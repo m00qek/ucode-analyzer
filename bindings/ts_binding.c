@@ -35,6 +35,7 @@ static uc_resource_type_t *parser_type;
 static uc_resource_type_t *tree_type;
 static uc_resource_type_t *node_type;
 static uc_resource_type_t *language_type;
+static uc_resource_type_t *query_type;
 
 static uc_value_t *
 node_wrap(uc_value_t *tree_ref, TSNode node)
@@ -70,6 +71,12 @@ static void
 parser_free(void *ptr)
 {
 	ts_parser_delete((TSParser *)ptr);
+}
+
+static void
+query_free(void *ptr)
+{
+	ts_query_delete((TSQuery *)ptr);
 }
 
 static uc_value_t *
@@ -282,6 +289,156 @@ uc_ts_node_parent(uc_vm_t *vm, size_t nargs)
 	return node_wrap(node->tree_ref, ts_node_parent(node->node));
 }
 
+static const char *
+query_error_name(TSQueryError type)
+{
+	switch (type) {
+	case TSQueryErrorSyntax:    return "syntax error";
+	case TSQueryErrorNodeType:  return "invalid node type";
+	case TSQueryErrorField:     return "invalid field name";
+	case TSQueryErrorCapture:   return "invalid capture name";
+	case TSQueryErrorStructure: return "invalid pattern structure";
+	case TSQueryErrorLanguage:  return "invalid language";
+	default:                    return "unknown error";
+	}
+}
+
+static uc_value_t *
+uc_ts_query_new(uc_vm_t *vm, size_t nargs)
+{
+	const TSLanguage *lang = ucv_resource_data(uc_fn_arg(0), "ts.language");
+	uc_value_t *srcval = uc_fn_arg(1);
+	uint32_t error_offset;
+	TSQueryError error_type;
+	TSQuery *query;
+
+	/* explicit check: see comment in uc_ts_parse() */
+	if (!lang || ucv_type(srcval) != UC_STRING) {
+		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a language handle and a query source string");
+		return NULL;
+	}
+
+	query = ts_query_new(lang, ucv_string_get(srcval), ucv_string_length(srcval),
+		&error_offset, &error_type);
+
+	if (!query) {
+		uc_vm_raise_exception(vm, EXCEPTION_RUNTIME, "query %s at byte %u",
+			query_error_name(error_type), error_offset);
+		return NULL;
+	}
+
+	return uc_resource_new(query_type, query);
+}
+
+static uc_value_t *
+uc_ts_query_pattern_count(uc_vm_t *vm, size_t nargs)
+{
+	TSQuery *query = ucv_resource_data(uc_fn_arg(0), "ts.query");
+
+	if (!query) {
+		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a query handle");
+		return NULL;
+	}
+
+	return ucv_int64_new(ts_query_pattern_count(query));
+}
+
+/*
+ * Returns the raw predicate steps for a pattern as a flat array of
+ * { type: "capture"|"string"|"done", value: <name or literal text> }.
+ * Grouping steps into individual predicates (splitting on "done") and
+ * evaluating standard predicates (#eq?, #match?, ...) is policy, not
+ * mechanism, and belongs in ts.uc.
+ */
+static uc_value_t *
+uc_ts_query_predicate_steps(uc_vm_t *vm, size_t nargs)
+{
+	TSQuery *query = ucv_resource_data(uc_fn_arg(0), "ts.query");
+	uc_value_t *patternval = uc_fn_arg(1);
+	const TSQueryPredicateStep *steps;
+	uint32_t count, i, len;
+	const char *text;
+	uc_value_t *result, *step;
+
+	if (!query) {
+		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a query handle");
+		return NULL;
+	}
+
+	steps = ts_query_predicates_for_pattern(query, ucv_int64_get(patternval), &count);
+	result = ucv_array_new(vm);
+
+	for (i = 0; i < count; i++) {
+		step = ucv_object_new(vm);
+
+		switch (steps[i].type) {
+		case TSQueryPredicateStepTypeCapture:
+			text = ts_query_capture_name_for_id(query, steps[i].value_id, &len);
+			ucv_object_add(step, "type", ucv_string_new("capture"));
+			ucv_object_add(step, "value", ucv_string_new_length(text, len));
+			break;
+
+		case TSQueryPredicateStepTypeString:
+			text = ts_query_string_value_for_id(query, steps[i].value_id, &len);
+			ucv_object_add(step, "type", ucv_string_new("string"));
+			ucv_object_add(step, "value", ucv_string_new_length(text, len));
+			break;
+
+		default:
+			ucv_object_add(step, "type", ucv_string_new("done"));
+			break;
+		}
+
+		ucv_array_push(result, step);
+	}
+
+	return result;
+}
+
+static uc_value_t *
+uc_ts_query_matches(uc_vm_t *vm, size_t nargs)
+{
+	TSQuery *query = ucv_resource_data(uc_fn_arg(0), "ts.query");
+	uc_value_t *nodeval = uc_fn_arg(1);
+	uc_ts_node_t *node = ucv_resource_data(nodeval, "ts.node");
+	TSQueryCursor *cursor;
+	TSQueryMatch match;
+	uc_value_t *result, *matchval, *captures, *capture;
+	uint32_t i, len;
+	const char *name;
+
+	if (!query || !node) {
+		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a query handle and a node handle");
+		return NULL;
+	}
+
+	cursor = ts_query_cursor_new();
+	ts_query_cursor_exec(cursor, query, node->node);
+
+	result = ucv_array_new(vm);
+
+	while (ts_query_cursor_next_match(cursor, &match)) {
+		matchval = ucv_object_new(vm);
+		captures = ucv_array_new(vm);
+
+		for (i = 0; i < match.capture_count; i++) {
+			name = ts_query_capture_name_for_id(query, match.captures[i].index, &len);
+			capture = ucv_object_new(vm);
+			ucv_object_add(capture, "name", ucv_string_new_length(name, len));
+			ucv_object_add(capture, "node", node_wrap(node->tree_ref, match.captures[i].node));
+			ucv_array_push(captures, capture);
+		}
+
+		ucv_object_add(matchval, "pattern", ucv_int64_new(match.pattern_index));
+		ucv_object_add(matchval, "captures", captures);
+		ucv_array_push(result, matchval);
+	}
+
+	ts_query_cursor_delete(cursor);
+
+	return result;
+}
+
 static const uc_function_list_t global_fns[] = {
 	{ "ts_language_ucode",         uc_ts_language_ucode },
 	{ "ts_language_ucdocs",        uc_ts_language_ucdocs },
@@ -299,6 +456,10 @@ static const uc_function_list_t global_fns[] = {
 	{ "ts_node_named_child",       uc_ts_node_named_child },
 	{ "ts_node_child_by_field",    uc_ts_node_child_by_field },
 	{ "ts_node_parent",            uc_ts_node_parent },
+	{ "ts_query_new",              uc_ts_query_new },
+	{ "ts_query_pattern_count",    uc_ts_query_pattern_count },
+	{ "ts_query_predicate_steps",  uc_ts_query_predicate_steps },
+	{ "ts_query_matches",          uc_ts_query_matches },
 };
 
 void uc_module_init(uc_vm_t *vm, uc_value_t *scope)
@@ -307,6 +468,7 @@ void uc_module_init(uc_vm_t *vm, uc_value_t *scope)
 	tree_type = _uc_type_declare(vm, "ts.tree", NULL, 0, tree_free);
 	node_type = _uc_type_declare(vm, "ts.node", NULL, 0, node_free);
 	language_type = _uc_type_declare(vm, "ts.language", NULL, 0, NULL);
+	query_type = _uc_type_declare(vm, "ts.query", NULL, 0, query_free);
 
 	uc_function_list_register(scope, global_fns);
 }

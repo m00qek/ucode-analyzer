@@ -61,4 +61,34 @@ threw = false;
 try { ts.nodeType(null); } catch (e) { threw = true; }
 check(threw, 'nodeType() should reject a non-node argument');
 
+// query API: basic captures, predicate evaluation, match grouping
+let qsrc = 'let x = 5, y = 6;';
+let qtree = ts.parse(ts.newParser(ts.ucode()), qsrc);
+let qroot = ts.rootNode(qtree);
+
+let q1 = ts.newQuery(ts.ucode(), '(variable_declarator name: (identifier) @name)');
+let caps1 = ts.queryCaptures(q1, qroot, qsrc);
+check(length(caps1) == 2, `expected 2 captures, got ${length(caps1)}`);
+check(ts.text(caps1[0].node, qsrc) == 'x', 'first capture should be x');
+check(ts.text(caps1[1].node, qsrc) == 'y', 'second capture should be y');
+
+let matches = ts.queryMatches(q1, qroot, qsrc);
+check(length(matches) == 2, `expected 2 matches, got ${length(matches)}`);
+
+let q2 = ts.newQuery(ts.ucode(),
+	'(variable_declarator name: (identifier) @name (#not-eq? @name "y"))');
+let caps2 = ts.queryCaptures(q2, qroot, qsrc);
+check(length(caps2) == 1, '#not-eq? predicate should drop the "y" match');
+check(ts.text(caps2[0].node, qsrc) == 'x', '#not-eq? predicate should keep the "x" match');
+
+let q3 = ts.newQuery(ts.ucode(),
+	'(variable_declarator name: (identifier) @name (#match? @name "^y$"))');
+let caps3 = ts.queryCaptures(q3, qroot, qsrc);
+check(length(caps3) == 1, '#match? predicate should keep only the "y" match');
+check(ts.text(caps3[0].node, qsrc) == 'y', '#match? predicate should keep the "y" match');
+
+threw = false;
+try { ts.newQuery(ts.ucode(), '(this is not valid'); } catch (e) { threw = true; }
+check(threw, 'newQuery() should reject invalid query syntax');
+
 print("ts_binding smoke test: OK\n");
