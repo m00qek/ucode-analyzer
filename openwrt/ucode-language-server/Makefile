@@ -41,6 +41,11 @@ define Package/$(PKG_NAME)/install
 	$(CP) ./src/tree_sitter.uc $(1)/usr/share/ucode/tree_sitter.uc
 	$(INSTALL_DIR) $(1)/usr/share/ucode/$(UCODE_MOD_NAME)
 	$(CP) ./src/$(UCODE_MOD_NAME)/* $(1)/usr/share/ucode/$(UCODE_MOD_NAME)/
+	$(INSTALL_DATA) ./src/ucode-language-server.uc \
+		$(1)/usr/share/ucode/ucode-language-server.uc
+	$(INSTALL_DIR) $(1)/usr/bin
+	ln -sf /usr/share/ucode/ucode-language-server.uc \
+		$(1)/usr/bin/ucode-language-server
 endef
 
 $(eval $(call BuildPackage,$(PKG_NAME)))

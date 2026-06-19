@@ -1,7 +1,12 @@
 import * as rpc from 'rpc_client';
 
 export function connect() {
-	return rpc.connect('ucode', ['-L', '/app/src', '/app/src/ucode_language_server/lsp.uc']);
+	return rpc.connect('ucode', [
+		'-L', '/app/src',
+		'/app/src/ucode-language-server.uc',
+		'--config', '/tmp',
+		'--workspace', '/app',
+	]);
 };
 
 export function initialize(proc) {
