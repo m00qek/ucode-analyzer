@@ -15,7 +15,7 @@ describe('ts (node/tree lifecycle)', () => {
 		let decl = ts.namedChild(root, 0);
 		assert.match('lexical_declaration', ts.nodeType(decl));
 		assert.match(src, ts.text(decl, src));
-		assert.match(true, ts.parent(decl) != null);
+		assert.match(true, ts.parent(decl) !== null);
 	});
 
 	it('namedChildren() collects all named children', () => {

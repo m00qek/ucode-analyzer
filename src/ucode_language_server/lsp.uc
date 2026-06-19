@@ -27,27 +27,27 @@ const handlers = {
 	},
 
 	'textDocument/didOpen': function(msg) {
-		let td = msg.params?.textDocument;
+		let td = msg.params.textDocument;
 		documents.open(td.uri, td.text, td.version);
 	},
 
 	'textDocument/didChange': function(msg) {
 		documents.change(
-			msg.params?.textDocument?.uri,
-			msg.params?.contentChanges,
-			msg.params?.textDocument?.version
+			msg.params.textDocument.uri,
+			msg.params.contentChanges,
+			msg.params.textDocument.version
 		);
 	},
 
 	'textDocument/didClose': function(msg) {
-		documents.close(msg.params?.textDocument?.uri);
+		documents.close(msg.params.textDocument.uri);
 	},
 };
 
 while (true) {
 	let msg = protocol.read_message();
 
-	if (msg == null)
+	if (msg === null)
 		exit(shutdown_requested ? 0 : 1);
 
 	let handler = handlers[msg.method];

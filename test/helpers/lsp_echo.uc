@@ -11,7 +11,7 @@ function read_exact(n) {
 	while (length(buf) < n) {
 		let chunk = fs.stdin.read(n - length(buf));
 
-		if (chunk == null || length(chunk) == 0)
+		if (chunk === null || length(chunk) === 0)
 			exit(0);
 
 		buf += chunk;
@@ -26,7 +26,7 @@ while (true) {
 	while (index(header, '\r\n\r\n') < 0) {
 		let ch = fs.stdin.read(1);
 
-		if (ch == null || length(ch) == 0)
+		if (ch === null || length(ch) === 0)
 			exit(0);
 
 		header += ch;

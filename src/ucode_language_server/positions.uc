@@ -5,7 +5,7 @@ export function buildLineTable(text) {
 	let len = length(text);
 
 	for (let i = 0; i < len; i++) {
-		if (substr(text, i, 1) == '\n')
+		if (substr(text, i, 1) === '\n')
 			push(lines, i + 1);
 	}
 

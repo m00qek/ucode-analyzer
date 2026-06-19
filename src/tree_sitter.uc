@@ -22,7 +22,7 @@ function pointAt(source, byteOffset) {
 	let lastNewline = -1;
 
 	for (let i = 0; i < byteOffset; i++) {
-		if (substr(source, i, 1) == "\n") {
+		if (substr(source, i, 1) === "\n") {
 			row++;
 			lastNewline = i;
 		}
@@ -35,12 +35,12 @@ export const ucode = native.ts_language_ucode;
 export const ucdocs = native.ts_language_ucdocs;
 
 export function newParser(language) {
-	expect(language != null, 'newParser() expects a language handle (ts.ucode() or ts.ucdocs())');
+	expect(language !== null, 'newParser() expects a language handle (ts.ucode() or ts.ucdocs())');
 	return native.ts_new_parser(language);
 };
 
 export function parse(parser, source) {
-	expect(type(source) == 'string', 'parse() expects a source string');
+	expect(type(source) === 'string', 'parse() expects a source string');
 	return native.ts_parse(parser, source);
 };
 
@@ -60,8 +60,8 @@ export function parse(parser, source) {
  * replacement (i.e. startByte + length of the replacement text in bytes).
  */
 export function reparse(parser, oldTree, oldSource, newSource, startByte, oldEndByte, newEndByte) {
-	expect(type(oldSource) == 'string', 'reparse() expects an old source string');
-	expect(type(newSource) == 'string', 'reparse() expects a new source string');
+	expect(type(oldSource) === 'string', 'reparse() expects an old source string');
+	expect(type(newSource) === 'string', 'reparse() expects a new source string');
 
 	let startPoint = pointAt(oldSource, startByte);
 	let oldEndPoint = pointAt(oldSource, oldEndByte);
@@ -87,7 +87,7 @@ export const nodeType = native.ts_node_type;
 export const isNamed = native.ts_node_is_named;
 
 export function text(node, source) {
-	expect(type(source) == 'string', 'text() expects a source string');
+	expect(type(source) === 'string', 'text() expects a source string');
 	return native.ts_node_text(node, source);
 };
 
@@ -99,7 +99,7 @@ export const child = native.ts_node_child;
 export const namedChild = native.ts_node_named_child;
 
 export function childByField(node, name) {
-	expect(type(name) == 'string', 'childByField() expects a field name string');
+	expect(type(name) === 'string', 'childByField() expects a field name string');
 	return native.ts_node_child_by_field(node, name);
 };
 
@@ -124,8 +124,8 @@ export function namedChildren(node) {
 };
 
 export function newQuery(language, source) {
-	expect(language != null, 'newQuery() expects a language handle (ts.ucode() or ts.ucdocs())');
-	expect(type(source) == 'string', 'newQuery() expects a query source string');
+	expect(language !== null, 'newQuery() expects a language handle (ts.ucode() or ts.ucdocs())');
+	expect(type(source) === 'string', 'newQuery() expects a query source string');
 	return native.ts_query_new(language, source);
 };
 
@@ -143,7 +143,7 @@ function predicatesForPattern(query, patternIndex) {
 	let current = [];
 
 	for (let step in steps) {
-		if (step.type == 'done') {
+		if (step.type === 'done') {
 			if (length(current) > 0) {
 				push(predicates, {
 					operator: current[0].value,
@@ -172,7 +172,7 @@ function predicatesForPattern(query, patternIndex) {
  */
 function evalPredicate(predicate, captureMap, source) {
 	function resolve(arg) {
-		if (arg.kind == 'capture') {
+		if (arg.kind === 'capture') {
 			let node = captureMap[arg.value];
 			return node ? text(node, source) : null;
 		}
@@ -182,16 +182,16 @@ function evalPredicate(predicate, captureMap, source) {
 
 	switch (predicate.operator) {
 		case 'eq?':
-			return resolve(predicate.args[0]) == resolve(predicate.args[1]);
+			return resolve(predicate.args[0]) === resolve(predicate.args[1]);
 
 		case 'not-eq?':
-			return resolve(predicate.args[0]) != resolve(predicate.args[1]);
+			return resolve(predicate.args[0]) !== resolve(predicate.args[1]);
 
 		case 'match?':
-			return match(resolve(predicate.args[0]), regexp(predicate.args[1].value)) != null;
+			return match(resolve(predicate.args[0]), regexp(predicate.args[1].value)) !== null;
 
 		case 'not-match?':
-			return match(resolve(predicate.args[0]), regexp(predicate.args[1].value)) == null;
+			return match(resolve(predicate.args[0]), regexp(predicate.args[1].value)) === null;
 
 		default:
 			return true;
@@ -205,7 +205,7 @@ function evalPredicate(predicate, captureMap, source) {
  * (#set!, #strip!, ...) are passed through unevaluated -- see evalPredicate().
  */
 export function queryMatches(query, node, source) {
-	expect(type(source) == 'string', 'queryMatches() expects a source string');
+	expect(type(source) === 'string', 'queryMatches() expects a source string');
 
 	let raw = native.ts_query_matches(query, node);
 	let result = [];

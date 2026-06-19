@@ -6,10 +6,10 @@ describe('documents', () => {
 		documents.open('file:///x.uc', 'let x = 5;', 1);
 		let doc = documents.get('file:///x.uc');
 
-		assert.match('let x = 5;', doc?.text);
-		assert.match(1, doc?.version);
-		assert.match(true, doc?.tree != null);
-		assert.match([0], doc?.lineTable);
+		assert.match('let x = 5;', doc.text);
+		assert.match(1, doc.version);
+		assert.match(true, doc.tree !== null);
+		assert.match([0], doc.lineTable);
 
 		documents.close('file:///x.uc');
 	});
@@ -19,9 +19,9 @@ describe('documents', () => {
 		documents.change('file:///x.uc', [{ text: 'let x = 5;\nlet y = 6;' }], 2);
 		let doc = documents.get('file:///x.uc');
 
-		assert.match('let x = 5;\nlet y = 6;', doc?.text);
-		assert.match(2, doc?.version);
-		assert.match([0, 11], doc?.lineTable);
+		assert.match('let x = 5;\nlet y = 6;', doc.text);
+		assert.match(2, doc.version);
+		assert.match([0, 11], doc.lineTable);
 
 		documents.close('file:///x.uc');
 	});

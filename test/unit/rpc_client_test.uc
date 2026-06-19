@@ -9,7 +9,7 @@ describe('rpc_client', () => {
 
 	it('close() returns non-zero for a failed exit', () => {
 		let proc = rpc.connect('false', []);
-		assert.match(true, rpc.close(proc) != 0);
+		assert.match(true, rpc.close(proc) !== 0);
 	});
 
 	it('close() returns a negative signal code', () => {
@@ -30,8 +30,8 @@ describe('rpc_client', () => {
 		rpc.send(proc, msg);
 		let resp = rpc.receive(proc);
 
-		assert.match(1, resp?.id);
-		assert.match('ping', resp?.method);
+		assert.match(1, resp.id);
+		assert.match('ping', resp.method);
 
 		rpc.close(proc);
 	});

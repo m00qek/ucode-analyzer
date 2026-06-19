@@ -15,7 +15,7 @@ function read_exact(proc, n) {
 	while (got < n) {
 		let chunk = proc.read_raw(n - got);
 
-		if (length(chunk) == 0)
+		if (length(chunk) === 0)
 			die('unexpected EOF reading message body');
 
 		push(parts, chunk);
@@ -31,7 +31,7 @@ function read_header(proc) {
 	while (index(buf, '\r\n\r\n') < 0) {
 		let ch = proc.read_raw(1);
 
-		if (length(ch) == 0)
+		if (length(ch) === 0)
 			return null;
 
 		buf += ch;
@@ -53,7 +53,7 @@ export function send(proc, obj) {
 export function receive(proc) {
 	let header = read_header(proc);
 
-	if (header == null)
+	if (header === null)
 		return null;
 
 	let m = match(header, /Content-Length: ([0-9]+)/);

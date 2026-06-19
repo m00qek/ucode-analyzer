@@ -7,7 +7,7 @@ function read_exact(n) {
 	while (got < n) {
 		let chunk = fs.stdin.read(n - got);
 
-		if (length(chunk) == 0)
+		if (length(chunk) === 0)
 			die('unexpected EOF reading message body');
 
 		push(parts, chunk);
@@ -23,7 +23,7 @@ function read_header() {
 	while (index(buf, '\r\n\r\n') < 0) {
 		let ch = fs.stdin.read(1);
 
-		if (length(ch) == 0)
+		if (length(ch) === 0)
 			return null;
 
 		buf += ch;
@@ -35,7 +35,7 @@ function read_header() {
 export function read_message() {
 	let header = read_header();
 
-	if (header == null)
+	if (header === null)
 		return null;
 
 	let m = match(header, /Content-Length: ([0-9]+)/);
