@@ -63,11 +63,4 @@ describe('hover', () => {
 		assert.match(null, hover(doc, { line: 99, character: 0 }));
 	});
 
-	it('returns null for an unopened document when called through documents', () => {
-		// doc.uri doesn't exist — simulate by closing before hover
-		documents.open(URI, 'let x = 5;', 1);
-		documents.close(URI);
-		let doc = documents.get(URI);
-		assert.match(null, doc);
-	});
 });

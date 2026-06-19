@@ -29,5 +29,12 @@ export function shutdown(proc) {
 };
 
 export const send = rpc.send;
-export const receive = rpc.receive;
 export const close = rpc.close;
+
+// Skip server-to-client notifications (no id field) and return the next response.
+export function receive(proc) {
+	while (true) {
+		let msg = rpc.receive(proc);
+		if (msg === null || msg.id !== null) return msg;
+	}
+};

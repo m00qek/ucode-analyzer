@@ -56,13 +56,12 @@ describe('references', () => {
 		assert.match(2, lines[2]);
 	});
 
-	it('returns empty list when identifier has no occurrences', () => {
-		// 'unique' appears only once
+	it('finds single occurrence when identifier appears only once', () => {
 		let text = "unique;\n";
 		documents.open(URI, text, 1);
 
 		let locs = references(URI, documents.get(URI), { line: 0, character: 0 });
 
-		assert.match(1, length(locs));  // the occurrence itself
+		assert.match(1, length(locs));
 	});
 });

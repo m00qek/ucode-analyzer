@@ -61,15 +61,12 @@ describe('completion — scope', () => {
 	});
 
 	it('does not offer bindings declared after cursor', () => {
-		// Two declarations; cursor is between them (end of line 0, which ends before 'b').
+		// Cursor is at (1,0) = start of 'let b'; buildScope uses startByte < offset,
+		// so 'let b' is excluded but 'let a' (which precedes it) is included.
 		let text = "let a = 1;\nlet b = 2;\n";
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
 
-		// Offset is the start of 'let b' (line 1); buildScope excludes it.
-		// Use line 2 so 'a' is in scope, and 'b' would be too if not excluded.
-		// Actually, use line 1 char 0 to show 'a' is included but 'b' is not.
-		// The 'let b' stmt starts exactly at (1,0), so buildScope excludes it.
 		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
 		let labels = map(items, (i) => i.label);
 
