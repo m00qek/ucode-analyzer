@@ -6,10 +6,11 @@ describe('documents', () => {
 		documents.close('file:///x.uc');
 	});
 
-	it('open() stores text, version, tree, and lineTable', () => {
+	it('open() stores uri, text, version, tree, and lineTable', () => {
 		documents.open('file:///x.uc', 'let x = 5;', 1);
 		let doc = documents.get('file:///x.uc');
 
+		assert.match('file:///x.uc', doc.uri);
 		assert.match('let x = 5;', doc.text);
 		assert.match(1, doc.version);
 		assert.match(true, doc.tree !== null);

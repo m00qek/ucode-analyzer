@@ -6,8 +6,14 @@ let T_INT    = { kind: 'primitive', name: 'int' };
 
 describe('type_registry', () => {
 	beforeEach(() => {
-		for (let name in reg.allNames())
-			reg.removeUri(reg.lookup(name).sourceUri);
+		let seen = {};
+		for (let name in reg.allNames()) {
+			let entry = reg.lookup(name);
+			if (entry && !seen[entry.sourceUri]) {
+				seen[entry.sourceUri] = true;
+				reg.removeUri(entry.sourceUri);
+			}
+		}
 	});
 
 	it('register and lookup by name', () => {
