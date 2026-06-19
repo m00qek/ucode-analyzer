@@ -1,0 +1,3 @@
+[submodule "third_party/tree-sitter-ucode"]
+	path = third_party/tree-sitter-ucode
+	url = git@github.com:m00qek/tree-sitter-ucode.git
