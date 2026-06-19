@@ -89,10 +89,12 @@ describe('completion — import context', () => {
 		// cursor at character 10 — inside the import_statement (on 'a' in 'parse')
 		let items = completion(URI, documents.get(URI), { line: 0, character: 10 });
 
-		assert.match(true, length(items) > 0);
+		// tree_sitter exports many symbols; falling through to importedItems would
+		// return only {parse} (1 item), so > 1 distinguishes the two paths.
+		assert.match(true, length(items) > 1);
 	});
 
-	it('outside an import statement offers scope locals not module exports', () => {
+	it('outside an import statement offers scope locals and named imports', () => {
 		let text = "import { parse } from 'tree_sitter';\nlet x = 1;\n";
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
@@ -101,6 +103,7 @@ describe('completion — import context', () => {
 		let items = completion(URI, documents.get(URI), { line: 2, character: 0 });
 
 		let labels = map(items, (i) => i.label);
-		assert.match(true, index(labels, 'x') >= 0);
+		assert.match(true, index(labels, 'x') >= 0);      // local binding
+		assert.match(true, index(labels, 'parse') >= 0);  // named import
 	});
 });

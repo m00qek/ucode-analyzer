@@ -50,6 +50,7 @@ describe('rename', () => {
 		let edit = rename(URI, documents.get(URI), { line: 0, character: 4 }, 'renamed');
 		let edits = edit.changes[URI];
 
+		assert.match(2, length(edits));
 		for (let e in edits)
 			assert.match('renamed', e.newText);
 	});

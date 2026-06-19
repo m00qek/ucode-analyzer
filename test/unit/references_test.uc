@@ -39,6 +39,7 @@ describe('references', () => {
 
 		let locs = references(URI, documents.get(URI), { line: 0, character: 4 });
 
+		assert.match(2, length(locs));
 		for (let l in locs)
 			assert.match(URI, l.uri);
 	});
