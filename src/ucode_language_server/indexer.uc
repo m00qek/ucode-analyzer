@@ -1,5 +1,25 @@
 import * as ts from 'tree_sitter';
 import * as fs from 'fs';
+import { parseDoc } from 'ucode_language_server.doc_parser';
+
+// Return the text of the /** */ block immediately before stmt among root's
+// children, or null if none. A // comment or any other statement resets.
+function precedingDocText(stmt, root, text) {
+	let stmtStart = ts.startByte(stmt);
+	let found = null;
+	let children = ts.children(root);
+	for (let i = 0; i < length(children); i++) {
+		let c = children[i];
+		if (ts.startByte(c) >= stmtStart) break;
+		if (ts.nodeType(c) === 'comment') {
+			let txt = ts.text(c, text);
+			found = (substr(txt, 0, 3) === '/**') ? txt : null;
+		} else if (ts.isNamed(c)) {
+			found = null;
+		}
+	}
+	return found;
+}
 
 function dotToSlash(s) {
 	let out = '';
@@ -37,10 +57,13 @@ export function extractExports(text, tree) {
 
 		let declType = ts.nodeType(decl);
 
+		let docText = precedingDocText(stmt, root, text);
+		let doc = docText ? parseDoc(docText) : null;
+
 		if (declType === 'function_declaration') {
 			let nameNode = ts.namedChild(decl, 0);
 			if (nameNode && ts.nodeType(nameNode) === 'identifier')
-				push(result, { name: ts.text(nameNode, text), kind: 'function', doc: null });
+				push(result, { name: ts.text(nameNode, text), kind: 'function', doc });
 
 		} else if (declType === 'lexical_declaration') {
 			let kind = 'let';
@@ -56,7 +79,7 @@ export function extractExports(text, tree) {
 				if (ts.nodeType(varDecl) !== 'variable_declarator') continue;
 				let nameNode = ts.namedChild(varDecl, 0);
 				if (nameNode && ts.nodeType(nameNode) === 'identifier')
-					push(result, { name: ts.text(nameNode, text), kind, doc: null });
+					push(result, { name: ts.text(nameNode, text), kind, doc });
 			}
 		}
 	}

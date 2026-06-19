@@ -53,6 +53,23 @@ describe('indexer.extractExports', () => {
 
 		assert.match(0, length(exps));
 	});
+
+	it('populates doc when a JSDoc comment precedes the export', () => {
+		let text = "/** @param {string} x @returns {int} */\nexport function foo(x) {};";
+		let exps = extractExports(text, parse(text));
+
+		assert.match(1, length(exps));
+		assert.match(true, exps[0].doc !== null);
+		assert.match({ kind: 'primitive', name: 'int' }, exps[0].doc.returns.type);
+		assert.match('x', exps[0].doc.params[0].name);
+	});
+
+	it('doc is null when no JSDoc comment precedes the export', () => {
+		let text = '// not a jsdoc\nexport function bar() {};';
+		let exps = extractExports(text, parse(text));
+
+		assert.match(null, exps[0].doc);
+	});
 });
 
 describe('indexer.extractImports', () => {
