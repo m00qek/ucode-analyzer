@@ -10,6 +10,7 @@ import { diagnosticsFor } from 'ucode_language_server.diagnostics';
 import { signatureHelp as signatureHelpDoc } from 'ucode_language_server.signature_help';
 import { references as referencesDoc } from 'ucode_language_server.references';
 import { documentSymbols as documentSymbolsDoc } from 'ucode_language_server.document_symbols';
+import { rename as renameDoc } from 'ucode_language_server.rename';
 
 export function run(config) {
 	let shutdown_requested = false;
@@ -25,6 +26,7 @@ export function run(config) {
 					signatureHelpProvider: { triggerCharacters: ['(', ','] },
 					referencesProvider: true,
 					documentSymbolProvider: true,
+					renameProvider: true,
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -113,6 +115,14 @@ export function run(config) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
 			protocol.respond(msg.id, doc ? documentSymbolsDoc(doc) : null);
+		},
+
+		'textDocument/rename': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc
+				? renameDoc(uri, doc, msg.params.position, msg.params.newName)
+				: null);
 		},
 	};
 
