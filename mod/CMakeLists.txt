@@ -34,8 +34,17 @@ add_library(native SHARED native.c)
 set_target_properties(native PROPERTIES PREFIX "")
 target_link_libraries(native ${UCODE_LIB} ucode_grammar ucdocs_grammar tree_sitter_core)
 
+# Test-only (e2e harness process spawning). CMake-installed so it survives
+# OpenWrt's build-dir autoremove cleanup (which wipes everything not under
+# .pkgdir/), but the OpenWrt Package/install step never references it, so it
+# never ships in the .apk.
+add_library(spawn_pipes SHARED spawn_pipes.c)
+set_target_properties(spawn_pipes PROPERTIES PREFIX "")
+target_link_libraries(spawn_pipes ${UCODE_LIB})
+
 if(NOT PKG_NAME)
   set(PKG_NAME "ucode_language_server")
 endif()
 
 install(TARGETS native DESTINATION lib/ucode/${PKG_NAME})
+install(TARGETS spawn_pipes DESTINATION lib/ucode)
