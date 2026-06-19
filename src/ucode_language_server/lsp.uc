@@ -6,6 +6,7 @@ import { completion as completionDoc } from 'ucode_language_server.completion';
 import * as glob from 'ucode_language_server.glob';
 import * as dag from 'ucode_language_server.dag';
 import { invalidateUri } from 'ucode_language_server.memo';
+import { diagnosticsFor } from 'ucode_language_server.diagnostics';
 
 export function run(config) {
 	let shutdown_requested = false;
@@ -51,6 +52,10 @@ export function run(config) {
 			let doc = documents.get(td.uri);
 			invalidateUri(td.uri);
 			dag.update(td.uri, doc.text, doc.tree);
+			protocol.notify('textDocument/publishDiagnostics', {
+				uri: td.uri,
+				diagnostics: diagnosticsFor(td.uri, doc),
+			});
 		},
 
 		'textDocument/didChange': function(msg) {
@@ -59,6 +64,10 @@ export function run(config) {
 			let doc = documents.get(uri);
 			invalidateUri(uri);
 			dag.update(uri, doc.text, doc.tree);
+			protocol.notify('textDocument/publishDiagnostics', {
+				uri,
+				diagnostics: diagnosticsFor(uri, doc),
+			});
 		},
 
 		'textDocument/didClose': function(msg) {
