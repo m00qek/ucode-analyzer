@@ -1,11 +1,14 @@
 import * as protocol from 'ucode_language_server.protocol';
+import * as documents from 'ucode_language_server.documents';
 
 let shutdown_requested = false;
 
 const handlers = {
 	initialize: function(msg) {
 		protocol.respond(msg.id, {
-			capabilities: {},
+			capabilities: {
+				textDocumentSync: 1,
+			},
 			serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 		});
 	},
@@ -21,6 +24,23 @@ const handlers = {
 
 	exit: function(msg) {
 		exit(shutdown_requested ? 0 : 1);
+	},
+
+	'textDocument/didOpen': function(msg) {
+		let td = msg.params?.textDocument;
+		documents.open(td.uri, td.text, td.version);
+	},
+
+	'textDocument/didChange': function(msg) {
+		documents.change(
+			msg.params?.textDocument?.uri,
+			msg.params?.contentChanges,
+			msg.params?.textDocument?.version
+		);
+	},
+
+	'textDocument/didClose': function(msg) {
+		documents.close(msg.params?.textDocument?.uri);
 	},
 };
 
