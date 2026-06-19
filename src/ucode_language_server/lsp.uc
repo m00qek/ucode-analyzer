@@ -35,14 +35,15 @@ export function run(config) {
 		initialized: function(msg) {
 			let workspaceDir = config.workspaceDir ?? '/root/project';
 			let ws = config.workspace ?? {};
-			let includes = ws.include ?? ['**/*.uc'];
-			let excludes = ws.exclude ?? [];
+			let libPaths = ws.libraryPaths ?? ['src'];
 
 			dag.init(config);
 
-			let files = glob.scan(workspaceDir, includes, excludes);
-			for (let path in files)
-				dag.addFromDisk('file://' + path);
+			for (let relPath in libPaths) {
+				let files = glob.scan(workspaceDir + '/' + relPath, ['**/*.uc'], []);
+				for (let path in files)
+					dag.addFromDisk('file://' + path);
+			}
 		},
 
 		shutdown: function(msg) {
