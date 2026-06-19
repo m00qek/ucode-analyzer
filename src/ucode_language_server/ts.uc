@@ -4,20 +4,12 @@
  * mod/native.c is a thin, mechanical FFI layer with minimal validation.
  * This module is where argument-checking with useful error messages,
  * structured results, and collection helpers (looping over children in
- * ucode instead of C) belong.
+ * ucode instead of C) belong. Functions that are pure renames of a native
+ * one are just re-exported directly; only the ones that add real
+ * validation/logic are wrapped.
  */
 
-import {
-	ts_language_ucode, ts_language_ucdocs,
-	ts_new_parser, ts_parse, ts_root_node,
-	ts_node_type, ts_node_is_named, ts_node_text,
-	ts_node_start_byte, ts_node_end_byte,
-	ts_node_child_count, ts_node_named_child_count,
-	ts_node_child, ts_node_named_child,
-	ts_node_child_by_field, ts_node_parent,
-	ts_query_new, ts_query_pattern_count, ts_query_predicate_steps, ts_query_matches,
-	ts_reparse
-} from 'ucode_language_server.native';
+import * as native from 'ucode_language_server.native';
 
 function expect(cond, msg) {
 	if (!cond)
@@ -39,22 +31,17 @@ function pointAt(source, byteOffset) {
 	return { row: row, column: byteOffset - lastNewline - 1 };
 }
 
-export function ucode() {
-	return ts_language_ucode();
-};
-
-export function ucdocs() {
-	return ts_language_ucdocs();
-};
+export const ucode = native.ts_language_ucode;
+export const ucdocs = native.ts_language_ucdocs;
 
 export function newParser(language) {
 	expect(language != null, 'newParser() expects a language handle (ts.ucode() or ts.ucdocs())');
-	return ts_new_parser(language);
+	return native.ts_new_parser(language);
 };
 
 export function parse(parser, source) {
 	expect(type(source) == 'string', 'parse() expects a source string');
-	return ts_parse(parser, source);
+	return native.ts_parse(parser, source);
 };
 
 /*
@@ -64,9 +51,9 @@ export function parse(parser, source) {
  * `oldTree` must be the tree produced by the immediately preceding parse of
  * `oldSource` -- this function has no way to verify that, and passing a
  * mismatched tree produces a structurally valid but silently wrong result
- * (see the comment on ts_reparse() in ts_binding.c). Any node values
- * obtained from `oldTree` become stale the moment this is called; fetch
- * fresh nodes from the returned tree instead.
+ * (see the comment on ts_reparse() in native.c). Any node values obtained
+ * from `oldTree` become stale the moment this is called; fetch fresh nodes
+ * from the returned tree instead.
  *
  * startByte/oldEndByte describe the byte range in `oldSource` that was
  * replaced; newEndByte is where that range ends in `newSource` after the
@@ -92,58 +79,31 @@ export function reparse(parser, oldTree, oldSource, newSource, startByte, oldEnd
 		newEndColumn: newEndPoint.column,
 	};
 
-	return ts_reparse(parser, oldTree, edit, newSource);
+	return native.ts_reparse(parser, oldTree, edit, newSource);
 };
 
-export function rootNode(tree) {
-	return ts_root_node(tree);
-};
-
-export function nodeType(node) {
-	return ts_node_type(node);
-};
-
-export function isNamed(node) {
-	return ts_node_is_named(node);
-};
+export const rootNode = native.ts_root_node;
+export const nodeType = native.ts_node_type;
+export const isNamed = native.ts_node_is_named;
 
 export function text(node, source) {
 	expect(type(source) == 'string', 'text() expects a source string');
-	return ts_node_text(node, source);
+	return native.ts_node_text(node, source);
 };
 
-export function startByte(node) {
-	return ts_node_start_byte(node);
-};
-
-export function endByte(node) {
-	return ts_node_end_byte(node);
-};
-
-export function childCount(node) {
-	return ts_node_child_count(node);
-};
-
-export function namedChildCount(node) {
-	return ts_node_named_child_count(node);
-};
-
-export function child(node, i) {
-	return ts_node_child(node, i);
-};
-
-export function namedChild(node, i) {
-	return ts_node_named_child(node, i);
-};
+export const startByte = native.ts_node_start_byte;
+export const endByte = native.ts_node_end_byte;
+export const childCount = native.ts_node_child_count;
+export const namedChildCount = native.ts_node_named_child_count;
+export const child = native.ts_node_child;
+export const namedChild = native.ts_node_named_child;
 
 export function childByField(node, name) {
 	expect(type(name) == 'string', 'childByField() expects a field name string');
-	return ts_node_child_by_field(node, name);
+	return native.ts_node_child_by_field(node, name);
 };
 
-export function parent(node) {
-	return ts_node_parent(node);
-};
+export const parent = native.ts_node_parent;
 
 export function children(node) {
 	let result = [];
@@ -166,12 +126,10 @@ export function namedChildren(node) {
 export function newQuery(language, source) {
 	expect(language != null, 'newQuery() expects a language handle (ts.ucode() or ts.ucdocs())');
 	expect(type(source) == 'string', 'newQuery() expects a query source string');
-	return ts_query_new(language, source);
+	return native.ts_query_new(language, source);
 };
 
-export function patternCount(query) {
-	return ts_query_pattern_count(query);
-};
+export const patternCount = native.ts_query_pattern_count;
 
 /*
  * Tree-sitter's C core only hands back the raw predicate step array for a
@@ -180,7 +138,7 @@ export function patternCount(query) {
  * { operator, args } predicates, where each arg is { kind: "capture"|"string", value }.
  */
 function predicatesForPattern(query, patternIndex) {
-	let steps = ts_query_predicate_steps(query, patternIndex);
+	let steps = native.ts_query_predicate_steps(query, patternIndex);
 	let predicates = [];
 	let current = [];
 
@@ -249,7 +207,7 @@ function evalPredicate(predicate, captureMap, source) {
 export function queryMatches(query, node, source) {
 	expect(type(source) == 'string', 'queryMatches() expects a source string');
 
-	let raw = ts_query_matches(query, node);
+	let raw = native.ts_query_matches(query, node);
 	let result = [];
 
 	for (let m in raw) {
