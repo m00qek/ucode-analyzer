@@ -39,6 +39,8 @@ define Package/$(PKG_NAME)/install
 		$(1)/usr/lib/ucode/rpc_client/native.so
 	$(INSTALL_DIR) $(1)/usr/share/ucode
 	$(CP) ./src/tree_sitter.uc $(1)/usr/share/ucode/tree_sitter.uc
+	$(INSTALL_DIR) $(1)/usr/share/ucode/$(UCODE_MOD_NAME)
+	$(CP) ./src/$(UCODE_MOD_NAME)/* $(1)/usr/share/ucode/$(UCODE_MOD_NAME)/
 endef
 
 $(eval $(call BuildPackage,$(PKG_NAME)))
