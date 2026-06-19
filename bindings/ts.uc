@@ -15,12 +15,28 @@ import {
 	ts_node_child_count, ts_node_named_child_count,
 	ts_node_child, ts_node_named_child,
 	ts_node_child_by_field, ts_node_parent,
-	ts_query_new, ts_query_predicate_steps, ts_query_matches
+	ts_query_new, ts_query_pattern_count, ts_query_predicate_steps, ts_query_matches,
+	ts_reparse
 } from 'ts_native';
 
 function expect(cond, msg) {
 	if (!cond)
 		die(msg);
+}
+
+/* tree-sitter points are (row, column), both 0-based, column in bytes. */
+function pointAt(source, byteOffset) {
+	let row = 0;
+	let lastNewline = -1;
+
+	for (let i = 0; i < byteOffset; i++) {
+		if (substr(source, i, 1) == "\n") {
+			row++;
+			lastNewline = i;
+		}
+	}
+
+	return { row: row, column: byteOffset - lastNewline - 1 };
 }
 
 export function ucode() {
@@ -39,6 +55,44 @@ export function newParser(language) {
 export function parse(parser, source) {
 	expect(type(source) == 'string', 'parse() expects a source string');
 	return ts_parse(parser, source);
+}
+
+/*
+ * Incrementally reparses `oldTree` to reflect a single contiguous text
+ * replacement and returns the new tree.
+ *
+ * `oldTree` must be the tree produced by the immediately preceding parse of
+ * `oldSource` -- this function has no way to verify that, and passing a
+ * mismatched tree produces a structurally valid but silently wrong result
+ * (see the comment on ts_reparse() in ts_binding.c). Any node values
+ * obtained from `oldTree` become stale the moment this is called; fetch
+ * fresh nodes from the returned tree instead.
+ *
+ * startByte/oldEndByte describe the byte range in `oldSource` that was
+ * replaced; newEndByte is where that range ends in `newSource` after the
+ * replacement (i.e. startByte + length of the replacement text in bytes).
+ */
+export function reparse(parser, oldTree, oldSource, newSource, startByte, oldEndByte, newEndByte) {
+	expect(type(oldSource) == 'string', 'reparse() expects an old source string');
+	expect(type(newSource) == 'string', 'reparse() expects a new source string');
+
+	let startPoint = pointAt(oldSource, startByte);
+	let oldEndPoint = pointAt(oldSource, oldEndByte);
+	let newEndPoint = pointAt(newSource, newEndByte);
+
+	let edit = {
+		startByte: startByte,
+		oldEndByte: oldEndByte,
+		newEndByte: newEndByte,
+		startRow: startPoint.row,
+		startColumn: startPoint.column,
+		oldEndRow: oldEndPoint.row,
+		oldEndColumn: oldEndPoint.column,
+		newEndRow: newEndPoint.row,
+		newEndColumn: newEndPoint.column,
+	};
+
+	return ts_reparse(parser, oldTree, edit, newSource);
 }
 
 export function rootNode(tree) {
@@ -113,6 +167,10 @@ export function newQuery(language, source) {
 	expect(language != null, 'newQuery() expects a language handle (ts.ucode() or ts.ucdocs())');
 	expect(type(source) == 'string', 'newQuery() expects a query source string');
 	return ts_query_new(language, source);
+}
+
+export function patternCount(query) {
+	return ts_query_pattern_count(query);
 }
 
 /*

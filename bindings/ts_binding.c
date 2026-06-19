@@ -142,6 +142,76 @@ uc_ts_parse(uc_vm_t *vm, size_t nargs)
 	return uc_resource_new(tree_type, tree);
 }
 
+static bool
+edit_field(uc_value_t *edit, const char *name, uint32_t *out)
+{
+	uc_value_t *v = ucv_object_get(edit, name, NULL);
+
+	if (ucv_type(v) != UC_INTEGER)
+		return false;
+
+	*out = (uint32_t)ucv_int64_get(v);
+
+	return true;
+}
+
+/*
+ * Intentionally the *only* way to reuse a previous tree: this always calls
+ * ts_tree_edit() on `tree` immediately before parsing, on the same call.
+ * ts_tree_edit() and the old-tree variant of ts_parser_parse_string() are
+ * not exposed separately, so there is no sequence of calls through this
+ * binding that parses with an old tree that wasn't just edited -- the
+ * failure mode documented in the prototype's PROBLEMS_IN_TREESITTER.MD #4
+ * (an unedited/mismatched old tree silently producing wrong node byte
+ * ranges) isn't reachable through this API.
+ *
+ * `tree` must be the TSTree produced by the immediately preceding parse of
+ * the exact text that `edit` describes a change to; this binding has no way
+ * to verify that. Any TSNode values obtained from `tree` before this call
+ * become stale once ts_tree_edit() runs and must not be used afterwards --
+ * fetch fresh nodes from the returned tree instead.
+ */
+static uc_value_t *
+uc_ts_reparse(uc_vm_t *vm, size_t nargs)
+{
+	TSParser *parser = ucv_resource_data(uc_fn_arg(0), "ts.parser");
+	TSTree *tree = ucv_resource_data(uc_fn_arg(1), "ts.tree");
+	uc_value_t *editval = uc_fn_arg(2);
+	uc_value_t *srcval = uc_fn_arg(3);
+	TSInputEdit edit = { 0 };
+	TSTree *newtree;
+
+	if (!parser || !tree || ucv_type(editval) != UC_OBJECT || ucv_type(srcval) != UC_STRING) {
+		uc_vm_raise_exception(vm, EXCEPTION_TYPE,
+			"expecting a parser, a tree, an edit object, and a source string");
+		return NULL;
+	}
+
+	if (!edit_field(editval, "startByte", &edit.start_byte) ||
+	    !edit_field(editval, "oldEndByte", &edit.old_end_byte) ||
+	    !edit_field(editval, "newEndByte", &edit.new_end_byte) ||
+	    !edit_field(editval, "startRow", &edit.start_point.row) ||
+	    !edit_field(editval, "startColumn", &edit.start_point.column) ||
+	    !edit_field(editval, "oldEndRow", &edit.old_end_point.row) ||
+	    !edit_field(editval, "oldEndColumn", &edit.old_end_point.column) ||
+	    !edit_field(editval, "newEndRow", &edit.new_end_point.row) ||
+	    !edit_field(editval, "newEndColumn", &edit.new_end_point.column)) {
+		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "incomplete edit object");
+		return NULL;
+	}
+
+	ts_tree_edit(tree, &edit);
+
+	newtree = ts_parser_parse_string(parser, tree, ucv_string_get(srcval), ucv_string_length(srcval));
+
+	if (!newtree) {
+		uc_vm_raise_exception(vm, EXCEPTION_RUNTIME, "parse failed");
+		return NULL;
+	}
+
+	return uc_resource_new(tree_type, newtree);
+}
+
 static uc_value_t *
 uc_ts_root_node(uc_vm_t *vm, size_t nargs)
 {
@@ -444,6 +514,7 @@ static const uc_function_list_t global_fns[] = {
 	{ "ts_language_ucdocs",        uc_ts_language_ucdocs },
 	{ "ts_new_parser",             uc_ts_new_parser },
 	{ "ts_parse",                  uc_ts_parse },
+	{ "ts_reparse",                uc_ts_reparse },
 	{ "ts_root_node",              uc_ts_root_node },
 	{ "ts_node_type",              uc_ts_node_type },
 	{ "ts_node_is_named",          uc_ts_node_is_named },

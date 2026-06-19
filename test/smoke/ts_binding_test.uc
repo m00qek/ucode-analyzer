@@ -91,4 +91,42 @@ threw = false;
 try { ts.newQuery(ts.ucode(), '(this is not valid'); } catch (e) { threw = true; }
 check(threw, 'newQuery() should reject invalid query syntax');
 
+// incremental reparse: a growing edit on an earlier line must shift byte
+// ranges for unaffected nodes on later lines correctly. This is the exact
+// failure mode from the prototype's PROBLEMS_IN_TREESITTER.MD #4 (an
+// unedited/mismatched old tree silently producing wrong byte ranges).
+let rsrc1 = "let ab = 1;\nlet cd = 2;\n";
+let rparser = ts.newParser(ts.ucode());
+let rtree1 = ts.parse(rparser, rsrc1);
+
+let rsrc2 = "let abcdef = 1;\nlet cd = 2;\n";
+let rstart = index(rsrc1, "ab");
+let roldEnd = rstart + length("ab");
+let rnewEnd = rstart + length("abcdef");
+
+let rtree2 = ts.reparse(rparser, rtree1, rsrc1, rsrc2, rstart, roldEnd, rnewEnd);
+let rroot2 = ts.rootNode(rtree2);
+
+check(ts.namedChildCount(rroot2) == 2, 'expected 2 statements after a growing reparse');
+check(ts.text(ts.namedChild(rroot2, 0), rsrc2) == 'let abcdef = 1;', 'edited declaration should reflect the new text');
+check(ts.text(ts.namedChild(rroot2, 1), rsrc2) == 'let cd = 2;',
+	'unaffected declaration on the next line should have correctly shifted byte ranges');
+
+// shrinking edit across a multi-line document
+let rsrc3 = "let a = 1;\nlet verylongname = 2;\nlet b = 3;\n";
+let rtree3 = ts.parse(rparser, rsrc3);
+
+let rsrc4 = "let a = 1;\nlet x = 2;\nlet b = 3;\n";
+let rstart2 = index(rsrc3, "verylongname");
+let roldEnd2 = rstart2 + length("verylongname");
+let rnewEnd2 = rstart2 + length("x");
+
+let rtree4 = ts.reparse(rparser, rtree3, rsrc3, rsrc4, rstart2, roldEnd2, rnewEnd2);
+let rroot4 = ts.rootNode(rtree4);
+
+check(ts.namedChildCount(rroot4) == 3, `expected 3 statements after a shrinking reparse, got ${ts.namedChildCount(rroot4)}`);
+check(ts.text(ts.namedChild(rroot4, 0), rsrc4) == 'let a = 1;', 'declaration before the edit should be unaffected');
+check(ts.text(ts.namedChild(rroot4, 1), rsrc4) == 'let x = 2;', 'edited declaration should reflect the new text');
+check(ts.text(ts.namedChild(rroot4, 2), rsrc4) == 'let b = 3;', 'declaration after the edit should have correctly shifted byte ranges');
+
 print("ts_binding smoke test: OK\n");
