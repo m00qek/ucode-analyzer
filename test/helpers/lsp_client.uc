@@ -11,7 +11,9 @@ export function connect() {
 
 export function initialize(proc) {
 	rpc.send(proc, { jsonrpc: '2.0', id: 0, method: 'initialize', params: { capabilities: {} } });
-	return rpc.receive(proc);
+	let resp = rpc.receive(proc);
+	rpc.send(proc, { jsonrpc: '2.0', method: 'initialized', params: {} });
+	return resp;
 };
 
 export function shutdown(proc) {

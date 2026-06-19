@@ -53,8 +53,13 @@ describe('dag nodes', () => {
 
 	it('allUris includes added nodes', () => {
 		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
-		let uris = dag.allUris();
-		assert.match(true, index(uris, URI_B) >= 0);
+		assert.match(true, index(dag.allUris(), URI_B) >= 0);
+	});
+
+	it('allUris excludes removed nodes', () => {
+		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
+		dag.remove(URI_B);
+		assert.match(false, index(dag.allUris(), URI_B) >= 0);
 	});
 });
 
@@ -65,16 +70,13 @@ describe('dag edges', () => {
 		dag.remove(URI_B);
 	});
 
-	it('records reverse edge when A imports B', () => {
-		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
+	it('records import specifier even when module does not resolve', () => {
 		dag.add(URI_A, TEXT_A_IMPORTS_B, parse(TEXT_A_IMPORTS_B));
 
-		// B is imported by A, so reverseDeps(B) should contain A
-		// (only if 'b' resolves — it won't here since /app/src/b.uc doesn't exist)
-		// This tests that importsOf records the specifier regardless.
 		let imps = dag.importsOf(URI_A);
 		assert.match(1, length(imps));
 		assert.match('b', imps[0].specifier);
+		assert.match(null, imps[0].resolvedUri);
 	});
 
 	it('resolves imports for modules that exist on disk', () => {
@@ -85,6 +87,17 @@ describe('dag edges', () => {
 		assert.match(1, length(imps));
 		assert.match('file:///app/src/tree_sitter.uc', imps[0].resolvedUri);
 		assert.match(true, index(dag.reverseDeps('file:///app/src/tree_sitter.uc'), URI_A) >= 0);
+	});
+
+	it('remove cleans up reverse edges', () => {
+		let text = "import * as ts from 'tree_sitter';";
+		dag.add(URI_A, text, parse(text));
+
+		let tsUri = 'file:///app/src/tree_sitter.uc';
+		assert.match(true, index(dag.reverseDeps(tsUri), URI_A) >= 0);
+
+		dag.remove(URI_A);
+		assert.match(false, index(dag.reverseDeps(tsUri), URI_A) >= 0);
 	});
 
 	it('update removes stale edges when imports change', () => {
