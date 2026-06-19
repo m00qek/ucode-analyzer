@@ -197,19 +197,25 @@ describe('textDocument/completion', () => {
 		assert.match(true, index(labels, 'answer') >= 0);
 	});
 
-	it('returns array for an open document', () => {
+	it('reflects new declaration added by didChange', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;\n" },
 		}});
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
+			textDocument: { uri: 'file:///t.uc', version: 2 },
+			contentChanges: [{ text: "let x = 1;\nlet y = 2;\n" }],
+		}});
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
 			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
+			position: { line: 2, character: 0 },  // after both declarations
 		}});
 
 		let resp = lsp.receive(proc);
+		let labels = map(resp.result, (i) => i.label);
 
 		assert.match(1, resp.id);
-		assert.match('array', type(resp.result));
+		assert.match(true, index(labels, 'x') >= 0);
+		assert.match(true, index(labels, 'y') >= 0);
 	});
 });
 
