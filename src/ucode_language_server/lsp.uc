@@ -1,6 +1,8 @@
 import * as protocol from 'ucode_language_server.protocol';
 import * as documents from 'ucode_language_server.documents';
 import { hover as hoverDoc } from 'ucode_language_server.hover';
+import * as glob from 'ucode_language_server.glob';
+import * as dag from 'ucode_language_server.dag';
 
 export function run(config) {
 	let shutdown_requested = false;
@@ -17,7 +19,16 @@ export function run(config) {
 		},
 
 		initialized: function(msg) {
-			// notification — no response
+			let workspaceDir = config.workspaceDir ?? '/root/project';
+			let ws = config.workspace ?? {};
+			let includes = ws.include ?? ['**/*.uc'];
+			let excludes = ws.exclude ?? [];
+
+			dag.init(config);
+
+			let files = glob.scan(workspaceDir, includes, excludes);
+			for (let path in files)
+				dag.addFromDisk('file://' + path);
 		},
 
 		shutdown: function(msg) {
@@ -32,14 +43,15 @@ export function run(config) {
 		'textDocument/didOpen': function(msg) {
 			let td = msg.params.textDocument;
 			documents.open(td.uri, td.text, td.version);
+			let doc = documents.get(td.uri);
+			dag.update(td.uri, doc.text, doc.tree);
 		},
 
 		'textDocument/didChange': function(msg) {
-			documents.change(
-				msg.params.textDocument.uri,
-				msg.params.contentChanges,
-				msg.params.textDocument.version
-			);
+			let uri = msg.params.textDocument.uri;
+			documents.change(uri, msg.params.contentChanges, msg.params.textDocument.version);
+			let doc = documents.get(uri);
+			dag.update(uri, doc.text, doc.tree);
 		},
 
 		'textDocument/didClose': function(msg) {

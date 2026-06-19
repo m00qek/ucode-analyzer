@@ -22,5 +22,6 @@ Options:
 
 const args = docopt(doc, ARGV, true, '0.1.0');
 const config = loadConfig(args['--config'], args['--workspace']);
+config.workspaceDir = args['--workspace'];
 
 run(config);
