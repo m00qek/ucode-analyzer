@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from 'utest';
+import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_language_server.dag';
 
@@ -26,6 +26,23 @@ describe('dag nodes', () => {
 		dag.init(_config);
 		dag.remove(URI_A);
 		dag.remove(URI_B);
+	});
+
+	it('addFromDisk indexes a file that exists on disk', () => {
+		let tsUri = 'file:///app/src/tree_sitter.uc';
+		dag.remove(tsUri);
+
+		dag.addFromDisk(tsUri);
+
+		let exps = dag.exportsOf(tsUri);
+		assert.match(true, exps !== null);
+		assert.match(true, length(exps) > 0);
+	});
+
+	it('addFromDisk is a no-op for a path that does not exist', () => {
+		let uri = 'file:///nonexistent/file.uc';
+		dag.addFromDisk(uri);
+		assert.match(null, dag.exportsOf(uri));
 	});
 
 	it('add makes exportsOf and importsOf available', () => {
@@ -107,10 +124,33 @@ describe('dag edges', () => {
 		let tsUri = 'file:///app/src/tree_sitter.uc';
 		assert.match(true, index(dag.reverseDeps(tsUri), URI_A) >= 0);
 
-		// Update A to no longer import tree_sitter
 		let text2 = TEXT_A_NO_IMPORT;
 		dag.update(URI_A, text2, parse(text2));
 
 		assert.match(false, index(dag.reverseDeps(tsUri), URI_A) >= 0);
+	});
+
+	it('cascade re-indexes reverse deps on update', () => {
+		// B imports tree_sitter (which resolves — the file exists on disk).
+		// When tree_sitter is updated, the cascade should re-read B and re-index it.
+		// The fs mock intercepts fs.open so we control what B "is on disk".
+		let tsUri = 'file:///app/src/tree_sitter.uc';
+		let text_b_v1 = "import * as ts from 'tree_sitter';\nexport function b_export() {};";
+		let text_b_v2 = "export function b_new_export() {};";
+
+		dag.add(URI_B, text_b_v1, parse(text_b_v1));
+		assert.match(true, index(dag.reverseDeps(tsUri), URI_B) >= 0);
+
+		// Patch fs so the cascade re-read of URI_B returns v2 content.
+		mock.global.patch('fs', { data: { '/app/src/b.uc': text_b_v2 } });
+
+		dag.update(tsUri, "export const ts_updated = true;", parse("export const ts_updated = true;"));
+
+		mock.global.unpatch('fs');
+
+		// B should now export b_new_export (from v2), not b_export (from v1).
+		let exps = dag.exportsOf(URI_B);
+		assert.match(1, length(exps));
+		assert.match('b_new_export', exps[0].name);
 	});
 });
