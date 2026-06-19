@@ -2,6 +2,7 @@ import * as protocol from 'ucode_language_server.protocol';
 import * as documents from 'ucode_language_server.documents';
 import { hover as hoverDoc } from 'ucode_language_server.hover';
 import { definition as definitionDoc } from 'ucode_language_server.definition';
+import { completion as completionDoc } from 'ucode_language_server.completion';
 import * as glob from 'ucode_language_server.glob';
 import * as dag from 'ucode_language_server.dag';
 import { invalidateUri } from 'ucode_language_server.memo';
@@ -16,6 +17,7 @@ export function run(config) {
 					textDocumentSync: 1,
 					hoverProvider: true,
 					definitionProvider: true,
+					completionProvider: { triggerCharacters: ['.'] },
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -72,6 +74,12 @@ export function run(config) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
 			protocol.respond(msg.id, doc ? definitionDoc(uri, doc, msg.params.position) : null);
+		},
+
+		'textDocument/completion': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc ? completionDoc(uri, doc, msg.params.position) : []);
 		},
 	};
 
