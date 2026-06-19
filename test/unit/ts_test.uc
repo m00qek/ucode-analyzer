@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import * as ts from 'ucode_language_server.ts';
+import * as ts from 'tree_sitter';
 
 describe('ts (node/tree lifecycle)', () => {
 	it('parses and walks a tree', () => {
