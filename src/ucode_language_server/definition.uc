@@ -69,6 +69,35 @@ function localDefinition(uri, doc, name) {
 	return null;
 }
 
+// Recursively search node (which must contain offset) for a function scope
+// whose formal_parameters contain name. Returns the Location of the parameter
+// identifier in the innermost matching scope, or null.
+function walkForParam(node, uri, doc, name, offset) {
+	if (ts.startByte(node) > offset || offset >= ts.endByte(node)) return null;
+
+	// Recurse first so the innermost scope wins.
+	for (let i = 0; i < ts.namedChildCount(node); i++) {
+		let res = walkForParam(ts.namedChild(node, i), uri, doc, name, offset);
+		if (res) return res;
+	}
+
+	let nt = ts.nodeType(node);
+	if (nt !== 'function_declaration' && nt !== 'arrow_function' && nt !== 'function_expression')
+		return null;
+
+	for (let i = 0; i < ts.namedChildCount(node); i++) {
+		let child = ts.namedChild(node, i);
+		if (ts.nodeType(child) !== 'formal_parameters') continue;
+		for (let j = 0; j < ts.namedChildCount(child); j++) {
+			let param = ts.namedChild(child, j);
+			if (ts.nodeType(param) === 'identifier' && ts.text(param, doc.text) === name)
+				return location(uri, doc.text, ts.startByte(param));
+		}
+		break;
+	}
+	return null;
+}
+
 // If name is a named import into uri, return the Location of its definition.
 function importedDefinition(uri, name) {
 	let imps = dag.importsOf(uri);
@@ -118,6 +147,10 @@ export function definition(uri, doc, position) {
 	let imp = importedDefinition(uri, name);
 	if (imp) return imp;
 
-	// Local declaration.
+	// Function parameter in the innermost enclosing scope.
+	let param = walkForParam(root, uri, doc, name, offset);
+	if (param) return param;
+
+	// Top-level declaration.
 	return localDefinition(uri, doc, name);
 };

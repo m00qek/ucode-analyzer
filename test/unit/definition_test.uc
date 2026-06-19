@@ -161,3 +161,43 @@ describe('definition — named imports (export clause)', () => {
 		assert.match('function', exps[0].kind);
 	});
 });
+
+describe('definition — function parameters', () => {
+	it('jumps to parameter declaration in the enclosing function', () => {
+		let text = "function parse(ts, opts) {\nts;\n}";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		// (1, 0) is 'ts' — a reference to the parameter
+		let result = definition(URI, doc, { line: 1, character: 0 });
+
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);        // parameter declared on line 0
+		assert.match(15, result.range.start.character);  // 'ts' at col 15 (after 'function parse(')
+	});
+
+	it('resolves to the innermost parameter when nested functions shadow the name', () => {
+		// outer 'x' is at col 9; inner 'x' is at col 18 (after 'function inner(')
+		let text = "function outer(x) {\nfunction inner(x) {\nx;\n}\n}";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		// (2, 0) is 'x' inside inner() — should resolve to inner's parameter
+		let result = definition(URI, doc, { line: 2, character: 0 });
+
+		assert.match(URI, result.uri);
+		assert.match(1, result.range.start.line);        // inner's parameter is on line 1
+		assert.match(15, result.range.start.character);  // 'x' after 'function inner('
+	});
+
+	it('does not match a parameter from a sibling function', () => {
+		let text = "function a(x) {}\nfunction b() {\nx;\n}";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		// (2, 0) is 'x' inside b(), which has no parameter named x
+		let result = definition(URI, doc, { line: 2, character: 0 });
+
+		assert.match(null, result);
+	});
+});
