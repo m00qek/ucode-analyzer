@@ -1,5 +1,6 @@
 import * as protocol from 'ucode_language_server.protocol';
 import * as documents from 'ucode_language_server.documents';
+import { hover as hoverDoc } from 'ucode_language_server.hover';
 
 export function run(config) {
 	let shutdown_requested = false;
@@ -9,6 +10,7 @@ export function run(config) {
 			protocol.respond(msg.id, {
 				capabilities: {
 					textDocumentSync: 1,
+					hoverProvider: true,
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -42,6 +44,11 @@ export function run(config) {
 
 		'textDocument/didClose': function(msg) {
 			documents.close(msg.params.textDocument.uri);
+		},
+
+		'textDocument/hover': function(msg) {
+			let doc = documents.get(msg.params.textDocument.uri);
+			protocol.respond(msg.id, doc ? hoverDoc(doc, msg.params.position) : null);
 		},
 	};
 

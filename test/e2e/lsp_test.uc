@@ -16,6 +16,7 @@ describe('initialize response', () => {
 
 		assert.match(true, type(resp.result.capabilities) === 'object');
 		assert.match(1, resp.result.capabilities.textDocumentSync);
+		assert.match(true, resp.result.capabilities.hoverProvider);
 		assert.match('ucode-language-server', resp.result.serverInfo.name);
 
 		let shutdownResp = lsp.shutdown(proc);
@@ -35,6 +36,40 @@ describe('LSP document sync', () => {
 	afterEach(() => {
 		lsp.shutdown(proc);
 		assert.match(0, lsp.close(proc));
+	});
+
+	it('textDocument/hover returns markdown for open document', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: DOC } });
+		lsp.send(proc, {
+			jsonrpc: '2.0', id: 1,
+			method: 'textDocument/hover',
+			params: {
+				textDocument: { uri: DOC.uri },
+				position: { line: 0, character: 4 },
+			},
+		});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(1, resp.id);
+		assert.match('markdown', resp.result.contents.kind);
+		assert.match(true, index(resp.result.contents.value, 'identifier') >= 0);
+	});
+
+	it('textDocument/hover returns null for unopened document', () => {
+		lsp.send(proc, {
+			jsonrpc: '2.0', id: 1,
+			method: 'textDocument/hover',
+			params: {
+				textDocument: { uri: 'file:///not-open.uc' },
+				position: { line: 0, character: 0 },
+			},
+		});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(1, resp.id);
+		assert.match(null, resp.result);
 	});
 
 	it('unknown request returns MethodNotFound', () => {
