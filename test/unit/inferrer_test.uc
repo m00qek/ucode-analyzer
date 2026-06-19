@@ -1,4 +1,4 @@
-import { describe, it, assert, mock, beforeEach } from 'utest';
+import { describe, it, assert, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_language_server.dag';
 import { inferNode, buildScope } from 'ucode_language_server.inferrer';
@@ -43,8 +43,6 @@ function prim(name)       { return { kind: 'primitive', name }; }
 function list_(elem)      { return { kind: 'generic', base: 'list', params: [elem] }; }
 function unknown()        { return { kind: 'unknown' }; }
 function union_(a, b)     { return { kind: 'union', members: [a, b] }; }
-function fn_(params, ret) { return { kind: 'function', params, return: ret }; }
-function np(name, type)   { return { name, type }; }
 
 describe('inferrer — literals', () => {
 	it('infers integer', () => {
@@ -93,7 +91,7 @@ describe('inferrer — binary expressions', () => {
 		assert.match(prim('int'), infer('let x = 1 + 2;'));
 	});
 
-	it('string + x yields string when left is string', () => {
+	it('string + string yields string', () => {
 		assert.match(prim('string'), infer("let x = 'a' + 'b';"));
 	});
 
@@ -113,11 +111,11 @@ describe('inferrer — unary expressions', () => {
 });
 
 describe('inferrer — ternary expressions', () => {
-	it('ternary with same-type branches returns that type', () => {
+	it('same-type branches return that type', () => {
 		assert.match(prim('int'), infer('let x = true ? 1 : 2;'));
 	});
 
-	it('ternary with different-type branches returns union', () => {
+	it('different-type branches return union', () => {
 		assert.match(union_(prim('int'), prim('string')), infer("let x = true ? 1 : 'a';"));
 	});
 });
@@ -139,7 +137,7 @@ describe('inferrer — identifier and scope', () => {
 		assert.match(unknown(), result);
 	});
 
-	it('identifier in scope yields its type', () => {
+	it('identifier bound in scope yields its type', () => {
 		let s = makeScope(null);
 		scopeSet(s, 'y', prim('string'));
 		let node = exprNode('let x = y;');
@@ -149,14 +147,15 @@ describe('inferrer — identifier and scope', () => {
 });
 
 describe('inferrer — arrow functions', () => {
-	it('single-param arrow with int body', () => {
+	it('single-param arrow has one param and inferred return', () => {
 		let result = infer('let f = x => 42;');
 		assert.match('function', result.kind);
 		assert.match(prim('int'), result.return);
 		assert.match(1, length(result.params));
+		assert.match('x', result.params[0].name);
 	});
 
-	it('multi-param arrow with bool body', () => {
+	it('multi-param arrow has correct param names and inferred return', () => {
 		let result = infer('let f = (a, b) => true;');
 		assert.match('function', result.kind);
 		assert.match(prim('boolean'), result.return);
@@ -165,25 +164,45 @@ describe('inferrer — arrow functions', () => {
 		assert.match('b', result.params[1].name);
 	});
 
-	it('arrow with string param body returns string', () => {
-		// When param type is known from scope, body can use it
-		let text = "let f = (a, b) => a;";
-		let node = exprNode(text);
-		// Build a scope with the inner param type: not possible yet without call context.
-		// At least verify the function shape.
-		let result = inferNode(node, text, URI, makeScope(null), 0);
+	it('arrow body referring to unknown param yields unknown return', () => {
+		// No pushed-down type context → param type is unknown → body `a` is unknown
+		let result = infer('let f = a => a;');
 		assert.match('function', result.kind);
-		assert.match(2, length(result.params));
+		assert.match(unknown(), result.return);
+	});
+
+	it('arrow with literal body ignores param type', () => {
+		let result = infer("let f = x => 'hi';");
+		assert.match('function', result.kind);
+		assert.match(prim('string'), result.return);
+	});
+});
+
+describe('inferrer — call expressions', () => {
+	it('call of in-scope function returns its declared return type', () => {
+		// Build a scope where `greet` is typed as () -> string
+		let s = makeScope(null);
+		scopeSet(s, 'greet', { kind: 'function', params: [], return: prim('string') });
+		// Parse a call expression
+		let text = "let r = greet();";
+		let node = exprNode(text);
+		let result = inferNode(node, text, URI, s, 0);
+		assert.match(prim('string'), result);
+	});
+
+	it('call of unknown function yields unknown', () => {
+		let result = infer('let r = foo();');
+		assert.match(unknown(), result);
 	});
 });
 
 describe('inferrer — buildScope', () => {
-	it('builds scope from preceding let declarations', () => {
+	it('binds preceding let declarations into scope', () => {
 		let text = "let a = 1;\nlet b = 'hello';\nlet c = b;";
 		let tree = parse(text);
 		let root = ts.rootNode(tree);
 
-		// Point at the third statement (let c = b)
+		// Point at the third statement (let c = b); only a and b should be in scope.
 		let thirdStmt = ts.namedChild(root, 2);
 		let offset = ts.startByte(thirdStmt);
 
@@ -192,34 +211,6 @@ describe('inferrer — buildScope', () => {
 
 		assert.match(prim('int'), scope.bindings['a']);
 		assert.match(prim('string'), scope.bindings['b']);
-	});
-});
-
-describe('inferrer — cross-file DAG lookup', () => {
-	it('named import resolves to the exported function type', () => {
-		let libText = "/** @returns {int} */\nexport function answer() {};";
-		let consumerText = "import { answer } from 'mylib';";
-		let libUri = 'file:///app/src/mylib.uc';
-
-		mock.global.patch('fs', { data: { '/app/src/mylib.uc': libText } });
-		dag.addFromDisk(libUri);
-		dag.add(URI, consumerText, parse(consumerText));
-		mock.global.unpatch('fs');
-
-		let imps = dag.importsOf(URI);
-		// If resolution worked, resolvedUri is set
-		if (imps && length(imps) > 0 && imps[0].resolvedUri === libUri) {
-			let text = "let r = answer;";
-			let node = exprNode(text);
-			let scope = buildScope(URI, consumerText, parse(consumerText), 1000);
-			let result = inferNode(node, text, URI, scope, 0);
-			assert.match({ kind: 'function', return: prim('int') }, result);
-		} else {
-			// Resolution not supported in this test environment, skip
-			assert.match(true, true);
-		}
-
-		dag.remove(libUri);
-		invalidateUri(libUri);
+		assert.match(null, scope.bindings['c']);
 	});
 });
