@@ -24,7 +24,7 @@ BUILD_IMAGE = docker run --rm \
 TEST_IMAGE = docker run --rm $(TEST_OPTS) \
 	-v $(CURDIR):/app \
 	$(if $(wildcard $(BUILD_DIR)/native.so),-v $(CURDIR)/$(BUILD_DIR)/native.so:/usr/lib/ucode/$(UCODE_MOD_NAME)/native.so:ro) \
-	$(if $(wildcard $(BUILD_DIR)/spawn_pipes.so),-v $(CURDIR)/$(BUILD_DIR)/spawn_pipes.so:/usr/lib/ucode/spawn_pipes.so:ro) \
+	$(if $(wildcard $(BUILD_DIR)/rpc_client.so),-v $(CURDIR)/$(BUILD_DIR)/rpc_client.so:/usr/lib/ucode/rpc_client.so:ro) \
 	-w /app \
 	$(IMAGE)
 
@@ -52,10 +52,10 @@ $(BUILD_DIR)/native.so: $(shell find mod third_party/tree-sitter-ucode/src third
 			make package/$(PKG_NAME)/compile V=s && \
 			find /builder/build_dir -name native.so \
 				-exec cp {} /builder/bin/native.so \; -quit && \
-			find /builder/build_dir -name spawn_pipes.so \
-				-exec cp {} /builder/bin/spawn_pipes.so \; -quit && \
+			find /builder/build_dir -name rpc_client.so \
+				-exec cp {} /builder/bin/rpc_client.so \; -quit && \
 			test -f /builder/bin/native.so && \
-			test -f /builder/bin/spawn_pipes.so && \
+			test -f /builder/bin/rpc_client.so && \
 			cp -fpR /builder/staging_dir/target-*/usr/include/* /builder/out_include/ \
 		"; EC=$$?; rm -f $(BUILD_DIR)/$(PKG_NAME)-Makefile; exit $$EC
 

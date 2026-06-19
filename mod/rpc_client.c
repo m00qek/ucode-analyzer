@@ -1,13 +1,10 @@
 /*
- * Bidirectional process spawning for the e2e test harness, installed as
- * spawn_pipes (test-only -- not installed by the OpenWrt package, see
- * openwrt/ucode-language-server/Makefile).
+ * Minimal native primitives for the rpc_client.uc JSON-RPC client.
+ * Exposes spawn() + three raw I/O methods on the returned process resource;
+ * all framing, buffering, and protocol logic lives in rpc_client.uc.
  *
- * Unlike fs.popen(), which only pipes one direction ("r" or "w"), the e2e
- * harness needs to write LSP requests to a long-running server process's
- * stdin and read its responses from stdout concurrently. uloop.process()
- * doesn't redirect the child's stdio at all. Neither covers this, hence a
- * small dedicated extension.
+ * Installed as a flat ucode module (rpc_client.so) for test-only use --
+ * the OpenWrt package does not ship it; only rpc_client.uc imports it.
  */
 
 #include <errno.h>
@@ -24,7 +21,7 @@ typedef struct {
 	pid_t pid;
 	int in_fd;  /* write end of the child's stdin, -1 once closed */
 	int out_fd; /* read end of the child's stdout, -1 once closed */
-} uc_spawn_process_t;
+} uc_rpc_process_t;
 
 static uc_resource_type_t *process_type;
 
@@ -38,7 +35,7 @@ set_cloexec(int fd)
 }
 
 static uc_value_t *
-uc_spawn(uc_vm_t *vm, size_t nargs)
+uc_rpc_spawn(uc_vm_t *vm, size_t nargs)
 {
 	uc_value_t *pathval = uc_fn_arg(0);
 	uc_value_t *argsval = uc_fn_arg(1);
@@ -46,7 +43,7 @@ uc_spawn(uc_vm_t *vm, size_t nargs)
 	char **argv;
 	size_t nargv, i;
 	pid_t pid;
-	uc_spawn_process_t *proc;
+	uc_rpc_process_t *proc;
 
 	if (ucv_type(pathval) != UC_STRING || (argsval && ucv_type(argsval) != UC_ARRAY)) {
 		uc_vm_raise_exception(vm, EXCEPTION_TYPE,
@@ -61,19 +58,15 @@ uc_spawn(uc_vm_t *vm, size_t nargs)
 
 	/*
 	 * CLOEXEC the ends each side keeps, so a grandchild execed later
-	 * doesn't inherit them. The ends being handed to the child via dup2()
-	 * below land on stdin/stdout (fd 0/1), which are never CLOEXEC by
-	 * definition, so this only needs to cover the parent-retained ends.
+	 * doesn't inherit them.
 	 */
 	set_cloexec(stdin_pipe[1]);
 	set_cloexec(stdout_pipe[0]);
 
 	/*
 	 * ucv_string_get() for short inline strings returns a pointer into the
-	 * local uc_value_t* variable's own storage. Storing those pointers in
-	 * argv and reusing the variable each loop iteration means all entries
-	 * would alias the same stack slot. strdup() each string immediately so
-	 * every argv[i] owns a stable, independent copy.
+	 * local uc_value_t* variable's own storage -- reusing the loop variable
+	 * would alias all argv entries. strdup() each string for a stable copy.
 	 */
 	nargv = argsval ? ucv_array_length(argsval) : 0;
 	argv = xalloc(sizeof(char *) * (nargv + 2));
@@ -118,7 +111,6 @@ uc_spawn(uc_vm_t *vm, size_t nargs)
 		free(argv[i]);
 	free(argv);
 
-	/* parent: close the ends handed to the child, keep the other ends */
 	close(stdin_pipe[0]);
 	close(stdout_pipe[1]);
 
@@ -133,7 +125,7 @@ uc_spawn(uc_vm_t *vm, size_t nargs)
 static void
 process_free(void *ptr)
 {
-	uc_spawn_process_t *proc = ptr;
+	uc_rpc_process_t *proc = ptr;
 
 	if (proc->in_fd != -1)
 		close(proc->in_fd);
@@ -149,13 +141,12 @@ process_free(void *ptr)
 	free(proc);
 }
 
+/* Single write() call; returns bytes written. The retry loop is in rpc_client.uc. */
 static uc_value_t *
-uc_spawn_write(uc_vm_t *vm, size_t nargs)
+uc_rpc_write_raw(uc_vm_t *vm, size_t nargs)
 {
-	uc_spawn_process_t *proc = uc_fn_thisval("spawn_pipes.process");
+	uc_rpc_process_t *proc = uc_fn_thisval("rpc_client.process");
 	uc_value_t *dataval = uc_fn_arg(0);
-	const char *data;
-	size_t len, off = 0;
 	ssize_t wlen;
 
 	if (!proc || ucv_type(dataval) != UC_STRING) {
@@ -168,40 +159,33 @@ uc_spawn_write(uc_vm_t *vm, size_t nargs)
 		return NULL;
 	}
 
-	data = ucv_string_get(dataval);
-	len = ucv_string_length(dataval);
+	do {
+		wlen = write(proc->in_fd,
+		             ucv_string_get(dataval),
+		             ucv_string_length(dataval));
+	} while (wlen == -1 && errno == EINTR);
 
-	while (off < len) {
-		wlen = write(proc->in_fd, data + off, len - off);
-
-		if (wlen == -1) {
-			if (errno == EINTR)
-				continue;
-
-			uc_vm_raise_exception(vm, EXCEPTION_RUNTIME, "write() failed: %s", strerror(errno));
-			return NULL;
-		}
-
-		off += (size_t)wlen;
+	if (wlen == -1) {
+		uc_vm_raise_exception(vm, EXCEPTION_RUNTIME, "write() failed: %s", strerror(errno));
+		return NULL;
 	}
 
-	return ucv_int64_new(off);
+	return ucv_int64_new(wlen);
 }
 
-/* Reads up to `n` bytes, looping on short reads; returns fewer bytes only at EOF. */
+/* Single read() call; returns "" at EOF. The accumulation loop is in rpc_client.uc. */
 static uc_value_t *
-uc_spawn_read(uc_vm_t *vm, size_t nargs)
+uc_rpc_read_raw(uc_vm_t *vm, size_t nargs)
 {
-	uc_spawn_process_t *proc = uc_fn_thisval("spawn_pipes.process");
+	uc_rpc_process_t *proc = uc_fn_thisval("rpc_client.process");
 	uc_value_t *nval = uc_fn_arg(0);
 	int64_t n;
 	char *buf;
-	size_t off = 0;
 	ssize_t rlen;
 	uc_value_t *result;
 
-	if (!proc || ucv_type(nval) != UC_INTEGER || ucv_int64_get(nval) < 0) {
-		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a non-negative byte count");
+	if (!proc || ucv_type(nval) != UC_INTEGER || ucv_int64_get(nval) <= 0) {
+		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a positive byte count");
 		return NULL;
 	}
 
@@ -213,40 +197,30 @@ uc_spawn_read(uc_vm_t *vm, size_t nargs)
 	n = ucv_int64_get(nval);
 	buf = xalloc(n);
 
-	while (off < (size_t)n) {
-		rlen = read(proc->out_fd, buf + off, (size_t)n - off);
+	do {
+		rlen = read(proc->out_fd, buf, (size_t)n);
+	} while (rlen == -1 && errno == EINTR);
 
-		if (rlen == -1) {
-			if (errno == EINTR)
-				continue;
-
-			free(buf);
-			uc_vm_raise_exception(vm, EXCEPTION_RUNTIME, "read() failed: %s", strerror(errno));
-			return NULL;
-		}
-
-		if (rlen == 0)
-			break; /* EOF */
-
-		off += (size_t)rlen;
+	if (rlen == -1) {
+		free(buf);
+		uc_vm_raise_exception(vm, EXCEPTION_RUNTIME, "read() failed: %s", strerror(errno));
+		return NULL;
 	}
 
-	result = ucv_string_new_length(buf, off);
+	result = ucv_string_new_length(buf, (size_t)rlen);
 	free(buf);
 
 	return result;
 }
 
 /*
- * Closes stdin (signaling EOF to the child), then waits for it to exit and
- * returns its exit status: positive exit code, or the negative signal
- * number if it was killed by a signal -- matching fs.proc#close()'s
- * convention. Safe to call more than once.
+ * Closes both pipe ends, waits for the child, and returns its exit status:
+ * positive exit code, or negative signal number if killed by a signal.
  */
 static uc_value_t *
-uc_spawn_close(uc_vm_t *vm, size_t nargs)
+uc_rpc_close(uc_vm_t *vm, size_t nargs)
 {
-	uc_spawn_process_t *proc = uc_fn_thisval("spawn_pipes.process");
+	uc_rpc_process_t *proc = uc_fn_thisval("rpc_client.process");
 	int status;
 
 	if (!proc)
@@ -282,18 +256,18 @@ uc_spawn_close(uc_vm_t *vm, size_t nargs)
 }
 
 static const uc_function_list_t process_fns[] = {
-	{ "write", uc_spawn_write },
-	{ "read",  uc_spawn_read },
-	{ "close", uc_spawn_close },
+	{ "write_raw", uc_rpc_write_raw },
+	{ "read_raw",  uc_rpc_read_raw },
+	{ "close",     uc_rpc_close },
 };
 
 static const uc_function_list_t global_fns[] = {
-	{ "spawn", uc_spawn },
+	{ "spawn", uc_rpc_spawn },
 };
 
 void uc_module_init(uc_vm_t *vm, uc_value_t *scope)
 {
-	process_type = uc_type_declare(vm, "spawn_pipes.process", process_fns, process_free);
+	process_type = uc_type_declare(vm, "rpc_client.process", process_fns, process_free);
 
 	uc_function_list_register(scope, global_fns);
 }
