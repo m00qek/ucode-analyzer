@@ -1,1 +1,2 @@
-/bindings/ucode/build/
+/bindings/build/
+/bindings/ts_native.so

@@ -14,11 +14,11 @@ if [ ! -x "$UCODE_SOURCE_DIR/build/ucode" ]; then
 	cmake --build "$UCODE_SOURCE_DIR/build" -j"$(nproc)" >/dev/null
 fi
 
-cmake -S "$ROOT/bindings/ucode" -B "$ROOT/bindings/ucode/build" \
+cmake -S "$ROOT/bindings" -B "$ROOT/bindings/build" \
 	-DUCODE_SOURCE_DIR="$UCODE_SOURCE_DIR" \
 	${TREE_SITTER_UCODE_DIR:+-DTREE_SITTER_UCODE_DIR="$TREE_SITTER_UCODE_DIR"} >/dev/null
-cmake --build "$ROOT/bindings/ucode/build" -j"$(nproc)" >/dev/null
+cmake --build "$ROOT/bindings/build" -j"$(nproc)" >/dev/null
 
 LD_LIBRARY_PATH="$UCODE_SOURCE_DIR/build" \
-	"$UCODE_SOURCE_DIR/build/ucode" -L "$ROOT/bindings/ucode/build" \
+	"$UCODE_SOURCE_DIR/build/ucode" -L "$ROOT/bindings" \
 	"$ROOT/test/smoke/ts_binding_test.uc"

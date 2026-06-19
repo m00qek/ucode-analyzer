@@ -1,11 +1,15 @@
 /*
- * ucode native extension exposing the tree-sitter C API ("ts" module).
+ * ucode native extension exposing the tree-sitter C API ("ts_native" module).
  *
- * Milestone 0 of the ucode-native LSP: parser/tree/node lifecycle plus
- * the two grammars (ucode, ucdocs) needed by the rest of the server.
+ * This is deliberately a thin, mechanical FFI layer: one function per
+ * tree-sitter call, minimal validation. Ergonomics (argument-checking with
+ * friendly messages, structured results, collection helpers) live in the
+ * companion ts.uc module, which is the module consumers should actually
+ * import. The checks kept here are the ones that prevent a null-pointer
+ * dereference or undefined behavior in C; ucode's own value accessors
+ * (ucv_string_get, ucv_int64_get, ...) already fail safe (return NULL/0)
+ * for wrong-typed arguments, so we don't duplicate that here.
  */
-
-#include <string.h>
 
 #include <tree_sitter/api.h>
 
@@ -83,8 +87,7 @@ uc_ts_language_ucdocs(uc_vm_t *vm, size_t nargs)
 static uc_value_t *
 uc_ts_new_parser(uc_vm_t *vm, size_t nargs)
 {
-	uc_value_t *langval = uc_fn_arg(0);
-	const TSLanguage *lang = ucv_resource_data(langval, "ts.language");
+	const TSLanguage *lang = ucv_resource_data(uc_fn_arg(0), "ts.language");
 	TSParser *parser;
 
 	if (!lang) {
@@ -106,11 +109,16 @@ uc_ts_new_parser(uc_vm_t *vm, size_t nargs)
 static uc_value_t *
 uc_ts_parse(uc_vm_t *vm, size_t nargs)
 {
-	uc_value_t *parserval = uc_fn_arg(0);
+	TSParser *parser = ucv_resource_data(uc_fn_arg(0), "ts.parser");
 	uc_value_t *srcval = uc_fn_arg(1);
-	TSParser *parser = ucv_resource_data(parserval, "ts.parser");
 	TSTree *tree;
 
+	/*
+	 * srcval's type is checked explicitly (rather than relying on
+	 * ucv_string_get()'s safe-NULL behavior) because a NULL buffer with a
+	 * non-zero claimed length would cross into tree-sitter's own C code,
+	 * which we don't control and isn't documented as null-safe here.
+	 */
 	if (!parser || ucv_type(srcval) != UC_STRING) {
 		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a parser handle and a source string");
 		return NULL;
@@ -157,10 +165,7 @@ uc_ts_node_type(uc_vm_t *vm, size_t nargs)
 {
 	uc_ts_node_t *node = node_arg(vm, nargs, 0);
 
-	if (!node)
-		return NULL;
-
-	return ucv_string_new(ts_node_type(node->node));
+	return node ? ucv_string_new(ts_node_type(node->node)) : NULL;
 }
 
 static uc_value_t *
@@ -168,10 +173,7 @@ uc_ts_node_is_named(uc_vm_t *vm, size_t nargs)
 {
 	uc_ts_node_t *node = node_arg(vm, nargs, 0);
 
-	if (!node)
-		return NULL;
-
-	return ucv_boolean_new(ts_node_is_named(node->node));
+	return node ? ucv_boolean_new(ts_node_is_named(node->node)) : NULL;
 }
 
 static uc_value_t *
@@ -184,6 +186,7 @@ uc_ts_node_text(uc_vm_t *vm, size_t nargs)
 	if (!node)
 		return NULL;
 
+	/* explicit check: see comment in uc_ts_parse() */
 	if (ucv_type(srcval) != UC_STRING) {
 		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a source string");
 		return NULL;
@@ -202,37 +205,19 @@ uc_ts_node_text(uc_vm_t *vm, size_t nargs)
 }
 
 static uc_value_t *
-point_to_object(TSPoint p, uint32_t byte)
-{
-	uc_value_t *o = ucv_object_new(NULL);
-
-	ucv_object_add(o, "row", ucv_int64_new(p.row));
-	ucv_object_add(o, "column", ucv_int64_new(p.column));
-	ucv_object_add(o, "byte", ucv_int64_new(byte));
-
-	return o;
-}
-
-static uc_value_t *
-uc_ts_node_start(uc_vm_t *vm, size_t nargs)
+uc_ts_node_start_byte(uc_vm_t *vm, size_t nargs)
 {
 	uc_ts_node_t *node = node_arg(vm, nargs, 0);
 
-	if (!node)
-		return NULL;
-
-	return point_to_object(ts_node_start_point(node->node), ts_node_start_byte(node->node));
+	return node ? ucv_int64_new(ts_node_start_byte(node->node)) : NULL;
 }
 
 static uc_value_t *
-uc_ts_node_end(uc_vm_t *vm, size_t nargs)
+uc_ts_node_end_byte(uc_vm_t *vm, size_t nargs)
 {
 	uc_ts_node_t *node = node_arg(vm, nargs, 0);
 
-	if (!node)
-		return NULL;
-
-	return point_to_object(ts_node_end_point(node->node), ts_node_end_byte(node->node));
+	return node ? ucv_int64_new(ts_node_end_byte(node->node)) : NULL;
 }
 
 static uc_value_t *
@@ -240,10 +225,7 @@ uc_ts_node_child_count(uc_vm_t *vm, size_t nargs)
 {
 	uc_ts_node_t *node = node_arg(vm, nargs, 0);
 
-	if (!node)
-		return NULL;
-
-	return ucv_int64_new(ts_node_child_count(node->node));
+	return node ? ucv_int64_new(ts_node_child_count(node->node)) : NULL;
 }
 
 static uc_value_t *
@@ -251,44 +233,29 @@ uc_ts_node_named_child_count(uc_vm_t *vm, size_t nargs)
 {
 	uc_ts_node_t *node = node_arg(vm, nargs, 0);
 
-	if (!node)
-		return NULL;
-
-	return ucv_int64_new(ts_node_named_child_count(node->node));
+	return node ? ucv_int64_new(ts_node_named_child_count(node->node)) : NULL;
 }
 
 static uc_value_t *
 uc_ts_node_child(uc_vm_t *vm, size_t nargs)
 {
 	uc_ts_node_t *node = node_arg(vm, nargs, 0);
-	uc_value_t *idxval = uc_fn_arg(1);
 
 	if (!node)
 		return NULL;
 
-	if (ucv_type(idxval) != UC_INTEGER) {
-		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting an integer index");
-		return NULL;
-	}
-
-	return node_wrap(node->tree_ref, ts_node_child(node->node, ucv_int64_get(idxval)));
+	return node_wrap(node->tree_ref, ts_node_child(node->node, ucv_int64_get(uc_fn_arg(1))));
 }
 
 static uc_value_t *
 uc_ts_node_named_child(uc_vm_t *vm, size_t nargs)
 {
 	uc_ts_node_t *node = node_arg(vm, nargs, 0);
-	uc_value_t *idxval = uc_fn_arg(1);
 
 	if (!node)
 		return NULL;
 
-	if (ucv_type(idxval) != UC_INTEGER) {
-		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting an integer index");
-		return NULL;
-	}
-
-	return node_wrap(node->tree_ref, ts_node_named_child(node->node, ucv_int64_get(idxval)));
+	return node_wrap(node->tree_ref, ts_node_named_child(node->node, ucv_int64_get(uc_fn_arg(1))));
 }
 
 static uc_value_t *
@@ -299,11 +266,6 @@ uc_ts_node_child_by_field(uc_vm_t *vm, size_t nargs)
 
 	if (!node)
 		return NULL;
-
-	if (ucv_type(fieldval) != UC_STRING) {
-		uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a field name string");
-		return NULL;
-	}
 
 	return node_wrap(node->tree_ref,
 		ts_node_child_by_field_name(node->node, ucv_string_get(fieldval), ucv_string_length(fieldval)));
@@ -321,22 +283,22 @@ uc_ts_node_parent(uc_vm_t *vm, size_t nargs)
 }
 
 static const uc_function_list_t global_fns[] = {
-	{ "ts_language_ucode",        uc_ts_language_ucode },
-	{ "ts_language_ucdocs",       uc_ts_language_ucdocs },
-	{ "ts_new_parser",            uc_ts_new_parser },
-	{ "ts_parse",                 uc_ts_parse },
-	{ "ts_root_node",             uc_ts_root_node },
-	{ "ts_node_type",             uc_ts_node_type },
-	{ "ts_node_is_named",         uc_ts_node_is_named },
-	{ "ts_node_text",             uc_ts_node_text },
-	{ "ts_node_start",            uc_ts_node_start },
-	{ "ts_node_end",              uc_ts_node_end },
-	{ "ts_node_child_count",      uc_ts_node_child_count },
+	{ "ts_language_ucode",         uc_ts_language_ucode },
+	{ "ts_language_ucdocs",        uc_ts_language_ucdocs },
+	{ "ts_new_parser",             uc_ts_new_parser },
+	{ "ts_parse",                  uc_ts_parse },
+	{ "ts_root_node",              uc_ts_root_node },
+	{ "ts_node_type",              uc_ts_node_type },
+	{ "ts_node_is_named",          uc_ts_node_is_named },
+	{ "ts_node_text",              uc_ts_node_text },
+	{ "ts_node_start_byte",        uc_ts_node_start_byte },
+	{ "ts_node_end_byte",          uc_ts_node_end_byte },
+	{ "ts_node_child_count",       uc_ts_node_child_count },
 	{ "ts_node_named_child_count", uc_ts_node_named_child_count },
-	{ "ts_node_child",            uc_ts_node_child },
-	{ "ts_node_named_child",      uc_ts_node_named_child },
-	{ "ts_node_child_by_field",   uc_ts_node_child_by_field },
-	{ "ts_node_parent",           uc_ts_node_parent },
+	{ "ts_node_child",             uc_ts_node_child },
+	{ "ts_node_named_child",       uc_ts_node_named_child },
+	{ "ts_node_child_by_field",    uc_ts_node_child_by_field },
+	{ "ts_node_parent",            uc_ts_node_parent },
 };
 
 void uc_module_init(uc_vm_t *vm, uc_value_t *scope)
