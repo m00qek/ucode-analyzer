@@ -31,16 +31,14 @@ define Build/Prepare
 endef
 
 define Package/$(PKG_NAME)/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode/$(UCODE_MOD_NAME)
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/$(UCODE_MOD_NAME)/native.so \
-		$(1)/usr/lib/ucode/$(UCODE_MOD_NAME)/native.so
-	$(INSTALL_DIR) $(1)/usr/lib/ucode
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/rpc_client.so \
-		$(1)/usr/lib/ucode/rpc_client.so
+	$(INSTALL_DIR) $(1)/usr/lib/ucode/tree_sitter
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/tree_sitter/native.so \
+		$(1)/usr/lib/ucode/tree_sitter/native.so
+	$(INSTALL_DIR) $(1)/usr/lib/ucode/rpc_client
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/rpc_client/native.so \
+		$(1)/usr/lib/ucode/rpc_client/native.so
 	$(INSTALL_DIR) $(1)/usr/share/ucode
 	$(CP) ./src/tree_sitter.uc $(1)/usr/share/ucode/tree_sitter.uc
-	$(INSTALL_DIR) $(1)/usr/share/ucode/$(UCODE_MOD_NAME)
-	$(CP) ./src/$(UCODE_MOD_NAME)/* $(1)/usr/share/ucode/$(UCODE_MOD_NAME)/
 endef
 
 $(eval $(call BuildPackage,$(PKG_NAME)))

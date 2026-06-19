@@ -9,7 +9,7 @@
  * validation/logic are wrapped.
  */
 
-import * as native from 'ucode_language_server.native';
+import * as native from 'tree_sitter.native';
 
 function expect(cond, msg) {
 	if (!cond)

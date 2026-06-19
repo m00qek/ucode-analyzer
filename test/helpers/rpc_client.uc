@@ -1,4 +1,4 @@
-import * as _proc from 'rpc_client';
+import * as native from 'rpc_client.native';
 
 function write_all(proc, data) {
 	let off = 0;
@@ -41,7 +41,7 @@ function read_header(proc) {
 };
 
 export function connect(path, args) {
-	return _proc.spawn(path, args ?? []);
+	return native.spawn(path, args ?? []);
 };
 
 export function send(proc, obj) {

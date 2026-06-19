@@ -30,21 +30,27 @@ add_library(ucdocs_grammar STATIC
 target_include_directories(ucdocs_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucdocs/src)
 set_target_properties(ucdocs_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_library(native SHARED tree_sitter/native.c)
-set_target_properties(native PROPERTIES PREFIX "")
-target_link_libraries(native ${UCODE_LIB} ucode_grammar ucdocs_grammar tree_sitter_core)
+add_library(tree_sitter_native SHARED tree_sitter/native.c)
+set_target_properties(tree_sitter_native PROPERTIES PREFIX "")
+target_link_libraries(tree_sitter_native ${UCODE_LIB} ucode_grammar ucdocs_grammar tree_sitter_core)
 
 # Test-only (JSON-RPC client primitives for the e2e harness). CMake-installed
 # so it survives OpenWrt's build-dir autoremove cleanup (which wipes everything
-# not under .pkgdir/), but the OpenWrt Package/install step never references
-# it, so it never ships in the .apk.
-add_library(rpc_client SHARED rpc_client/native.c)
-set_target_properties(rpc_client PROPERTIES PREFIX "")
-target_link_libraries(rpc_client ${UCODE_LIB})
+# not under .pkgdir/), but shipped in the .apk only so the test image can run
+# e2e tests on-device.
+add_library(rpc_client_native SHARED rpc_client/native.c)
+set_target_properties(rpc_client_native PROPERTIES PREFIX "")
+target_link_libraries(rpc_client_native ${UCODE_LIB})
 
 if(NOT PKG_NAME)
   set(PKG_NAME "ucode_language_server")
 endif()
 
-install(TARGETS native DESTINATION lib/ucode/${PKG_NAME})
-install(TARGETS rpc_client DESTINATION lib/ucode)
+# Both targets are installed as native.so under their respective namespace
+# directories so ucode resolves them as 'tree_sitter.native' and
+# 'rpc_client.native'. The build names (tree_sitter_native / rpc_client_native)
+# must differ to avoid a CMake/Ninja conflict in the shared build directory.
+install(FILES $<TARGET_FILE:tree_sitter_native>
+        DESTINATION lib/ucode/tree_sitter RENAME native.so)
+install(FILES $<TARGET_FILE:rpc_client_native>
+        DESTINATION lib/ucode/rpc_client RENAME native.so)

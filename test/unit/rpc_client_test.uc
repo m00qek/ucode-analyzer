@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import * as rpc from 'ucode_language_server.rpc_client';
+import * as rpc from 'rpc_client';
 
 describe('rpc_client', () => {
 	it('close() returns 0 for a clean exit', () => {
