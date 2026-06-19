@@ -38,14 +38,14 @@ describe('LSP document sync', () => {
 		assert.match(0, lsp.close(proc));
 	});
 
-	it('textDocument/hover returns markdown for open document', () => {
+	it('textDocument/hover returns inferred type for a variable', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: DOC } });
 		lsp.send(proc, {
 			jsonrpc: '2.0', id: 1,
 			method: 'textDocument/hover',
 			params: {
 				textDocument: { uri: DOC.uri },
-				position: { line: 0, character: 4 },
+				position: { line: 0, character: 4 },  // cursor on 'x' in 'let x = 5;'
 			},
 		});
 
@@ -53,7 +53,7 @@ describe('LSP document sync', () => {
 
 		assert.match(1, resp.id);
 		assert.match('markdown', resp.result.contents.kind);
-		assert.match(true, index(resp.result.contents.value, 'identifier') >= 0);
+		assert.match(true, index(resp.result.contents.value, 'int') >= 0);
 	});
 
 	it('textDocument/hover returns null for unopened document', () => {

@@ -3,6 +3,7 @@ import * as documents from 'ucode_language_server.documents';
 import { hover as hoverDoc } from 'ucode_language_server.hover';
 import * as glob from 'ucode_language_server.glob';
 import * as dag from 'ucode_language_server.dag';
+import { invalidateUri } from 'ucode_language_server.memo';
 
 export function run(config) {
 	let shutdown_requested = false;
@@ -44,6 +45,7 @@ export function run(config) {
 			let td = msg.params.textDocument;
 			documents.open(td.uri, td.text, td.version);
 			let doc = documents.get(td.uri);
+			invalidateUri(td.uri);
 			dag.update(td.uri, doc.text, doc.tree);
 		},
 
@@ -51,6 +53,7 @@ export function run(config) {
 			let uri = msg.params.textDocument.uri;
 			documents.change(uri, msg.params.contentChanges, msg.params.textDocument.version);
 			let doc = documents.get(uri);
+			invalidateUri(uri);
 			dag.update(uri, doc.text, doc.tree);
 		},
 

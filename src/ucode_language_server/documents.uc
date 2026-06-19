@@ -6,6 +6,7 @@ let _documents = {};
 
 export function open(uri, text, version) {
 	_documents[uri] = {
+		uri,
 		text,
 		version,
 		tree: ts.parse(_parser, text),
@@ -22,6 +23,7 @@ export function change(uri, changes, version) {
 	let text = changes[0].text;
 
 	_documents[uri] = {
+		uri,
 		text,
 		version,
 		tree: ts.parse(_parser, text),
