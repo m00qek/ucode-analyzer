@@ -28,7 +28,7 @@ TEST_IMAGE = docker run --rm $(TEST_OPTS) \
 	-w /app \
 	$(IMAGE)
 
-.PHONY: compile test test-unit shell package
+.PHONY: compile test test-unit test-e2e shell package
 
 .docker-image: Dockerfile
 	@docker build \
@@ -65,10 +65,13 @@ mod/compile_flags.txt: $(BUILD_DIR)/include
 		"$(CURDIR)/third_party/tree-sitter/lib/include" \
 		"$(CURDIR)/third_party/tree-sitter-ucode/src" > mod/compile_flags.txt
 
-test: test-unit
+test: test-unit test-e2e
 
 test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) test/unit/
+
+test-e2e: .docker-image $(BUILD_DIR)/tree_sitter_native.so
+	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) test/e2e/
 
 shell: TEST_OPTS := -it
 shell: .docker-image
