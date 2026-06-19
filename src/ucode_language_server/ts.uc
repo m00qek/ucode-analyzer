@@ -1,7 +1,7 @@
 /*
- * Ergonomic wrapper around the native ts_native module (bindings/ts_binding.c).
+ * Ergonomic wrapper around the native module (mod/native.c).
  *
- * ts_binding.c is a thin, mechanical FFI layer with minimal validation.
+ * mod/native.c is a thin, mechanical FFI layer with minimal validation.
  * This module is where argument-checking with useful error messages,
  * structured results, and collection helpers (looping over children in
  * ucode instead of C) belong.
@@ -17,7 +17,7 @@ import {
 	ts_node_child_by_field, ts_node_parent,
 	ts_query_new, ts_query_pattern_count, ts_query_predicate_steps, ts_query_matches,
 	ts_reparse
-} from 'ts_native';
+} from 'ucode_language_server.native';
 
 function expect(cond, msg) {
 	if (!cond)
@@ -41,21 +41,21 @@ function pointAt(source, byteOffset) {
 
 export function ucode() {
 	return ts_language_ucode();
-}
+};
 
 export function ucdocs() {
 	return ts_language_ucdocs();
-}
+};
 
 export function newParser(language) {
 	expect(language != null, 'newParser() expects a language handle (ts.ucode() or ts.ucdocs())');
 	return ts_new_parser(language);
-}
+};
 
 export function parse(parser, source) {
 	expect(type(source) == 'string', 'parse() expects a source string');
 	return ts_parse(parser, source);
-}
+};
 
 /*
  * Incrementally reparses `oldTree` to reflect a single contiguous text
@@ -93,57 +93,57 @@ export function reparse(parser, oldTree, oldSource, newSource, startByte, oldEnd
 	};
 
 	return ts_reparse(parser, oldTree, edit, newSource);
-}
+};
 
 export function rootNode(tree) {
 	return ts_root_node(tree);
-}
+};
 
 export function nodeType(node) {
 	return ts_node_type(node);
-}
+};
 
 export function isNamed(node) {
 	return ts_node_is_named(node);
-}
+};
 
 export function text(node, source) {
 	expect(type(source) == 'string', 'text() expects a source string');
 	return ts_node_text(node, source);
-}
+};
 
 export function startByte(node) {
 	return ts_node_start_byte(node);
-}
+};
 
 export function endByte(node) {
 	return ts_node_end_byte(node);
-}
+};
 
 export function childCount(node) {
 	return ts_node_child_count(node);
-}
+};
 
 export function namedChildCount(node) {
 	return ts_node_named_child_count(node);
-}
+};
 
 export function child(node, i) {
 	return ts_node_child(node, i);
-}
+};
 
 export function namedChild(node, i) {
 	return ts_node_named_child(node, i);
-}
+};
 
 export function childByField(node, name) {
 	expect(type(name) == 'string', 'childByField() expects a field name string');
 	return ts_node_child_by_field(node, name);
-}
+};
 
 export function parent(node) {
 	return ts_node_parent(node);
-}
+};
 
 export function children(node) {
 	let result = [];
@@ -152,7 +152,7 @@ export function children(node) {
 		push(result, child(node, i));
 
 	return result;
-}
+};
 
 export function namedChildren(node) {
 	let result = [];
@@ -161,17 +161,17 @@ export function namedChildren(node) {
 		push(result, namedChild(node, i));
 
 	return result;
-}
+};
 
 export function newQuery(language, source) {
 	expect(language != null, 'newQuery() expects a language handle (ts.ucode() or ts.ucdocs())');
 	expect(type(source) == 'string', 'newQuery() expects a query source string');
 	return ts_query_new(language, source);
-}
+};
 
 export function patternCount(query) {
 	return ts_query_pattern_count(query);
-}
+};
 
 /*
  * Tree-sitter's C core only hands back the raw predicate step array for a
@@ -272,7 +272,7 @@ export function queryMatches(query, node, source) {
 	}
 
 	return result;
-}
+};
 
 /* Flat [{ name, node }] across all (predicate-filtered) matches. */
 export function queryCaptures(query, node, source) {
@@ -283,4 +283,4 @@ export function queryCaptures(query, node, source) {
 			push(result, c);
 
 	return result;
-}
+};

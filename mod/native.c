@@ -1,10 +1,11 @@
 /*
- * ucode native extension exposing the tree-sitter C API ("ts_native" module).
+ * ucode native extension exposing the tree-sitter C API, installed as
+ * ucode_language_server.native (/usr/lib/ucode/ucode_language_server/native.so).
  *
  * This is deliberately a thin, mechanical FFI layer: one function per
  * tree-sitter call, minimal validation. Ergonomics (argument-checking with
  * friendly messages, structured results, collection helpers) live in the
- * companion ts.uc module, which is the module consumers should actually
+ * companion src/ts.uc module, which is the module consumers should actually
  * import. The checks kept here are the ones that prevent a null-pointer
  * dereference or undefined behavior in C; ucode's own value accessors
  * (ucv_string_get, ucv_int64_get, ...) already fail safe (return NULL/0)
