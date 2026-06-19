@@ -30,7 +30,7 @@ add_library(ucdocs_grammar STATIC
 target_include_directories(ucdocs_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucdocs/src)
 set_target_properties(ucdocs_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_library(native SHARED native.c)
+add_library(native SHARED tree_sitter/native.c)
 set_target_properties(native PROPERTIES PREFIX "")
 target_link_libraries(native ${UCODE_LIB} ucode_grammar ucdocs_grammar tree_sitter_core)
 
@@ -38,7 +38,7 @@ target_link_libraries(native ${UCODE_LIB} ucode_grammar ucdocs_grammar tree_sitt
 # so it survives OpenWrt's build-dir autoremove cleanup (which wipes everything
 # not under .pkgdir/), but the OpenWrt Package/install step never references
 # it, so it never ships in the .apk.
-add_library(rpc_client SHARED rpc_client.c)
+add_library(rpc_client SHARED rpc_client/native.c)
 set_target_properties(rpc_client PROPERTIES PREFIX "")
 target_link_libraries(rpc_client ${UCODE_LIB})
 
