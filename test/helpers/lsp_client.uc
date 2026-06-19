@@ -38,3 +38,11 @@ export function receive(proc) {
 		if (msg === null || msg.id !== null) return msg;
 	}
 };
+
+// Skip responses and return the next server-to-client notification.
+export function receiveNotification(proc) {
+	while (true) {
+		let msg = rpc.receive(proc);
+		if (msg === null || msg.id === null) return msg;
+	}
+};
