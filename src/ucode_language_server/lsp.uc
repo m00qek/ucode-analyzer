@@ -8,6 +8,7 @@ import * as dag from 'ucode_language_server.dag';
 import { invalidateUri } from 'ucode_language_server.memo';
 import { diagnosticsFor } from 'ucode_language_server.diagnostics';
 import { signatureHelp as signatureHelpDoc } from 'ucode_language_server.signature_help';
+import { references as referencesDoc } from 'ucode_language_server.references';
 
 export function run(config) {
 	let shutdown_requested = false;
@@ -21,6 +22,7 @@ export function run(config) {
 					definitionProvider: true,
 					completionProvider: { triggerCharacters: ['.'] },
 					signatureHelpProvider: { triggerCharacters: ['(', ','] },
+					referencesProvider: true,
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -97,6 +99,12 @@ export function run(config) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
 			protocol.respond(msg.id, doc ? signatureHelpDoc(uri, doc, msg.params.position) : null);
+		},
+
+		'textDocument/references': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc ? referencesDoc(uri, doc, msg.params.position) : null);
 		},
 	};
 
