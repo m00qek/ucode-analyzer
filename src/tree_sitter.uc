@@ -1,5 +1,5 @@
 /*
- * Ergonomic wrapper around the native module (mod/native.c).
+ * Ergonomic wrapper around the native module (mod/tree_sitter/native.c).
  *
  * mod/native.c is a thin, mechanical FFI layer with minimal validation.
  * This module is where argument-checking with useful error messages,

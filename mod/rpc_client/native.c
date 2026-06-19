@@ -3,8 +3,8 @@
  * Exposes spawn() + three raw I/O methods on the returned process resource;
  * all framing, buffering, and protocol logic lives in rpc_client.uc.
  *
- * Installed as a flat ucode module (rpc_client.so) for test-only use --
- * the OpenWrt package does not ship it; only rpc_client.uc imports it.
+ * Installed as lib/ucode/rpc_client/native.so (imported as 'rpc_client.native').
+ * Only test/helpers/rpc_client.uc imports this module directly.
  */
 
 #include <errno.h>
