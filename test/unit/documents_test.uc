@@ -1,7 +1,11 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_language_server.documents';
 
 describe('documents', () => {
+	afterEach(() => {
+		documents.close('file:///x.uc');
+	});
+
 	it('open() stores text, version, tree, and lineTable', () => {
 		documents.open('file:///x.uc', 'let x = 5;', 1);
 		let doc = documents.get('file:///x.uc');
@@ -10,8 +14,6 @@ describe('documents', () => {
 		assert.match(1, doc.version);
 		assert.match(true, doc.tree !== null);
 		assert.match([0], doc.lineTable);
-
-		documents.close('file:///x.uc');
 	});
 
 	it('change() updates text, version, tree, and lineTable', () => {
@@ -22,8 +24,6 @@ describe('documents', () => {
 		assert.match('let x = 5;\nlet y = 6;', doc.text);
 		assert.match(2, doc.version);
 		assert.match([0, 11], doc.lineTable);
-
-		documents.close('file:///x.uc');
 	});
 
 	it('change() on unknown uri is a no-op', () => {

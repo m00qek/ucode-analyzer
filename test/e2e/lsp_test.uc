@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, beforeEach, afterEach } from 'utest';
 import * as lsp from 'lsp_client';
 
 const DOC = {
@@ -8,8 +8,9 @@ const DOC = {
 	text: 'let x = 5;',
 };
 
-describe('LSP lifecycle', () => {
-	it('initialize returns capabilities and serverInfo', () => {
+// Standalone: needs to inspect the initialize response itself.
+describe('initialize response', () => {
+	it('returns capabilities and serverInfo', () => {
 		let proc = lsp.connect();
 		let resp = lsp.initialize(proc);
 
@@ -21,38 +22,37 @@ describe('LSP lifecycle', () => {
 		assert.match(null, shutdownResp.result);
 		assert.match(0, lsp.close(proc));
 	});
+});
+
+describe('LSP document sync', () => {
+	let proc;
+
+	beforeEach(() => {
+		proc = lsp.connect();
+		lsp.initialize(proc);
+	});
+
+	afterEach(() => {
+		lsp.shutdown(proc);
+		assert.match(0, lsp.close(proc));
+	});
 
 	it('unknown request returns MethodNotFound', () => {
-		let proc = lsp.connect();
-		lsp.initialize(proc);
-
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'unknown/method', params: null });
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
 		assert.match(-32601, resp.error.code);
-
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
 	});
 
 	it('textDocument/didOpen is accepted', () => {
-		let proc = lsp.connect();
-		lsp.initialize(proc);
-
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: DOC } });
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'unknown/method', params: null });
 		assert.match(1, lsp.receive(proc).id);
-
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
 	});
 
 	it('textDocument/didChange is accepted', () => {
-		let proc = lsp.connect();
-		lsp.initialize(proc);
-
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: DOC } });
 		lsp.send(proc, {
 			jsonrpc: '2.0',
@@ -65,15 +65,9 @@ describe('LSP lifecycle', () => {
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'unknown/method', params: null });
 		assert.match(1, lsp.receive(proc).id);
-
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
 	});
 
 	it('textDocument/didClose is accepted', () => {
-		let proc = lsp.connect();
-		lsp.initialize(proc);
-
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: DOC } });
 		lsp.send(proc, {
 			jsonrpc: '2.0',
@@ -83,11 +77,11 @@ describe('LSP lifecycle', () => {
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'unknown/method', params: null });
 		assert.match(1, lsp.receive(proc).id);
-
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
 	});
+});
 
+// Standalone: afterEach shutdown would conflict with the server already having exited.
+describe('exit behavior', () => {
 	it('exit without shutdown returns non-zero', () => {
 		let proc = lsp.connect();
 		lsp.initialize(proc);
