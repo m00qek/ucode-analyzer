@@ -77,12 +77,19 @@ describe('positions (multibyte UTF-8)', () => {
 		assert.match({ line: 0, character: 2 }, pos.offsetToPosition(text, lt, 4));
 	});
 
-	it('round-trips offsets in mixed multibyte text', () => {
-		// 'a' + é + € + 😀 + 'b' across two lines
+	it('round-trips all character-boundary offsets in mixed multibyte text', () => {
+		// 'a' + é (2 bytes) + '\n' + € (3 bytes) + 😀 (4 bytes) + 'b'
 		let text = 'a\xC3\xA9\n\xE2\x82\xAC\xF0\x9F\x98\x80b';
 		let lt = pos.buildLineTable(text);
-		// Only test offsets at character boundaries
-		for (let off in [0, 1, 3, 4, 7, 11, 12]) {
+
+		for (let off = 0; off <= length(text); off++) {
+			// Skip UTF-8 continuation bytes (0x80–0xBF) — not valid start positions.
+			if (off < length(text)) {
+				let b = ord(substr(text, off, 1));
+				if (b >= 0x80 && b < 0xC0)
+					continue;
+			}
+
 			let p = pos.offsetToPosition(text, lt, off);
 			assert.match(off, pos.positionToOffset(text, lt, p));
 		}
