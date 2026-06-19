@@ -30,6 +30,30 @@ function dotToSlash(s) {
 	return out;
 }
 
+// Return 'function' if name is declared as a function at the top level, else 'let'.
+function localDeclKind(root, text, name) {
+	for (let i = 0; i < ts.namedChildCount(root); i++) {
+		let stmt = ts.namedChild(root, i);
+		let nt = ts.nodeType(stmt);
+		if (nt === 'function_declaration') {
+			let nameNode = ts.namedChild(stmt, 0);
+			if (nameNode && ts.text(nameNode, text) === name) return 'function';
+		} else if (nt === 'lexical_declaration') {
+			for (let j = 0; j < ts.namedChildCount(stmt); j++) {
+				let vd = ts.namedChild(stmt, j);
+				if (ts.nodeType(vd) !== 'variable_declarator') continue;
+				let nameNode = ts.namedChild(vd, 0);
+				if (!nameNode || ts.text(nameNode, text) !== name) continue;
+				let init = ts.childByField(vd, 'value');
+				if (!init) return 'let';
+				let it = ts.nodeType(init);
+				return (it === 'arrow_function' || it === 'function_expression') ? 'function' : 'let';
+			}
+		}
+	}
+	return 'let';
+}
+
 // Extracts the module specifier string from an import_statement node.
 function importSpecifier(stmt, text) {
 	for (let i = 0; i < ts.childCount(stmt); i++) {
@@ -80,6 +104,17 @@ export function extractExports(text, tree) {
 				let nameNode = ts.namedChild(varDecl, 0);
 				if (nameNode && ts.nodeType(nameNode) === 'identifier')
 					push(result, { name: ts.text(nameNode, text), kind, doc });
+			}
+		} else if (declType === 'export_clause') {
+			for (let j = 0; j < ts.namedChildCount(decl); j++) {
+				let spec = ts.namedChild(decl, j);
+				if (ts.nodeType(spec) !== 'export_specifier') continue;
+				// last named child is the exported name (handles both `{ name }` and `{ local as name }`)
+				let count = ts.namedChildCount(spec);
+				let nameNode = ts.namedChild(spec, count - 1);
+				if (!nameNode || ts.nodeType(nameNode) !== 'identifier') continue;
+				let name = ts.text(nameNode, text);
+				push(result, { name, kind: localDeclKind(root, text, name), doc: null });
 			}
 		}
 	}

@@ -1,11 +1,24 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, beforeEach } from 'utest';
 import * as documents from 'ucode_language_server.documents';
 import { definition } from 'ucode_language_server.definition';
+import * as dag from 'ucode_language_server.dag';
+import { invalidateUri } from 'ucode_language_server.memo';
 
-let URI = 'file:///test.uc';
+let URI       = 'file:///test.uc';
+let TS_URI    = 'file:///app/src/tree_sitter.uc';
+let GREET_URI = 'file:///app/test/fixtures/greet.uc';
+
+let _config = {
+	workspaceDir: '/app',
+	workspace: { libraryPaths: ['src', 'test'] },
+};
 
 afterEach(() => {
 	documents.close(URI);
+	dag.remove(URI);
+	dag.remove(TS_URI);
+	dag.remove(GREET_URI);
+	invalidateUri(URI);
 });
 
 describe('definition — local declarations', () => {
@@ -84,5 +97,67 @@ describe('definition — local declarations', () => {
 		let doc = documents.get(URI);
 
 		assert.match(null, definition(URI, doc, { line: 99, character: 0 }));
+	});
+});
+
+describe('definition — named imports (inline export)', () => {
+	beforeEach(() => {
+		dag.init(_config);
+		dag.addFromDisk(TS_URI);
+	});
+
+	it('jumps to export function declaration in source file', () => {
+		let text = "import { parse } from 'tree_sitter';\nparse;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (1, 0) is the 'parse' reference on line 1
+		let result = definition(URI, doc, { line: 1, character: 0 });
+
+		assert.match(TS_URI, result.uri);
+		// 'parse' is declared in tree_sitter.uc — just verify the uri and a line number
+		assert.match(true, result.range.start.line >= 0);
+	});
+
+	it('returns null when the imported name does not exist in source', () => {
+		let text = "import { doesNotExist } from 'tree_sitter';\ndoesNotExist;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		let result = definition(URI, doc, { line: 1, character: 0 });
+
+		assert.match(null, result);
+	});
+});
+
+describe('definition — named imports (export clause)', () => {
+	beforeEach(() => {
+		dag.init(_config);
+		dag.addFromDisk(GREET_URI);
+	});
+
+	it('jumps to local function declaration for export { name } style', () => {
+		// fixtures/greet.uc: function greet() {}  export { greet };
+		let text = "import { greet } from 'fixtures.greet';\ngreet;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (1, 0) is the 'greet' reference
+		let result = definition(URI, doc, { line: 1, character: 0 });
+
+		assert.match(GREET_URI, result.uri);
+		assert.match(0, result.range.start.line);       // function greet() on line 0
+		assert.match(9, result.range.start.character);  // 'greet' after 'function '
+	});
+
+	it('extractExports reports export-clause names in the DAG', () => {
+		let exps = dag.exportsOf(GREET_URI);
+		assert.match(true, exps !== null);
+		assert.match(1, length(exps));
+		assert.match('greet', exps[0].name);
+		assert.match('function', exps[0].kind);
 	});
 });

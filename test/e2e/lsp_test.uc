@@ -166,6 +166,75 @@ describe('textDocument/definition', () => {
 		assert.match(1, resp.id);
 		assert.match(null, resp.result);
 	});
+
+	it('returns the location of a local function declaration', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "function greet() {}\ngreet;" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(1, resp.id);
+		assert.match('file:///t.uc', resp.result.uri);
+		assert.match(0, resp.result.range.start.line);
+		assert.match(9, resp.result.range.start.character);  // 'greet' after 'function '
+	});
+
+	it('returns null for a non-identifier node', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 5;" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 0, character: 0 },  // 'l' in 'let' — anonymous token
+		}});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(1, resp.id);
+		assert.match(null, resp.result);
+	});
+
+	it('follows a named import to an inline export function', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { parse } from 'tree_sitter';\nparse;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(1, resp.id);
+		assert.match(true, index(resp.result.uri, 'tree_sitter') >= 0);
+		assert.match(true, resp.result.range.start.line >= 0);
+	});
+
+	it('follows a named import to a function declared via export { name }', () => {
+		// test/fixtures/greet.uc: function greet() {}  export { greet };
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { greet } from 'fixtures.greet';\ngreet;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(1, resp.id);
+		assert.match(true, index(resp.result.uri, 'greet') >= 0);
+		assert.match(0, resp.result.range.start.line);
+		assert.match(9, resp.result.range.start.character);  // 'greet' after 'function '
+	});
 });
 
 describe('textDocument/completion', () => {

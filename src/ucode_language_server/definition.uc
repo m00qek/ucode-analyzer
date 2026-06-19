@@ -21,40 +21,6 @@ function location(uri, text, byteOffset) {
 	return { uri, range: { start: pos, end: pos } };
 }
 
-// If name is a named import into uri, return the Location of its definition.
-function importedDefinition(uri, name) {
-	let imps = dag.importsOf(uri);
-	if (!imps) return null;
-	for (let i = 0; i < length(imps); i++) {
-		let imp = imps[i];
-		if (!imp.resolvedUri || index(imp.symbols, name) < 0) continue;
-		let exps = dag.exportsOf(imp.resolvedUri);
-		if (!exps) continue;
-		for (let j = 0; j < length(exps); j++) {
-			if (exps[j].name !== name) continue;
-			// Read the file to compute the position.
-			let path = substr(imp.resolvedUri, length('file://'));
-			let text = fs.readfile(path);
-			if (!text) return null;
-			// Find the byte offset of the export in that file.
-			let parser = ts.newParser(ts.ucode());
-			let tree = ts.parse(parser, text);
-			let root = ts.rootNode(tree);
-			for (let k = 0; k < ts.namedChildCount(root); k++) {
-				let stmt = ts.namedChild(root, k);
-				if (ts.nodeType(stmt) !== 'export_statement') continue;
-				let decl = ts.namedChild(stmt, 0);
-				if (!decl) continue;
-				let nameNode = findExportName(decl, name, text);
-				if (nameNode)
-					return location(imp.resolvedUri, text, ts.startByte(nameNode));
-			}
-			return null;
-		}
-	}
-	return null;
-}
-
 // Extract the identifier matching name from a function_declaration or
 // lexical_declaration node. Returns the identifier node or null.
 function findExportName(decl, name, text) {
@@ -98,6 +64,41 @@ function localDefinition(uri, doc, name) {
 			let nameNode = findExportName(decl, name, doc.text);
 			if (nameNode)
 				return location(uri, doc.text, ts.startByte(nameNode));
+		}
+	}
+	return null;
+}
+
+// If name is a named import into uri, return the Location of its definition.
+function importedDefinition(uri, name) {
+	let imps = dag.importsOf(uri);
+	if (!imps) return null;
+	for (let i = 0; i < length(imps); i++) {
+		let imp = imps[i];
+		if (!imp.resolvedUri || index(imp.symbols, name) < 0) continue;
+		let exps = dag.exportsOf(imp.resolvedUri);
+		if (!exps) continue;
+		for (let j = 0; j < length(exps); j++) {
+			if (exps[j].name !== name) continue;
+			let path = substr(imp.resolvedUri, length('file://'));
+			let text = fs.readfile(path);
+			if (!text) return null;
+			let parser = ts.newParser(ts.ucode());
+			let tree = ts.parse(parser, text);
+			let root = ts.rootNode(tree);
+			// First pass: inline export (export function / export let).
+			for (let k = 0; k < ts.namedChildCount(root); k++) {
+				let stmt = ts.namedChild(root, k);
+				if (ts.nodeType(stmt) !== 'export_statement') continue;
+				let decl = ts.namedChild(stmt, 0);
+				if (!decl) continue;
+				let nameNode = findExportName(decl, name, text);
+				if (nameNode)
+					return location(imp.resolvedUri, text, ts.startByte(nameNode));
+			}
+			// Second pass: local declaration (handles `export { name }` style).
+			let doc = { uri: imp.resolvedUri, text, tree, lineTable: buildLineTable(text) };
+			return localDefinition(imp.resolvedUri, doc, name);
 		}
 	}
 	return null;
