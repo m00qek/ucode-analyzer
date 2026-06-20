@@ -198,10 +198,15 @@ export function extractImports(text, tree) {
 export function resolveModule(specifier, libraryPaths, workspaceDir) {
 	let slashForm = dotToSlash(specifier) + '.uc';
 	let dotForm   = specifier + '.uc';
+	let declForm  = dotToSlash(specifier) + '.d.uc';
 
 	for (let libPath in libraryPaths) {
 		let absLib = (substr(libPath, 0, 1) === '/') ? libPath : workspaceDir + '/' + libPath;
-		let candidates = [absLib + '/' + slashForm, absLib + '/' + dotForm];
+		let candidates = [
+			absLib + '/' + slashForm,
+			absLib + '/' + dotForm,
+			absLib + '/declarations/' + declForm,
+		];
 
 		for (let candidate in candidates) {
 			let s = fs.stat(candidate);

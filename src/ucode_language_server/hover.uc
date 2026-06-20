@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset } from 'ucode_language_server.positions';
-import { inferNode, buildScope } from 'ucode_language_server.inferrer';
+import { inferNode, buildScope, stdlibUri } from 'ucode_language_server.inferrer';
 import { typeToString } from 'ucode_language_server.doc_parser';
 import * as dag from 'ucode_language_server.dag';
 
@@ -12,6 +12,18 @@ function nodeAtOffset(node, offset) {
 			return nodeAtOffset(child, offset);
 	}
 	return node;
+}
+
+// Find the JSDoc description for a builtin in stdlib.d.uc.
+function builtinDescription(name) {
+	let uri = stdlibUri();
+	if (!uri) return null;
+	let exps = dag.exportsOf(uri);
+	if (!exps) return null;
+	for (let i = 0; i < length(exps); i++)
+		if (exps[i].name === name && exps[i].doc && exps[i].doc.description)
+			return exps[i].doc.description;
+	return null;
 }
 
 // Find the JSDoc description for a named import resolved via the DAG.
@@ -49,7 +61,7 @@ export function hover(doc, position) {
 	let md = sprintf('```ucode\n%s: %s\n```', label, typeStr);
 
 	if (ts.nodeType(node) === 'identifier') {
-		let desc = importedDescription(doc.uri, label);
+		let desc = importedDescription(doc.uri, label) ?? builtinDescription(label);
 		if (desc) md += '\n\n' + desc;
 	}
 

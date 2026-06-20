@@ -67,6 +67,7 @@ function _initBuiltins() {
 }
 
 let _builtinScope = _initBuiltins();
+let _stdlibUri    = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -610,4 +611,16 @@ _infer = function(node, source, uri, scope, depth) {
 
 export function inferNode(node, source, uri, scope, depth) {
 	return _infer(node, source, uri, scope, depth ?? 0);
+};
+
+export function stdlibUri() { return _stdlibUri; };
+
+export function initBuiltinsFromDag(uri) {
+	let exps = dag.exportsOf(uri);
+	if (!exps || length(exps) === 0) return;
+	_stdlibUri = uri;
+	let s = makeScope(null);
+	for (let i = 0; i < length(exps); i++)
+		scopeSet(s, exps[i].name, exportType(exps[i]));
+	_builtinScope = s;
 };

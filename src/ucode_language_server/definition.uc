@@ -2,7 +2,7 @@ import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, buildLineTable } from 'ucode_language_server.positions';
 import * as dag from 'ucode_language_server.dag';
 import * as fs from 'fs';
-import { buildScope, inferNode } from 'ucode_language_server.inferrer';
+import { buildScope, inferNode, stdlibUri } from 'ucode_language_server.inferrer';
 import * as type_registry from 'ucode_language_server.type_registry';
 
 // Walk to the deepest named node containing offset.
@@ -236,5 +236,10 @@ export function definition(uri, doc, position) {
 	if (param) return param;
 
 	// Top-level declaration.
-	return localDefinition(uri, doc, name);
+	let local = localDefinition(uri, doc, name);
+	if (local) return local;
+
+	// Builtin: jump to its declaration in stdlib.d.uc.
+	let stdlib = stdlibUri();
+	return stdlib ? resolveExportInFile(stdlib, name) : null;
 };

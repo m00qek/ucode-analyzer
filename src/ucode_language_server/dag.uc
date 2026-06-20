@@ -131,3 +131,8 @@ export function reverseDeps(uri) {
 export function allUris() {
 	return keys(_nodes);
 };
+
+export function resolveSpecifier(specifier) {
+	let workdir = _config.workspaceDir ?? '/';
+	return resolveModule(specifier, resolvedLibPaths(), workdir);
+};
