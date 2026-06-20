@@ -2,8 +2,8 @@ import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, buildLineTable } from 'ucode_language_server.positions';
 import * as dag from 'ucode_language_server.dag';
 import * as fs from 'fs';
-import { buildScope, inferNode, stdlibUri } from 'ucode_language_server.inferrer';
-import * as type_registry from 'ucode_language_server.type_registry';
+import { buildScope, inferNode, stdlibUri } from 'ucode_language_server.types.inferrer';
+import * as type_registry from 'ucode_language_server.types.registry';
 
 // Walk to the deepest named node containing offset.
 function nodeAtOffset(node, offset) {

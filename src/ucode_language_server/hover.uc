@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset } from 'ucode_language_server.positions';
-import { inferNode, buildScope, stdlibUri } from 'ucode_language_server.inferrer';
-import { typeToString } from 'ucode_language_server.doc_parser';
+import { inferNode, buildScope, stdlibUri } from 'ucode_language_server.types.inferrer';
+import { typeToString } from 'ucode_language_server.types.doc_parser';
 import * as dag from 'ucode_language_server.dag';
 
 function nodeAtOffset(node, offset) {

@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset } from 'ucode_language_server.positions';
-import { buildScope, inferNode } from 'ucode_language_server.inferrer';
-import { typeToString } from 'ucode_language_server.doc_parser';
+import { buildScope, inferNode } from 'ucode_language_server.types.inferrer';
+import { typeToString } from 'ucode_language_server.types.doc_parser';
 
 // Walk the tree depth-first; return the innermost call_expression whose
 // arguments node contains offset.

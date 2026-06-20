@@ -1,10 +1,10 @@
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_language_server.dag';
-import { parseDoc } from 'ucode_language_server.doc_parser';
-import { unify, substitute } from 'ucode_language_server.type_unifier';
+import { parseDoc } from 'ucode_language_server.types.doc_parser';
+import { unify, substitute } from 'ucode_language_server.types.unifier';
 import { memoGet, memoSet } from 'ucode_language_server.memo';
-import { makeScope, scopeGet, scopeSet } from 'ucode_language_server.scope';
-import * as type_registry from 'ucode_language_server.type_registry';
+import { makeScope, scopeGet, scopeSet } from 'ucode_language_server.types.scope';
+import * as type_registry from 'ucode_language_server.types.registry';
 
 let UNKNOWN = { kind: 'unknown' };
 let BOOL    = { kind: 'primitive', name: 'boolean' };

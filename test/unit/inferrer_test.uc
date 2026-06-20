@@ -1,8 +1,8 @@
 import { describe, it, assert, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_language_server.dag';
-import { inferNode, buildScope, initBuiltinsFromDag } from 'ucode_language_server.inferrer';
-import { makeScope, scopeSet, scopeGet } from 'ucode_language_server.scope';
+import { inferNode, buildScope, initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
+import { makeScope, scopeSet, scopeGet } from 'ucode_language_server.types.scope';
 import { invalidateUri } from 'ucode_language_server.memo';
 
 let _parser = ts.newParser(ts.ucode());

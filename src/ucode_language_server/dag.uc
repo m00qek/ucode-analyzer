@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as ts from 'tree_sitter';
 import { extractExports, extractImports, extractTypedefs, resolveModule } from 'ucode_language_server.indexer';
-import * as type_registry from 'ucode_language_server.type_registry';
+import * as type_registry from 'ucode_language_server.types.registry';
 
 let _parser = ts.newParser(ts.ucode());
 let _config = {};

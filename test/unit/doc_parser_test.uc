@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import { parseDoc, typeToString } from 'ucode_language_server.doc_parser';
+import { parseDoc, typeToString } from 'ucode_language_server.types.doc_parser';
 
 // Helpers that build expected type objects.
 function prim(name)          { return { kind: 'primitive', name }; }

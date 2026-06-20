@@ -11,7 +11,7 @@ import { signatureHelp as signatureHelpDoc } from 'ucode_language_server.signatu
 import { references as referencesDoc } from 'ucode_language_server.references';
 import { documentSymbols as documentSymbolsDoc } from 'ucode_language_server.document_symbols';
 import { rename as renameDoc } from 'ucode_language_server.rename';
-import { initBuiltinsFromDag } from 'ucode_language_server.inferrer';
+import { initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
 
 export function run(config) {
 	let shutdown_requested = false;

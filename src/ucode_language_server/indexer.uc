@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import * as fs from 'fs';
-import { parseDoc } from 'ucode_language_server.doc_parser';
-import * as type_registry from 'ucode_language_server.type_registry';
+import { parseDoc } from 'ucode_language_server.types.doc_parser';
+import * as type_registry from 'ucode_language_server.types.registry';
 
 // Return the text of the /** */ block immediately before stmt among root's
 // children, or null if none. A // comment or any other statement resets.
