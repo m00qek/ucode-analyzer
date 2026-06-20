@@ -72,6 +72,12 @@ parseTypeNode = function(node, source, tparams) {
 			push(params, parseTypeNode(ts.namedChild(node, i), source, tparams));
 		if (tparams[name] && !length(params))
 			return { kind: 'param', name };
+		// Normalize JSDoc generic aliases to internal representations so that
+		// Array<T> and T[] produce identical types and unify correctly.
+		if (name === 'Array')
+			return { kind: 'generic', base: 'list', params: [length(params) ? params[0] : { kind: 'unknown' }] };
+		if (name === 'Object')
+			return { kind: 'generic', base: 'dict', params: [length(params) > 1 ? params[1] : { kind: 'unknown' }] };
 		return { kind: 'ref', name, params };
 	}
 
