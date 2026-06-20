@@ -441,6 +441,34 @@ describe('inferrer — builtins', () => {
 	});
 });
 
+describe('inferrer — buildScope: local function declarations', () => {
+	it('function_declaration inside a function body is in scope', () => {
+		let text = "function outer() {\nfunction helper(x) { return 1; }\nhelper;\n}";
+		let tree = parse(text);
+		let offset = length("function outer() {\nfunction helper(x) { return 1; }\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		let t = scope.bindings['helper'];
+		assert.match(true, t !== null);
+		assert.match('function', t.kind);
+	});
+
+	it('top-level function_declaration is in scope', () => {
+		let text = "function greet() { return 'hi'; }\ngreet;\n";
+		let tree = parse(text);
+		let offset = length(text) - 1;
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		let t = scope.bindings['greet'];
+		assert.match(true, t !== null);
+		assert.match('function', t.kind);
+	});
+});
+
 describe('inferrer — buildScope: local declarations inside function bodies', () => {
 	let TS_URI = 'file:///app/src/tree_sitter.uc';
 

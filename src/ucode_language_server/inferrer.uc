@@ -491,6 +491,11 @@ function processBlock(stmts, source, uri, scope, targetOffset) {
 		if (stype === 'lexical_declaration') {
 			processDecl(stmt, source, uri, scope, 0);
 
+		} else if (stype === 'function_declaration') {
+			let nameNode = ts.namedChild(stmt, 0);
+			if (nameNode && ts.nodeType(nameNode) === 'identifier')
+				scopeSet(scope, ts.text(nameNode, source), _infer(stmt, source, uri, scope, 0));
+
 		} else if (stype === 'export_statement') {
 			let inner = ts.namedChild(stmt, 0);
 			if (inner && ts.nodeType(inner) === 'lexical_declaration')
