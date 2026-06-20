@@ -131,7 +131,7 @@
  * A string identifying the program name. If omitted, the name of the calling
  * process is used by default.
  *
- * @param {*} [options]
+ * @param {int|module:log.LogOption|module:log.LogOption[]} [options]
  * Logging options to use.
  *
  * See {@link module:log.LogOption|LogOption} for recognized option names.
@@ -258,7 +258,7 @@ export function closelog() {};
  *
  * @function module:log#ulog_open
  *
- * @param {*} [channel]
+ * @param {int|module:log.UlogChannel|module:log.UlogChannel[]} [channel]
  * Specifies the log channels to use.
  *
  * See {@link module:log.UlogChannel|UlogChannel} for recognized channel names.

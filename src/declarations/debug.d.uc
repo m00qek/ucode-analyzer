@@ -220,7 +220,7 @@ export function setlocal(level, variable, value) {};
  *
  * @function module:debug#getupval
  *
- * @param {*} target
+ * @param {function|int} target
  * Either a function value referring to a closure to query upvalues for or a
  * stack depth number selecting a closure that many levels up.
  *
@@ -259,7 +259,7 @@ export function getupval(target, variable) {};
  *
  * @function module:debug#setupval
  *
- * @param {*} target
+ * @param {function|int} target
  * Either a function value referring to a closure to update upvalues for or a
  * stack depth number selecting a closure that many levels up.
  *

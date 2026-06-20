@@ -162,6 +162,68 @@ describe('definition — named imports (export clause)', () => {
 	});
 });
 
+describe('definition — namespace import alias', () => {
+	beforeEach(() => {
+		dag.init(_config);
+		dag.addFromDisk(TS_URI);
+	});
+
+	it('jumps to the top of the imported module file', () => {
+		let text = "import * as ts from 'tree_sitter';\nts;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (1, 0) is 'ts' — the namespace alias reference
+		let result = definition(URI, doc, { line: 1, character: 0 });
+
+		assert.match(TS_URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(0, result.range.start.character);
+	});
+
+	it('returns null for an identifier that is not a namespace alias', () => {
+		let text = "import * as ts from 'tree_sitter';\nnotAlias;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		let result = definition(URI, doc, { line: 1, character: 0 });
+		assert.match(null, result);
+	});
+});
+
+describe('definition — member expression (namespace import)', () => {
+	beforeEach(() => {
+		dag.init(_config);
+		dag.addFromDisk(TS_URI);
+	});
+
+	it('jumps to the export in the module when cursor is on the property', () => {
+		// 'parse' is an export of tree_sitter.uc; cursor on 'parse' in ts.parse()
+		// Column: "import * as ts from 'tree_sitter';\nts.parse;\n" — 'parse' starts at col 3
+		let text = "import * as ts from 'tree_sitter';\nts.parse;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		let result = definition(URI, doc, { line: 1, character: 3 });
+
+		assert.match(TS_URI, result.uri);
+		assert.match(true, result.range.start.line >= 0);
+	});
+
+	it('returns null for a property not exported by the module', () => {
+		let text = "import * as ts from 'tree_sitter';\nts.doesNotExist;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		let result = definition(URI, doc, { line: 1, character: 3 });
+		assert.match(null, result);
+	});
+});
+
 describe('definition — function parameters', () => {
 	it('jumps to parameter declaration in the enclosing function', () => {
 		let text = "function parse(ts, opts) {\nts;\n}";

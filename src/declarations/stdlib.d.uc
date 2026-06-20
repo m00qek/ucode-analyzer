@@ -43,7 +43,7 @@
  *
  * @function module:core#print
  *
- * @param {*} values
+ * @param {...*} values
  * Arbitrary values to print
  *
  * @returns {int}
@@ -63,7 +63,7 @@ export function print(values) {};
  *
  * @function module:core#length
  *
- * @param {*} x - The input object, array, or string.
+ * @param {Object|Array|string} x - The input object, array, or string.
  *
  * @returns {?int} - The length of the input.
  *
@@ -88,7 +88,7 @@ export function length(x) {};
  *
  * @function module:core#index
  *
- * @param {*} arr_or_str
+ * @param {Array|string} arr_or_str
  * The array or string to search for the value.
  *
  * @param {*} needle
@@ -116,7 +116,7 @@ export function index(arr_or_str, needle) {};
  *
  * @function module:core#rindex
  *
- * @param {*} arr_or_str
+ * @param {Array|string} arr_or_str
  * The array or string to search for the value.
  *
  * @param {*} needle
@@ -140,7 +140,7 @@ export function rindex(arr_or_str, needle) {};
  *
  * @function module:core#push
  *
- * @param {*} arr
+ * @param {Array} arr
  * The array to push values to.
  *
  * @param {...*} [values]
@@ -162,10 +162,12 @@ export function push(arr, values) {};
  *
  * @function module:core#pop
  *
- * @param {*} arr
+ * @template T
+ *
+ * @param {Array<T>} arr
  * The input array.
  *
- * @returns {*}
+ * @returns {?T}
  *
  * @example
  * let x = [ 1, 2, 3 ];
@@ -181,10 +183,12 @@ export function pop(arr) {};
  *
  * @function module:core#shift
  *
- * @param {*} arr
+ * @template T
+ *
+ * @param {Array<T>} arr
  * The array from which to pop the first item.
  *
- * @returns {*}
+ * @returns {?T}
  *
  * @example
  * let x = [ 1, 2, 3 ];
@@ -200,7 +204,7 @@ export function shift(arr) {};
  *
  * @function module:core#unshift
  *
- * @param {*} arr
+ * @param {Array} arr
  * The array to which the values will be added.
  *
  * @param {...*}
@@ -259,7 +263,7 @@ export function die(msg) {};
  *
  * @function module:core#exists
  *
- * @param {*} obj
+ * @param {Object} obj
  * The input object.
  *
  * @param {string} key
@@ -302,7 +306,7 @@ export function exit(n) {};
  * @param {string} [name]
  * The name of the environment variable.
  *
- * @returns {*}
+ * @returns {string|Object<string, string>}
  */
 export function getenv(name) {};
 
@@ -326,13 +330,15 @@ export function getenv(name) {};
  *
  * @function module:core#filter
  *
- * @param {*} arr
+ * @template T
+ *
+ * @param {Array<T>} arr
  * The input array.
  *
- * @param {*} fn
+ * @param {(value: T, index: int, arr: Array<T>) => boolean} fn
  * The filter function.
  *
- * @returns {*}
+ * @returns {Array<T>}
  *
  * @example
  * // filter out any empty string:
@@ -403,7 +409,7 @@ export function int(x, base) {};
  * @param {string} sep
  * The separator to be used in joining the array elements.
  *
- * @param {*} arr
+ * @param {Array<*>} arr
  * The array to be joined into a string.
  *
  * @returns {?string}
@@ -418,10 +424,10 @@ export function join(sep, arr) {};
  *
  * @function module:core#keys
  *
- * @param {*} obj
+ * @param {Object} obj
  * The object from which to retrieve the key names.
  *
- * @returns {*}
+ * @returns {?Array}
  */
 export function keys(obj) {};
 
@@ -462,13 +468,15 @@ export function lc(s) {};
  *
  * @function module:core#map
  *
- * @param {*} arr
+ * @template T, U
+ *
+ * @param {Array<T>} arr
  * The input array.
  *
- * @param {*} fn
+ * @param {(value: T, index: int, arr: Array<T>) => U} fn
  * The mapping function.
  *
- * @returns {*}
+ * @returns {Array<U>}
  *
  * @example
  * // turn into an array of string lengths:
@@ -565,10 +573,10 @@ export function type(x) {};
  *
  * @function module:core#reverse
  *
- * @param {*} arr_or_str
+ * @param {Array|string} arr_or_str
  * The input array or string.
  *
- * @returns {*}
+ * @returns {?(Array|string)}
  *
  * @example
  * reverse([1, 2, 3]);   // [ 3, 2, 1 ]
@@ -591,13 +599,15 @@ export function reverse(arr_or_str) {};
  *
  * @function module:core#sort
  *
- * @param {*} arr
+ * @template T
+ *
+ * @param {Array<T>} arr
  * The input array to be sorted.
  *
- * @param {*} [fn]
+ * @param {(a: T, b: T) => int} [fn]
  * The sort function.
  *
- * @returns {*}
+ * @returns {Array<T>}
  *
  * @example
  * sort([8, 1, 5, 9]) // [1, 5, 8, 9]
@@ -617,7 +627,9 @@ export function sort(arr, fn) {};
  *
  * @function module:core#splice
  *
- * @param {*} arr
+ * @template T
+ *
+ * @param {Array<T>} arr
  * The input array to be modified.
  *
  * @param {int} off
@@ -626,10 +638,10 @@ export function sort(arr, fn) {};
  * @param {int} [len]
  * The number of elements to remove.
  *
- * @param {*} [elements]
+ * @param {...*} [elements]
  * The elements to insert.
  *
- * @returns {*}
+ * @returns {Array<T>}
  *
  * @example
  * let x = [ 1, 2, 3, 4 ];
@@ -647,7 +659,9 @@ export function splice(arr, off, len, elements) {};
  *
  * @function module:core#slice
  *
- * @param {*} arr
+ * @template T
+ *
+ * @param {Array<T>} arr
  * The source array to be copied.
  *
  * @param {int} [off]
@@ -656,7 +670,7 @@ export function splice(arr, off, len, elements) {};
  * @param {int} [end]
  * The index of the first element to exclude from the returned array.
  *
- * @returns {*}
+ * @returns {?Array<T>}
  *
  * @example
  * slice([1, 2, 3])          // [1, 2, 3]
@@ -686,13 +700,13 @@ export function slice(arr, off, end) {};
  * @param {string} str
  * The input string to be split.
  *
- * @param {*} sep
+ * @param {string|RegExp} sep
  * The separator.
  *
  * @param {int} [limit]
  * The limit on the number of splits.
  *
- * @returns {*}
+ * @returns {Array<string>}
  *
  * @example
  * split("foo,bar,baz", ",")     // ["foo", "bar", "baz"]
@@ -798,7 +812,7 @@ export function uchr() {};
  * @param {*} obj
  * The object from which to extract values.
  *
- * @returns {*}
+ * @returns {?Array}
  *
  * @example
  * values({ foo: true, bar: false });   // [true, false]
@@ -1068,7 +1082,7 @@ export function require(name) {};
  * @param {string} address
  * The IP address string to convert.
  *
- * @returns {*}
+ * @returns {?int[]}
  *
  * @example
  * iptoarr("192.168.1.1")              // [ 192, 168, 1, 1 ]
@@ -1091,7 +1105,7 @@ export function iptoarr(address) {};
  *
  * @function module:core#arrtoip
  *
- * @param {*} arr
+ * @param {int[]} arr
  * The byte array to convert into an IP address string.
  *
  * @returns {?string}
@@ -1122,10 +1136,10 @@ export function arrtoip(arr) {};
  * @param {string} str
  * The string to be matched against the pattern.
  *
- * @param {*} pattern
+ * @param {RegExp} pattern
  * The regular expression pattern.
  *
- * @returns {*}
+ * @returns {?Array}
  *
  * @example
  * match("foobarbaz", /b.(.)/)   // ["bar", "r"]
@@ -1160,10 +1174,10 @@ export function match(str, pattern) {};
  * @param {string} str
  * The string in which to replace occurrences.
  *
- * @param {*} pattern
+ * @param {RegExp|string} pattern
  * The pattern to be replaced.
  *
- * @param {*} replace
+ * @param {Function|string} replace
  * The replacement value.
  *
  * @param {int} [limit]
@@ -1241,7 +1255,7 @@ export function json(str_or_resource) {};
  * @param {string} path
  * The path to the file to be included.
  *
- * @param {*} [scope]
+ * @param {Object} [scope]
  * The optional scope object to override the execution scope.
  *
  * @example
@@ -1282,16 +1296,16 @@ export function include(path, scope) {};
  *
  * @function module:core#render
  *
- * @param {*} path_or_func
+ * @param {string|Function} path_or_func
  * The path to the file or the function to be rendered.
  *
- * @param {*} [scope_or_fnarg1]
+ * @param {Object|*} [scope_or_fnarg1]
  * The optional scope or the first argument for the function.
  *
  * @param {*} [fnarg2]
  * The second argument for the function.
  *
- * @param {*} [fnargN]
+ * @param {...*} [fnargN]
  * Additional arguments for the function.
  *
  * @returns {string}
@@ -1315,7 +1329,7 @@ export function render(path_or_func, scope_or_fnarg1, fnarg2, fnargN) {};
  *
  * @function module:core#warn
  *
- * @param {*} x
+ * @param {...*} x
  * The values to be printed.
  *
  * @returns {int}
@@ -1348,7 +1362,7 @@ export function warn(x) {};
  *
  * @function module:core#system
  *
- * @param {*} command
+ * @param {string|Array} command
  * The command to be executed.
  *
  * @param {int} [timeout]
@@ -1404,13 +1418,13 @@ export function trace(level) {};
  *
  * @function module:core#proto
  *
- * @param {*} val
+ * @param {Array|Object} val
  * The array or object value.
  *
- * @param {*} [proto]
+ * @param {Object} [proto]
  * The optional prototype object.
  *
- * @returns {*}
+ * @returns {?Object}
  *
  * @example
  * const arr = [1, 2, 3];
@@ -1480,7 +1494,7 @@ export function assert(cond, message) {};
  * @param {string} [flags]
  * The optional regular expression flags (i=ignore case, s=dotAll, g=global).
  *
- * @returns {*}
+ * @returns {RegExp}
  *
  * @example
  * regexp('foo.*bar', 'is');   // equivalent to /foo.*bar/is
@@ -1552,7 +1566,7 @@ export function sourcepath(depth, dironly) {};
  *
  * @function module:core#min
  *
- * @param {*} [val]
+ * @param {...*} [val]
  * The values to compare.
  *
  * @returns {*}
@@ -1571,7 +1585,7 @@ export function min(val) {};
  *
  * @function module:core#max
  *
- * @param {*} [val]
+ * @param {...*} [val]
  * The values to compare.
  *
  * @returns {*}
@@ -1632,10 +1646,12 @@ export function b64enc(str) {};
  *
  * @function module:core#uniq
  *
- * @param {*} array
+ * @template T
+ *
+ * @param {Array<T>} array
  * The input array.
  *
- * @returns {*}
+ * @returns {?Array<T>}
  *
  * @example
  * uniq([1, true, "foo", 2, true, "bar", "foo"]);       // Returns [1, true, "foo", 2, "bar"]
@@ -1772,7 +1788,7 @@ export function timegm(datetimespec) {};
  * @param {boolean} [monotonic]
  * Whether to query the monotonic system clock.
  *
- * @returns {*}
+ * @returns {?int[]}
  *
  * @example
  * clock();        // [ 1647954926, 798269464 ]
@@ -1853,7 +1869,7 @@ export function hexdec(hexstring, skipchars) {};
  * @param {*} [argument]
  * The argument for the operation.
  *
- * @returns {?boolean|?int}
+ * @returns {?(boolean|int)}
  *
  * @example
  * gc();         // true
@@ -1889,7 +1905,7 @@ export function gc(operation, argument) {};
  * @param {module:core.ParseConfig} [options]
  * The options for compilation.
  *
- * @returns {*}
+ * @returns {Function}
  *
  * @example
  * let fn1 = loadstring("Hello, {{ name }}", { raw_mode: false });
@@ -1921,7 +1937,7 @@ export function loadstring(code, options) {};
  * @param {module:core.ParseConfig} [options]
  * The options for compilation.
  *
- * @returns {*}
+ * @returns {Function}
  *
  * @example
  * loadfile("./templates/example.uc");  // function main() { ... }
@@ -1959,13 +1975,13 @@ export function loadfile(path, options) {};
  *
  * @function module:core#call
  *
- * @param {*} fn
+ * @param {Function} fn
  * Function value to call.
  *
  * @param {*} [ctx=null]
  * `this` context for the invoked function.
  *
- * @param {*} [scope=null]
+ * @param {Object} [scope=null]
  * Global environment for the invoked function.
  *
  * @param {...*} [arg]
@@ -2044,10 +2060,10 @@ export function call(fn, ctx, scope, arg) {};
  * @param {int|string} signal
  * The signal to query/set handler for.
  *
- * @param {*} [handler]
+ * @param {Function|string} [handler]
  * The signal handler to install for the given signal.
  *
- * @returns {*}
+ * @returns {Function|string}
  *
  * @example
  * // Ignore signals

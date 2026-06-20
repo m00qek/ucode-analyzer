@@ -85,7 +85,7 @@ export function handle() {};
  *
  * @function module:io.handle#tcgetattr
  *
- * @returns {*}
+ * @returns {?object}
  *
  * @example
  * const handle = io.open('/dev/tty', O_RDWR);
@@ -115,7 +115,7 @@ export function handle() {};
  *
  * @function module:io.handle#tcsetattr
  *
- * @param {*} attrs
+ * @param {Object} attrs
  * The terminal attributes to set.
  *
  * @param {int} [when=0]
@@ -354,7 +354,7 @@ export function handle() {};
  * @param {int} [arg]
  * Optional argument for the command.
  *
- * @returns {?int|?module:io.handle}
+ * @returns {?(int|module:io.handle)}
  *
  * @example
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
@@ -517,7 +517,7 @@ export function open(path, flags, mode) {};
  *
  * @function module:io#pipe
  *
- * @returns {*}
+ * @returns {?Array<module:io.handle>}
  *
  * @example
  * const [reader, writer] = io.pipe();

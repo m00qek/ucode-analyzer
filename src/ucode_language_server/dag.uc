@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as ts from 'tree_sitter';
-import { extractExports, extractImports, resolveModule } from 'ucode_language_server.indexer';
+import { extractExports, extractImports, extractTypedefs, resolveModule } from 'ucode_language_server.indexer';
+import * as type_registry from 'ucode_language_server.type_registry';
 
 let _parser = ts.newParser(ts.ucode());
 let _config = {};
@@ -60,6 +61,7 @@ function indexNode(uri, text, tree) {
 	removeOutEdges(uri);
 	_nodes[uri] = { exports: exps, imports: imps };
 	addOutEdges(uri, imps);
+	extractTypedefs(uri, text, tree);
 }
 
 function readAndParse(path) {
@@ -111,6 +113,7 @@ export function remove(uri) {
 	removeOutEdges(uri);
 	delete _nodes[uri];
 	delete _inEdges[uri];
+	type_registry.removeUri(uri);
 };
 
 export function exportsOf(uri) {

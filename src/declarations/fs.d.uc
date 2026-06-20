@@ -587,7 +587,7 @@ export function open(path, mode, perm) {};
  * @param {string} [mode="r"]
  * The open mode.
  *
- * @returns {*}
+ * @returns {Object}
  *
  * @example
  * // Associate file descriptors of stdin and stdout with handles
@@ -1041,9 +1041,9 @@ export function rename(oldPath, newPath) {};
  *
  * @function module:fs#glob
  *
- * @param {*} pattern
+ * @param {...Arguments} pattern
  *
- * @returns {*}
+ * @returns {?string[]}
  *
  * @example
  *
@@ -1114,7 +1114,7 @@ export function basename(path) {};
  * @param {string} path
  * The path to the directory.
  *
- * @returns {*}
+ * @returns {?string[]}
  *
  * @example
  * // List the content of a directory
@@ -1339,7 +1339,7 @@ export function realpath(path) {};
  *
  * @function module:fs#pipe
  *
- * @returns {*}
+ * @returns {?module:fs.file[]}
  *
  * @example
  * // Create a pipe

@@ -182,7 +182,7 @@ export function running() {};
  *
  * @function module:uloop#end
  *
- * @returns {null}
+ * @returns {void}
  * This function does not return any value.
  *
  * @example
@@ -200,7 +200,7 @@ export function end() {};
  *
  * @function module:uloop#done
  *
- * @returns {null}
+ * @returns {void}
  * This function does not return any value.
  *
  * @example
@@ -291,7 +291,7 @@ export function timer() {};
  * Optional. The timeout duration in milliseconds. Defaults to -1, indicating
  * the timer is not initially armed.
  *
- * @param {*} callback
+ * @param {Function} callback
  * The callback function to be executed when the timer expires.
  *
  * @returns {?module:uloop.timer}
@@ -354,7 +354,7 @@ export function handle() {};
  *
  * @function module:uloop.handle#delete
  *
- * @returns {null}
+ * @returns {void}
  * This function does not return a value.
  *
  * @example
@@ -378,7 +378,7 @@ export function handle() {};
  * @param {int|module:fs.file|module:fs.proc|module:socket.socket|module:io.handle} handle
  * The file handle (descriptor number, file or socket instance).
  *
- * @param {*} callback
+ * @param {Function} callback
  * The callback function to be invoked when the specified IO events occur.
  *
  * @param {int} events
@@ -454,14 +454,14 @@ export function process() {};
  * @param {string} executable
  * The path to the executable program.
  *
- * @param {*} [args]
+ * @param {string[]} [args]
  * Optional. An array of strings representing the arguments passed to the
  * executable.
  *
- * @param {*} [env]
+ * @param {Object<string, *>} [env]
  * Optional. A dictionary describing environment variables for the process.
  *
- * @param {*} callback
+ * @param {Function} callback
  * The callback function to be invoked when the invoked process ends.
  *
  * @returns {?module:uloop.process}
@@ -515,7 +515,7 @@ export function pipe(msg) {};
  *
  * @function module:uloop.pipe#receive
  *
- * @returns {*}
+ * @returns {?*}
  * Returns the deserialized message read from the task communication pipe.
  * Returns `null` on error, such as when there's no input callback registered
  * on the task handle.
@@ -655,14 +655,14 @@ export function task() {};
  *
  * @function module:uloop#task
  *
- * @param {*} taskFunction
+ * @param {Function} taskFunction
  * The task function to be invoked as a background process.
  *
- * @param {*} [outputCallback]
+ * @param {Function} [outputCallback]
  * Optional. The output callback function to be invoked when output is received
  * from the task. It is invoked with the output data as the argument.
  *
- * @param {*} [inputCallback]
+ * @param {Function} [inputCallback]
  * Optional. The input callback function to be invoked when input is required
  * by the task. It is invoked with a function to send input to the task
  * as the argument.
@@ -803,7 +803,7 @@ export function interval() {};
  * Optional. The interval duration in milliseconds. Defaults to -1, indicating
  * the interval is not initially armed.
  *
- * @param {*} callback
+ * @param {Function} callback
  * The callback function to be executed when the interval expires.
  *
  * @returns {?module:uloop.interval}
@@ -870,7 +870,7 @@ export function signal() {};
  * @param {string|int} signal
  * The signal name string (with or without "SIG" prefix) or signal number.
  *
- * @param {*} callback
+ * @param {Function} callback
  * The callback function to be invoked when the specified Unix signal is caught.
  *
  * @returns {?module:uloop.signal}

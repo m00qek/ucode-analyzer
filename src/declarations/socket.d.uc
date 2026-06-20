@@ -87,7 +87,7 @@ export function socket(level, option, value) {};
  * The socket option to retrieve. This can be an integer representing the
  * option, such as `SO_REUSEADDR`, or a constant defined by the system.
  *
- * @returns {*}
+ * @returns {?*}
  * The value of the requested option. The type of the returned value depends
  * on the specific option being retrieved. It can be an integer, a boolean, a
  * string, or a dictionary representing a complex data structure.
@@ -185,7 +185,7 @@ export function strerror(code) {};
  *
  * @function module:socket#sockaddr
  *
- * @param {*} address
+ * @param {string|int[]|module:socket.socket.SocketAddress} address
  * The address value to parse.
  *
  * @returns {?module:socket.socket.SocketAddress}
@@ -232,7 +232,7 @@ export function sockaddr(address) {};
  * Optional flags that provide additional control over the resolution process,
  * specified as bitwise OR-ed number of `NI_*` constants.
  *
- * @returns {*}}
+ * @returns {?{hostname: string, service: string}}
  *
  * @see {@link module:socket~"Socket Types"|Socket Types}
  * @see {@link module:socket~"Name Info Constants"|AName Info Constants}
@@ -264,7 +264,7 @@ export function nameinfo(address, flags) {};
  * Optional service name to resolve. If not provided, the service field of the
  * resulting address information structures is left uninitialized.
  *
- * @param {*} [hints]
+ * @param {Object} [hints]
  * Optional hints object that provides additional control over the resolution
  * process. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
@@ -272,7 +272,7 @@ export function nameinfo(address, flags) {};
  * - `protocol`: The protocol of returned addresses.
  * - `flags`: Bitwise OR-ed `AI_*` flags to control the resolution behavior.
  *
- * @returns {*}
+ * @returns {?module:socket.AddressInfo[]}
  *
  * @see {@link module:socket~"Socket Types"|Socket Types}
  * @see {@link module:socket~"Address Info Flags"|Address Info Flags}
@@ -311,7 +311,7 @@ export function addrinfo(hostname, service, hints) {};
  * call will wait indefinitely, in all other cases the poll call will wait at
  * most for the given amount of milliseconds before returning.
  *
- * @param {...*} sockets
+ * @param {...(module:socket.socket|module:socket.PollSpec)} sockets
  * An arbitrary amount of socket arguments. Each argument may be either a plain
  * {@link module:socket.socket|socket instance} (or any other kind of handle
  * implementing a `fileno()` method) or a `[socket, flags]` tuple specifying the
@@ -319,7 +319,7 @@ export function addrinfo(hostname, service, hints) {};
  * instead of a tuple is provided, the requested poll flags default to
  * `POLLIN|POLLERR|POLLHUP` for this socket.
  *
- * @returns {*}
+ * @returns {module:socket.PollSpec[]}
  *
  * @example
  * let x = socket.connect("example.org", 80);
@@ -351,7 +351,7 @@ export function poll(timeout, sockets) {};
  *
  * @function module:socket#connect
  *
- * @param {*} host
+ * @param {string|int[]|module:socket.socket.SocketAddress} host
  * The host to connect to, can be an IP address, hostname,
  * {@link module:socket.socket.SocketAddress|SocketAddress}, or an array value
  * returned by {@link module:core#iptoarr|iptoarr()}.
@@ -361,7 +361,7 @@ export function poll(timeout, sockets) {};
  * a port number. Optional if host is specified as
  * {@link module:socket.socket.SocketAddress|SocketAddress}.
  *
- * @param {*} [hints]
+ * @param {Object} [hints]
  * Optional preferences for the socket. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
  * - `socktype`: The socket type (`SOCK_STREAM`, `SOCK_DGRAM`, etc.).
@@ -409,7 +409,7 @@ export function connect(host, service, hints, timeout) {};
  *
  * @function module:socket#listen
  *
- * @param {*} host
+ * @param {string|int[]|module:socket.socket.SocketAddress} host
  * The host to bind to, can be an IP address, hostname,
  * {@link module:socket.socket.SocketAddress|SocketAddress}, or an array value
  * returned by {@link module:core#iptoarr|iptoarr()}.
@@ -419,7 +419,7 @@ export function connect(host, service, hints, timeout) {};
  * a port number. Optional if host is specified as
  * {@link module:socket.socket.SocketAddress|SocketAddress}.
  *
- * @param {*} [hints]
+ * @param {Object} [hints]
  * Optional preferences for the socket. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
  * - `socktype`: The socket type (`SOCK_STREAM`, `SOCK_DGRAM`, etc.).
@@ -536,7 +536,7 @@ export function open(fd) {};
  * The socket type, e.g., SOCK_STREAM or SOCK_DGRAM. It may also be
  * bitwise OR-ed with SOCK_NONBLOCK or SOCK_CLOEXEC.
  *
- * @returns {*}
+ * @returns {Array<?module:socket.socket>}
  * Socket instances representing the newly created sockets.
  *
  * @example
@@ -587,7 +587,7 @@ export function socket(address, port) {};
  * @param {int} [flags]
  * Optional flags that modify the behavior of the send operation.
  *
- * @param {*} [address]
+ * @param {module:socket.socket.SocketAddress|int[]|string} [address]
  * The address of the remote endpoint to send the data to. It can be either an
  * IP address string, an array returned by {@link module:core#iptoarr|iptoarr()},
  * or an object representing a network address. If not provided, the data is
@@ -634,7 +634,7 @@ export function socket(data, flags, address) {};
  * @param {int} [flags]
  * Optional flags that modify the behavior of the receive operation.
  *
- * @param {*} [address]
+ * @param {Object} [address]
  * An object where the function will store the address from which the data was
  * received. If provided, it will be filled with the details obtained from the
  * sockaddr argument of the underlying `recvfrom()` syscall. See the type
@@ -664,7 +664,7 @@ export function socket(length, flags, address) {};
  * values are implicitly converted to a string and sent. If omitted, only
  * ancillary data and address are considered.
  *
- * @param {*} [ancillaryData]
+ * @param {module:socket.socket.ControlMessage[]|string} [ancillaryData]
  * Optional ancillary data to be sent. If an array is provided, each element is
  * converted to a control message. If a string is provided, it is sent as-is
  * without further interpretation. Refer to
@@ -712,7 +712,7 @@ export function socket(data, ancillaryData, address, flags) {};
  *
  * @function module:socket.socket#recvmsg
  *
- * @param {*} [sizes]
+ * @param {int[]|int} [sizes]
  * Specifies the sizes of the buffers used for receiving the message. If an
  * array of numbers is provided, each number determines the size of an
  * individual buffer segment, creating multiple `struct iovec` for reception.
@@ -836,7 +836,7 @@ export function socket(backlog) {};
  *
  * @function module:socket.socket#accept
  *
- * @param {*} [address]
+ * @param {Object} [address]
  * An optional dictionary to receive the address details of the peer socket.
  * See {@link module:socket.socket.SocketAddress|SocketAddress} for details.
  *

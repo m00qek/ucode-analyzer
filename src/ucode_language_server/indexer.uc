@@ -1,6 +1,7 @@
 import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import { parseDoc } from 'ucode_language_server.doc_parser';
+import * as type_registry from 'ucode_language_server.type_registry';
 
 // Return the text of the /** */ block immediately before stmt among root's
 // children, or null if none. A // comment or any other statement resets.
@@ -30,14 +31,18 @@ function dotToSlash(s) {
 	return out;
 }
 
-// Return 'function' if name is declared as a function at the top level, else 'let'.
-function localDeclKind(root, text, name) {
+// Return { kind, doc } for the local declaration of name, or { kind: 'let', doc: null }.
+// Avoids walking the tree twice when both are needed.
+function localDeclInfo(root, text, name) {
 	for (let i = 0; i < ts.namedChildCount(root); i++) {
 		let stmt = ts.namedChild(root, i);
 		let nt = ts.nodeType(stmt);
 		if (nt === 'function_declaration') {
 			let nameNode = ts.namedChild(stmt, 0);
-			if (nameNode && ts.text(nameNode, text) === name) return 'function';
+			if (nameNode && ts.text(nameNode, text) === name) {
+				let docText = precedingDocText(stmt, root, text);
+				return { kind: 'function', doc: docText ? parseDoc(docText) : null };
+			}
 		} else if (nt === 'lexical_declaration') {
 			for (let j = 0; j < ts.namedChildCount(stmt); j++) {
 				let vd = ts.namedChild(stmt, j);
@@ -45,13 +50,14 @@ function localDeclKind(root, text, name) {
 				let nameNode = ts.namedChild(vd, 0);
 				if (!nameNode || ts.text(nameNode, text) !== name) continue;
 				let init = ts.childByField(vd, 'value');
-				if (!init) return 'let';
-				let it = ts.nodeType(init);
-				return (it === 'arrow_function' || it === 'function_expression') ? 'function' : 'let';
+				let it = init ? ts.nodeType(init) : null;
+				let kind = (it === 'arrow_function' || it === 'function_expression') ? 'function' : 'let';
+				let docText = precedingDocText(stmt, root, text);
+				return { kind, doc: docText ? parseDoc(docText) : null };
 			}
 		}
 	}
-	return 'let';
+	return { kind: 'let', doc: null };
 }
 
 // Extracts the module specifier string from an import_statement node.
@@ -114,7 +120,12 @@ export function extractExports(text, tree) {
 				let nameNode = ts.namedChild(spec, count - 1);
 				if (!nameNode || ts.nodeType(nameNode) !== 'identifier') continue;
 				let name = ts.text(nameNode, text);
-				push(result, { name, kind: localDeclKind(root, text, name), doc: null });
+				// For `{ local as alias }` the local (original) name is the first child; use it
+				// for the declaration lookup so kind/doc reflect the actual local binding.
+				let localNameNode = (count > 1) ? ts.namedChild(spec, 0) : nameNode;
+				let localName = localNameNode ? ts.text(localNameNode, text) : name;
+				let info = localDeclInfo(root, text, localName);
+				push(result, { name, kind: info.kind, doc: info.doc });
 			}
 		}
 	}
@@ -147,13 +158,24 @@ export function extractImports(text, tree) {
 
 		if (clauseType === 'named_imports') {
 			let symbols = [];
+			let renames = {};
 			for (let j = 0; j < ts.namedChildCount(clauseChild); j++) {
 				let spec = ts.namedChild(clauseChild, j);
 				if (ts.nodeType(spec) !== 'import_specifier') continue;
-				let nameNode = ts.namedChild(spec, 0);
-				if (nameNode) push(symbols, ts.text(nameNode, text));
+				let count = ts.namedChildCount(spec);
+				let remoteNode = ts.namedChild(spec, 0);
+				if (!remoteNode) continue;
+				let remoteName = ts.text(remoteNode, text);
+				// For `{ remote as local }`, the alias (local binding) is the last named child.
+				let localName = remoteName;
+				if (count > 1) {
+					let localNode = ts.namedChild(spec, count - 1);
+					if (localNode) localName = ts.text(localNode, text);
+				}
+				push(symbols, localName);
+				if (localName !== remoteName) renames[localName] = remoteName;
 			}
-			push(result, { specifier, symbols, alias: null, resolvedUri: null });
+			push(result, { specifier, symbols, renames, alias: null, resolvedUri: null });
 
 		} else if (clauseType === 'namespace_import') {
 			let alias = null;
@@ -189,4 +211,21 @@ export function resolveModule(specifier, libraryPaths, workspaceDir) {
 	}
 
 	return null;
+};
+
+// Walk every /** */ comment in the file and register any @typedef it contains.
+// Removes stale entries for this uri first so re-indexing stays consistent.
+export function extractTypedefs(uri, text, tree) {
+	type_registry.removeUri(uri);
+	let root = ts.rootNode(tree);
+	let children = ts.namedChildren(root);
+	for (let i = 0; i < length(children); i++) {
+		let c = children[i];
+		if (ts.nodeType(c) !== 'comment') continue;
+		let txt = ts.text(c, text);
+		if (substr(txt, 0, 3) !== '/**') continue;
+		let doc = parseDoc(txt);
+		if (doc.typedef && doc.typedef.name && doc.typedef.type)
+			type_registry.register(doc.typedef.name, doc.typedef.type, uri);
+	}
 };

@@ -28,7 +28,7 @@
  * @param {?boolean} [gzip=false]
  * Add a gzip header if true (creates a gzip-compliant output, otherwise defaults to Zlib)
  *
- * @param {?int} [level=Z_DEFAULT_COMPRESSION]
+ * @param {\1int\2} [level=Z_DEFAULT_COMPRESSION]
  * The compression level (0-9).
  *
  * @returns {?string}
@@ -77,7 +77,7 @@ export function inflate(str_or_resource) {};
  * @param {?boolean} [gzip=false]
  * Add a gzip header if true (creates a gzip-compliant output, otherwise defaults to Zlib)
  *
- * @param {?int} [level=Z_DEFAULT_COMPRESSION]
+ * @param {\1int\2} [level=Z_DEFAULT_COMPRESSION]
  * The compression level (0-9).
  *
  * @returns {?module:zlib.deflate}
@@ -112,7 +112,7 @@ export function deflater(gzip, level) {};
  * @param {string} src
  * The string of data to deflate.
  *
- * @param {?int} [flush=Z_NO_FLUSH]
+ * @param {\1int\2} [flush=Z_NO_FLUSH]
  * The zlib flush mode.
  *
  * @returns {?boolean}
@@ -172,7 +172,7 @@ export function inflater() {};
  * @param {string} src
  * The string of data to inflate.
  *
- * @param {?int} [flush=Z_NO_FLUSH]
+ * @param {\1int\2} [flush=Z_NO_FLUSH]
  * The zlib flush mode.
  *
  * @returns {?boolean}

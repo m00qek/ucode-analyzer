@@ -44,7 +44,7 @@
  * @param {*} number
  * The number to return the absolute value for.
  *
- * @returns {int}
+ * @returns {float}
  * Returns the absolute value or `NaN` if the given argument could
  * not be converted to a number.
  */
@@ -257,7 +257,7 @@ export function tanh(x) {};
  * @param {*} x
  * The `x` value.
  *
- * @returns {int}
+ * @returns {float}
  */
 export function atan2(y, x) {};
 
@@ -294,10 +294,10 @@ export function tan(x) {};
  *
  * @function module:math#cos
  *
- * @param {int} x
+ * @param {float} x
  * Radians value to calculate cosine for.
  *
- * @returns {int}
+ * @returns {float}
  */
 export function cos(x) {};
 
@@ -316,10 +316,10 @@ export function cos(x) {};
  *
  * @function module:math#exp
  *
- * @param {int} x
+ * @param {float} x
  * Power to raise `e` to.
  *
- * @returns {int}
+ * @returns {float}
  */
 export function exp(x) {};
 
@@ -339,10 +339,10 @@ export function exp(x) {};
  *
  * @function module:math#log
  *
- * @param {int} x
+ * @param {float} x
  * Value to calculate natural logarithm of.
  *
- * @returns {int}
+ * @returns {float}
  */
 export function log(x) {};
 
@@ -450,10 +450,10 @@ export function expm1(x) {};
  *
  * @function module:math#sin
  *
- * @param {int} x
+ * @param {float} x
  * Radians value to calculate sine for.
  *
- * @returns {int}
+ * @returns {float}
  */
 export function sin(x) {};
 
@@ -470,10 +470,10 @@ export function sin(x) {};
  *
  * @function module:math#sqrt
  *
- * @param {int} x
+ * @param {float} x
  * Value to calculate square root for.
  *
- * @returns {int}
+ * @returns {float}
  */
 export function sqrt(x) {};
 
@@ -576,13 +576,13 @@ export function hypot(x, y) {};
  *
  * @function module:math#pow
  *
- * @param {int} x
+ * @param {float} x
  * The base value.
  *
- * @param {int} y
+ * @param {float} y
  * The power value.
  *
- * @returns {int}
+ * @returns {float}
  */
 export function pow(x, y) {};
 
@@ -649,7 +649,7 @@ export function srand(seed) {};
  *
  * @function module:math#isnan
  *
- * @param {int} x
+ * @param {float} x
  * The value to test.
  *
  * @returns {boolean}
@@ -666,7 +666,7 @@ export function isnan(x) {};
  *
  * @function module:math#isinf
  *
- * @param {int} x
+ * @param {float} x
  * The value to test.
  *
  * @returns {boolean}
@@ -681,7 +681,7 @@ export function isinf(x) {};
  * @param {float} number
  * The number to return the radian value for.
  *
- * @returns {int}
+ * @returns {float}
  * Returns the absolute value or `NaN` if the given argument could
  * not be converted to a number.
  * @example
@@ -698,7 +698,7 @@ export function deg2rad(number) {};
  * @param {float} number
  * The number to return the degree value for.
  *
- * @returns {int}
+ * @returns {float}
  * Returns the absolute value or `NaN` if the given argument could
  * not be converted to a number.
  * @example
@@ -854,7 +854,7 @@ export function copysign(x, y) {};
  * @param {float} x number
  * @param {boolean} output_type - false is `integer`, true is `double`.
  *
- * @returns {int}
+ * @returns {int|float}
  * Returns the largest integer value not greater than `x`, or `NaN` if the given
  * argument could not be converted to a number.
  * @example
@@ -875,7 +875,7 @@ export function floor(x, output_type) {};
  * @param {float} x number
  * @param {boolean} output_type - false is `integer`, true is `double`.
  *
- * @returns {int}
+ * @returns {int|float}
  * Returns the smallest integer value not less than `x`, or `NaN` if the given
  * argument could not be converted to a number.
  * @example
@@ -897,7 +897,7 @@ export function ceil(x, output_type) {};
  * @param {float} x number
  * @param {boolean} output_type - false is `integer`, true is `double`.
  *
- * @returns {int}
+ * @returns {int|float}
  * Returns the rounded integer value of `x`, or `NaN` if the given
  * argument could not be converted to a number.
  *
@@ -921,10 +921,10 @@ export function round(x, output_type) {};
  *
  * @function module:math#trunc
  *
- * @param {int} x number
+ * @param {float} x number
  * @param {boolean} output_type - false is `integer`, true is `double`.
  *
- * @returns {int}
+ * @returns {int|float}
  * The integral portion remaining after the decimal portion is truncated, or
  * `NaN` if the given argument could not be converted to a number.
  *

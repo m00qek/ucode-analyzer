@@ -202,7 +202,7 @@ export function connect(socket, timeout) {};
  * Optional object name pattern to filter results. When provided, returns
  * signatures for matching objects; otherwise returns all object paths.
  *
- * @returns {*}
+ * @returns {?string[]}
  */
 export function connection(object_name) {};
 
@@ -224,7 +224,7 @@ export function connection(object_name) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {string|boolean} [return="single"]
@@ -235,10 +235,10 @@ export function connection(object_name) {};
  * @param {int} [fd]
  * Optional file descriptor to send along with the call.
  *
- * @param {*} [fd_cb]
+ * @param {function} [fd_cb]
  * Optional callback function invoked when a file descriptor is received.
  *
- * @returns {*}
+ * @returns {?*}
  */
 export function connection(object, method, data, return, fd, fd_cb) {};
 
@@ -256,7 +256,7 @@ export function connection(object, method, data, return, fd, fd_cb) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {string|boolean} [return="single"]
@@ -265,10 +265,10 @@ export function connection(object, method, data, return, fd, fd_cb) {};
  * @param {int} [fd]
  * Optional file descriptor to send along with the request.
  *
- * @param {*} [fd_cb]
+ * @param {function} [fd_cb]
  * Optional callback function invoked when a file descriptor is received.
  *
- * @returns {*}
+ * @returns {?*}
  *
  * @example
  * const chan = open_channel(…);
@@ -295,20 +295,20 @@ export function channel(method, data, return, fd, fd_cb) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional method arguments as an object with field names and values.
  *
- * @param {*} [cb]
+ * @param {function} [cb]
  * Callback function invoked when the operation completes. Receives status
  * code and response data as arguments.
  *
- * @param {*} [data_cb]
+ * @param {function} [data_cb]
  * Optional callback invoked for intermediate data notifications.
  *
  * @param {int} [fd]
  * Optional file descriptor to send along with the call.
  *
- * @param {*} [fd_cb]
+ * @param {function} [fd_cb]
  * Optional callback function invoked when a file descriptor is received.
  *
  * @returns {?module:ubus.deferred}
@@ -349,19 +349,19 @@ export function connection(object, method, data, cb, data_cb, fd, fd_cb) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional method arguments as an object with field names and values.
  *
- * @param {*} [cb]
+ * @param {function} [cb]
  * Callback function invoked when the operation completes.
  *
- * @param {*} [data_cb]
+ * @param {function} [data_cb]
  * Optional callback invoked for intermediate data notifications.
  *
  * @param {int} [fd]
  * Optional file descriptor to send along with the request.
  *
- * @param {*} [fd_cb]
+ * @param {function} [fd_cb]
  * Optional callback function invoked when a file descriptor is received.
  *
  * @returns {?module:ubus.deferred}
@@ -388,7 +388,7 @@ export function channel(method, data, cb, data_cb, fd, fd_cb) {};
  *
  * @function module:ubus.request#reply
  *
- * @param {*} [reply]
+ * @param {Object} [reply]
  * The reply data to send as an object with field names and values.
  *
  * @param {int} [rcode=0]
@@ -564,16 +564,16 @@ export function notify() {};
  * @param {string} type
  * The notification type string.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional notification data as an object with field names and values.
  *
- * @param {*} [data_cb]
+ * @param {function} [data_cb]
  * Optional callback invoked for each data notification received.
  *
- * @param {*} [status_cb]
+ * @param {function} [status_cb]
  * Optional callback invoked for status updates.
  *
- * @param {*} [cb]
+ * @param {function} [cb]
  * Optional callback invoked when the notification operation completes.
  *
  * @param {int} [timeout]
@@ -654,14 +654,14 @@ export function object() {};
  * @param {string} object_name
  * The name to register the object under.
  *
- * @param {*} [methods]
+ * @param {Object} [methods]
  * Optional object defining methods with `call` functions and optional
  * `args` type specifications.
  *
- * @param {*} [subscribe_callback]
+ * @param {function} [subscribe_callback]
  * Optional callback invoked when a subscriber connects to the object.
  *
- * @returns {*}
+ * @returns {?module:ubus.object}
  *
  * @example
  * const conn = connect();
@@ -715,7 +715,7 @@ export function listener() {};
  * The event type pattern to match, supporting wildcards (e.g.,
  * `` `system.*` ``, `` `my.event.?` ``).
  *
- * @param {*} cb
+ * @param {function} cb
  * Callback invoked when a matching event is received. Receives the event
  * type string and event data object as arguments.
  *
@@ -744,7 +744,7 @@ export function connection(pattern, cb) {};
  * @param {string} event_type
  * The type string identifying the event.
  *
- * @param {*} [event_data]
+ * @param {Object} [event_data]
  * Optional event data as an object with field names and values.
  *
  * @returns {?boolean}
@@ -838,14 +838,14 @@ export function subscriber() {};
  *
  * @function module:ubus.connection#subscriber
  *
- * @param {*} notify_callback
+ * @param {function} notify_callback
  * Callback invoked when a notification is received from a subscribed
  * object.
  *
- * @param {*} remove_callback
+ * @param {function} remove_callback
  * Callback invoked when a subscribed object is removed from the bus.
  *
- * @param {*} [subscription_patterns]
+ * @param {string[]} [subscription_patterns]
  * Optional array of glob patterns for automatic object subscription.
  *
  * @returns {?module:ubus.subscriber}
@@ -980,10 +980,10 @@ export function deferred() {};
  *
  * @function module:ubus.request#new_channel
  *
- * @param {*} cb
+ * @param {function} cb
  * Callback invoked for incoming messages on the channel.
  *
- * @param {*} [disconnect_cb]
+ * @param {function} [disconnect_cb]
  * Optional callback invoked when the channel is disconnected.
  *
  * @param {int} [timeout=30]
@@ -1013,10 +1013,10 @@ export function request(cb, disconnect_cb, timeout) {};
  * resource retains ownership of the fd; the channel merely detaches from it
  * on disconnect without closing.
  *
- * @param {*} cb
+ * @param {function} cb
  * Callback invoked for incoming messages on the channel.
  *
- * @param {*} [disconnect_cb]
+ * @param {function} [disconnect_cb]
  * Optional callback invoked when the channel is disconnected.
  *
  * @param {int} [timeout=30]
@@ -1039,10 +1039,10 @@ export function open_channel(fd, cb, disconnect_cb, timeout) {};
  *
  * @function module:ubus#guard
  *
- * @param {*} [handler]
+ * @param {function} [handler]
  * The exception handler function to register.
  *
- * @returns {*}
+ * @returns {function|boolean}
  */
 export function guard(handler) {};
 

@@ -70,14 +70,21 @@ function importedItems(uri) {
 			// Namespace import: offer the alias itself as a MODULE item.
 			push(items, { label: imp.alias, kind: KIND_MODULE, detail: imp.specifier });
 		} else {
-			// Named imports: offer each imported symbol.
+			// Named imports: offer each imported symbol under its local binding name.
 			let exps = dag.exportsOf(imp.resolvedUri);
 			if (!exps) continue;
 			for (let j = 0; j < length(exps); j++) {
 				let exp = exps[j];
-				if (index(imp.symbols, exp.name) < 0) continue;
+				// Find the local name for this export, accounting for renames.
+				let localName = null;
+				for (let k = 0; k < length(imp.symbols); k++) {
+					let sym = imp.symbols[k];
+					let remote = (imp.renames && imp.renames[sym]) ?? sym;
+					if (remote === exp.name) { localName = sym; break; }
+				}
+				if (localName === null) continue;
 				push(items, {
-					label: exp.name,
+					label: localName,
 					kind: (exp.kind === 'function') ? KIND_FUNCTION : KIND_VARIABLE,
 					detail: detail(exp),
 				});

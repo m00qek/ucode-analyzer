@@ -171,7 +171,7 @@ export function cursor(config) {};
  * The name of the option to query within the section. If omitted, the type of
  * the section is returned instead.
  *
- * @returns {*}
+ * @returns {?(string|string[])}
  *
  * @example
  * const ctx = cursor(…);
@@ -211,7 +211,7 @@ export function cursor(config, section, option) {};
  * The name of the section to query within the configuration. If omitted a
  * nested dictionary containing all section values is returned.
  *
- * @returns {*}
+ * @returns {?(Object<string, module:uci.cursor.SectionObject>|module:uci.cursor.SectionObject)}
  *
  * @example
  * const ctx = cursor(…);
@@ -255,7 +255,7 @@ export function cursor(config, section) {};
  * The name of the option to query within the section. If omitted, the name of
  * the section is returned instead.
  *
- * @returns {*}
+ * @returns {?(string|string[])}
  *
  * @example
  * const ctx = cursor(…);
@@ -347,7 +347,7 @@ export function cursor(config, type) {};
  * argument is omitted, the type of the section to create within the
  * configuration.
  *
- * @param {*} [value]
+ * @param {(Array<string|boolean|int>|string|boolean|int)} [value]
  * The option value to set.
  *
  * @returns {?boolean}
@@ -754,7 +754,7 @@ export function cursor(config) {};
  * The name of the configuration file to enumerate changes for, e.g. `"system"`
  * to query pending changes for the `/etc/config/system` file.
  *
- * @returns {*}
+ * @returns {?Object<string, module:uci.cursor.ChangeRecord[]>}
  *
  * @example
  * const ctx = cursor(…);
@@ -823,7 +823,7 @@ export function cursor(config, type, callback) {};
  *
  * @function module:uci.cursor#configs
  *
- * @returns {*}
+ * @returns {?string[]}
  *
  * @example
  * const ctx = cursor(…);

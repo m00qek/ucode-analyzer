@@ -2,6 +2,8 @@ import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, buildLineTable } from 'ucode_language_server.positions';
 import * as dag from 'ucode_language_server.dag';
 import * as fs from 'fs';
+import { buildScope, inferNode } from 'ucode_language_server.inferrer';
+import * as type_registry from 'ucode_language_server.type_registry';
 
 // Walk to the deepest named node containing offset.
 function nodeAtOffset(node, offset) {
@@ -98,6 +100,90 @@ function walkForParam(node, uri, doc, name, offset) {
 	return null;
 }
 
+// If name is a namespace import alias (import * as name), return a Location
+// pointing to the top of the imported module file.
+function namespaceDef(uri, name) {
+	let imps = dag.importsOf(uri);
+	if (!imps) return null;
+	for (let i = 0; i < length(imps); i++) {
+		let imp = imps[i];
+		if (imp.alias === name && imp.resolvedUri)
+			return { uri: imp.resolvedUri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } };
+	}
+	return null;
+}
+
+// Resolve a member name in a type to a file Location via the type registry.
+// Returns the location of the @typedef that defines the record containing propName,
+// or null if the type doesn't resolve to a record with that field.
+function locationOfMember(type, propName, depth) {
+	if (!depth) depth = 0;
+	if (depth > 5 || !type) return null;
+	if (type.kind === 'ref') {
+		let def = type_registry.lookup(type.name);
+		if (!def) return null;
+		if (def.type && def.type.kind === 'record') {
+			for (let i = 0; i < length(def.type.fields); i++)
+				if (def.type.fields[i].name === propName)
+					return { uri: def.sourceUri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } };
+			return null;
+		}
+		return locationOfMember(def.type, propName, depth + 1);
+	}
+	return null;
+}
+
+// Read resolvedUri from disk, find the definition of name (checking inline exports
+// first, then falling back to local declarations). Returns a Location or null.
+function resolveExportInFile(resolvedUri, name) {
+	let path = substr(resolvedUri, length('file://'));
+	let text = fs.readfile(path);
+	if (!text) return null;
+	let parser = ts.newParser(ts.ucode());
+	let tree = ts.parse(parser, text);
+	let root = ts.rootNode(tree);
+	for (let k = 0; k < ts.namedChildCount(root); k++) {
+		let stmt = ts.namedChild(root, k);
+		if (ts.nodeType(stmt) !== 'export_statement') continue;
+		let decl = ts.namedChild(stmt, 0);
+		if (!decl) continue;
+		let nameNode = findExportName(decl, name, text);
+		if (nameNode)
+			return location(resolvedUri, text, ts.startByte(nameNode));
+	}
+	let doc = { uri: resolvedUri, text, tree, lineTable: buildLineTable(text) };
+	return localDefinition(resolvedUri, doc, name);
+}
+
+// If cursor is on a property_identifier inside a member_expression, resolve
+// via namespace import DAG or scope-based type inference.
+function memberExprDef(uri, doc, memberExpr, propName, offset) {
+	let objNode = ts.namedChild(memberExpr, 0);
+	if (!objNode || ts.nodeType(objNode) !== 'identifier') return null;
+	let objName = ts.text(objNode, doc.text);
+
+	// Namespace import: import * as objName from 'mod' → look up propName in mod
+	let imps = dag.importsOf(uri);
+	if (imps) {
+		for (let i = 0; i < length(imps); i++) {
+			let imp = imps[i];
+			if (imp.alias !== objName || !imp.resolvedUri) continue;
+			let exps = dag.exportsOf(imp.resolvedUri);
+			if (!exps) return null;
+			for (let j = 0; j < length(exps); j++) {
+				if (exps[j].name !== propName) continue;
+				return resolveExportInFile(imp.resolvedUri, propName);
+			}
+			return null;
+		}
+	}
+
+	// Scope-based: object has a typedef'd record type → find member in type registry
+	let scope = buildScope(uri, doc.text, doc.tree, offset);
+	let objType = inferNode(objNode, doc.text, uri, scope, 0);
+	return locationOfMember(objType, propName);
+}
+
 // If name is a named import into uri, return the Location of its definition.
 function importedDefinition(uri, name) {
 	let imps = dag.importsOf(uri);
@@ -107,27 +193,11 @@ function importedDefinition(uri, name) {
 		if (!imp.resolvedUri || index(imp.symbols, name) < 0) continue;
 		let exps = dag.exportsOf(imp.resolvedUri);
 		if (!exps) continue;
+		// symbols holds local names; renames maps local → remote for aliased imports.
+		let remoteName = (imp.renames && imp.renames[name]) ?? name;
 		for (let j = 0; j < length(exps); j++) {
-			if (exps[j].name !== name) continue;
-			let path = substr(imp.resolvedUri, length('file://'));
-			let text = fs.readfile(path);
-			if (!text) return null;
-			let parser = ts.newParser(ts.ucode());
-			let tree = ts.parse(parser, text);
-			let root = ts.rootNode(tree);
-			// First pass: inline export (export function / export let).
-			for (let k = 0; k < ts.namedChildCount(root); k++) {
-				let stmt = ts.namedChild(root, k);
-				if (ts.nodeType(stmt) !== 'export_statement') continue;
-				let decl = ts.namedChild(stmt, 0);
-				if (!decl) continue;
-				let nameNode = findExportName(decl, name, text);
-				if (nameNode)
-					return location(imp.resolvedUri, text, ts.startByte(nameNode));
-			}
-			// Second pass: local declaration (handles `export { name }` style).
-			let doc = { uri: imp.resolvedUri, text, tree, lineTable: buildLineTable(text) };
-			return localDefinition(imp.resolvedUri, doc, name);
+			if (exps[j].name !== remoteName) continue;
+			return resolveExportInFile(imp.resolvedUri, remoteName);
 		}
 	}
 	return null;
@@ -139,13 +209,27 @@ export function definition(uri, doc, position) {
 	if (offset >= ts.endByte(root)) return null;
 
 	let node = nodeAtOffset(root, offset);
-	if (ts.nodeType(node) !== 'identifier') return null;
+	let nt = ts.nodeType(node);
+
+	// Member expression property (e.g. `mod.fn` — cursor on `fn`)
+	if (nt === 'property_identifier') {
+		let parent = ts.parent(node);
+		if (parent && ts.nodeType(parent) === 'member_expression')
+			return memberExprDef(uri, doc, parent, ts.text(node, doc.text), offset);
+		return null;
+	}
+
+	if (nt !== 'identifier') return null;
 
 	let name = ts.text(node, doc.text);
 
 	// Named import → jump to the exporting file.
 	let imp = importedDefinition(uri, name);
 	if (imp) return imp;
+
+	// Namespace import alias → jump to the module file.
+	let ns = namespaceDef(uri, name);
+	if (ns) return ns;
 
 	// Function parameter in the innermost enclosing scope.
 	let param = walkForParam(root, uri, doc, name, offset);

@@ -335,7 +335,7 @@
  * @param {string} format
  * The format string.
  *
- * @param {*} values
+ * @param {...*} values
  * Variable number of values to pack.
  *
  * @returns {string}
@@ -372,7 +372,7 @@ export function pack(format, values) {};
  * @param {int} [offset=0]
  * The offset within the input string to start unpacking from.
  *
- * @returns {*}
+ * @returns {Array<*>}
  *
  * @example
  * // Unpack three consecutive unsigned int values in network byte order.
@@ -421,7 +421,7 @@ export function new(format) {};
  *
  * @function module:struct.instance#pack
  *
- * @param {*} values
+ * @param {...*} values
  * Variable number of values to pack.
  *
  * @returns {string}
@@ -454,7 +454,7 @@ export function instance(values) {};
  * @param {int} [offset=0]
  * The offset within the input string to start unpacking from.
  *
- * @returns {*}
+ * @returns {Array<*>}
  *
  * @example
  * const fmt = struct.new(…);
@@ -600,7 +600,7 @@ export function buffer() {};
  * @param {string} format
  * The format string specifying how to pack the data.
  *
- * @param {*} values
+ * @param {...*} values
  * The values to pack into the buffer.
  *
  * @returns {module:struct.buffer}
@@ -660,7 +660,7 @@ export function buffer(format) {};
  * @param {string} format
  * The format string specifying how to unpack the data.
  *
- * @returns {*}
+ * @returns {Array<*>}
  * An array containing the unpacked values.
  *
  * @see {@link module:struct#unpack|struct.unpack()}

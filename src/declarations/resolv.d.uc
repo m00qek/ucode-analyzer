@@ -214,20 +214,20 @@
  *
  * @function module:resolv#query
  *
- * @param {*} names
+ * @param {string|string[]} names
  * Domain name(s) to query. Can be a single domain name string or an array
  * of domain name strings. IP addresses can also be provided for reverse
  * DNS lookups.
  *
- * @param {*} [options]
+ * @param {Object} [options]
  * Query options object.
  *
- * @param {*} [options.type]
+ * @param {string[]} [options.type]
  * Array of DNS record types to query for. Valid types are: 'A', 'AAAA',
  * 'CNAME', 'MX', 'NS', 'PTR', 'SOA', 'SRV', 'TXT', 'ANY'. If not specified,
  * defaults to 'A' and 'AAAA' for domain names, or 'PTR' for IP addresses.
  *
- * @param {*} [options.nameserver]
+ * @param {string[]} [options.nameserver]
  * Array of DNS nameserver addresses to query. Each address can optionally
  * include a port number using '#' separator (e.g., '8.8.8.8#53'). IPv6
  * addresses can include interface scope using '%' separator. If not specified,
@@ -247,7 +247,7 @@
  * Return TXT record strings as array elements instead of space-joining all
  * record strings into one single string per record.
  *
- * @returns {*}
+ * @returns {Object}
  * Object containing DNS query results. Keys are domain names, values are
  * objects containing arrays of records grouped by type, or error information
  * for failed queries.

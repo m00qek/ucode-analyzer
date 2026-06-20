@@ -70,7 +70,7 @@ export function error() {};
  * @param {int} flags - The netlink flags for the request
  * @param {*} payload - The payload data for the request
  *
- * @returns {*} - The response data or null on error
+ * @returns {?*} - The response data or null on error
  *
  * @example
  * // Send a route request
@@ -86,9 +86,9 @@ export function request(cmd, flags, payload) {};
  *
  * @function module:rtnl#listener
  *
- * @param {*} callback - The callback function to invoke when a message is received
- * @param {*} [commands] - Array of netlink commands to listen for (optional)
- * @param {*} [groups] - Array of multicast groups to join (optional)
+ * @param {function} callback - The callback function to invoke when a message is received
+ * @param {Array<string>} [commands] - Array of netlink commands to listen for (optional)
+ * @param {Array<int>} [groups] - Array of multicast groups to join (optional)
  *
  * @returns {module:rtnl.listener} - A listener object with methods to control the listener
  *
@@ -107,7 +107,7 @@ export function listener(callback, commands, groups) {};
  *
  * @function module:rtnl.listener#set_commands
  *
- * @param {*} commands - Array of netlink commands to listen for
+ * @param {Array<string>} commands - Array of netlink commands to listen for
  *
  * @returns {boolean} - true if successful, false on error
  *

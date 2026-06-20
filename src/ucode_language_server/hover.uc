@@ -23,9 +23,10 @@ function importedDescription(uri, name) {
 		if (!imp.resolvedUri || index(imp.symbols, name) < 0) continue;
 		let exps = dag.exportsOf(imp.resolvedUri);
 		if (!exps) continue;
+		let remoteName = (imp.renames && imp.renames[name]) ?? name;
 		for (let j = 0; j < length(exps); j++) {
 			let exp = exps[j];
-			if (exp.name === name && exp.doc && exp.doc.description)
+			if (exp.name === remoteName && exp.doc && exp.doc.description)
 				return exp.doc.description;
 		}
 	}
