@@ -12,61 +12,7 @@ let STR     = { kind: 'primitive', name: 'string' };
 let INT     = { kind: 'primitive', name: 'int' };
 let NULL_T  = { kind: 'primitive', name: 'null' };
 
-// ── Builtin scope ─────────────────────────────────────────────────────────
-
-function _initBuiltins() {
-	let s    = makeScope(null);
-	let FLOAT = { kind: 'primitive', name: 'float' };
-	let ANY   = { kind: 'any' };
-	let LIST  = { kind: 'generic', base: 'list', params: [ANY] };
-	let LSTR  = { kind: 'generic', base: 'list', params: [STR] };
-
-	function fn0(r) { return { kind: 'function', params: [], return: r }; }
-	function fn1(r) { return { kind: 'function', params: [{ name: 'a', type: ANY }], return: r }; }
-	function fn2(r) { return { kind: 'function', params: [{ name: 'a', type: ANY }, { name: 'b', type: ANY }], return: r }; }
-	function fn3(r) { return { kind: 'function', params: [{ name: 'a', type: ANY }, { name: 'b', type: ANY }, { name: 'c', type: ANY }], return: r }; }
-
-	// Strings
-	scopeSet(s, 'sprintf', fn2(STR));   scopeSet(s, 'trim',  fn1(STR));
-	scopeSet(s, 'ltrim',   fn1(STR));   scopeSet(s, 'rtrim', fn1(STR));
-	scopeSet(s, 'lc',      fn1(STR));   scopeSet(s, 'uc',    fn1(STR));
-	scopeSet(s, 'substr',  fn3(STR));   scopeSet(s, 'join',  fn2(STR));
-	scopeSet(s, 'split',   fn2(LSTR));
-	// Arrays
-	scopeSet(s, 'push',    fn2(NULL_T));  scopeSet(s, 'pop',     fn1(ANY));
-	scopeSet(s, 'shift',   fn1(ANY));     scopeSet(s, 'unshift', fn2(NULL_T));
-	scopeSet(s, 'splice',  fn3(LIST));    scopeSet(s, 'slice',   fn3(LIST));
-	scopeSet(s, 'reverse', fn1(NULL_T));  scopeSet(s, 'sort',    fn2(LIST));
-	scopeSet(s, 'index',   fn2(INT));     scopeSet(s, 'length',  fn1(INT));
-	scopeSet(s, 'map',     fn2(LIST));    scopeSet(s, 'filter',  fn2(LIST));
-	scopeSet(s, 'reduce',  fn3(ANY));
-	// Objects
-	scopeSet(s, 'keys',    fn1(LSTR));   scopeSet(s, 'values', fn1(LIST));
-	scopeSet(s, 'delete',  fn2(NULL_T));
-	// Types
-	scopeSet(s, 'type',    fn1(STR));    scopeSet(s, 'int',    fn1(INT));
-	scopeSet(s, 'string',  fn1(STR));    scopeSet(s, 'float',  fn1(FLOAT));
-	scopeSet(s, 'bool',    fn1(BOOL));
-	// Math
-	scopeSet(s, 'abs',   fn1(FLOAT));  scopeSet(s, 'ceil',  fn1(INT));
-	scopeSet(s, 'floor', fn1(INT));    scopeSet(s, 'rand',  fn0(FLOAT));
-	scopeSet(s, 'srand', fn1(NULL_T)); scopeSet(s, 'sqrt',  fn1(FLOAT));
-	scopeSet(s, 'atan2', fn2(FLOAT));  scopeSet(s, 'sin',   fn1(FLOAT));
-	scopeSet(s, 'cos',   fn1(FLOAT));  scopeSet(s, 'log',   fn1(FLOAT));
-	scopeSet(s, 'exp',   fn1(FLOAT));  scopeSet(s, 'pow',   fn2(FLOAT));
-	// IO
-	scopeSet(s, 'print',  fn1(NULL_T));  scopeSet(s, 'printf', fn2(NULL_T));
-	scopeSet(s, 'warn',   fn1(NULL_T));  scopeSet(s, 'die',    fn1(NULL_T));
-	// Other
-	scopeSet(s, 'json',   fn1(ANY));    scopeSet(s, 'ord',  fn1(INT));
-	scopeSet(s, 'chr',    fn1(STR));    scopeSet(s, 'hex',  fn1(INT));
-	scopeSet(s, 'match',  fn2({ kind: 'nullable', inner: LSTR }));
-	scopeSet(s, 'regexp', fn1(ANY));
-
-	return s;
-}
-
-let _builtinScope = _initBuiltins();
+let _builtinScope = makeScope(null);
 let _stdlibUri    = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────

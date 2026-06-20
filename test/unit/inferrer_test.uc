@@ -1,7 +1,7 @@
 import { describe, it, assert, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_language_server.dag';
-import { inferNode, buildScope } from 'ucode_language_server.inferrer';
+import { inferNode, buildScope, initBuiltinsFromDag } from 'ucode_language_server.inferrer';
 import { makeScope, scopeSet, scopeGet } from 'ucode_language_server.scope';
 import { invalidateUri } from 'ucode_language_server.memo';
 
@@ -17,6 +17,14 @@ let _config = {
 	workspaceDir: '/app',
 	workspace: { libraryPaths: ['src'] },
 };
+
+// Bootstrap the builtin scope from stdlib.d.uc once for the whole test run.
+dag.init(_config);
+let _stdlibUri = dag.resolveSpecifier('stdlib');
+if (_stdlibUri) {
+	dag.addFromDisk(_stdlibUri);
+	initBuiltinsFromDag(_stdlibUri);
+}
 
 beforeEach(() => {
 	dag.init(_config);
@@ -474,7 +482,7 @@ describe('inferrer — function_expression', () => {
 });
 
 describe('inferrer — builtins', () => {
-	it('length is in scope with int return type', () => {
+	it('length is in scope with nullable int return type', () => {
 		let text = "";
 		let tree = parse(text);
 		dag.add(URI, text, tree);
@@ -483,7 +491,7 @@ describe('inferrer — builtins', () => {
 		let t = scopeGet(scope, 'length');
 		assert.match(true, t !== null);
 		assert.match('function', t.kind);
-		assert.match(prim('int'), t.return);
+		assert.match({ kind: 'nullable', inner: prim('int') }, t.return);
 	});
 
 	it('sprintf is in scope with string return type', () => {
@@ -497,7 +505,7 @@ describe('inferrer — builtins', () => {
 		assert.match(prim('string'), t.return);
 	});
 
-	it('keys is in scope with list<string> return type', () => {
+	it('keys is in scope with nullable Array return type', () => {
 		let text = "";
 		let tree = parse(text);
 		dag.add(URI, text, tree);
@@ -505,7 +513,7 @@ describe('inferrer — builtins', () => {
 
 		let t = scopeGet(scope, 'keys');
 		assert.match('function', t.kind);
-		assert.match({ kind: 'generic', base: 'list', params: [prim('string')] }, t.return);
+		assert.match({ kind: 'nullable', inner: { kind: 'ref', name: 'Array', params: [] } }, t.return);
 	});
 
 	it('builtins do not pollute scope.bindings — they live in the parent chain', () => {
