@@ -311,7 +311,7 @@ export function addrinfo(hostname, service, hints) {};
  * call will wait indefinitely, in all other cases the poll call will wait at
  * most for the given amount of milliseconds before returning.
  *
- * @param {*} sockets
+ * @param {...*} sockets
  * An arbitrary amount of socket arguments. Each argument may be either a plain
  * {@link module:socket.socket|socket instance} (or any other kind of handle
  * implementing a `fileno()` method) or a `[socket, flags]` tuple specifying the

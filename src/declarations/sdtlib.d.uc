@@ -143,7 +143,7 @@ export function rindex(arr_or_str, needle) {};
  * @param {*} arr
  * The array to push values to.
  *
- * @param {*} [values]
+ * @param {...*} [values]
  * The values to push.
  *
  * @returns {*}
@@ -203,7 +203,7 @@ export function shift(arr) {};
  * @param {*} arr
  * The array to which the values will be added.
  *
- * @param {*}
+ * @param {...*}
  * Values to add.
  *
  * @returns {*}
@@ -224,7 +224,7 @@ export function unshift(arr) {};
  *
  * @function module:core#chr
  *
- * @param {*} n1
+ * @param {...int} n1
  * The numeric values.
  *
  * @returns {string}
@@ -777,7 +777,7 @@ export function uc(str) {};
  *
  * @function module:core#uchr
  *
- * @param {*}
+ * @param {...int}
  * Numeric values to convert.
  *
  * @returns {string}
@@ -882,7 +882,7 @@ export function rtrim(str, c) {};
  * @param {string} fmt
  * The format string.
  *
- * @param {*}
+ * @param {...*}
  * Arguments to be formatted.
  *
  * @returns {string}
@@ -922,7 +922,7 @@ export function sprintf(fmt) {};
  * @param {string} fmt
  * The format string.
  *
- * @param {*}
+ * @param {...*}
  * Arguments to be formatted.
  *
  * @returns {int}
@@ -1968,7 +1968,7 @@ export function loadfile(path, options) {};
  * @param {*} [scope=null]
  * Global environment for the invoked function.
  *
- * @param {*} [arg]
+ * @param {...*} [arg]
  * Additional arguments to pass to the invoked function.
  *
  * @returns {*}
