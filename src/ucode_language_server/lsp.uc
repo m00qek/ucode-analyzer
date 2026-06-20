@@ -47,6 +47,10 @@ export function run(config) {
 			}
 
 			let stdlibUri = dag.resolveSpecifier('stdlib');
+			if (!stdlibUri && config.selfSrcDir) {
+				stdlibUri = dag.resolveSpecifierIn([config.selfSrcDir], 'stdlib');
+				if (stdlibUri) dag.addFromDisk(stdlibUri);
+			}
 			if (stdlibUri) initBuiltinsFromDag(stdlibUri);
 		},
 

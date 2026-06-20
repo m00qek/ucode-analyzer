@@ -17,29 +17,12 @@ let _stdlibUri    = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-// Return the text of the /** */ comment immediately before `node` among its
-// direct parent's children. Any intervening named node or // comment resets.
-function docForFunc(node, source) {
-	let parent = ts.parent(node);
-	if (!parent) return null;
-	let nodeStart = ts.startByte(node);
-	let children = ts.children(parent);
-	let found = null;
-	for (let i = 0; i < length(children); i++) {
-		let c = children[i];
-		if (ts.startByte(c) >= nodeStart) break;
-		if (ts.nodeType(c) === 'comment') {
-			let txt = ts.text(c, source);
-			found = (substr(txt, 0, 3) === '/**') ? txt : null;
-		} else if (ts.isNamed(c)) {
-			found = null;
-		}
-	}
-	return found;
-}
-
 // Return all function nodes (function_declaration / arrow_function /
 // function_expression) that contain offset, outermost first.
+// Returns all enclosing function nodes (outermost first) so their parameters
+// can be added to scope.  Needed separately from enclosingBlocks because arrow
+// functions may have an expression body (no statement_block) yet still introduce
+// parameter bindings.
 function enclosingFunctions(root, offset) {
 	let result = [];
 	let stack = [root];
@@ -55,40 +38,20 @@ function enclosingFunctions(root, offset) {
 	return result;
 }
 
-// Add the formal parameters of fn to scope. Types come from the function's
-// JSDoc @param annotations when present.
-function addParamScope(fn, source, scope) {
-	let docTxt = docForFunc(fn, source);
-	let docParams = (docTxt ? parseDoc(docTxt).params : null) ?? [];
-
-	function paramType(name) {
-		for (let k = 0; k < length(docParams); k++)
-			if (docParams[k].name === name && docParams[k].type) return docParams[k].type;
-		return UNKNOWN;
+// Returns all statement_block nodes containing offset, outermost first.
+// These are the blocks whose declarations are in scope at the cursor.
+function enclosingBlocks(root, offset) {
+	let result = [];
+	let stack = [root];
+	while (length(stack) > 0) {
+		let node = pop(stack);
+		if (ts.startByte(node) > offset || offset >= ts.endByte(node)) continue;
+		if (ts.nodeType(node) === 'statement_block')
+			push(result, node);
+		for (let i = 0; i < ts.namedChildCount(node); i++)
+			push(stack, ts.namedChild(node, i));
 	}
-
-	let foundFormal = false;
-	for (let i = 0; i < ts.namedChildCount(fn); i++) {
-		let child = ts.namedChild(fn, i);
-		if (ts.nodeType(child) !== 'formal_parameters') continue;
-		foundFormal = true;
-		for (let j = 0; j < ts.namedChildCount(child); j++) {
-			let param = ts.namedChild(child, j);
-			if (ts.nodeType(param) !== 'identifier') continue;
-			let name = ts.text(param, source);
-			scopeSet(scope, name, paramType(name));
-		}
-		break;
-	}
-
-	// Single-param arrow `x => ...` has a bare identifier as param, no formal_parameters node.
-	if (!foundFormal && ts.nodeType(fn) === 'arrow_function') {
-		let first = ts.namedChild(fn, 0);
-		if (first && ts.nodeType(first) === 'identifier') {
-			let name = ts.text(first, source);
-			scopeSet(scope, name, paramType(name));
-		}
-	}
+	return result;
 }
 
 // Look up a member name in a resolved type. Expands ref types via the registry.
@@ -190,6 +153,100 @@ let _infer;
 
 // ── Internal helpers ───────────────────────────────────────────────────────
 
+// If block is the body of a for-in statement, add the loop variable to scope.
+function addForInVar(block, source, uri, scope) {
+	let forIn = ts.parent(block);
+	if (!forIn || ts.nodeType(forIn) !== 'for_in_statement') return;
+	let loopVar = ts.childByField(forIn, 'left');
+	if (!loopVar || ts.nodeType(loopVar) !== 'identifier') return;
+	let iterable = ts.childByField(forIn, 'right');
+	let elemType = UNKNOWN;
+	if (iterable) {
+		let iterType = _infer(iterable, source, uri, scope, 0);
+		if (iterType.kind === 'generic' && iterType.base === 'list' && length(iterType.params) > 0)
+			elemType = iterType.params[0];
+		else if (iterType.kind === 'record')
+			elemType = STR;
+	}
+	scopeSet(scope, ts.text(loopVar, source), elemType);
+}
+
+// When fn is a callback argument in a call_expression, return the expected function
+// type for that parameter position with type variables resolved from preceding args.
+// Returns null when the context can't be determined.
+function callbackExpectedType(fn, source, uri, scope) {
+	let argsNode = ts.parent(fn);
+	if (!argsNode || ts.nodeType(argsNode) !== 'arguments') return null;
+	let callNode = ts.parent(argsNode);
+	if (!callNode || ts.nodeType(callNode) !== 'call_expression') return null;
+
+	let callee = ts.childByField(callNode, 'function');
+	if (!callee) return null;
+	let calleeType = _infer(callee, source, uri, scope, 0);
+	if (!calleeType || calleeType.kind !== 'function') return null;
+
+	let args = ts.namedChildren(argsNode);
+	let fnStart = ts.startByte(fn);
+	let fnIdx = -1;
+	for (let i = 0; i < length(args); i++) {
+		if (ts.startByte(args[i]) === fnStart) { fnIdx = i; break; }
+	}
+	if (fnIdx < 0 || fnIdx >= length(calleeType.params)) return null;
+
+	let bindings = {};
+	for (let i = 0; i < fnIdx; i++) {
+		if (i >= length(calleeType.params)) break;
+		let argType = _infer(args[i], source, uri, scope, 0);
+		unify(calleeType.params[i].type ?? UNKNOWN, argType, bindings, 0);
+	}
+
+	let expectedType = substitute(calleeType.params[fnIdx].type ?? UNKNOWN, bindings);
+	return (expectedType && expectedType.kind === 'function') ? expectedType : null;
+}
+
+// Add the formal parameters of fn to scope. Types come from JSDoc @param
+// annotations when present; falls back to the expected type from the call
+// context when fn is an anonymous callback.
+function addParamScope(fn, source, uri, scope) {
+	let docTxt = precedingDoc(fn, source);
+	let docParams = (docTxt ? parseDoc(docTxt).params : null) ?? [];
+
+	let expectedCb = length(docParams) === 0
+		? callbackExpectedType(fn, source, uri, scope) : null;
+	let cbParams = (expectedCb ? expectedCb.params : null) ?? [];
+
+	function paramType(name, idx) {
+		for (let k = 0; k < length(docParams); k++)
+			if (docParams[k].name === name && docParams[k].type) return docParams[k].type;
+		if (idx < length(cbParams) && cbParams[idx].type)
+			return cbParams[idx].type;
+		return UNKNOWN;
+	}
+
+	let foundFormal = false;
+	for (let i = 0; i < ts.namedChildCount(fn); i++) {
+		let child = ts.namedChild(fn, i);
+		if (ts.nodeType(child) !== 'formal_parameters') continue;
+		foundFormal = true;
+		for (let j = 0; j < ts.namedChildCount(child); j++) {
+			let param = ts.namedChild(child, j);
+			if (ts.nodeType(param) !== 'identifier') continue;
+			let name = ts.text(param, source);
+			scopeSet(scope, name, paramType(name, j));
+		}
+		break;
+	}
+
+	// Single-param arrow `x => ...` has a bare identifier as param, no formal_parameters node.
+	if (!foundFormal && ts.nodeType(fn) === 'arrow_function') {
+		let first = ts.namedChild(fn, 0);
+		if (first && ts.nodeType(first) === 'identifier') {
+			let name = ts.text(first, source);
+			scopeSet(scope, name, paramType(name, 0));
+		}
+	}
+}
+
 function processDecl(stmt, source, uri, scope, depth) {
 	for (let i = 0; i < ts.namedChildCount(stmt); i++) {
 		let decl = ts.namedChild(stmt, i);
@@ -262,7 +319,7 @@ function inferCall(node, source, uri, scope, depth) {
 			? (fnType.params[i].type ?? UNKNOWN) : UNKNOWN;
 
 		let argType;
-		if (ts.nodeType(arg) === 'arrow_function') {
+		if (ts.nodeType(arg) === 'arrow_function' || ts.nodeType(arg) === 'function_expression') {
 			let expected = substitute(paramType, bindings);
 			argType = inferArrow(arg, source, uri, scope, depth + 1, expected);
 		} else {
@@ -469,9 +526,9 @@ function importScope(uri) {
 	return scope;
 }
 
-// Process declarations in a block of statements into scope, stopping at targetOffset.
-// Handles let/const, for-in loop vars, and assignment updates — same logic
-// whether the block is the top-level program or a function body.
+// Process declarations visible at targetOffset within a flat list of statements.
+// Nested blocks (for-in bodies, if-bodies, etc.) are handled by buildScope via
+// enclosingBlocks — this function never recurses.
 function processBlock(stmts, source, uri, scope, targetOffset) {
 	for (let i = 0; i < length(stmts); i++) {
 		let stmt = stmts[i];
@@ -490,22 +547,10 @@ function processBlock(stmts, source, uri, scope, targetOffset) {
 			let inner = ts.namedChild(stmt, 0);
 			if (inner && ts.nodeType(inner) === 'lexical_declaration')
 				processDecl(inner, source, uri, scope, 0);
-
-		} else if (stype === 'for_in_statement') {
-			if (targetOffset < ts.endByte(stmt)) {
-				let loopVar = ts.childByField(stmt, 'left');
-				if (loopVar && ts.nodeType(loopVar) === 'identifier') {
-					let iterable = ts.childByField(stmt, 'right');
-					let elemType = UNKNOWN;
-					if (iterable) {
-						let iterType = _infer(iterable, source, uri, scope, 0);
-						if (iterType.kind === 'generic' && iterType.base === 'list' && length(iterType.params) > 0)
-							elemType = iterType.params[0];
-						else if (iterType.kind === 'record')
-							elemType = STR;  // for-in over an object iterates string keys
-					}
-					scopeSet(scope, ts.text(loopVar, source), elemType);
-				}
+			else if (inner && ts.nodeType(inner) === 'function_declaration') {
+				let nameNode = ts.namedChild(inner, 0);
+				if (nameNode && ts.nodeType(nameNode) === 'identifier')
+					scopeSet(scope, ts.text(nameNode, source), _infer(inner, source, uri, scope, 0));
 			}
 
 		} else if (stype === 'expression_statement') {
@@ -515,17 +560,24 @@ function processBlock(stmts, source, uri, scope, targetOffset) {
 				let rhs = ts.childByField(inner, 'right');
 				if (lhs && rhs && ts.nodeType(lhs) === 'identifier') {
 					let name = ts.text(lhs, source);
-					if (scopeGet(scope, name) !== null)
-						scopeSet(scope, name, _infer(rhs, source, uri, scope, 0));
+					let newType = _infer(rhs, source, uri, scope, 0);
+					if (scopeGet(scope, name) !== null && newType.kind !== 'unknown')
+						scopeSet(scope, name, newType);
 				}
 			}
 		}
 	}
 }
 
-// Build a scope for the given file at targetOffset: imports + top-level
-// declarations + parameters and body declarations of all enclosing functions
-// (outermost first, so inner names shadow outer ones).
+// Build a scope for the given file at targetOffset.
+//
+// Strategy (outermost first so inner names shadow outer ones):
+//   1. importScope   — named imports and namespace aliases
+//   2. enclosingFunctions params — arrow/function params even without a block body
+//   3. processBlock for the root program node
+//   4. For each enclosing statement_block (function body, for-in body, if-body, …):
+//        a. addForInVar — loop variable when the block is a for-in body
+//        b. processBlock — declarations inside that block up to targetOffset
 export function buildScope(uri, source, tree, targetOffset) {
 	let scope = importScope(uri);
 	let root = ts.rootNode(tree);
@@ -533,10 +585,13 @@ export function buildScope(uri, source, tree, targetOffset) {
 	processBlock(ts.namedChildren(root), source, uri, scope, targetOffset);
 
 	let fns = enclosingFunctions(root, targetOffset);
-	for (let i = 0; i < length(fns); i++) {
-		addParamScope(fns[i], source, scope);
-		let body = ts.childByField(fns[i], 'body');
-		if (body) processBlock(ts.namedChildren(body), source, uri, scope, targetOffset);
+	for (let i = 0; i < length(fns); i++)
+		addParamScope(fns[i], source, uri, scope);
+
+	let blocks = enclosingBlocks(root, targetOffset);
+	for (let i = 0; i < length(blocks); i++) {
+		addForInVar(blocks[i], source, uri, scope);
+		processBlock(ts.namedChildren(blocks[i]), source, uri, scope, targetOffset);
 	}
 	return scope;
 };

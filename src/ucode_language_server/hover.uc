@@ -45,6 +45,18 @@ function importedDescription(uri, name) {
 	return null;
 }
 
+// Find the JSDoc description for an export in the same file.
+function localDescription(uri, name) {
+	let exps = dag.exportsOf(uri);
+	if (!exps) return null;
+	for (let i = 0; i < length(exps); i++) {
+		let exp = exps[i];
+		if (exp.name === name && exp.doc && exp.doc.description)
+			return exp.doc.description;
+	}
+	return null;
+}
+
 export function hover(doc, position) {
 	let offset = positionToOffset(doc.text, doc.lineTable, position);
 	let root = ts.rootNode(doc.tree);
@@ -61,7 +73,7 @@ export function hover(doc, position) {
 	let md = sprintf('```ucode\n%s: %s\n```', label, typeStr);
 
 	if (ts.nodeType(node) === 'identifier') {
-		let desc = importedDescription(doc.uri, label) ?? builtinDescription(label);
+		let desc = importedDescription(doc.uri, label) ?? builtinDescription(label) ?? localDescription(doc.uri, label);
 		if (desc) md += '\n\n' + desc;
 	}
 

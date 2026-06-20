@@ -738,6 +738,82 @@ describe('template type parameter propagation', () => {
 	});
 });
 
+describe('export function visible to later code in same file', () => {
+	let proc;
+
+	beforeEach(() => {
+		proc = lsp.connect();
+		lsp.initialize(proc);
+	});
+
+	afterEach(() => {
+		lsp.shutdown(proc);
+		assert.match(0, lsp.close(proc));
+	});
+
+	it('calling a sibling export function resolves to its return type', () => {
+		let src = "/**\n * @returns {string}\n */\nexport function tag(x) { return '' + x; }\nexport function caller(v) {\n    let r = tag(v);\n    r;\n}\n";
+		let uri = 'file:///export_fn_scope.uc';
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri, languageId: 'ucode', version: 1, text: src },
+		}});
+		// 'r' on the standalone 'r;' line — line 6 (0-based), character 4
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri },
+			position: { line: 6, character: 4 },
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+	});
+});
+
+describe('nested block scope — let inside for-in body', () => {
+	let proc;
+
+	beforeEach(() => {
+		proc = lsp.connect();
+		lsp.initialize(proc);
+	});
+
+	afterEach(() => {
+		lsp.shutdown(proc);
+		assert.match(0, lsp.close(proc));
+	});
+
+	it('let declared inside a for-in body resolves to its initializer type', () => {
+		let src = "/**\n * @returns {string}\n */\nfunction tag(x) { return '' + x; }\nfor (let item in items) {\n    let k = tag(item);\n    k;\n}\n";
+		let uri = 'file:///nested_scope.uc';
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri, languageId: 'ucode', version: 1, text: src },
+		}});
+		// 'k' on the standalone 'k;' line — line 6 (0-based), character 4
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri },
+			position: { line: 6, character: 4 },
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+	});
+
+	it('let declared inside a doubly-nested for-in body resolves correctly', () => {
+		let src = "/**\n * @returns {string}\n */\nfunction tag(x) { return '' + x; }\nfor (let outer in items) {\n    for (let inner in outer) {\n        let k = tag(inner);\n        k;\n    }\n}\n";
+		let uri = 'file:///double_nested.uc';
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri, languageId: 'ucode', version: 1, text: src },
+		}});
+		// 'k' on the standalone 'k;' line — line 7 (0-based), character 8
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri },
+			position: { line: 7, character: 8 },
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+	});
+});
+
 // Standalone: afterEach shutdown would conflict with the server already having exited.
 describe('exit behavior', () => {
 	it('exit without shutdown returns non-zero', () => {

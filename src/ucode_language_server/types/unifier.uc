@@ -10,6 +10,13 @@ export function unify(paramType, argType, bindings, depth) {
 		return;
 	}
 
+	// If the caller passes a nullable where the param expects a concrete type, try
+	// matching against the inner type (e.g. list<T> unified with ?list<OptionNode>).
+	if (argType.kind === 'nullable' && pk !== 'nullable') {
+		unify(paramType, argType.inner, bindings, depth + 1);
+		return;
+	}
+
 	if (pk === 'generic' && argType.kind === 'generic' && paramType.base === argType.base) {
 		let n = min(length(paramType.params), length(argType.params));
 		for (let i = 0; i < n; i++)

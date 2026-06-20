@@ -329,6 +329,21 @@ describe('inferrer — buildScope: export let', () => {
 	});
 });
 
+describe('inferrer — buildScope: export function', () => {
+	it('export function declarations are in scope for later references', () => {
+		let text = "/**\n * @returns {string}\n */\nexport function tag(x) {}\nexport function caller(v) {\n    let r = tag(v);\n    r;\n}\n";
+		let tree = parse(text);
+		// offset at 'r;' inside caller
+		let offset = index(text, '\n    r;') + 5;
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(true, scope.bindings['tag'] !== null);
+		assert.match(prim('string'), scope.bindings['r']);
+	});
+});
+
 describe('inferrer — buildScope: namespace import alias', () => {
 	let TS_URI = 'file:///app/src/tree_sitter.uc';
 
@@ -383,6 +398,52 @@ describe('inferrer — buildScope: for_in loop variable', () => {
 		let scope = buildScope(URI, text, tree, offset);
 
 		assert.match(null, scope.bindings['k'] ?? null);
+	});
+});
+
+describe('inferrer — buildScope: nested block scope', () => {
+	it('let inside a for-in body is bound', () => {
+		let text = "/**\n * @returns {string}\n */\nfunction f(x) { return x; }\nfor (let it in arr) {\n    let k = f(it);\n    k;\n}";
+		let tree = parse(text);
+		let offset = index(text, '\n    k;') + 5;  // at standalone 'k'
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('string'), scope.bindings['k']);
+	});
+
+	it('let inside a nested for-in body is bound', () => {
+		let text = "/**\n * @returns {string}\n */\nfunction f(x) { return x; }\nfor (let outer in arr) {\n    for (let node in outer) {\n        let k = f(node);\n        k;\n    }\n}";
+		let tree = parse(text);
+		let offset = index(text, '\n        k;') + 9;  // at standalone 'k'
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('string'), scope.bindings['k']);
+	});
+
+	it('let inside an if-body is bound', () => {
+		let text = "/**\n * @returns {string}\n */\nfunction f(x) { return x; }\nif (cond) {\n    let k = f(v);\n    k;\n}";
+		let tree = parse(text);
+		let offset = index(text, '\n    k;') + 5;
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('string'), scope.bindings['k']);
+	});
+
+	it('let inside a while-body is bound', () => {
+		let text = "/**\n * @returns {string}\n */\nfunction f(x) { return x; }\nwhile (cond) {\n    let k = f(v);\n    k;\n}";
+		let tree = parse(text);
+		let offset = index(text, '\n    k;') + 5;
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('string'), scope.bindings['k']);
 	});
 });
 
@@ -660,6 +721,44 @@ describe('inferrer — property_identifier in member expression', () => {
 
 		assert.match('function', t.kind);
 		assert.match(prim('string'), t.return);
+	});
+});
+
+describe('inferrer — buildScope: callback parameter types from call context', () => {
+	it('function_expression callback param typed from callee signature (type var resolved)', () => {
+		// filter(list<string>, function(x) {...}) → x should be string
+		let text = "let items = ['a', 'b'];\nfilter(items, function(x) {\n    x;\n});";
+		let tree = parse(text);
+		let offset = index(text, '\n    x;') + 5;  // at standalone 'x' in callback body
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('string'), scope.bindings['x']);
+	});
+
+	it('arrow callback param typed from callee signature', () => {
+		let text = "let items = ['a', 'b'];\nfilter(items, x => {\n    x;\n});";
+		let tree = parse(text);
+		let offset = index(text, '\n    x;') + 5;
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('string'), scope.bindings['x']);
+	});
+
+	it('callback param type resolves T when callee is an outer function param', () => {
+		// Outer function param 'arr' typed as list<int>; filter(arr, function(el) {...})
+		// enclosing function param scope for 'arr' must be built before callback context
+		let text = "/**\n * @param {list<int>} arr\n */\nfunction outer(arr) {\n    filter(arr, function(el) {\n        el;\n    });\n}";
+		let tree = parse(text);
+		let offset = index(text, '\n        el;') + 9;  // at 'el' in callback body
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('int'), scope.bindings['el']);
 	});
 });
 

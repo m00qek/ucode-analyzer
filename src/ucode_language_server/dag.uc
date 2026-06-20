@@ -136,3 +136,7 @@ export function resolveSpecifier(specifier) {
 	let workdir = _config.workspaceDir ?? '/';
 	return resolveModule(specifier, resolvedLibPaths(), workdir);
 };
+
+export function resolveSpecifierIn(paths, specifier) {
+	return resolveModule(specifier, paths, '/');
+};
