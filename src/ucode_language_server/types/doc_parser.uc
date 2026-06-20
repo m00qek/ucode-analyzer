@@ -128,6 +128,16 @@ parseTypeNode = function(node, source, tparams) {
 		return { kind: 'module', path: path ? ts.text(path, source) : '?' };
 	}
 
+	if (kind === 'array_type') {
+		let elem = ts.namedChild(node, 0);
+		return { kind: 'generic', base: 'list', params: [elem ? parseTypeNode(elem, source, tparams) : { kind: 'unknown' }] };
+	}
+
+	if (kind === 'parenthesized_type') {
+		let inner = ts.namedChild(node, 0);
+		return inner ? parseTypeNode(inner, source, tparams) : { kind: 'unknown' };
+	}
+
 	return { kind: 'unknown' };
 };
 

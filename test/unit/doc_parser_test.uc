@@ -134,6 +134,21 @@ describe('parseDoc — type forms', () => {
 		assert.match(list_(prim('string')), doc.returns.type);
 	});
 
+	it('parses T[] (array_type) as list<T>', () => {
+		let doc = parseDoc("/** @returns {string[]} */");
+		assert.match(list_(prim('string')), doc.returns.type);
+	});
+
+	it('parses nested T[][] as list<list<T>>', () => {
+		let doc = parseDoc("/** @returns {int[][]} */");
+		assert.match(list_(list_(prim('int'))), doc.returns.type);
+	});
+
+	it('parses parenthesized_type as the inner type', () => {
+		let doc = parseDoc("/** @returns {(string|int)} */");
+		assert.match(union_(prim('string'), prim('int')), doc.returns.type);
+	});
+
 	it('parses dict<V>', () => {
 		let doc = parseDoc("/** @returns {dict<int>} */");
 		assert.match(dict_(prim('int')), doc.returns.type);
