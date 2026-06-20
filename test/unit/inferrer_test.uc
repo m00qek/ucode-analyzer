@@ -128,6 +128,19 @@ describe('inferrer — array literals', () => {
 	it('integer array yields list<int>', () => {
 		assert.match(list_(prim('int')), infer('let x = [1, 2, 3];'));
 	});
+
+	it('mixed int/string array yields list<int | string>', () => {
+		let t = infer("let x = [1, 'a'];");
+		assert.match('generic', t.kind);
+		assert.match('list', t.base);
+		assert.match('union', t.params[0].kind);
+		assert.match(2, length(t.params[0].members));
+	});
+
+	it('single-element array yields list<T>, not a union', () => {
+		let t = infer('let x = [42];');
+		assert.match(list_(prim('int')), t);
+	});
 });
 
 describe('inferrer — identifier and scope', () => {

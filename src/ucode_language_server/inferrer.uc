@@ -403,8 +403,22 @@ function inferInner(node, source, uri, scope, depth) {
 	}
 
 	if (ntype === 'array') {
-		let elem = ts.namedChildCount(node) > 0
-			? _infer(ts.namedChild(node, 0), source, uri, scope, depth + 1) : UNKNOWN;
+		let n = ts.namedChildCount(node);
+		if (n === 0) return { kind: 'generic', base: 'list', params: [UNKNOWN] };
+		// Collect distinct element types; build a union when they differ.
+		let members = [];
+		for (let i = 0; i < n; i++) {
+			let t = _infer(ts.namedChild(node, i), source, uri, scope, depth + 1);
+			let seen = false;
+			for (let j = 0; j < length(members); j++) {
+				let m = members[j];
+				if (m.kind === t.kind && (m.kind !== 'primitive' || m.name === t.name)) {
+					seen = true; break;
+				}
+			}
+			if (!seen) push(members, t);
+		}
+		let elem = length(members) === 1 ? members[0] : { kind: 'union', members };
 		return { kind: 'generic', base: 'list', params: [elem] };
 	}
 
