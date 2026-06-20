@@ -146,6 +146,34 @@ describe('inferrer — identifier and scope', () => {
 	});
 });
 
+describe('inferrer — block-body function return type inference', () => {
+	it('infers return type from first return statement in a block body arrow', () => {
+		let t = infer('let f = (x) => { return 42; };');
+		assert.match('function', t.kind);
+		assert.match(prim('int'), t.return);
+	});
+
+	it('infers return type from first return statement in a function_declaration', () => {
+		let text = "function greet() { return 'hello'; }";
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let fnNode = ts.namedChild(root, 0);
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, 0);
+		let t = inferNode(fnNode, text, URI, scope, 0);
+
+		assert.match('function', t.kind);
+		assert.match(prim('string'), t.return);
+	});
+
+	it('bare-expression arrow body still works', () => {
+		let t = infer('let f = x => x + 1;');
+		assert.match('function', t.kind);
+		// return is unknown because x has no known type here
+	});
+});
+
 describe('inferrer — arrow functions', () => {
 	it('single-param arrow has one param and inferred return', () => {
 		let result = infer('let f = x => 42;');

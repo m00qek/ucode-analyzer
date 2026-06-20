@@ -281,7 +281,21 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 		scopeSet(childScope, params[i].name, params[i].type);
 
 	let bodyNode = ts.childByField(node, 'body');
-	let ret = bodyNode ? _infer(bodyNode, source, uri, childScope, depth + 1) : UNKNOWN;
+	let ret = UNKNOWN;
+	if (bodyNode) {
+		if (ts.nodeType(bodyNode) === 'statement_block') {
+			// Scan direct children for the first return statement.
+			for (let i = 0; i < ts.namedChildCount(bodyNode); i++) {
+				let child = ts.namedChild(bodyNode, i);
+				if (ts.nodeType(child) !== 'return_statement') continue;
+				let expr = ts.namedChild(child, 0);
+				if (expr) ret = _infer(expr, source, uri, childScope, depth + 1);
+				break;
+			}
+		} else {
+			ret = _infer(bodyNode, source, uri, childScope, depth + 1);
+		}
+	}
 	return { kind: 'function', params, return: ret };
 }
 
@@ -450,7 +464,19 @@ function inferInner(node, source, uri, scope, depth) {
 					return: doc.returns.type,
 				};
 		}
-		return { kind: 'function', params: [], return: UNKNOWN };
+		// No JSDoc @returns — infer from body's first return statement.
+		let body = ts.childByField(node, 'body');
+		let ret = UNKNOWN;
+		if (body) {
+			for (let i = 0; i < ts.namedChildCount(body); i++) {
+				let child = ts.namedChild(body, i);
+				if (ts.nodeType(child) !== 'return_statement') continue;
+				let expr = ts.namedChild(child, 0);
+				if (expr) ret = _infer(expr, source, uri, scope, depth + 1);
+				break;
+			}
+		}
+		return { kind: 'function', params: [], return: ret };
 	}
 
 	return UNKNOWN;
