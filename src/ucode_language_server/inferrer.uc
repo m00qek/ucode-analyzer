@@ -309,21 +309,21 @@ function inferCall(node, source, uri, scope, depth) {
 	return substitute(fnType.return, bindings);
 }
 
-function inferMember(node, source, uri, scope) {
+function inferMember(node, source, uri, scope, depth) {
 	let objNode  = ts.namedChild(node, 0);
 	let propNode = ts.namedChild(node, 1);
-	if (!objNode || !propNode || ts.nodeType(objNode) !== 'identifier') return UNKNOWN;
-	let objName  = ts.text(objNode, source);
+	if (!objNode || !propNode) return UNKNOWN;
 	let propName = ts.text(propNode, source);
-	// Namespace import: import * as alias from 'mod'
-	let dagResult = dagMemberLookup(uri, objName, propName);
-	if (dagResult) return dagResult;
-	// Scope-based: object has a known type → look up member in it
-	if (scope) {
-		let objType = scopeGet(scope, objName);
-		if (objType && objType.kind !== 'unknown')
-			return memberOfType(objType, propName);
+	// Namespace import lookup only applies when the object is a direct identifier alias.
+	if (ts.nodeType(objNode) === 'identifier') {
+		let dagResult = dagMemberLookup(uri, ts.text(objNode, source), propName);
+		if (dagResult) return dagResult;
 	}
+	// General: infer the object's type, then walk the member in it.
+	// Depth is threaded to prevent runaway recursion on pathological chains.
+	let objType = _infer(objNode, source, uri, scope, (depth ?? 0) + 1);
+	if (objType && objType.kind !== 'unknown')
+		return memberOfType(objType, propName);
 	return UNKNOWN;
 }
 
@@ -346,7 +346,7 @@ function inferInner(node, source, uri, scope, depth) {
 	if (ntype === 'property_identifier') {
 		let parent = ts.parent(node);
 		if (parent && ts.nodeType(parent) === 'member_expression')
-			return inferMember(parent, source, uri, scope);
+			return inferMember(parent, source, uri, scope, depth);
 		return UNKNOWN;
 	}
 
@@ -409,7 +409,7 @@ function inferInner(node, source, uri, scope, depth) {
 	}
 
 	if (ntype === 'call_expression')   return inferCall(node, source, uri, scope, depth);
-	if (ntype === 'member_expression') return inferMember(node, source, uri, scope);
+	if (ntype === 'member_expression') return inferMember(node, source, uri, scope, depth);
 	if (ntype === 'arrow_function') return inferArrow(node, source, uri, scope, depth, null);
 
 	if (ntype === 'function_expression') {

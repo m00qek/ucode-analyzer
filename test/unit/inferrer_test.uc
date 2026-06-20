@@ -487,6 +487,41 @@ describe('inferrer — buildScope: local declarations inside function bodies', (
 	});
 });
 
+describe('inferrer — chained member access', () => {
+	it('a.b.c resolves when a.b is a record with field c', () => {
+		let s = makeScope(null);
+		// a has type { b: { c: int } }
+		scopeSet(s, 'a', {
+			kind: 'record',
+			fields: [{ name: 'b', type: { kind: 'record', fields: [{ name: 'c', type: prim('int') }] } }]
+		});
+		// parse `let x = a.b.c;` and infer the member_expression a.b.c
+		let text = "let x = a.b.c;";
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let decl = ts.namedChild(root, 0);
+		let vd   = ts.namedChild(decl, 0);
+		let expr = ts.childByField(vd, 'value');  // member_expression a.b.c
+
+		dag.add(URI, text, tree);
+		let t = inferNode(expr, text, URI, s, 0);
+		assert.match(prim('int'), t);
+	});
+
+	it('a.b where a is a record returns the field type', () => {
+		let s = makeScope(null);
+		scopeSet(s, 'obj', { kind: 'record', fields: [{ name: 'x', type: prim('string') }] });
+		let text = "let r = obj.x;";
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let expr = ts.childByField(ts.namedChild(ts.namedChild(root, 0), 0), 'value');
+
+		dag.add(URI, text, tree);
+		let t = inferNode(expr, text, URI, s, 0);
+		assert.match(prim('string'), t);
+	});
+});
+
 describe('inferrer — property_identifier in member expression', () => {
 	let TS_URI = 'file:///app/src/tree_sitter.uc';
 
