@@ -314,6 +314,17 @@ describe('inferrer — buildScope: for_in loop variable', () => {
 		assert.match(prim('int'), scope.bindings['it']);
 	});
 
+	it('loop variable over a record literal is string (key iteration)', () => {
+		let text = "let m = { a: 1, b: 2 };\nfor (let k in m) {\nk;\n}";
+		let tree = parse(text);
+		let offset = length("let m = { a: 1, b: 2 };\nfor (let k in m) {\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('string'), scope.bindings['k']);
+	});
+
 	it('loop variable is not in scope after the for-in statement', () => {
 		let text = "for (let k in [1]) {}\nk;\n";
 		let tree = parse(text);

@@ -514,6 +514,8 @@ function processBlock(stmts, source, uri, scope, targetOffset) {
 						let iterType = _infer(iterable, source, uri, scope, 0);
 						if (iterType.kind === 'generic' && iterType.base === 'list' && length(iterType.params) > 0)
 							elemType = iterType.params[0];
+						else if (iterType.kind === 'record')
+							elemType = STR;  // for-in over an object iterates string keys
 					}
 					scopeSet(scope, ts.text(loopVar, source), elemType);
 				}
