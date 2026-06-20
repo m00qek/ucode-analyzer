@@ -2,7 +2,7 @@ import { describe, it, assert, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_language_server.dag';
 import { inferNode, buildScope } from 'ucode_language_server.inferrer';
-import { makeScope, scopeSet } from 'ucode_language_server.scope';
+import { makeScope, scopeSet, scopeGet } from 'ucode_language_server.scope';
 import { invalidateUri } from 'ucode_language_server.memo';
 
 let _parser = ts.newParser(ts.ucode());
@@ -212,5 +212,315 @@ describe('inferrer — buildScope', () => {
 		assert.match(prim('int'), scope.bindings['a']);
 		assert.match(prim('string'), scope.bindings['b']);
 		assert.match(null, scope.bindings['c']);
+	});
+
+	it('includes function parameters for an offset inside a function body', () => {
+		// Offset inside the body: after the opening brace, before the return.
+		// 'x' is a parameter; it should appear in scope with unknown type (no JSDoc).
+		let text = "function add(x, y) {\nreturn x + y;\n}";
+		let tree = parse(text);
+		// Position of 'x' reference on line 1 (inside the body)
+		let offset = length("function add(x, y) {\nreturn ");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		// Parameters must be in scope (even without JSDoc the bindings key exists)
+		assert.match(true, 'x' in scope.bindings);
+		assert.match(true, 'y' in scope.bindings);
+	});
+
+	it('uses JSDoc @param types when present', () => {
+		let text = "/** @param {int} n — count */\nfunction double(n) {\nreturn n * 2;\n}";
+		let tree = parse(text);
+		let offset = length("/** @param {int} n — count */\nfunction double(n) {\nreturn ");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('int'), scope.bindings['n']);
+	});
+
+	it('single-param arrow parameter is in scope inside the body', () => {
+		let text = "let f = x => x + 1;";
+		let tree = parse(text);
+		// Offset inside the arrow body (at `x` in `x + 1`)
+		let offset = length("let f = x => ");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(true, 'x' in scope.bindings);
+	});
+
+	it('inner parameters shadow outer ones of the same name', () => {
+		let text = "function outer(x) {\nfunction inner(x) {\nreturn x;\n}\n}";
+		let tree = parse(text);
+		// Offset inside inner(): after 'return '
+		let offset = length("function outer(x) {\nfunction inner(x) {\nreturn ");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		// The binding for 'x' should exist (the inner one wins — same key, last write wins)
+		assert.match(true, 'x' in scope.bindings);
+	});
+});
+
+describe('inferrer — buildScope: export let', () => {
+	it('export let declarations are in scope', () => {
+		let text = "export let count = 42;\n";
+		let tree = parse(text);
+		let offset = length(text);
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('int'), scope.bindings['count']);
+	});
+});
+
+describe('inferrer — buildScope: namespace import alias', () => {
+	let TS_URI = 'file:///app/src/tree_sitter.uc';
+
+	it('namespace alias is in scope as module type', () => {
+		dag.addFromDisk(TS_URI);
+		let text = "import * as ts from 'tree_sitter';\nts;\n";
+		let tree = parse(text);
+		let offset = length(text);
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		let t = scope.bindings['ts'];
+		assert.match(true, t !== null);
+		assert.match('module', t.kind);
+		assert.match('tree_sitter', t.path);
+	});
+});
+
+describe('inferrer — buildScope: for_in loop variable', () => {
+	it('loop variable is bound inside a for-in body', () => {
+		let text = "let items = [1, 2, 3];\nfor (let it in items) {\nit;\n}";
+		let tree = parse(text);
+		// Offset at 'it' reference inside the for body
+		let offset = length("let items = [1, 2, 3];\nfor (let it in items) {\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(true, 'it' in scope.bindings);
+		// items is list<int>, so element type is int
+		assert.match(prim('int'), scope.bindings['it']);
+	});
+
+	it('loop variable is not in scope after the for-in statement', () => {
+		let text = "for (let k in [1]) {}\nk;\n";
+		let tree = parse(text);
+		let offset = length(text) - 2;  // at 'k' after the for
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(null, scope.bindings['k'] ?? null);
+	});
+});
+
+describe('inferrer — buildScope: assignment expression', () => {
+	it('updates a declared variable type on assignment', () => {
+		// x starts as string (from the literal), then gets reassigned to int
+		let text = "let x = 'hello';\nx = 42;\n";
+		let tree = parse(text);
+		let offset = length(text);
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('int'), scope.bindings['x']);
+	});
+
+	it('does not create a new binding for undeclared identifiers', () => {
+		let text = "undeclared = 5;\n";
+		let tree = parse(text);
+		let offset = length(text);
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(null, scope.bindings['undeclared'] ?? null);
+	});
+});
+
+describe('inferrer — object literals', () => {
+	it('infers a record type from an object literal', () => {
+		let t = infer('let o = { a: 1, b: "hi" };');
+		assert.match('record', t.kind);
+		assert.match(2, length(t.fields));
+		assert.match('a', t.fields[0].name);
+		assert.match(prim('int'), t.fields[0].type);
+		assert.match('b', t.fields[1].name);
+		assert.match(prim('string'), t.fields[1].type);
+	});
+
+	it('infers an empty record for an empty object', () => {
+		let t = infer('let o = {};');
+		assert.match('record', t.kind);
+		assert.match(0, length(t.fields));
+	});
+});
+
+describe('inferrer — function_expression', () => {
+	it('infers a function type from body', () => {
+		let t = infer('let f = function(a) { return 1; };');
+		assert.match('function', t.kind);
+	});
+
+	it('uses JSDoc @returns when present', () => {
+		let text = "/** @param {int} n\n * @returns {string}\n */\nlet f = function(n) { return n; };";
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		// find the variable_declarator value (function_expression)
+		let stmt = ts.namedChild(root, 1);  // lexical_declaration (after comment)
+		let decl = ts.namedChild(stmt, 0);
+		let fnNode = ts.childByField(decl, 'value');
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, ts.startByte(fnNode));
+		let t = inferNode(fnNode, text, URI, scope, 0);
+
+		assert.match('function', t.kind);
+		assert.match(prim('string'), t.return);
+	});
+});
+
+describe('inferrer — builtins', () => {
+	it('length is in scope with int return type', () => {
+		let text = "";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, 0);
+
+		let t = scopeGet(scope, 'length');
+		assert.match(true, t !== null);
+		assert.match('function', t.kind);
+		assert.match(prim('int'), t.return);
+	});
+
+	it('sprintf is in scope with string return type', () => {
+		let text = "";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, 0);
+
+		let t = scopeGet(scope, 'sprintf');
+		assert.match('function', t.kind);
+		assert.match(prim('string'), t.return);
+	});
+
+	it('keys is in scope with list<string> return type', () => {
+		let text = "";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, 0);
+
+		let t = scopeGet(scope, 'keys');
+		assert.match('function', t.kind);
+		assert.match({ kind: 'generic', base: 'list', params: [prim('string')] }, t.return);
+	});
+
+	it('builtins do not pollute scope.bindings — they live in the parent chain', () => {
+		let text = "";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, 0);
+
+		// scopeGet finds builtins through the parent chain
+		assert.match(true, scopeGet(scope, 'push') !== null);
+		// but the immediate frame is empty (no local declarations)
+		assert.match(null, scope.bindings['push'] ?? null);
+	});
+});
+
+describe('inferrer — buildScope: local declarations inside function bodies', () => {
+	let TS_URI = 'file:///app/src/tree_sitter.uc';
+
+	it('let inside a function body is in scope', () => {
+		let text = "function f() {\nlet x = 42;\nx;\n}";
+		let tree = parse(text);
+		// Offset at 'x' reference (inside body, after the let)
+		let offset = length("function f() {\nlet x = 42;\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('int'), scope.bindings['x']);
+	});
+
+	it('local var gets return type of a namespace member call', () => {
+		dag.addFromDisk(TS_URI);
+		let text = "import * as ts from 'tree_sitter';\nfunction f(p) {\nlet root = ts.rootNode(p);\nroot;\n}";
+		let tree = parse(text);
+		// Offset at 'root' reference inside body
+		let offset = length("import * as ts from 'tree_sitter';\nfunction f(p) {\nlet root = ts.rootNode(p);\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		let t = scope.bindings['root'];
+		assert.match(true, t !== null && t.kind !== 'unknown');
+		// rootNode returns Node (ref type)
+		assert.match('ref', t.kind);
+		assert.match('Node', t.name);
+	});
+
+	it('let declared after cursor is not in scope', () => {
+		let text = "function f() {\nlet x = 1;\nlet y = 2;\n}";
+		let tree = parse(text);
+		// Offset between x and y declarations
+		let offset = length("function f() {\nlet x = 1;\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(prim('int'), scope.bindings['x']);
+		assert.match(null, scope.bindings['y'] ?? null);
+	});
+});
+
+describe('inferrer — property_identifier in member expression', () => {
+	let TS_URI = 'file:///app/src/tree_sitter.uc';
+
+	it('inferring a property_identifier redirects to its member_expression', () => {
+		dag.addFromDisk(TS_URI);
+		let text = "import * as ts from 'tree_sitter';\nts.text;\n";
+		let tree = parse(text);
+
+		// Find the property_identifier node for 'text'
+		let root = ts.rootNode(tree);
+		let exprStmt = ts.namedChild(root, 1);
+		let memberExpr = ts.namedChild(exprStmt, 0);
+		let propNode = ts.namedChild(memberExpr, 1);  // property_identifier
+
+		assert.match('property_identifier', ts.nodeType(propNode));
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, ts.startByte(propNode));
+		let t = inferNode(propNode, text, URI, scope, 0);
+
+		assert.match('function', t.kind);
+		assert.match(prim('string'), t.return);
+	});
+});
+
+describe('inferrer — export clause carries doc', () => {
+	let GREET_URI = 'file:///app/test/fixtures/greet.uc';
+
+	it('exported name via export { name } has the function kind', () => {
+		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src', 'test'] } });
+		dag.addFromDisk(GREET_URI);
+		let exps = dag.exportsOf(GREET_URI);
+		assert.match(true, exps !== null && length(exps) > 0);
+		assert.match('greet', exps[0].name);
+		assert.match('function', exps[0].kind);
 	});
 });

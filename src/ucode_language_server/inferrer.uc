@@ -4,12 +4,160 @@ import { parseDoc } from 'ucode_language_server.doc_parser';
 import { unify, substitute } from 'ucode_language_server.type_unifier';
 import { memoGet, memoSet } from 'ucode_language_server.memo';
 import { makeScope, scopeGet, scopeSet } from 'ucode_language_server.scope';
+import * as type_registry from 'ucode_language_server.type_registry';
 
 let UNKNOWN = { kind: 'unknown' };
 let BOOL    = { kind: 'primitive', name: 'boolean' };
 let STR     = { kind: 'primitive', name: 'string' };
 let INT     = { kind: 'primitive', name: 'int' };
 let NULL_T  = { kind: 'primitive', name: 'null' };
+
+// ── Builtin scope ─────────────────────────────────────────────────────────
+
+function _initBuiltins() {
+	let s    = makeScope(null);
+	let FLOAT = { kind: 'primitive', name: 'float' };
+	let ANY   = { kind: 'any' };
+	let LIST  = { kind: 'generic', base: 'list', params: [ANY] };
+	let LSTR  = { kind: 'generic', base: 'list', params: [STR] };
+
+	function fn0(r) { return { kind: 'function', params: [], return: r }; }
+	function fn1(r) { return { kind: 'function', params: [{ name: 'a', type: ANY }], return: r }; }
+	function fn2(r) { return { kind: 'function', params: [{ name: 'a', type: ANY }, { name: 'b', type: ANY }], return: r }; }
+	function fn3(r) { return { kind: 'function', params: [{ name: 'a', type: ANY }, { name: 'b', type: ANY }, { name: 'c', type: ANY }], return: r }; }
+
+	// Strings
+	scopeSet(s, 'sprintf', fn2(STR));   scopeSet(s, 'trim',  fn1(STR));
+	scopeSet(s, 'ltrim',   fn1(STR));   scopeSet(s, 'rtrim', fn1(STR));
+	scopeSet(s, 'lc',      fn1(STR));   scopeSet(s, 'uc',    fn1(STR));
+	scopeSet(s, 'substr',  fn3(STR));   scopeSet(s, 'join',  fn2(STR));
+	scopeSet(s, 'split',   fn2(LSTR));
+	// Arrays
+	scopeSet(s, 'push',    fn2(NULL_T));  scopeSet(s, 'pop',     fn1(ANY));
+	scopeSet(s, 'shift',   fn1(ANY));     scopeSet(s, 'unshift', fn2(NULL_T));
+	scopeSet(s, 'splice',  fn3(LIST));    scopeSet(s, 'slice',   fn3(LIST));
+	scopeSet(s, 'reverse', fn1(NULL_T));  scopeSet(s, 'sort',    fn2(LIST));
+	scopeSet(s, 'index',   fn2(INT));     scopeSet(s, 'length',  fn1(INT));
+	scopeSet(s, 'map',     fn2(LIST));    scopeSet(s, 'filter',  fn2(LIST));
+	scopeSet(s, 'reduce',  fn3(ANY));
+	// Objects
+	scopeSet(s, 'keys',    fn1(LSTR));   scopeSet(s, 'values', fn1(LIST));
+	scopeSet(s, 'delete',  fn2(NULL_T));
+	// Types
+	scopeSet(s, 'type',    fn1(STR));    scopeSet(s, 'int',    fn1(INT));
+	scopeSet(s, 'string',  fn1(STR));    scopeSet(s, 'float',  fn1(FLOAT));
+	scopeSet(s, 'bool',    fn1(BOOL));
+	// Math
+	scopeSet(s, 'abs',   fn1(FLOAT));  scopeSet(s, 'ceil',  fn1(INT));
+	scopeSet(s, 'floor', fn1(INT));    scopeSet(s, 'rand',  fn0(FLOAT));
+	scopeSet(s, 'srand', fn1(NULL_T)); scopeSet(s, 'sqrt',  fn1(FLOAT));
+	scopeSet(s, 'atan2', fn2(FLOAT));  scopeSet(s, 'sin',   fn1(FLOAT));
+	scopeSet(s, 'cos',   fn1(FLOAT));  scopeSet(s, 'log',   fn1(FLOAT));
+	scopeSet(s, 'exp',   fn1(FLOAT));  scopeSet(s, 'pow',   fn2(FLOAT));
+	// IO
+	scopeSet(s, 'print',  fn1(NULL_T));  scopeSet(s, 'printf', fn2(NULL_T));
+	scopeSet(s, 'warn',   fn1(NULL_T));  scopeSet(s, 'die',    fn1(NULL_T));
+	// Other
+	scopeSet(s, 'json',   fn1(ANY));    scopeSet(s, 'ord',  fn1(INT));
+	scopeSet(s, 'chr',    fn1(STR));    scopeSet(s, 'hex',  fn1(INT));
+	scopeSet(s, 'match',  fn2({ kind: 'nullable', inner: LSTR }));
+	scopeSet(s, 'regexp', fn1(ANY));
+
+	return s;
+}
+
+let _builtinScope = _initBuiltins();
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+// Return the text of the /** */ comment immediately before `node` among its
+// direct parent's children. Any intervening named node or // comment resets.
+function docForFunc(node, source) {
+	let parent = ts.parent(node);
+	if (!parent) return null;
+	let nodeStart = ts.startByte(node);
+	let children = ts.children(parent);
+	let found = null;
+	for (let i = 0; i < length(children); i++) {
+		let c = children[i];
+		if (ts.startByte(c) >= nodeStart) break;
+		if (ts.nodeType(c) === 'comment') {
+			let txt = ts.text(c, source);
+			found = (substr(txt, 0, 3) === '/**') ? txt : null;
+		} else if (ts.isNamed(c)) {
+			found = null;
+		}
+	}
+	return found;
+}
+
+// Return all function nodes (function_declaration / arrow_function /
+// function_expression) that contain offset, outermost first.
+function enclosingFunctions(root, offset) {
+	let result = [];
+	let stack = [root];
+	while (length(stack) > 0) {
+		let node = pop(stack);
+		if (ts.startByte(node) > offset || offset >= ts.endByte(node)) continue;
+		let nt = ts.nodeType(node);
+		if (nt === 'function_declaration' || nt === 'arrow_function' || nt === 'function_expression')
+			push(result, node);
+		for (let i = 0; i < ts.namedChildCount(node); i++)
+			push(stack, ts.namedChild(node, i));
+	}
+	return result;
+}
+
+// Add the formal parameters of fn to scope. Types come from the function's
+// JSDoc @param annotations when present.
+function addParamScope(fn, source, scope) {
+	let docTxt = docForFunc(fn, source);
+	let docParams = (docTxt ? parseDoc(docTxt).params : null) ?? [];
+
+	function paramType(name) {
+		for (let k = 0; k < length(docParams); k++)
+			if (docParams[k].name === name && docParams[k].type) return docParams[k].type;
+		return UNKNOWN;
+	}
+
+	let foundFormal = false;
+	for (let i = 0; i < ts.namedChildCount(fn); i++) {
+		let child = ts.namedChild(fn, i);
+		if (ts.nodeType(child) !== 'formal_parameters') continue;
+		foundFormal = true;
+		for (let j = 0; j < ts.namedChildCount(child); j++) {
+			let param = ts.namedChild(child, j);
+			if (ts.nodeType(param) !== 'identifier') continue;
+			let name = ts.text(param, source);
+			scopeSet(scope, name, paramType(name));
+		}
+		break;
+	}
+
+	// Single-param arrow `x => ...` has a bare identifier as param, no formal_parameters node.
+	if (!foundFormal && ts.nodeType(fn) === 'arrow_function') {
+		let first = ts.namedChild(fn, 0);
+		if (first && ts.nodeType(first) === 'identifier') {
+			let name = ts.text(first, source);
+			scopeSet(scope, name, paramType(name));
+		}
+	}
+}
+
+// Look up a member name in a resolved type. Expands ref types via the registry.
+function memberOfType(type, propName) {
+	if (!type) return UNKNOWN;
+	if (type.kind === 'record') {
+		for (let i = 0; i < length(type.fields); i++)
+			if (type.fields[i].name === propName) return type.fields[i].type;
+		return UNKNOWN;
+	}
+	if (type.kind === 'ref') {
+		let def = type_registry.lookup(type.name);
+		if (def) return memberOfType(def.type, propName);
+	}
+	return UNKNOWN;
+}
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
 
@@ -161,11 +309,22 @@ function inferCall(node, source, uri, scope, depth) {
 	return substitute(fnType.return, bindings);
 }
 
-function inferMember(node, source, uri) {
+function inferMember(node, source, uri, scope) {
 	let objNode  = ts.namedChild(node, 0);
 	let propNode = ts.namedChild(node, 1);
 	if (!objNode || !propNode || ts.nodeType(objNode) !== 'identifier') return UNKNOWN;
-	return dagMemberLookup(uri, ts.text(objNode, source), ts.text(propNode, source)) ?? UNKNOWN;
+	let objName  = ts.text(objNode, source);
+	let propName = ts.text(propNode, source);
+	// Namespace import: import * as alias from 'mod'
+	let dagResult = dagMemberLookup(uri, objName, propName);
+	if (dagResult) return dagResult;
+	// Scope-based: object has a known type → look up member in it
+	if (scope) {
+		let objType = scopeGet(scope, objName);
+		if (objType && objType.kind !== 'unknown')
+			return memberOfType(objType, propName);
+	}
+	return UNKNOWN;
 }
 
 function inferInner(node, source, uri, scope, depth) {
@@ -181,6 +340,14 @@ function inferInner(node, source, uri, scope, depth) {
 	if (ntype === 'identifier') {
 		let name = ts.text(node, source);
 		return scopeGet(scope, name) ?? dagNamedLookup(uri, name) ?? UNKNOWN;
+	}
+
+	// Cursor on a property name in obj.prop — infer the whole member expression.
+	if (ntype === 'property_identifier') {
+		let parent = ts.parent(node);
+		if (parent && ts.nodeType(parent) === 'member_expression')
+			return inferMember(parent, source, uri, scope);
+		return UNKNOWN;
 	}
 
 	if (ntype === 'parenthesized_expression') {
@@ -224,11 +391,40 @@ function inferInner(node, source, uri, scope, depth) {
 		return { kind: 'generic', base: 'list', params: [elem] };
 	}
 
-	if (ntype === 'object') return UNKNOWN;
+	if (ntype === 'object') {
+		let fields = [];
+		for (let i = 0; i < ts.namedChildCount(node); i++) {
+			let pair = ts.namedChild(node, i);
+			if (ts.nodeType(pair) !== 'pair') continue;
+			let keyNode = ts.childByField(pair, 'key');
+			let valNode = ts.childByField(pair, 'value');
+			if (!keyNode) continue;
+			let kt = ts.nodeType(keyNode);
+			let keyName = (kt === 'property_identifier' || kt === 'identifier')
+				? ts.text(keyNode, source) : null;
+			if (!keyName) continue;
+			push(fields, { name: keyName, type: valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN });
+		}
+		return { kind: 'record', fields };
+	}
 
 	if (ntype === 'call_expression')   return inferCall(node, source, uri, scope, depth);
-	if (ntype === 'member_expression') return inferMember(node, source, uri);
-	if (ntype === 'arrow_function')    return inferArrow(node, source, uri, scope, depth, null);
+	if (ntype === 'member_expression') return inferMember(node, source, uri, scope);
+	if (ntype === 'arrow_function') return inferArrow(node, source, uri, scope, depth, null);
+
+	if (ntype === 'function_expression') {
+		let docTxt = precedingDoc(node, source);
+		if (docTxt) {
+			let doc = parseDoc(docTxt);
+			if (doc.returns && doc.returns.type)
+				return {
+					kind: 'function',
+					params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
+					return: doc.returns.type,
+				};
+		}
+		return inferArrow(node, source, uri, scope, depth, null);
+	}
 
 	if (ntype === 'return_statement') {
 		let expr = ts.namedChild(node, 0);
@@ -260,12 +456,18 @@ function inferInner(node, source, uri, scope, depth) {
 // ── Scope building ─────────────────────────────────────────────────────────
 
 function importScope(uri) {
-	let scope = makeScope(null);
+	let scope = makeScope(_builtinScope);
 	let imps = dag.importsOf(uri);
 	if (!imps) return scope;
 	for (let i = 0; i < length(imps); i++) {
 		let imp = imps[i];
-		if (imp.alias || !imp.resolvedUri) continue;
+		if (imp.alias) {
+			// Namespace import: import * as alias from 'mod'
+			if (imp.resolvedUri)
+				scopeSet(scope, imp.alias, { kind: 'module', path: imp.specifier });
+			continue;
+		}
+		if (!imp.resolvedUri) continue;
 		let exps = dag.exportsOf(imp.resolvedUri);
 		if (!exps) continue;
 		for (let j = 0; j < length(exps); j++) {
@@ -277,16 +479,67 @@ function importScope(uri) {
 	return scope;
 }
 
-// Build a scope for the given file at targetOffset: imports + all
-// let/const declarations that appear before targetOffset.
+// Process declarations in a block of statements into scope, stopping at targetOffset.
+// Handles let/const, for-in loop vars, and assignment updates — same logic
+// whether the block is the top-level program or a function body.
+function processBlock(stmts, source, uri, scope, targetOffset) {
+	for (let i = 0; i < length(stmts); i++) {
+		let stmt = stmts[i];
+		if (ts.startByte(stmt) >= targetOffset) break;
+		let stype = ts.nodeType(stmt);
+
+		if (stype === 'lexical_declaration') {
+			processDecl(stmt, source, uri, scope, 0);
+
+		} else if (stype === 'export_statement') {
+			let inner = ts.namedChild(stmt, 0);
+			if (inner && ts.nodeType(inner) === 'lexical_declaration')
+				processDecl(inner, source, uri, scope, 0);
+
+		} else if (stype === 'for_in_statement') {
+			if (targetOffset < ts.endByte(stmt)) {
+				let loopVar = ts.childByField(stmt, 'left');
+				if (loopVar && ts.nodeType(loopVar) === 'identifier') {
+					let iterable = ts.childByField(stmt, 'right');
+					let elemType = UNKNOWN;
+					if (iterable) {
+						let iterType = _infer(iterable, source, uri, scope, 0);
+						if (iterType.kind === 'generic' && iterType.base === 'list' && length(iterType.params) > 0)
+							elemType = iterType.params[0];
+					}
+					scopeSet(scope, ts.text(loopVar, source), elemType);
+				}
+			}
+
+		} else if (stype === 'expression_statement') {
+			let inner = ts.namedChild(stmt, 0);
+			if (inner && ts.nodeType(inner) === 'assignment_expression') {
+				let lhs = ts.childByField(inner, 'left');
+				let rhs = ts.childByField(inner, 'right');
+				if (lhs && rhs && ts.nodeType(lhs) === 'identifier') {
+					let name = ts.text(lhs, source);
+					if (scopeGet(scope, name) !== null)
+						scopeSet(scope, name, _infer(rhs, source, uri, scope, 0));
+				}
+			}
+		}
+	}
+}
+
+// Build a scope for the given file at targetOffset: imports + top-level
+// declarations + parameters and body declarations of all enclosing functions
+// (outermost first, so inner names shadow outer ones).
 export function buildScope(uri, source, tree, targetOffset) {
 	let scope = importScope(uri);
 	let root = ts.rootNode(tree);
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let stmt = ts.namedChild(root, i);
-		if (ts.startByte(stmt) >= targetOffset) break;
-		if (ts.nodeType(stmt) === 'lexical_declaration')
-			processDecl(stmt, source, uri, scope, 0);
+
+	processBlock(ts.namedChildren(root), source, uri, scope, targetOffset);
+
+	let fns = enclosingFunctions(root, targetOffset);
+	for (let i = 0; i < length(fns); i++) {
+		addParamScope(fns[i], source, scope);
+		let body = ts.childByField(fns[i], 'body');
+		if (body) processBlock(ts.namedChildren(body), source, uri, scope, targetOffset);
 	}
 	return scope;
 };
