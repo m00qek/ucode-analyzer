@@ -161,12 +161,15 @@ function memberOfType(type, propName) {
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
 
-// Return the text of the /** */ comment immediately before the top-level
-// statement containing node. Any intervening named node or // comment resets.
+// Return the text of the /** */ comment immediately before the nearest
+// statement containing node (stopping at program or statement_block).
+// Any intervening named node or // comment resets.
 function precedingDoc(node, source) {
 	let target = node;
 	let p = ts.parent(target);
-	while (p && ts.nodeType(p) !== 'program') {
+	while (p) {
+		let pt = ts.nodeType(p);
+		if (pt === 'program' || pt === 'statement_block') break;
 		target = p;
 		p = ts.parent(target);
 	}

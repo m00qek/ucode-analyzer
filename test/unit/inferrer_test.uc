@@ -369,6 +369,34 @@ describe('inferrer — object literals', () => {
 	});
 });
 
+describe('inferrer — JSDoc on nested function declarations', () => {
+	it('picks up the doc immediately before the inner function, not the outer', () => {
+		let text = "/** @returns {string} */\nfunction outer() {\n/** @returns {int} */\nfunction inner() { return 1; }\ninner;\n}";
+		let tree = parse(text);
+		let offset = length("/** @returns {string} */\nfunction outer() {\n/** @returns {int} */\nfunction inner() { return 1; }\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		let t = scope.bindings['inner'];
+		assert.match('function', t.kind);
+		assert.match(prim('int'), t.return);
+	});
+
+	it('nested function_expression uses doc before its let, not the enclosing function doc', () => {
+		let text = "/** @returns {string} */\nfunction outer() {\n/** @returns {int} */\nlet f = function() { return 1; };\nf;\n}";
+		let tree = parse(text);
+		let offset = length("/** @returns {string} */\nfunction outer() {\n/** @returns {int} */\nlet f = function() { return 1; };\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		let t = scope.bindings['f'];
+		assert.match('function', t.kind);
+		assert.match(prim('int'), t.return);
+	});
+});
+
 describe('inferrer — function_expression', () => {
 	it('infers a function type from body', () => {
 		let t = infer('let f = function(a) { return 1; };');
