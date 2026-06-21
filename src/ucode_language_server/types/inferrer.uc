@@ -19,10 +19,6 @@ let _stdlibUri    = null;
 
 // Return all function nodes (function_declaration / arrow_function /
 // function_expression) that contain offset, outermost first.
-// Returns all enclosing function nodes (outermost first) so their parameters
-// can be added to scope.  Needed separately from enclosingBlocks because arrow
-// functions may have an expression body (no statement_block) yet still introduce
-// parameter bindings.
 function enclosingFunctions(root, offset) {
 	let result = [];
 	let stack = [root];
@@ -38,8 +34,7 @@ function enclosingFunctions(root, offset) {
 	return result;
 }
 
-// Returns all statement_block nodes containing offset, outermost first.
-// These are the blocks whose declarations are in scope at the cursor.
+// Return all statement_block nodes containing offset, outermost first.
 function enclosingBlocks(root, offset) {
 	let result = [];
 	let stack = [root];
@@ -171,10 +166,10 @@ function addForInVar(block, source, uri, scope) {
 	scopeSet(scope, ts.text(loopVar, source), elemType);
 }
 
-// When fn is a callback argument in a call_expression, return the expected function
-// type for that parameter position with type variables resolved from preceding args.
-// Returns null when the context can't be determined.
-function callbackExpectedType(fn, source, uri, scope) {
+// When fn is a callback argument in a call_expression, return the expected
+// function type for that parameter position with type variables resolved from
+// preceding arguments.  Returns null when the context cannot be determined.
+function callbackExpectedType(fn, source, uri, scope, depth) {
 	let argsNode = ts.parent(fn);
 	if (!argsNode || ts.nodeType(argsNode) !== 'arguments') return null;
 	let callNode = ts.parent(argsNode);
@@ -182,7 +177,7 @@ function callbackExpectedType(fn, source, uri, scope) {
 
 	let callee = ts.childByField(callNode, 'function');
 	if (!callee) return null;
-	let calleeType = _infer(callee, source, uri, scope, 0);
+	let calleeType = _infer(callee, source, uri, scope, depth + 1);
 	if (!calleeType || calleeType.kind !== 'function') return null;
 
 	let args = ts.namedChildren(argsNode);
@@ -196,55 +191,12 @@ function callbackExpectedType(fn, source, uri, scope) {
 	let bindings = {};
 	for (let i = 0; i < fnIdx; i++) {
 		if (i >= length(calleeType.params)) break;
-		let argType = _infer(args[i], source, uri, scope, 0);
+		let argType = _infer(args[i], source, uri, scope, depth + 1);
 		unify(calleeType.params[i].type ?? UNKNOWN, argType, bindings, 0);
 	}
 
 	let expectedType = substitute(calleeType.params[fnIdx].type ?? UNKNOWN, bindings);
 	return (expectedType && expectedType.kind === 'function') ? expectedType : null;
-}
-
-// Add the formal parameters of fn to scope. Types come from JSDoc @param
-// annotations when present; falls back to the expected type from the call
-// context when fn is an anonymous callback.
-function addParamScope(fn, source, uri, scope) {
-	let docTxt = precedingDoc(fn, source);
-	let docParams = (docTxt ? parseDoc(docTxt).params : null) ?? [];
-
-	let expectedCb = length(docParams) === 0
-		? callbackExpectedType(fn, source, uri, scope) : null;
-	let cbParams = (expectedCb ? expectedCb.params : null) ?? [];
-
-	function paramType(name, idx) {
-		for (let k = 0; k < length(docParams); k++)
-			if (docParams[k].name === name && docParams[k].type) return docParams[k].type;
-		if (idx < length(cbParams) && cbParams[idx].type)
-			return cbParams[idx].type;
-		return UNKNOWN;
-	}
-
-	let foundFormal = false;
-	for (let i = 0; i < ts.namedChildCount(fn); i++) {
-		let child = ts.namedChild(fn, i);
-		if (ts.nodeType(child) !== 'formal_parameters') continue;
-		foundFormal = true;
-		for (let j = 0; j < ts.namedChildCount(child); j++) {
-			let param = ts.namedChild(child, j);
-			if (ts.nodeType(param) !== 'identifier') continue;
-			let name = ts.text(param, source);
-			scopeSet(scope, name, paramType(name, j));
-		}
-		break;
-	}
-
-	// Single-param arrow `x => ...` has a bare identifier as param, no formal_parameters node.
-	if (!foundFormal && ts.nodeType(fn) === 'arrow_function') {
-		let first = ts.namedChild(fn, 0);
-		if (first && ts.nodeType(first) === 'identifier') {
-			let name = ts.text(first, source);
-			scopeSet(scope, name, paramType(name, 0));
-		}
-	}
 }
 
 function processDecl(stmt, source, uri, scope, depth) {
@@ -260,7 +212,22 @@ function processDecl(stmt, source, uri, scope, depth) {
 	}
 }
 
+// Infer the type of an arrow_function or function_expression node.
+//
+// Parameter types are resolved in priority order:
+//   1. expectedType, when explicitly provided (e.g. when the caller already
+//      knows the declared signature from JSDoc @returns).
+//   2. callbackExpectedType — derives expected params from the call site when
+//      this function is passed as an argument.
+//   3. UNKNOWN — used for any param not covered by the above.
+//
+// The return type is always inferred from the body; expectedType.return is
+// never used (only the caller that has a @returns declaration short-circuits
+// before calling inferArrow).
 function inferArrow(node, source, uri, scope, depth, expectedType) {
+	if (!expectedType)
+		expectedType = callbackExpectedType(node, source, uri, scope, depth);
+
 	let expectedParams = (expectedType && expectedType.kind === 'function')
 		? expectedType.params : [];
 
@@ -275,6 +242,7 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 			push(params, { name: ts.text(pnode, source), type: ptype });
 		}
 	} else if (first && ts.nodeType(first) === 'identifier') {
+		// Single-param arrow `x => ...` — bare identifier, no formal_parameters node.
 		let ptype = length(expectedParams) > 0
 			? (expectedParams[0].type ?? UNKNOWN) : UNKNOWN;
 		push(params, { name: ts.text(first, source), type: ptype });
@@ -288,7 +256,6 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 	let ret = UNKNOWN;
 	if (bodyNode) {
 		if (ts.nodeType(bodyNode) === 'statement_block') {
-			// Scan direct children for the first return statement.
 			for (let i = 0; i < ts.namedChildCount(bodyNode); i++) {
 				let child = ts.namedChild(bodyNode, i);
 				if (ts.nodeType(child) !== 'return_statement') continue;
@@ -317,14 +284,7 @@ function inferCall(node, source, uri, scope, depth) {
 		let arg = args[i];
 		let paramType = (i < length(fnType.params))
 			? (fnType.params[i].type ?? UNKNOWN) : UNKNOWN;
-
-		let argType;
-		if (ts.nodeType(arg) === 'arrow_function' || ts.nodeType(arg) === 'function_expression') {
-			let expected = substitute(paramType, bindings);
-			argType = inferArrow(arg, source, uri, scope, depth + 1, expected);
-		} else {
-			argType = _infer(arg, source, uri, scope, depth + 1);
-		}
+		let argType = _infer(arg, source, uri, scope, depth + 1);
 		unify(paramType, argType, bindings, 0);
 	}
 	return substitute(fnType.return, bindings);
@@ -340,8 +300,6 @@ function inferMember(node, source, uri, scope, depth) {
 		let dagResult = dagMemberLookup(uri, ts.text(objNode, source), propName);
 		if (dagResult) return dagResult;
 	}
-	// General: infer the object's type, then walk the member in it.
-	// Depth is threaded to prevent runaway recursion on pathological chains.
 	let objType = _infer(objNode, source, uri, scope, (depth ?? 0) + 1);
 	if (objType && objType.kind !== 'unknown')
 		return memberOfType(objType, propName);
@@ -409,7 +367,6 @@ function inferInner(node, source, uri, scope, depth) {
 	if (ntype === 'array') {
 		let n = ts.namedChildCount(node);
 		if (n === 0) return { kind: 'generic', base: 'list', params: [UNKNOWN] };
-		// Collect distinct element types; build a union when they differ.
 		let members = [];
 		for (let i = 0; i < n; i++) {
 			let t = _infer(ts.namedChild(node, i), source, uri, scope, depth + 1);
@@ -445,20 +402,27 @@ function inferInner(node, source, uri, scope, depth) {
 
 	if (ntype === 'call_expression')   return inferCall(node, source, uri, scope, depth);
 	if (ntype === 'member_expression') return inferMember(node, source, uri, scope, depth);
-	if (ntype === 'arrow_function') return inferArrow(node, source, uri, scope, depth, null);
+
+	if (ntype === 'arrow_function')
+		return inferArrow(node, source, uri, scope, depth, null);
 
 	if (ntype === 'function_expression') {
 		let docTxt = precedingDoc(node, source);
-		if (docTxt) {
-			let doc = parseDoc(docTxt);
-			if (doc.returns && doc.returns.type)
-				return {
-					kind: 'function',
-					params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
-					return: doc.returns.type,
-				};
+		let doc = docTxt ? parseDoc(docTxt) : null;
+		// @returns declared: trust it and skip body inference.
+		if (doc && doc.returns && doc.returns.type) {
+			return {
+				kind: 'function',
+				params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
+				return: doc.returns.type,
+			};
 		}
-		return inferArrow(node, source, uri, scope, depth, null);
+		// @param annotations present: use them as the expected type so they take
+		// priority over callbackExpectedType (which would otherwise override JSDoc).
+		let expected = (doc && length(doc.params) > 0)
+			? { kind: 'function', params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })), return: UNKNOWN }
+			: null;
+		return inferArrow(node, source, uri, scope, depth, expected);
 	}
 
 	if (ntype === 'return_statement') {
@@ -473,28 +437,42 @@ function inferInner(node, source, uri, scope, depth) {
 
 	if (ntype === 'function_declaration') {
 		let docTxt = precedingDoc(node, source);
-		if (docTxt) {
-			let doc = parseDoc(docTxt);
-			if (doc.returns && doc.returns.type)
-				return {
-					kind: 'function',
-					params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
-					return: doc.returns.type,
-				};
-		}
-		// No JSDoc @returns — infer from body's first return statement.
-		let body = ts.childByField(node, 'body');
-		let ret = UNKNOWN;
-		if (body) {
-			for (let i = 0; i < ts.namedChildCount(body); i++) {
-				let child = ts.namedChild(body, i);
-				if (ts.nodeType(child) !== 'return_statement') continue;
-				let expr = ts.namedChild(child, 0);
-				if (expr) ret = _infer(expr, source, uri, scope, depth + 1);
+		let doc = docTxt ? parseDoc(docTxt) : null;
+		let docParams = (doc && doc.params) ? doc.params : [];
+
+		// Params: from JSDoc @param when annotated, otherwise one UNKNOWN entry per
+		// formal parameter so addParamScope can still bind the names.
+		let params = [];
+		if (length(docParams) > 0) {
+			params = map(docParams, (p) => ({ name: p.name, type: p.type ?? UNKNOWN }));
+		} else {
+			for (let i = 0; i < ts.namedChildCount(node); i++) {
+				let child = ts.namedChild(node, i);
+				if (ts.nodeType(child) !== 'formal_parameters') continue;
+				for (let j = 0; j < ts.namedChildCount(child); j++) {
+					let p = ts.namedChild(child, j);
+					if (ts.nodeType(p) !== 'identifier') continue;
+					push(params, { name: ts.text(p, source), type: UNKNOWN });
+				}
 				break;
 			}
 		}
-		return { kind: 'function', params: [], return: ret };
+
+		// Return type: declared via @returns, or infer from first return statement.
+		let ret = (doc && doc.returns && doc.returns.type) ? doc.returns.type : UNKNOWN;
+		if (ret === UNKNOWN) {
+			let body = ts.childByField(node, 'body');
+			if (body) {
+				for (let i = 0; i < ts.namedChildCount(body); i++) {
+					let child = ts.namedChild(body, i);
+					if (ts.nodeType(child) !== 'return_statement') continue;
+					let expr = ts.namedChild(child, 0);
+					if (expr) ret = _infer(expr, source, uri, scope, depth + 1);
+					break;
+				}
+			}
+		}
+		return { kind: 'function', params, return: ret };
 	}
 
 	return UNKNOWN;
@@ -569,6 +547,20 @@ function processBlock(stmts, source, uri, scope, targetOffset) {
 	}
 }
 
+// Add the formal parameters of fn to scope by inferring its function type.
+// For named functions this uses JSDoc @param annotations; for anonymous
+// callbacks it derives param types from the call site via callbackExpectedType
+// (invoked inside inferArrow).  Both paths go through _infer so the result is
+// cached and consistent with what inferCall sees.
+function addParamScope(fn, source, uri, scope) {
+	let fnType = _infer(fn, source, uri, scope, 0);
+	if (!fnType || fnType.kind !== 'function') return;
+	for (let i = 0; i < length(fnType.params); i++) {
+		let p = fnType.params[i];
+		scopeSet(scope, p.name, p.type ?? UNKNOWN);
+	}
+}
+
 // Build a scope for the given file at targetOffset.
 //
 // Strategy (outermost first so inner names shadow outer ones):
@@ -620,22 +612,12 @@ export function buildScope(uri, source, tree, targetOffset) {
 
 _infer = function(node, source, uri, scope, depth) {
 	if (!node || depth > 10) return UNKNOWN;
-
-	// Identifiers and property identifiers share their start byte with enclosing
-	// expressions (e.g. a call_expression starts at the same byte as its callee
-	// identifier).  Caching them would cause the enclosing expression's result to
-	// overwrite theirs (or vice versa), corrupting later lookups.  Scope lookups
-	// are O(1), so there is no performance cost to skipping the cache here.
 	let ntype = ts.nodeType(node);
-	if (ntype === 'identifier' || ntype === 'property_identifier')
-		return inferInner(node, source, uri, scope, depth);
-
 	let offset = ts.startByte(node);
-	let cached = memoGet(uri, offset);
+	let cached = memoGet(uri, offset, ntype);
 	if (cached) return cached;
-
 	let type = inferInner(node, source, uri, scope, depth);
-	memoSet(uri, offset, type);
+	memoSet(uri, offset, ntype, type);
 	return type;
 };
 
