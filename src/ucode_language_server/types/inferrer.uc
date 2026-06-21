@@ -573,26 +573,46 @@ function processBlock(stmts, source, uri, scope, targetOffset) {
 //
 // Strategy (outermost first so inner names shadow outer ones):
 //   1. importScope   — named imports and namespace aliases
-//   2. enclosingFunctions params — arrow/function params even without a block body
-//   3. processBlock for the root program node
-//   4. For each enclosing statement_block (function body, for-in body, if-body, …):
-//        a. addForInVar — loop variable when the block is a for-in body
-//        b. processBlock — declarations inside that block up to targetOffset
+//   2. processBlock for the root program node (top-level lets/fns)
+//   3. Walk enclosing statement_blocks outermost-first. For each block:
+//        a. If the block is the body of the next enclosing function, run
+//           addParamScope for that function first (so params shadow block lets
+//           from outer scopes, and callback inference sees let bindings from
+//           non-function enclosing blocks like `if` bodies).
+//        b. addForInVar — loop variable when the block is a for-in body
+//        c. processBlock — declarations inside that block up to targetOffset
+//   4. Any remaining enclosing functions (arrow fns with expression bodies)
+//      get addParamScope at the end.
 export function buildScope(uri, source, tree, targetOffset) {
 	let scope = importScope(uri);
 	let root = ts.rootNode(tree);
 
 	processBlock(ts.namedChildren(root), source, uri, scope, targetOffset);
 
-	let fns = enclosingFunctions(root, targetOffset);
-	for (let i = 0; i < length(fns); i++)
-		addParamScope(fns[i], source, uri, scope);
-
+	let fns    = enclosingFunctions(root, targetOffset);
 	let blocks = enclosingBlocks(root, targetOffset);
-	for (let i = 0; i < length(blocks); i++) {
-		addForInVar(blocks[i], source, uri, scope);
-		processBlock(ts.namedChildren(blocks[i]), source, uri, scope, targetOffset);
+	let fi = 0;
+
+	for (let bi = 0; bi < length(blocks); bi++) {
+		let block = blocks[bi];
+		// If this block is the body of the next enclosing function, add its
+		// parameters before processing the block's own declarations.
+		if (fi < length(fns)) {
+			let fnBody = ts.childByField(fns[fi], 'body');
+			if (fnBody && ts.startByte(fnBody) === ts.startByte(block)) {
+				addParamScope(fns[fi], source, uri, scope);
+				fi++;
+			}
+		}
+		addForInVar(block, source, uri, scope);
+		processBlock(ts.namedChildren(block), source, uri, scope, targetOffset);
 	}
+
+	// Arrow functions with expression bodies have no statement_block, so their
+	// body never appears in enclosingBlocks — handle them here.
+	for (; fi < length(fns); fi++)
+		addParamScope(fns[fi], source, uri, scope);
+
 	return scope;
 };
 
@@ -600,6 +620,15 @@ export function buildScope(uri, source, tree, targetOffset) {
 
 _infer = function(node, source, uri, scope, depth) {
 	if (!node || depth > 10) return UNKNOWN;
+
+	// Identifiers and property identifiers share their start byte with enclosing
+	// expressions (e.g. a call_expression starts at the same byte as its callee
+	// identifier).  Caching them would cause the enclosing expression's result to
+	// overwrite theirs (or vice versa), corrupting later lookups.  Scope lookups
+	// are O(1), so there is no performance cost to skipping the cache here.
+	let ntype = ts.nodeType(node);
+	if (ntype === 'identifier' || ntype === 'property_identifier')
+		return inferInner(node, source, uri, scope, depth);
 
 	let offset = ts.startByte(node);
 	let cached = memoGet(uri, offset);
