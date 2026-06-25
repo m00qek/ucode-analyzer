@@ -54,5 +54,8 @@ export function load(configDir, workspaceDir) {
 	let projectConfig = readJson(workspaceDir + '/.lsp/config.json');
 	if (projectConfig === null)
 		projectConfig = writeDefault(workspaceDir);
-	return deepMerge(userConfig, projectConfig);
+	let merged = deepMerge(userConfig, projectConfig);
+	if (!merged.systemLibPaths)
+		merged.systemLibPaths = ['/usr/share/ucode'];
+	return merged;
 };
