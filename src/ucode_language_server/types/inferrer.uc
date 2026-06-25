@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import * as dag from 'ucode_language_server.dag';
+import * as dag from 'ucode_language_server.dag.dag';
 import { parseDoc } from 'ucode_language_server.types.doc_parser';
 import { unify, substitute } from 'ucode_language_server.types.unifier';
 import { memoGet, memoSet } from 'ucode_language_server.memo';
@@ -49,9 +49,40 @@ function enclosingBlocks(root, offset) {
 	return result;
 }
 
+// Reduce a list of Types to a single type: UNKNOWN for empty, the sole element
+// for a singleton, or a union of distinct types otherwise.
+function unionOf(types) {
+	let members = [];
+	for (let i = 0; i < length(types); i++) {
+		let t = types[i];
+		let seen = false;
+		for (let j = 0; j < length(members); j++) {
+			let m = members[j];
+			if (m.kind !== t.kind) continue;
+			if (t.kind === 'primitive' && m.name !== t.name) continue;
+			if (t.kind === 'ref'       && m.name !== t.name) continue;
+			seen = true; break;
+		}
+		if (!seen) push(members, t);
+	}
+	if (length(members) === 0) return UNKNOWN;
+	if (length(members) === 1) return members[0];
+	return { kind: 'union', members };
+}
+
 // Look up a member name in a resolved type. Expands ref types via the registry.
 function memberOfType(type, propName) {
 	if (!type) return UNKNOWN;
+	if (type.kind === 'nullable')
+		return memberOfType(type.inner, propName);
+	if (type.kind === 'union') {
+		let results = [];
+		for (let i = 0; i < length(type.members); i++) {
+			let t = memberOfType(type.members[i], propName);
+			if (t.kind !== 'unknown') push(results, t);
+		}
+		return unionOf(results);
+	}
 	if (type.kind === 'record') {
 		for (let i = 0; i < length(type.fields); i++)
 			if (type.fields[i].name === propName) return type.fields[i].type;
@@ -118,10 +149,9 @@ function dagNamedLookup(uri, name) {
 	for (let i = 0; i < length(imps); i++) {
 		let imp = imps[i];
 		if (!imp.resolvedUri || index(imp.symbols, name) < 0) continue;
-		let exps = dag.exportsOf(imp.resolvedUri);
-		if (!exps) continue;
-		for (let j = 0; j < length(exps); j++)
-			if (exps[j].name === name) return exportType(exps[j]);
+		let remoteName = (imp.renames && imp.renames[name]) ?? name;
+		let exp = dag.resolveExport(imp.resolvedUri, remoteName);
+		if (exp) return exportType(exp);
 	}
 	return null;
 }
@@ -133,18 +163,16 @@ function dagMemberLookup(uri, alias, member) {
 	for (let i = 0; i < length(imps); i++) {
 		let imp = imps[i];
 		if (imp.alias !== alias || !imp.resolvedUri) continue;
-		let exps = dag.exportsOf(imp.resolvedUri);
-		if (!exps) break;
-		for (let j = 0; j < length(exps); j++)
-			if (exps[j].name === member) return exportType(exps[j]);
-		break;
+		let exp = dag.resolveExport(imp.resolvedUri, member);
+		return exp ? exportType(exp) : null;
 	}
 	return null;
 }
 
-// ── Forward declaration (mutual recursion) ─────────────────────────────────
+// ── Forward declarations (mutual recursion) ────────────────────────────────
 
 let _infer;
+let _collectReturns;
 
 // ── Internal helpers ───────────────────────────────────────────────────────
 
@@ -158,12 +186,22 @@ function addForInVar(block, source, uri, scope) {
 	let elemType = UNKNOWN;
 	if (iterable) {
 		let iterType = _infer(iterable, source, uri, scope, 0);
+		if (iterType.kind === 'nullable') iterType = iterType.inner;
 		if (iterType.kind === 'generic' && iterType.base === 'list' && length(iterType.params) > 0)
 			elemType = iterType.params[0];
-		else if (iterType.kind === 'record')
+		else if (iterType.kind === 'record' || (iterType.kind === 'generic' && iterType.base === 'dict'))
 			elemType = STR;
 	}
 	scopeSet(scope, ts.text(loopVar, source), elemType);
+}
+
+// If block is the body of a catch_clause, add its parameter to scope.
+function addCatchVar(block, source, uri, scope) {
+	let clause = ts.parent(block);
+	if (!clause || ts.nodeType(clause) !== 'catch_clause') return;
+	let param = ts.childByField(clause, 'parameter');
+	if (param && ts.nodeType(param) === 'identifier')
+		scopeSet(scope, ts.text(param, source), UNKNOWN);
 }
 
 // When fn is a callback argument in a call_expression, return the expected
@@ -212,6 +250,35 @@ function processDecl(stmt, source, uri, scope, depth) {
 	}
 }
 
+// Collect types of all return expressions within node, recursing into control
+// flow but not crossing nested function boundaries.  Tracks let declarations
+// encountered along the way so returns inside if-bodies can resolve local vars.
+_collectReturns = function(node, source, uri, scope, depth, out) {
+	let n = ts.namedChildCount(node);
+	for (let i = 0; i < n; i++) {
+		let child = ts.namedChild(node, i);
+		let ct = ts.nodeType(child);
+		if (ct === 'return_statement') {
+			let expr = ts.namedChild(child, 0);
+			push(out, expr ? _infer(expr, source, uri, scope, depth + 1) : NULL_T);
+		} else if (ct === 'lexical_declaration') {
+			processDecl(child, source, uri, scope, depth);
+		} else if (ct !== 'function_declaration' && ct !== 'arrow_function' && ct !== 'function_expression') {
+			_collectReturns(child, source, uri, scope, depth, out);
+		}
+	}
+};
+
+// If block is the body of a C-style for statement, add its initializer
+// bindings (e.g. `let i = 0`) to scope.
+function addForVar(block, source, uri, scope) {
+	let forStmt = ts.parent(block);
+	if (!forStmt || ts.nodeType(forStmt) !== 'for_statement') return;
+	let init = ts.childByField(forStmt, 'initializer');
+	if (init && ts.nodeType(init) === 'lexical_declaration')
+		processDecl(init, source, uri, scope, 0);
+}
+
 // Infer the type of an arrow_function or function_expression node.
 //
 // Parameter types are resolved in priority order:
@@ -256,13 +323,9 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 	let ret = UNKNOWN;
 	if (bodyNode) {
 		if (ts.nodeType(bodyNode) === 'statement_block') {
-			for (let i = 0; i < ts.namedChildCount(bodyNode); i++) {
-				let child = ts.namedChild(bodyNode, i);
-				if (ts.nodeType(child) !== 'return_statement') continue;
-				let expr = ts.namedChild(child, 0);
-				if (expr) ret = _infer(expr, source, uri, childScope, depth + 1);
-				break;
-			}
+			let rets = [];
+			_collectReturns(bodyNode, source, uri, childScope, depth, rets);
+			ret = unionOf(rets);
 		} else {
 			ret = _infer(bodyNode, source, uri, childScope, depth + 1);
 		}
@@ -346,10 +409,14 @@ function inferInner(node, source, uri, scope, depth) {
 		if (op === '<'  || op === '>'  || op === '<=' || op === '>=' ||
 		    op === '==' || op === '!=' || op === '&&' || op === '||')
 			return BOOL;
-		let left = ts.namedChild(node, 0);
-		if (op === '+' && left) {
-			let lt = _infer(left, source, uri, scope, depth + 1);
-			if (lt.kind === 'primitive' && lt.name === 'string') return STR;
+		let left  = ts.namedChild(node, 0);
+		let right = ts.namedChild(node, 1);
+		if (op === '+') {
+			let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;
+			let rt = right ? _infer(right, source, uri, scope, depth + 1) : UNKNOWN;
+			if ((lt.kind === 'primitive' && lt.name === 'string') ||
+			    (rt.kind === 'primitive' && rt.name === 'string'))
+				return STR;
 		}
 		return left ? _infer(left, source, uri, scope, depth + 1) : INT;
 	}
@@ -458,18 +525,17 @@ function inferInner(node, source, uri, scope, depth) {
 			}
 		}
 
-		// Return type: declared via @returns, or infer from first return statement.
+		// Return type: declared via @returns, or infer from all return statements.
 		let ret = (doc && doc.returns && doc.returns.type) ? doc.returns.type : UNKNOWN;
 		if (ret === UNKNOWN) {
 			let body = ts.childByField(node, 'body');
 			if (body) {
-				for (let i = 0; i < ts.namedChildCount(body); i++) {
-					let child = ts.namedChild(body, i);
-					if (ts.nodeType(child) !== 'return_statement') continue;
-					let expr = ts.namedChild(child, 0);
-					if (expr) ret = _infer(expr, source, uri, scope, depth + 1);
-					break;
-				}
+				let bodyScope = makeScope(scope);
+				for (let i = 0; i < length(params); i++)
+					scopeSet(bodyScope, params[i].name, params[i].type ?? UNKNOWN);
+				let rets = [];
+				_collectReturns(body, source, uri, bodyScope, depth, rets);
+				ret = unionOf(rets);
 			}
 		}
 		return { kind: 'function', params, return: ret };
@@ -493,12 +559,11 @@ function importScope(uri) {
 			continue;
 		}
 		if (!imp.resolvedUri) continue;
-		let exps = dag.exportsOf(imp.resolvedUri);
-		if (!exps) continue;
-		for (let j = 0; j < length(exps); j++) {
-			let exp = exps[j];
-			if (index(imp.symbols, exp.name) >= 0)
-				scopeSet(scope, exp.name, exportType(exp));
+		for (let j = 0; j < length(imp.symbols); j++) {
+			let localName = imp.symbols[j];
+			let remoteName = (imp.renames && imp.renames[localName]) ?? localName;
+			let r = dag.resolveExport(imp.resolvedUri, remoteName);
+			if (r) scopeSet(scope, localName, exportType(r));
 		}
 	}
 	return scope;
@@ -597,6 +662,8 @@ export function buildScope(uri, source, tree, targetOffset) {
 			}
 		}
 		addForInVar(block, source, uri, scope);
+		addForVar(block, source, uri, scope);
+		addCatchVar(block, source, uri, scope);
 		processBlock(ts.namedChildren(block), source, uri, scope, targetOffset);
 	}
 

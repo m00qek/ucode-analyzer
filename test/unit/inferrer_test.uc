@@ -1,6 +1,6 @@
 import { describe, it, assert, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
-import * as dag from 'ucode_language_server.dag';
+import * as dag from 'ucode_language_server.dag.dag';
 import { inferNode, buildScope, initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
 import { makeScope, scopeSet, scopeGet } from 'ucode_language_server.types.scope';
 import { invalidateUri } from 'ucode_language_server.memo';
@@ -101,6 +101,10 @@ describe('inferrer — binary expressions', () => {
 
 	it('string + string yields string', () => {
 		assert.match(prim('string'), infer("let x = 'a' + 'b';"));
+	});
+
+	it('int + string yields string', () => {
+		assert.match(prim('string'), infer("let x = 1 + 'a';"));
 	});
 
 	it('arithmetic on float yields float', () => {
@@ -664,6 +668,71 @@ describe('inferrer — buildScope: local declarations inside function bodies', (
 	});
 });
 
+describe('inferrer — union type member access', () => {
+	it('member access on union type returns union of member types', () => {
+		let s = makeScope(null);
+		// x: { val: int } | { val: string }
+		scopeSet(s, 'x', {
+			kind: 'union',
+			members: [
+				{ kind: 'record', fields: [{ name: 'val', type: prim('int') }] },
+				{ kind: 'record', fields: [{ name: 'val', type: prim('string') }] },
+			]
+		});
+		let text = "let r = x.val;";
+		let tree = parse(text);
+		let expr = ts.childByField(ts.namedChild(ts.namedChild(ts.rootNode(tree), 0), 0), 'value');
+		dag.add(URI, text, tree);
+		let t = inferNode(expr, text, URI, s, 0);
+		assert.match('union', t.kind);
+		assert.match(2, length(t.members));
+	});
+
+	it('member access on union where all members agree returns plain type', () => {
+		let s = makeScope(null);
+		scopeSet(s, 'x', {
+			kind: 'union',
+			members: [
+				{ kind: 'record', fields: [{ name: 'val', type: prim('int') }] },
+				{ kind: 'record', fields: [{ name: 'val', type: prim('int') }] },
+			]
+		});
+		let text = "let r = x.val;";
+		let tree = parse(text);
+		let expr = ts.childByField(ts.namedChild(ts.namedChild(ts.rootNode(tree), 0), 0), 'value');
+		dag.add(URI, text, tree);
+		let t = inferNode(expr, text, URI, s, 0);
+		assert.match(prim('int'), t);
+	});
+});
+
+describe('inferrer — _collectReturns tracks local let bindings', () => {
+	it('return type resolved via let declared inside a branch', () => {
+		let text = "function f(x) { if (x) { let r = 42; return r; } return null; }";
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let fnNode = ts.namedChild(root, 0);
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, 0);
+		let t = inferNode(fnNode, text, URI, scope, 0);
+		assert.match('function', t.kind);
+		assert.match('union', t.return.kind);
+		// Should be int | null (not unknown | null)
+		let kinds = map(t.return.members, (m) => m.kind + (m.name ? ':' + m.name : ''));
+		assert.match(true, index(kinds, 'primitive:int') >= 0);
+	});
+
+	it('local let does not leak into outer scope', () => {
+		let text = "function f() {\nlet x = 1;\nlet y = 2;\n}";
+		let tree = parse(text);
+		let offset = length("function f() {\nlet x = 1;\n");
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+		assert.match(prim('int'), scope.bindings['x']);
+		assert.match(null, scope.bindings['y'] ?? null);
+	});
+});
+
 describe('inferrer — chained member access', () => {
 	it('a.b.c resolves when a.b is a record with field c', () => {
 		let s = makeScope(null);
@@ -762,6 +831,145 @@ describe('inferrer — buildScope: callback parameter types from call context', 
 	});
 });
 
+describe('inferrer — nullable type unwrapping', () => {
+	it('member access on nullable ref unwraps and resolves the field', () => {
+		// ?MyType.field should resolve to the field type, not UNKNOWN
+		let text = "/** @typedef {{ value: number }} MyType */\nlet x = null;\nlet r = x.value;";
+		// We can't easily test full typedef resolution here; test that ?record unwraps:
+		let scope = makeScope(null);
+		scopeSet(scope, 'x', { kind: 'nullable', inner: { kind: 'record', fields: [{ name: 'v', type: prim('int') }] } });
+		let tree = parse("x.v;");
+		dag.add(URI, "x.v;", tree);
+		let root = ts.rootNode(tree);
+		let memberNode = ts.namedChild(root, 0);  // expression_statement
+		memberNode = ts.namedChild(memberNode, 0); // member_expression
+		let t = inferNode(memberNode, "x.v;", URI, scope, 0);
+		assert.match(prim('int'), t);
+	});
+
+	it('for-in over nullable list<int> gives int loop variable', () => {
+		let text = "let xs = null;\nfor (let x in xs) {\nx;\n}";
+		let tree = parse(text);
+		let offset = length("let xs = null;\nfor (let x in xs) {\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+		// xs has no type info from null, so we verify the nullable unwrap path works
+		// by providing the type directly in scope
+		let scope2 = makeScope(null);
+		scopeSet(scope2, 'xs', { kind: 'nullable', inner: { kind: 'generic', base: 'list', params: [prim('int')] } });
+		// Rebuild with the injected scope context — test via addForInVar indirectly
+		// by checking that a nullable list in buildScope gives the right elem type.
+		// (buildScope re-infers, so we need a typed declaration)
+		let text2 = "/**\n * @returns {?list<int>}\n */\nfunction getXs() {}\nfor (let x in getXs()) {\nx;\n}";
+		let tree2 = parse(text2);
+		let offset2 = length(text2) - length("x;\n}") - 1;
+		dag.add(URI, text2, tree2);
+		if (_stdlibUri) {
+			let scope3 = buildScope(URI, text2, tree2, offset2);
+			assert.match(prim('int'), scope3.bindings['x']);
+		}
+	});
+});
+
+describe('inferrer — multiple return statement union', () => {
+	it('function with two returns unions both types', () => {
+		let text = "function f(x) { if (x) return 1; return 'a'; }";
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let fnNode = ts.namedChild(root, 0);
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, 0);
+		let t = inferNode(fnNode, text, URI, scope, 0);
+		assert.match('function', t.kind);
+		assert.match('union', t.return.kind);
+		assert.match(2, length(t.return.members));
+	});
+
+	it('function with one return keeps a plain type', () => {
+		let text = "function f() { return 42; }";
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let fnNode = ts.namedChild(root, 0);
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, 0);
+		let t = inferNode(fnNode, text, URI, scope, 0);
+		assert.match('function', t.kind);
+		assert.match(prim('int'), t.return);
+	});
+
+	it('arrow with two returns unions both types', () => {
+		let text = "let f = (x) => { if (x) return 1; return 'a'; };";
+		let t = infer(text);
+		assert.match('function', t.kind);
+		assert.match('union', t.return.kind);
+		assert.match(2, length(t.return.members));
+	});
+});
+
+describe('inferrer — buildScope: C-style for loop variable', () => {
+	it('C-style for loop counter is in scope inside the body', () => {
+		let text = "for (let i = 0; i < 10; i++) {\ni;\n}";
+		let tree = parse(text);
+		let offset = length("for (let i = 0; i < 10; i++) {\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(true, 'i' in scope.bindings);
+		assert.match(prim('int'), scope.bindings['i']);
+	});
+
+	it('C-style for loop counter is not in scope after the for statement', () => {
+		let text = "for (let i = 0; i < 10; i++) {}\ni;\n";
+		let tree = parse(text);
+		let offset = length(text) - 2;
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(null, scope.bindings['i'] ?? null);
+	});
+});
+
+describe('inferrer — buildScope: catch clause variable', () => {
+	it('catch parameter is in scope inside the catch body', () => {
+		let text = "try { } catch (e) {\ne;\n}";
+		let tree = parse(text);
+		let offset = length("try { } catch (e) {\n");
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(true, 'e' in scope.bindings);
+	});
+
+	it('catch parameter is not in scope after the catch block', () => {
+		let text = "try { } catch (e) {}\ne;\n";
+		let tree = parse(text);
+		let offset = length(text) - 2;
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, offset);
+
+		assert.match(null, scope.bindings['e'] ?? null);
+	});
+});
+
+describe('inferrer — buildScope: Object/dict for-in key type', () => {
+	it('for-in over Object<string, int> yields string keys', () => {
+		// Object<K,V> normalises to {kind:'generic', base:'dict'} — for-in gives keys (string)
+		let text2 = "/**\n * @returns {Object<string, int>}\n */\nfunction getMap() {}\nfor (let k in getMap()) {\nk;\n}";
+		let tree2 = parse(text2);
+		let offset2 = length(text2) - length("k;\n}") - 1;
+		dag.add(URI, text2, tree2);
+		if (_stdlibUri) {
+			let scope = buildScope(URI, text2, tree2, offset2);
+			assert.match(prim('string'), scope.bindings['k']);
+		}
+	});
+});
+
 describe('inferrer — export clause carries doc', () => {
 	let GREET_URI = 'file:///app/test/fixtures/greet.uc';
 
@@ -772,5 +980,47 @@ describe('inferrer — export clause carries doc', () => {
 		assert.match(true, exps !== null && length(exps) > 0);
 		assert.match('greet', exps[0].name);
 		assert.match('function', exps[0].kind);
+	});
+});
+
+describe('inferrer — importScope: renamed imports', () => {
+	let TS_URI = 'file:///app/src/tree_sitter.uc';
+
+	beforeEach(() => {
+		dag.init(_config);
+		dag.remove(URI);
+		invalidateUri(URI);
+		dag.addFromDisk(TS_URI);
+	});
+
+	it('renamed import is available under its local binding name', () => {
+		// import { parse as p } from 'tree_sitter'; → 'p' must be in scope, not 'parse'
+		let text = "import { parse as p } from 'tree_sitter';\np;";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let offset = length(text) - 1;  // at 'p'
+		let scope = buildScope(URI, text, tree, offset);
+		assert.match(true, 'p' in scope.bindings);
+		assert.match(null, scope.bindings['parse'] ?? null);
+	});
+
+	it('renamed import carries the resolved type from the source module', () => {
+		let text = "import { parse as p } from 'tree_sitter';\np;";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let offset = length(text) - 1;
+		let scope = buildScope(URI, text, tree, offset);
+		// 'parse' is a function export — the renamed binding should have function kind
+		assert.match('function', scope.bindings['p'].kind);
+	});
+
+	it('unrenamed import is still available under its original name', () => {
+		let text = "import { parse } from 'tree_sitter';\nparse;";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let offset = length(text) - 1;
+		let scope = buildScope(URI, text, tree, offset);
+		assert.match(true, 'parse' in scope.bindings);
+		assert.match('function', scope.bindings['parse'].kind);
 	});
 });
