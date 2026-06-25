@@ -36,6 +36,41 @@
  * @module socket
  */
 
+/** @typedef {{ family: ?int, address: ?string, port: ?int, path: ?string }} SocketAddress */
+
+/** @typedef {{ family: int, socktype: int, protocol: int, address: SocketAddress }} AddressInfo */
+
+/** @typedef {{ fd: Socket, events: int }} PollSpec */
+
+/** @typedef {{ data: *, length: int, ancillary: object[], address: ?SocketAddress }} ReceivedMessage */
+
+/** @typedef {{ uid: int, gid: int, pid: int }} PeerCredentials */
+
+/**
+ * Socket handle returned by {@link module:socket#create|create()},
+ * {@link module:socket#connect|connect()}, {@link module:socket#listen|listen()},
+ * {@link module:socket#open|open()}, and {@link module:socket#pair|pair()}.
+ *
+ * @typedef {{
+ *   setopt: function(int, int, *): ?boolean,
+ *   getopt: function(int, int): ?*,
+ *   fileno: function(): int,
+ *   connect: function(*): ?boolean,
+ *   send: function(*, ?int, ?*): ?int,
+ *   recv: function(?int, ?int, ?*): ?string,
+ *   sendmsg: function(*, ?*, ?*, ?int): ?int,
+ *   recvmsg: function(?*, ?int, ?int): ?ReceivedMessage,
+ *   bind: function(*): ?boolean,
+ *   listen: function(?int): ?boolean,
+ *   accept: function(?*): ?Socket,
+ *   shutdown: function(int): ?boolean,
+ *   peercred: function(): ?PeerCredentials,
+ *   peername: function(): ?SocketAddress,
+ *   sockname: function(): ?SocketAddress,
+ *   close: function(): ?boolean
+ * }} Socket
+ */
+
 /**
  * Sets options on the socket.
  *
@@ -45,7 +80,7 @@
  *
  * Returns `null` if an error occurred.
  *
- * @function module:socket.socket#setopt
+ * @function Socket#setopt
  *
  * @param {int} level
  * The protocol level at which the option resides. This can be a level such as
@@ -65,7 +100,6 @@
  *
  * @returns {?boolean}
  */
-export function socket(level, option, value) {};
 
 /**
  * Gets options from the socket.
@@ -76,7 +110,7 @@ export function socket(level, option, value) {};
  *
  * Returns `null` if an error occurred or if the option is not supported.
  *
- * @function module:socket.socket#getopt
+ * @function Socket#getopt
  *
  * @param {int} level
  * The protocol level at which the option resides. This can be a level such as
@@ -92,7 +126,6 @@ export function socket(level, option, value) {};
  * on the specific option being retrieved. It can be an integer, a boolean, a
  * string, or a dictionary representing a complex data structure.
  */
-export function socket(level, option) {};
 
 /**
  * Returns the UNIX file descriptor number associated with the socket.
@@ -101,11 +134,10 @@ export function socket(level, option) {};
  *
  * Returns `-1` if an error occurred.
  *
- * @function module:socket.socket#fileno
+ * @function Socket#fileno
  *
  * @returns {int}
  */
-export function socket() {};
 
 /**
  * Query error information.
@@ -185,10 +217,10 @@ export function strerror(code) {};
  *
  * @function module:socket#sockaddr
  *
- * @param {string|int[]|module:socket.socket.SocketAddress} address
+ * @param {string|int[]|SocketAddress} address
  * The address value to parse.
  *
- * @returns {?module:socket.socket.SocketAddress}
+ * @returns {?SocketAddress}
  * A socket address representation of the provided address value, or `null` if
  * the address could not be parsed.
  *
@@ -223,7 +255,7 @@ export function sockaddr(address) {};
  *
  * @function module:socket#nameinfo
  *
- * @param {string|module:socket.socket.SocketAddress} address
+ * @param {string|SocketAddress} address
  * The network address to resolve. It can be specified as:
  * - A string representing the IP address.
  * - An object representing the address with properties `address` and `port`.
@@ -272,7 +304,7 @@ export function nameinfo(address, flags) {};
  * - `protocol`: The protocol of returned addresses.
  * - `flags`: Bitwise OR-ed `AI_*` flags to control the resolution behavior.
  *
- * @returns {?module:socket.AddressInfo[]}
+ * @returns {?AddressInfo[]}
  *
  * @see {@link module:socket~"Socket Types"|Socket Types}
  * @see {@link module:socket~"Address Info Flags"|Address Info Flags}
@@ -311,15 +343,15 @@ export function addrinfo(hostname, service, hints) {};
  * call will wait indefinitely, in all other cases the poll call will wait at
  * most for the given amount of milliseconds before returning.
  *
- * @param {...(module:socket.socket|module:socket.PollSpec)} sockets
+ * @param {...(Socket|PollSpec)} sockets
  * An arbitrary amount of socket arguments. Each argument may be either a plain
- * {@link module:socket.socket|socket instance} (or any other kind of handle
+ * {@link Socket|socket instance} (or any other kind of handle
  * implementing a `fileno()` method) or a `[socket, flags]` tuple specifying the
  * socket and requested poll flags. If a plain socket (or other kind of handle)
  * instead of a tuple is provided, the requested poll flags default to
  * `POLLIN|POLLERR|POLLHUP` for this socket.
  *
- * @returns {module:socket.PollSpec[]}
+ * @returns {PollSpec[]}
  *
  * @example
  * let x = socket.connect("example.org", 80);
@@ -346,20 +378,20 @@ export function poll(timeout, sockets) {};
  * This high level function combines the functionality of
  * {@link module:socket#create|create()},
  * {@link module:socket#addrinfo|addrinfo()} and
- * {@link module:socket.socket#connect|connect()} to simplify connection
+ * {@link Socket#connect|connect()} to simplify connection
  * establishment with the socket module.
  *
  * @function module:socket#connect
  *
- * @param {string|int[]|module:socket.socket.SocketAddress} host
+ * @param {string|int[]|SocketAddress} host
  * The host to connect to, can be an IP address, hostname,
- * {@link module:socket.socket.SocketAddress|SocketAddress}, or an array value
+ * {@link SocketAddress|SocketAddress}, or an array value
  * returned by {@link module:core#iptoarr|iptoarr()}.
  *
  * @param {string|int} [service]
  * The service to connect to, can be a symbolic service name (such as "http") or
  * a port number. Optional if host is specified as
- * {@link module:socket.socket.SocketAddress|SocketAddress}.
+ * {@link SocketAddress|SocketAddress}.
  *
  * @param {Object} [hints]
  * Optional preferences for the socket. It can contain the following properties:
@@ -377,7 +409,7 @@ export function poll(timeout, sockets) {};
  * block until either a connection was successfull or the underlying operating
  * system timeout is reached.
  *
- * @returns {module:socket.socket}
+ * @returns {Socket}
  *
  * @example
  * // Resolve host, try to connect to both resulting IPv4 and IPv6 addresses
@@ -403,21 +435,21 @@ export function connect(host, service, hints, timeout) {};
  * This high-level function combines the functionality of
  * {@link module:socket#create|create()},
  * {@link module:socket#addrinfo|addrinfo()},
- * {@link module:socket.socket#bind|bind()}, and
- * {@link module:socket.socket#listen|listen()} to simplify setting up a
+ * {@link Socket#bind|bind()}, and
+ * {@link Socket#listen|listen()} to simplify setting up a
  * listening socket with the socket module.
  *
  * @function module:socket#listen
  *
- * @param {string|int[]|module:socket.socket.SocketAddress} host
+ * @param {string|int[]|SocketAddress} host
  * The host to bind to, can be an IP address, hostname,
- * {@link module:socket.socket.SocketAddress|SocketAddress}, or an array value
+ * {@link SocketAddress|SocketAddress}, or an array value
  * returned by {@link module:core#iptoarr|iptoarr()}.
  *
  * @param {string|int} [service]
  * The service to listen on, can be a symbolic service name (such as "http") or
  * a port number. Optional if host is specified as
- * {@link module:socket.socket.SocketAddress|SocketAddress}.
+ * {@link SocketAddress|SocketAddress}.
  *
  * @param {Object} [hints]
  * Optional preferences for the socket. It can contain the following properties:
@@ -435,7 +467,7 @@ export function connect(host, service, hints, timeout) {};
  * @param {boolean} [reuseaddr]
  * Whether to set the SO_REUSEADDR option before calling bind().
  *
- * @returns {module:socket.socket}
+ * @returns {Socket}
  *
  * @example
  * // Listen for incoming TCP connections on port 80
@@ -485,7 +517,7 @@ export function listen(host, service, hints, backlog, reuseaddr) {};
  * @param {int} [protocol=0]
  * The protocol to be used with the socket.
  *
- * @returns {?module:socket.socket}
+ * @returns {?Socket}
  * A socket instance representing the newly created socket.
  *
  * @example
@@ -509,7 +541,7 @@ export function create(domain, type, protocol) {};
  * @param {int} [fd]
  * The file descriptor number
  *
- * @returns {?module:socket.socket}
+ * @returns {?Socket}
  * A socket instance representing the socket.
  */
 export function open(fd) {};
@@ -536,7 +568,7 @@ export function open(fd) {};
  * The socket type, e.g., SOCK_STREAM or SOCK_DGRAM. It may also be
  * bitwise OR-ed with SOCK_NONBLOCK or SOCK_CLOEXEC.
  *
- * @returns {Array<?module:socket.socket>}
+ * @returns {Array<?Socket>}
  * Socket instances representing the newly created sockets.
  *
  * @example
@@ -556,9 +588,9 @@ export function pair(type) {};
  * Returns `true` if the connection is successfully established.
  * Returns `null` if an error occurred during the connection attempt.
  *
- * @function module:socket.socket#connect
+ * @function Socket#connect
  *
- * @param {string|module:socket.socket.SocketAddress} address
+ * @param {string|SocketAddress} address
  * The address of the remote endpoint to connect to.
  *
  * @param {int} port
@@ -566,7 +598,6 @@ export function pair(type) {};
  *
  * @returns {?boolean}
  */
-export function socket(address, port) {};
 
 /**
  * Sends data through the socket.
@@ -577,7 +608,7 @@ export function socket(address, port) {};
  * Returns the number of bytes sent.
  * Returns `null` if an error occurred during the send operation.
  *
- * @function module:socket.socket#send
+ * @function Socket#send
  *
  * @param {*} data
  * The data to be sent through the socket. String data is sent as-is, any other
@@ -587,7 +618,7 @@ export function socket(address, port) {};
  * @param {int} [flags]
  * Optional flags that modify the behavior of the send operation.
  *
- * @param {module:socket.socket.SocketAddress|int[]|string} [address]
+ * @param {SocketAddress|int[]|string} [address]
  * The address of the remote endpoint to send the data to. It can be either an
  * IP address string, an array returned by {@link module:core#iptoarr|iptoarr()},
  * or an object representing a network address. If not provided, the data is
@@ -612,7 +643,6 @@ export function socket(address, port) {};
  *   port: 9000
  * });
  */
-export function socket(data, flags, address) {};
 
 /**
  * Receives data from the socket.
@@ -626,7 +656,7 @@ export function socket(data, flags, address) {};
  * Returns an empty string if the remote side closed the socket.
  * Returns `null` if an error occurred during the receive operation.
  *
- * @function module:socket.socket#recv
+ * @function Socket#recv
  *
  * @param {int} [length=4096]
  * The maximum number of bytes to receive.
@@ -638,12 +668,11 @@ export function socket(data, flags, address) {};
  * An object where the function will store the address from which the data was
  * received. If provided, it will be filled with the details obtained from the
  * sockaddr argument of the underlying `recvfrom()` syscall. See the type
- * definition of {@link module:socket.socket.SocketAddress|SocketAddress} for
+ * definition of {@link SocketAddress|SocketAddress} for
  * details on the format.
  *
  * @returns {?string}
  */
-export function socket(length, flags, address) {};
 
 /**
  * Sends a message through the socket.
@@ -656,7 +685,7 @@ export function socket(length, flags, address) {};
  *
  * Returns `null` if an error occurred.
  *
- * @function module:socket.socket#sendmsg
+ * @function Socket#sendmsg
  *
  * @param {*} [data]
  * The data to be sent. If a string is provided, it is sent as is. If an array
@@ -664,14 +693,14 @@ export function socket(length, flags, address) {};
  * values are implicitly converted to a string and sent. If omitted, only
  * ancillary data and address are considered.
  *
- * @param {module:socket.socket.ControlMessage[]|string} [ancillaryData]
+ * @param {object[]|string} [ancillaryData]
  * Optional ancillary data to be sent. If an array is provided, each element is
  * converted to a control message. If a string is provided, it is sent as-is
  * without further interpretation. Refer to
- * {@link module:socket.socket#recvmsg|`recvmsg()`} and
- * {@link module:socket.socket.ControlMessage|ControlMessage} for details.
+ * {@link Socket#recvmsg|`recvmsg()`} and
+ * {@link object|ControlMessage} for details.
  *
- * @param {module:socket.socket.SocketAddress} [address]
+ * @param {SocketAddress} [address]
  * The destination address for the message. If provided, it sets or overrides
  * the packet destination address.
  *
@@ -695,7 +724,6 @@ export function socket(length, flags, address) {};
  * // Send multiple values in one datagram
  * sk.sendmsg([ "This", "is", "one", "message" ]);
  */
-export function socket(data, ancillaryData, address, flags) {};
 
 /**
  * Receives a message from the socket.
@@ -710,7 +738,7 @@ export function socket(data, ancillaryData, address, flags) {};
  *
  * Returns `null` if an error occurred during the receive operation.
  *
- * @function module:socket.socket#recvmsg
+ * @function Socket#recvmsg
  *
  * @param {int[]|int} [sizes]
  * Specifies the sizes of the buffers used for receiving the message. If an
@@ -726,7 +754,7 @@ export function socket(data, ancillaryData, address, flags) {};
  * Optional flags to modify the behavior of the receive operation. This should
  * be a bitwise OR-ed combination of flag values.
  *
- * @returns {?module:socket.socket.ReceivedMessage}
+ * @returns {?ReceivedMessage}
  * An object containing the received message data, ancillary data,
  * and the sender's address.
  *
@@ -748,7 +776,6 @@ export function socket(data, ancillaryData, address, flags) {};
  * const msg = sk.recvmsg(0, 0, socket.MSG_PEEK|socket.MSG_TRUNC);
  * print(`Received ${length(msg.data)} bytes, ${msg.length} bytes available\n`);
  */
-export function socket(sizes, ancillarySize, flags) {};
 
 /**
  * Binds a socket to a specific address.
@@ -759,9 +786,9 @@ export function socket(sizes, ancillarySize, flags) {};
  *
  * Returns `null` on error, e.g. when the address is in use.
  *
- * @function module:socket.socket#bind
+ * @function Socket#bind
  *
- * @param {string|module:socket.socket.SocketAddress} address
+ * @param {string|SocketAddress} address
  * The IP address to bind the socket to.
  *
  * @returns {?boolean}
@@ -775,7 +802,6 @@ export function socket(sizes, ancillarySize, flags) {};
  * else
  *     print(`Failed to bind socket: ${sock.error()}.\n`);
  */
-export function socket(address) {};
 
 /**
  * Listen for connections on a socket.
@@ -792,14 +818,14 @@ export function socket(address) {};
  * Returns `true` if the socket is successfully marked as passive.
  * Returns `null` if an error occurred, e.g. when the requested port is in use.
  *
- * @function module:socket.socket#listen
+ * @function Socket#listen
  *
  * @param {int} [backlog=128]
  * The maximum length of the queue of pending connections.
  *
  * @returns {?boolean}
  *
- * @see {@link module:socket.socket#accept|accept()}
+ * @see {@link Socket#accept|accept()}
  *
  * @example
  * const sock = socket.create(…);
@@ -811,7 +837,6 @@ export function socket(address) {};
  * else
  *     print(`Failed to listen on socket: ${sock.error()}\n`);
  */
-export function socket(backlog) {};
 
 /**
  * Accept a connection on a socket.
@@ -834,16 +859,16 @@ export function socket(backlog) {};
  *
  * Returns `null` if an error occurred.
  *
- * @function module:socket.socket#accept
+ * @function Socket#accept
  *
  * @param {Object} [address]
  * An optional dictionary to receive the address details of the peer socket.
- * See {@link module:socket.socket.SocketAddress|SocketAddress} for details.
+ * See {@link SocketAddress|SocketAddress} for details.
  *
  * @param {int} [flags]
  * Optional flags to modify the behavior of the peer socket.
  *
- * @returns {?module:socket.socket}
+ * @returns {?Socket}
  *
  * @example
  * const sock = socket.create(…);
@@ -857,7 +882,6 @@ export function socket(backlog) {};
  * else
  *     print(`Failed to accept connection: ${sock.error()}\n`);
  */
-export function socket(address, flags) {};
 
 /**
  * Shutdown part of a full-duplex connection.
@@ -873,7 +897,7 @@ export function socket(address, flags) {};
  * Returns `true` if the shutdown operation is successful.
  * Returns `null` if an error occurred.
  *
- * @function module:socket.socket#shutdown
+ * @function Socket#shutdown
  *
  * @param {int} how
  * Specifies which half of the connection to shut down.
@@ -893,7 +917,6 @@ export function socket(address, flags) {};
  * else
  *     print(`Failed to shut down send operations: ${sock.error()}\n`);
  */
-export function socket(how) {};
 
 /**
  * Retrieves the peer credentials.
@@ -904,9 +927,9 @@ export function socket(how) {};
  * Returns the remote credentials if the operation is successful.
  * Returns `null` on error.
  *
- * @function module:socket.socket#peercred
+ * @function Socket#peercred
  *
- * @returns {?module:socket.socket.PeerCredentials}
+ * @returns {?PeerCredentials}
  *
  * @example
  * const sock = socket.create(socket.AF_UNIX, …);
@@ -918,7 +941,6 @@ export function socket(how) {};
  * else
  *     print(`Failed to retrieve peer credentials: ${sock.error()}\n`);
  */
-export function socket() {};
 
 /**
  * Retrieves the remote address.
@@ -928,11 +950,11 @@ export function socket() {};
  * Returns the remote address if the operation is successful.
  * Returns `null` on error.
  *
- * @function module:socket.socket#peername
+ * @function Socket#peername
  *
- * @returns {?module:socket.socket.SocketAddress}
+ * @returns {?SocketAddress}
  *
- * @see {@link module:socket.socket#sockname|sockname()}
+ * @see {@link Socket#sockname|sockname()}
  *
  * @example
  * const sock = socket.create(…);
@@ -944,7 +966,6 @@ export function socket() {};
  * else
  *     print(`Failed to retrieve peer address: ${sock.error()}\n`);
  */
-export function socket() {};
 
 /**
  * Retrieves the local address.
@@ -954,11 +975,11 @@ export function socket() {};
  * Returns the local address if the operation is successful.
  * Returns `null` on error.
  *
- * @function module:socket.socket#sockname
+ * @function Socket#sockname
  *
- * @returns {?module:socket.socket.SocketAddress}
+ * @returns {?SocketAddress}
  *
- * @see {@link module:socket.socket#peername|peername()}
+ * @see {@link Socket#peername|peername()}
  *
  * @example
  * const sock = socket.create(…);
@@ -970,7 +991,6 @@ export function socket() {};
  * else
  *     print(`Failed to retrieve peer address: ${sock.error()}\n`);
  */
-export function socket() {};
 
 /**
  * Closes the socket.
@@ -981,7 +1001,7 @@ export function socket() {};
  * Returns `true` if the socket was successfully closed.
  * Returns `null` on error.
  *
- * @function module:socket.socket#close
+ * @function Socket#close
  *
  * @returns {?boolean}
  *
@@ -991,5 +1011,4 @@ export function socket() {};
  * // Perform operations with the socket…
  * sock.close();
  */
-export function socket() {};
 

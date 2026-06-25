@@ -47,6 +47,20 @@
  * @module uloop
  */
 
+/** @typedef {{ set: function(int): ?boolean, remaining: function(): int, cancel: function(): boolean }} UloopTimer */
+
+/** @typedef {{ fileno: function(): int, handle: function(): *, delete: function(): void }} UloopHandle */
+
+/** @typedef {{ pid: function(): int, delete: function(): boolean }} UloopProcess */
+
+/** @typedef {{ send: function(*): ?boolean, receive: function(): ?*, sending: function(): boolean, receiving: function(): boolean }} UloopPipe */
+
+/** @typedef {{ pid: function(): int, kill: function(): ?boolean, finished: function(): boolean }} UloopTask */
+
+/** @typedef {{ set: function(int): ?boolean, remaining: function(): int, expirations: function(): int, cancel: function(): boolean }} UloopInterval */
+
+/** @typedef {{ signo: function(): int, delete: function(): boolean }} UloopSignal */
+
 /**
  * Retrieves the last error message.
  *
@@ -235,7 +249,6 @@ export function done() {};
  * // Disable the uloop timer
  * timeout.set();
  */
-export function timer(timeout) {};
 
 /**
  * Returns the number of milliseconds until the uloop timer expires.
@@ -256,7 +269,6 @@ export function timer(timeout) {};
  * else
  *     printf("Timer is not armed\n");
  */
-export function timer() {};
 
 /**
  * Cancels the uloop timer, disarming it and removing it from the event loop.
@@ -272,7 +284,6 @@ export function timer() {};
  * // Cancel the uloop timer
  * timer.cancel();
  */
-export function timer() {};
 
 /**
  * Creates a timer instance for scheduling callbacks.
@@ -294,7 +305,7 @@ export function timer() {};
  * @param {Function} callback
  * The callback function to be executed when the timer expires.
  *
- * @returns {?module:uloop.timer}
+ * @returns {?UloopTimer}
  * Returns a timer instance for scheduling callbacks.
  * Returns `null` when the timeout or callback arguments are invalid.
  *
@@ -325,7 +336,6 @@ export function timer(timeout, callback) {};
  * const fd = handle.fileno();
  * printf("File descriptor number: %d\n", fd);
  */
-export function handle() {};
 
 /**
  * Returns the underlying file or socket instance.
@@ -343,7 +353,6 @@ export function handle() {};
  * const fileOrSocket = handle.handle();
  * printf("Handle: %s\n", fileOrSocket); // e.g. <socket 0x5> or <fs.proc …>
  */
-export function handle() {};
 
 /**
  * Unregisters the uloop handle.
@@ -362,7 +371,6 @@ export function handle() {};
  * handle.delete();
  * printf("Handle deleted successfully\n");
  */
-export function handle() {};
 
 /**
  * Creates a handle instance for monitoring file descriptor events.
@@ -385,7 +393,7 @@ export function handle() {};
  * Bitwise OR-ed flags of IO events (`ULOOP_READ`, `ULOOP_WRITE`) that the
  * callback should be invoked for.
  *
- * @returns {?module:uloop.handle}
+ * @returns {?UloopHandle}
  * Returns a handle instance for monitoring file descriptor events.
  * Returns `null` when the handle, callback or signal arguments are invalid.
  *
@@ -420,7 +428,6 @@ export function handle(handle, callback, events) {};
  *
  * printf("Process ID: %d\n", proc.pid());
  */
-export function process() {};
 
 /**
  * Unregisters the process from uloop.
@@ -439,7 +446,6 @@ export function process() {};
  *
  * proc.delete();
  */
-export function process() {};
 
 /**
  * Creates a process instance for executing external programs.
@@ -464,7 +470,7 @@ export function process() {};
  * @param {Function} callback
  * The callback function to be invoked when the invoked process ends.
  *
- * @returns {?module:uloop.process}
+ * @returns {?UloopProcess}
  * Returns a process instance for executing external programs.
  * Returns `null` on error, e.g. due to `exec()` failure or invalid arguments.
  *
@@ -503,7 +509,6 @@ export function process(executable, args, env, callback) {};
  * else
  *     die(`Error sending message: ${uloop.error()}\n`);
  */
-export function pipe(msg) {};
 
 /**
  * Reads input from the task handle.
@@ -529,7 +534,6 @@ export function pipe(msg) {};
  * else
  *     die(`Error receiving message: ${uloop.error()}\n`);
  */
-export function pipe() {};
 
 /**
  * Checks if the task handle provides input.
@@ -552,7 +556,6 @@ export function pipe() {};
  * else
  *     printf("No input callback on the task handle\n");
  */
-export function pipe() {};
 
 /**
  * Checks if the task handle reads output.
@@ -575,7 +578,6 @@ export function pipe() {};
  * else
  *     printf("No output callback on the task handle\n");
  */
-export function pipe() {};
 
 /**
  * Returns the process ID.
@@ -593,7 +595,6 @@ export function pipe() {};
  *
  * printf("Process ID: %d\n", task.pid());
  */
-export function task() {};
 
 /**
  * Terminates the task process.
@@ -618,7 +619,6 @@ export function task() {};
  * else
  *     die(`Error terminating task process: ${uloop.error()}\n`);
  */
-export function task() {};
 
 /**
  * Checks if the task ran to completion.
@@ -642,7 +642,6 @@ export function task() {};
  * else
  *     printf("Task function is still running\n");
  */
-export function task() {};
 
 /**
  * Creates a task instance for executing background tasks.
@@ -667,7 +666,7 @@ export function task() {};
  * by the task. It is invoked with a function to send input to the task
  * as the argument.
  *
- * @returns {?module:uloop.task}
+ * @returns {?UloopTask}
  * Returns a task instance for executing background tasks.
  * Returns `null` on error, e.g. due to fork failure or invalid arguments.
  *
@@ -727,7 +726,6 @@ export function task(taskFunction, outputCallback, inputCallback) {};
  * else
  *     printf("Error occurred while disabling interval: ${uloop.error()}\n");
  */
-export function interval(interval) {};
 
 /**
  * Returns the milliseconds until the next expiration.
@@ -751,7 +749,6 @@ export function interval(interval) {};
  * else
  *     printf("Interval is not armed\n");
  */
-export function interval() {};
 
 /**
  * Returns number of times the interval timer fired.
@@ -769,7 +766,6 @@ export function interval() {};
  * const expirations = interval.expirations();
  * printf("Number of expirations: %d\n", expirations);
  */
-export function interval() {};
 
 /**
  * Cancels the uloop interval.
@@ -786,7 +782,6 @@ export function interval() {};
  * // Cancel the uloop interval
  * interval.cancel();
  */
-export function interval() {};
 
 /**
  * Creates an interval instance for scheduling repeated callbacks.
@@ -806,7 +801,7 @@ export function interval() {};
  * @param {Function} callback
  * The callback function to be executed when the interval expires.
  *
- * @returns {?module:uloop.interval}
+ * @returns {?UloopInterval}
  * Returns an interval instance for scheduling repeated callbacks.
  * Returns `null` when the timeout or callback arguments are invalid.
  *
@@ -837,7 +832,6 @@ export function interval(timeout, callback) {};
  * const sighandler = uloop.signal("SIGINT", () => printf("Cought INT\n"));
  * printf("Signal number: %d\n", sighandler.signo());
  */
-export function signal() {};
 
 /**
  * Uninstalls the signal handler.
@@ -855,7 +849,6 @@ export function signal() {};
  * const sighandler = uloop.signal(…);
  * sighandler.delete();
  */
-export function signal() {};
 
 /**
  * Creates a signal instance for handling Unix signals.
@@ -873,7 +866,7 @@ export function signal() {};
  * @param {Function} callback
  * The callback function to be invoked when the specified Unix signal is caught.
  *
- * @returns {?module:uloop.signal}
+ * @returns {?UloopSignal}
  * Returns a signal instance representing the installed signal handler.
  * Returns `null` when the signal or callback arguments are invalid.
  *

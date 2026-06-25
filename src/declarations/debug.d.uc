@@ -41,6 +41,38 @@
  */
 
 /**
+ * Entry in the call stack returned by {@link module:debug#traceback|traceback()}.
+ *
+ * @typedef {{ sourcefile: string, line: int, offset: int, funcname: ?string }} StackTraceEntry
+ */
+
+/**
+ * Source code position returned by {@link module:debug#sourcepos|sourcepos()}.
+ *
+ * @typedef {{ filename: string, line: int, offset: int }} SourcePosition
+ */
+
+/**
+ * Internal value information returned by {@link module:debug#getinfo|getinfo()}.
+ *
+ * @typedef {{ type: string, refcount: int, mark: boolean }} ValueInformation
+ */
+
+/**
+ * Local variable information returned by {@link module:debug#getlocal|getlocal()}
+ * and {@link module:debug#setlocal|setlocal()}.
+ *
+ * @typedef {{ name: string, value: * }} LocalInfo
+ */
+
+/**
+ * Upvalue (captured variable) information returned by {@link module:debug#getupval|getupval()}
+ * and {@link module:debug#setupval|setupval()}.
+ *
+ * @typedef {{ name: string, value: * }} UpvalInfo
+ */
+
+/**
  * Write a memory dump report to the given file.
  *
  * This function generates a human readable memory dump of ucode values
@@ -57,7 +89,7 @@
  *
  * @function module:debug#memdump
  *
- * @param {string|module:fs.file|module:fs.proc} file
+ * @param {string|FsFile|FsProc} file
  * The file path or open file handle to write report to.
  *
  * @return {?boolean}
@@ -80,7 +112,7 @@ export function memdump(file) {};
  * The number of callframes up the call trace should start, `0` is this function
  * itself, `1` the function calling it and so on.
  *
- * @return {module:debug.StackTraceEntry[]}
+ * @return {StackTraceEntry[]}
  */
 export function traceback(level) {};
 
@@ -97,7 +129,7 @@ export function traceback(level) {};
  *
  * @function module:debug#sourcepos
  *
- * @return {?module:debug.SourcePosition}
+ * @return {?SourcePosition}
  */
 export function sourcepos() {};
 
@@ -117,7 +149,7 @@ export function sourcepos() {};
  * @param {*} value
  * The value to query information for.
  *
- * @return {?module:debug.ValueInformation}
+ * @return {?ValueInformation}
  */
 export function getinfo(value) {};
 
@@ -151,7 +183,7 @@ export function getinfo(value) {};
  * @param {string|int} variable
  * The variable index or variable name to obtain information for.
  *
- * @returns {?module:debug.LocalInfo}
+ * @returns {?LocalInfo}
  */
 export function getlocal(level, variable) {};
 
@@ -188,7 +220,7 @@ export function getlocal(level, variable) {};
  * @param {*} [value=null]
  * The value to set the local variable to.
  *
- * @returns {?module:debug.LocalInfo}
+ * @returns {?LocalInfo}
  */
 export function setlocal(level, variable, value) {};
 
@@ -227,7 +259,7 @@ export function setlocal(level, variable, value) {};
  * @param {string|int} variable
  * The variable index or variable name to obtain information for.
  *
- * @returns {?module:debug.UpvalInfo}
+ * @returns {?UpvalInfo}
  */
 export function getupval(target, variable) {};
 
@@ -269,7 +301,7 @@ export function getupval(target, variable) {};
  * @param {*} value
  * The value to set the variable to.
  *
- * @returns {?module:debug.UpvalInfo}
+ * @returns {?UpvalInfo}
  */
 export function setupval(target, variable, value) {};
 

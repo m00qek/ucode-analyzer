@@ -7,6 +7,20 @@
  */
 
 /**
+ * Streaming deflate (compression) handle returned by
+ * {@link module:zlib#deflater|deflater()}.
+ *
+ * @typedef {{ write: function(string, ?int): ?boolean, read: function(): ?string, error: function(): ?string }} ZlibDeflate
+ */
+
+/**
+ * Streaming inflate (decompression) handle returned by
+ * {@link module:zlib#inflater|inflater()}.
+ *
+ * @typedef {{ write: function(string, ?int): ?boolean, read: function(): ?string }} ZlibInflate
+ */
+
+/**
  * Compresses data in Zlib or gzip format.
  *
  * If the input argument is a plain string, it is directly compressed.
@@ -28,7 +42,7 @@
  * @param {?boolean} [gzip=false]
  * Add a gzip header if true (creates a gzip-compliant output, otherwise defaults to Zlib)
  *
- * @param {\1int\2} [level=Z_DEFAULT_COMPRESSION]
+ * @param {int} [level=Z_DEFAULT_COMPRESSION]
  * The compression level (0-9).
  *
  * @returns {?string}
@@ -77,10 +91,10 @@ export function inflate(str_or_resource) {};
  * @param {?boolean} [gzip=false]
  * Add a gzip header if true (creates a gzip-compliant output, otherwise defaults to Zlib)
  *
- * @param {\1int\2} [level=Z_DEFAULT_COMPRESSION]
+ * @param {int} [level=Z_DEFAULT_COMPRESSION]
  * The compression level (0-9).
  *
- * @returns {?module:zlib.deflate}
+ * @returns {?ZlibDeflate}
  *
  * @example
  * // initialize a Zlib deflate stream using default compression
@@ -112,12 +126,11 @@ export function deflater(gzip, level) {};
  * @param {string} src
  * The string of data to deflate.
  *
- * @param {\1int\2} [flush=Z_NO_FLUSH]
+ * @param {int} [flush=Z_NO_FLUSH]
  * The zlib flush mode.
  *
  * @returns {?boolean}
  */
-export function deflate(src, flush) {};
 
 /**
  * Reads a chunk of compressed data from the deflate stream.
@@ -133,7 +146,6 @@ export function deflate(src, flush) {};
  *
  * @returns {?string}
  */
-export function deflate() {};
 
 /**
  * Initializes an inflate stream. Can process either Zlib or gzip data.
@@ -144,7 +156,7 @@ export function deflate() {};
  *
  * @function module:zlib#inflater
  *
- * @returns {?module:zlib.inflate}
+ * @returns {?ZlibInflate}
  *
  * @example
  * // initialize an inflate stream
@@ -172,12 +184,11 @@ export function inflater() {};
  * @param {string} src
  * The string of data to inflate.
  *
- * @param {\1int\2} [flush=Z_NO_FLUSH]
+ * @param {int} [flush=Z_NO_FLUSH]
  * The zlib flush mode.
  *
  * @returns {?boolean}
  */
-export function inflate(src, flush) {};
 
 /**
  * Reads a chunk of decompressed data from the inflate stream.
@@ -193,7 +204,6 @@ export function inflate(src, flush) {};
  *
  * @returns {?string}
  */
-export function inflate() {};
 
 /**
  * Queries error information.
@@ -206,5 +216,4 @@ export function inflate() {};
  *
  * @returns {?string}
  */
-export function deflate() {};
 

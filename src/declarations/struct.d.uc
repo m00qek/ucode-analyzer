@@ -319,6 +319,29 @@
  */
 
 /**
+ * Precompiled struct format instance returned by {@link module:struct#new|new()}.
+ *
+ * @typedef {{ pack: function(*): string, unpack: function(string, ?int): *[] }} StructInstance
+ */
+
+/**
+ * Incremental struct buffer returned by {@link module:struct#buffer|buffer()}.
+ *
+ * @typedef {{
+ *   pos: function(?int): *,
+ *   length: function(?int): *,
+ *   start: function(): StructBuffer,
+ *   end: function(): StructBuffer,
+ *   put: function(string, *): StructBuffer,
+ *   get: function(string | int): *,
+ *   read: function(string): *[],
+ *   slice: function(?int, ?int): string,
+ *   set: function(*, ?int, ?int): StructBuffer,
+ *   pull: function(): string
+ * }} StructBuffer
+ */
+
+/**
  * Pack given values according to specified format.
  *
  * The `pack()` function creates a byte string containing the argument values
@@ -398,7 +421,7 @@ export function unpack(format, input, offset) {};
  * @param {string} format
  * The format string.
  *
- * @returns {module:struct.instance}
+ * @returns {StructInstance}
  *
  * @example
  * // Create a format of three consecutive unsigned int values in network byte order.
@@ -430,7 +453,6 @@ export function new(format) {};
  * const fmt = struct.new(…);
  * const data = fmt.pack(…);
  */
-export function instance(values) {};
 
 /**
  * Unpack given byte string.
@@ -460,7 +482,6 @@ export function instance(values) {};
  * const fmt = struct.new(…);
  * const values = fmt.unpack(…);
  */
-export function instance(input, offset) {};
 
 /**
  * Creates a new struct buffer instance.
@@ -483,7 +504,7 @@ export function instance(input, offset) {};
  * @param {string} [initialData]
  * Optional initial data to populate the buffer with.
  *
- * @returns {module:struct.buffer}
+ * @returns {StructBuffer}
  *
  * @example
  * // Create an empty buffer
@@ -514,7 +535,7 @@ export function buffer(initialData) {};
  * @param {int} [position]
  * The position to set. If omitted, the current position is returned.
  *
- * @returns {int|module:struct.buffer}
+ * @returns {int|StructBuffer}
  * If called without arguments, returns the current position.
  * If called with a position argument, returns the buffer instance for chaining.
  *
@@ -522,7 +543,6 @@ export function buffer(initialData) {};
  * const currentPos = buf.pos();
  * buf.pos(10);  // Set position to 10
  */
-export function buffer(position) {};
 
 /**
  * Get or set the current buffer length.
@@ -542,7 +562,7 @@ export function buffer(position) {};
  * @param {int} [length]
  * The length to set. If omitted, the current length is returned.
  *
- * @returns {int|module:struct.buffer}
+ * @returns {int|StructBuffer}
  * If called without arguments, returns the current length.
  * If called with a length argument, returns the buffer instance for chaining.
  *
@@ -556,33 +576,30 @@ export function buffer(position) {};
  * buf.length(2);                    // Truncate to 2 bytes
  * buf.slice();                      // Truncated data: "ab"
  */
-export function buffer(length) {};
 
 /**
  * Set the buffer position to the start (0).
  *
  * @function module:struct.buffer#start
  *
- * @returns {module:struct.buffer}
+ * @returns {StructBuffer}
  * The buffer instance.
  *
  * @example
  * buf.start();
  */
-export function buffer() {};
 
 /**
  * Set the buffer position to the end.
  *
  * @function module:struct.buffer#end
  *
- * @returns {module:struct.buffer}
+ * @returns {StructBuffer}
  * The buffer instance.
  *
  * @example
  * buf.end();
  */
-export function buffer() {};
 
 /**
  * Pack data into the buffer at the current position.
@@ -603,7 +620,7 @@ export function buffer() {};
  * @param {...*} values
  * The values to pack into the buffer.
  *
- * @returns {module:struct.buffer}
+ * @returns {StructBuffer}
  * The buffer instance.
  *
  * @see {@link module:struct#pack|struct.pack()}
@@ -611,7 +628,6 @@ export function buffer() {};
  * @example
  * buf.put('II', 1234, 5678);
  */
-export function buffer(format, values) {};
 
 /**
  * Unpack a single value from the buffer at the current position.
@@ -643,7 +659,6 @@ export function buffer(format, values) {};
  * const str = buf.get(5);    // equivalent to buf.get('5s')
  * const str = buf.get(-3);   // equivalent to buf.pos(buf.pos() - 3).get('3s')
  */
-export function buffer(format) {};
 
 /**
  * Unpack multiple values from the buffer at the current position.
@@ -668,7 +683,6 @@ export function buffer(format) {};
  * @example
  * const values = buf.get('II');
  */
-export function buffer(format) {};
 
 /**
  * Extract a slice of the buffer content.
@@ -694,7 +708,6 @@ export function buffer(format) {};
  * @example
  * const slice = buf.slice(4, 8);
  */
-export function buffer(start, end) {};
 
 /**
  * Set a slice of the buffer content to given byte value.
@@ -722,7 +735,7 @@ export function buffer(start, end) {};
  * @param {int} [end=buffer.length()]
  * The position to end overwriting (exclusive).
  *
- * @returns {module:struct.buffer}
+ * @returns {StructBuffer}
  * The buffer instance.
  *
  * @example
@@ -730,7 +743,6 @@ export function buffer(start, end) {};
  * buf.set("X", 2, 4).slice();  // Buffer content is now "abXXe"
  * buf.set().slice();           // Buffer content is now "\x00\x00\x00\x00\x00"
  */
-export function buffer(value, start, end) {};
 
 /**
  * Extract and remove all content from the buffer.
@@ -746,5 +758,4 @@ export function buffer(value, start, end) {};
  * @example
  * const allData = buf.pull();
  */
-export function buffer() {};
 

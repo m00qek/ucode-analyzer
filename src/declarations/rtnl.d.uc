@@ -41,6 +41,12 @@
  */
 
 /**
+ * Netlink listener handle returned by {@link module:rtnl#listener|listener()}.
+ *
+ * @typedef {{ set_commands: function(string[]): boolean, close: function(): boolean }} RtnlListener
+ */
+
+/**
  * Query error information.
  *
  * Returns a string containing a description of the last occurred error or
@@ -90,7 +96,7 @@ export function request(cmd, flags, payload) {};
  * @param {Array<string>} [commands] - Array of netlink commands to listen for (optional)
  * @param {Array<int>} [groups] - Array of multicast groups to join (optional)
  *
- * @returns {module:rtnl.listener} - A listener object with methods to control the listener
+ * @returns {?RtnlListener}
  *
  * @example
  * // Create a listener for route changes
@@ -115,7 +121,6 @@ export function listener(callback, commands, groups) {};
  * // Update listener to only receive route messages
  * listener.set_commands([RTM_NEWROUTE, RTM_DELROUTE]);
  */
-export function listener(commands) {};
 
 /**
  * Close a netlink listener.
@@ -130,5 +135,4 @@ export function listener(commands) {};
  * // Close the listener
  * listener.close();
  */
-export function listener() {};
 

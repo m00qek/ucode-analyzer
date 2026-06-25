@@ -143,6 +143,90 @@
  */
 
 /**
+ * Connection handle returned by {@link module:ubus#connect|connect()}.
+ *
+ * @typedef {{
+ *   list: function(?string): ?object,
+ *   call: function(string, string, ?object, ?int, ?int, ?function): ?object,
+ *   defer: function(string, string, ?object, function, ?function, ?int, ?function): ?UbusDeferred,
+ *   publish: function(string, object, ?function): ?UbusObject,
+ *   listener: function(string, function): ?UbusListener,
+ *   event: function(string, ?object): ?boolean,
+ *   subscriber: function(function, ?function, ?string[]): ?UbusSubscriber,
+ *   disconnect: function(): boolean
+ * }} UbusConnection
+ */
+
+/**
+ * Channel handle returned by {@link module:ubus#open_channel|open_channel()}.
+ *
+ * @typedef {{
+ *   request: function(string, ?object, ?int, ?int, ?function): ?object,
+ *   defer: function(string, ?object, function, ?function, ?int, ?function): ?UbusDeferred
+ * }} UbusChannel
+ */
+
+/**
+ * Pending request handle available in ubus method callbacks.
+ *
+ * @typedef {{
+ *   reply: function(*): ?boolean,
+ *   defer: function(): void,
+ *   get_fd: function(): ?int,
+ *   set_fd: function(int): ?boolean,
+ *   error: function(int): void,
+ *   new_channel: function(function, ?function, ?int): ?UbusChannel
+ * }} UbusRequest
+ */
+
+/**
+ * Notification handle returned by {@link module:ubus.object#notify|notify()}.
+ *
+ * @typedef {{
+ *   completed: function(): boolean,
+ *   abort: function(): boolean
+ * }} UbusNotify
+ */
+
+/**
+ * Published object handle returned by {@link module:ubus.connection#publish|publish()}.
+ *
+ * @typedef {{
+ *   notify: function(string, ?object, ?function, ?function, ?function, ?int): ?UbusNotify,
+ *   remove: function(): void,
+ *   subscribed: function(): boolean
+ * }} UbusObject
+ */
+
+/**
+ * Event listener handle returned by {@link module:ubus.connection#listener|listener()}.
+ *
+ * @typedef {{
+ *   remove: function(): void
+ * }} UbusListener
+ */
+
+/**
+ * Subscriber handle returned by {@link module:ubus.connection#subscriber|subscriber()}.
+ *
+ * @typedef {{
+ *   subscribe: function(string): boolean,
+ *   unsubscribe: function(string): boolean,
+ *   remove: function(): void
+ * }} UbusSubscriber
+ */
+
+/**
+ * Deferred request handle returned by async ubus call methods.
+ *
+ * @typedef {{
+ *   completed: function(): boolean,
+ *   await: function(): boolean,
+ *   abort: function(): boolean
+ * }} UbusDeferred
+ */
+
+/**
  * Query ubus error information.
  *
  * Returns a string containing a description of the last ubus error when
@@ -181,7 +265,7 @@ export function error(numeric) {};
  * @param {int} [timeout=30]
  * The timeout in seconds to use for subsequent ubus operations.
  *
- * @returns {?module:ubus.connection}
+ * @returns {?UbusConnection}
  */
 export function connect(socket, timeout) {};
 
@@ -204,7 +288,6 @@ export function connect(socket, timeout) {};
  *
  * @returns {?string[]}
  */
-export function connection(object_name) {};
 
 /**
  * Invoke a ubus method synchronously.
@@ -240,7 +323,6 @@ export function connection(object_name) {};
  *
  * @returns {?*}
  */
-export function connection(object, method, data, return, fd, fd_cb) {};
 
 /**
  * Send a request on a channel connection.
@@ -274,7 +356,6 @@ export function connection(object, method, data, return, fd, fd_cb) {};
  * const chan = open_channel(…);
  * const result = chan.request("method_name", { arg: "value" });
  */
-export function channel(method, data, return, fd, fd_cb) {};
 
 /**
  * Invoke a ubus method asynchronously.
@@ -311,7 +392,7 @@ export function channel(method, data, return, fd, fd_cb) {};
  * @param {function} [fd_cb]
  * Optional callback function invoked when a file descriptor is received.
  *
- * @returns {?module:ubus.deferred}
+ * @returns {?UbusDeferred}
  *
  * @example
  * // Asynchronous call with callback - typical pattern for RPC handlers
@@ -333,7 +414,6 @@ export function channel(method, data, return, fd, fd_cb) {};
  *     });
  * }
  */
-export function connection(object, method, data, cb, data_cb, fd, fd_cb) {};
 
 /**
  * Send an asynchronous request on a channel connection.
@@ -364,7 +444,7 @@ export function connection(object, method, data, cb, data_cb, fd, fd_cb) {};
  * @param {function} [fd_cb]
  * Optional callback function invoked when a file descriptor is received.
  *
- * @returns {?module:ubus.deferred}
+ * @returns {?UbusDeferred}
  *
  * @example
  * const chan = open_channel(…);
@@ -373,7 +453,6 @@ export function connection(object, method, data, cb, data_cb, fd, fd_cb) {};
  *         printf("Status: %d\n", status);
  *     });
  */
-export function channel(method, data, cb, data_cb, fd, fd_cb) {};
 
 /**
  * Send a reply to a deferred ubus method call.
@@ -405,7 +484,6 @@ export function channel(method, data, cb, data_cb, fd, fd_cb) {};
  *     }
  * });
  */
-export function request(reply, rcode) {};
 
 /**
  * Defer completion of a ubus method call.
@@ -431,7 +509,6 @@ export function request(reply, rcode) {};
  *     }
  * });
  */
-export function request() {};
 
 /**
  * Get the caller's file descriptor from a ubus method call.
@@ -444,7 +521,6 @@ export function request() {};
  * @returns {int}
  * The file descriptor number, or -1 if none was provided.
  */
-export function request() {};
 
 /**
  * Set a file descriptor to send with a ubus method reply.
@@ -473,7 +549,6 @@ export function request() {};
  *     }
  * });
  */
-export function request(fd) {};
 
 /**
  * Finish a ubus method call with an error status.
@@ -504,7 +579,6 @@ export function request(fd) {};
  *     }
  * });
  */
-export function request(rcode) {};
 
 /**
  * Check if a notification request has completed.
@@ -523,7 +597,6 @@ export function request(rcode) {};
  *     printf("Notification sent\n");
  * }
  */
-export function notify() {};
 
 /**
  * Abort a pending notification request.
@@ -544,7 +617,6 @@ export function notify() {};
  *     n.abort();
  * }
  */
-export function notify() {};
 
 /**
  * Send a notification from a ubus object.
@@ -580,7 +652,7 @@ export function notify() {};
  * Optional timeout in milliseconds. If specified, the operation waits
  * synchronously for completion.
  *
- * @returns {?module:ubus.notify|?int}
+ * @returns {?UbusNotify|?int}
  *
  * @example
  * const obj = publish("my.service", {
@@ -592,7 +664,6 @@ export function notify() {};
  *     }
  * });
  */
-export function object(type, data, data_cb, status_cb, cb, timeout) {};
 
 /**
  * Remove a ubus object from the bus.
@@ -613,7 +684,6 @@ export function object(type, data, data_cb, status_cb, cb, timeout) {};
  * // … do work …
  * obj.remove();
  */
-export function object() {};
 
 /**
  * Check if a ubus object has subscribers.
@@ -636,7 +706,6 @@ export function object() {};
  *     }
  * });
  */
-export function object() {};
 
 /**
  * Publish a ubus object on the bus.
@@ -661,7 +730,7 @@ export function object() {};
  * @param {function} [subscribe_callback]
  * Optional callback invoked when a subscriber connects to the object.
  *
- * @returns {?module:ubus.object}
+ * @returns {?UbusObject}
  *
  * @example
  * const conn = connect();
@@ -674,7 +743,6 @@ export function object() {};
  *     }
  * });
  */
-export function connection(object_name, methods, subscribe_callback) {};
 
 /**
  * Remove an event listener from the bus.
@@ -696,7 +764,6 @@ export function connection(object_name, methods, subscribe_callback) {};
  * // … later …
  * listener.remove();
  */
-export function listener() {};
 
 /**
  * Register an event listener.
@@ -719,7 +786,7 @@ export function listener() {};
  * Callback invoked when a matching event is received. Receives the event
  * type string and event data object as arguments.
  *
- * @returns {?module:ubus.listener}
+ * @returns {?UbusListener}
  *
  * @example
  * const conn = connect();
@@ -727,7 +794,6 @@ export function listener() {};
  *     printf("Event %s: %.J\n", type, data);
  * });
  */
-export function connection(pattern, cb) {};
 
 /**
  * Send a ubus event.
@@ -753,7 +819,6 @@ export function connection(pattern, cb) {};
  * const conn = connect();
  * conn.event("system.boot", { host: "router1", uptime: 3600 });
  */
-export function connection(event_type, event_data) {};
 
 /**
  * Subscribe to a ubus object.
@@ -779,7 +844,6 @@ export function connection(event_type, event_data) {};
  * // … later, to re-subscribe …
  * sub.subscribe("my.object");
  */
-export function subscriber(object_name) {};
 
 /**
  * Unsubscribe from a ubus object.
@@ -802,7 +866,6 @@ export function subscriber(object_name) {};
  * // … later, to unsubscribe temporarily …
  * sub.unsubscribe("my.object");
  */
-export function subscriber(object_name) {};
 
 /**
  * Remove a subscriber from the bus.
@@ -823,7 +886,6 @@ export function subscriber(object_name) {};
  * // … when done …
  * sub.remove();
  */
-export function subscriber() {};
 
 /**
  * Register a ubus subscriber.
@@ -848,7 +910,7 @@ export function subscriber() {};
  * @param {string[]} [subscription_patterns]
  * Optional array of glob patterns for automatic object subscription.
  *
- * @returns {?module:ubus.subscriber}
+ * @returns {?UbusSubscriber}
  *
  * @example
  * const conn = connect();
@@ -865,7 +927,6 @@ export function subscriber() {};
  * // Subscribe to a specific object
  * sub.subscribe("some.object");
  */
-export function connection(notify_callback, remove_callback, subscription_patterns) {};
 
 /**
  * Send a reply to an asynchronous method call.
@@ -903,7 +964,6 @@ export function connection(notify_callback, remove_callback, subscription_patter
  *     }
  * });
  */
-export function request(data) {};
 
 /**
  * Disconnect from the ubus bus.
@@ -922,7 +982,6 @@ export function request(data) {};
  * // … do work …
  * conn.disconnect();
  */
-export function connection() {};
 
 /**
  * Check if a deferred request has completed.
@@ -935,7 +994,6 @@ export function connection() {};
  *
  * @returns {boolean}
  */
-export function deferred() {};
 
 /**
  * Wait synchronously for a deferred request to complete.
@@ -950,7 +1008,6 @@ export function deferred() {};
  *
  * @returns {boolean}
  */
-export function deferred() {};
 
 /**
  * Abort a pending deferred request.
@@ -965,7 +1022,6 @@ export function deferred() {};
  *
  * @returns {boolean}
  */
-export function deferred() {};
 
 /**
  * Create a new ubus channel from a method call context.
@@ -989,9 +1045,8 @@ export function deferred() {};
  * @param {int} [timeout=30]
  * The timeout in seconds for subsequent operations.
  *
- * @returns {?module:ubus.channel}
+ * @returns {?UbusChannel}
  */
-export function request(cb, disconnect_cb, timeout) {};
 
 /**
  * Connect to a ubus channel from a file descriptor.
@@ -1022,7 +1077,7 @@ export function request(cb, disconnect_cb, timeout) {};
  * @param {int} [timeout=30]
  * The timeout in seconds for subsequent operations.
  *
- * @returns {?module:ubus.channel}
+ * @returns {?UbusChannel}
  */
 export function open_channel(fd, cb, disconnect_cb, timeout) {};
 

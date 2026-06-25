@@ -31,6 +31,73 @@
  */
 
 /**
+ * Process handle returned by {@link module:fs#popen|popen()}.
+ *
+ * @typedef {{
+ *   close: function(): ?int,
+ *   read: function(int | string): ?string,
+ *   write: function(*): ?int,
+ *   flush: function(): ?boolean,
+ *   fileno: function(): ?int
+ * }} FsProc
+ */
+
+/**
+ * File handle returned by {@link module:fs#open|open()},
+ * {@link module:fs#fdopen|fdopen()}, {@link module:fs#mkstemp|mkstemp()},
+ * and {@link module:fs#pipe|pipe()}.
+ *
+ * @typedef {{
+ *   close: function(): ?boolean,
+ *   read: function(int | string): ?string,
+ *   write: function(*): ?int,
+ *   seek: function(?int, ?int): ?boolean,
+ *   truncate: function(?int): ?boolean,
+ *   lock: function(?string): ?boolean,
+ *   tell: function(): ?int,
+ *   isatty: function(): ?boolean,
+ *   flush: function(): ?boolean,
+ *   fileno: function(): ?int,
+ *   ioctl: function(int, int, int, *): *
+ * }} FsFile
+ */
+
+/**
+ * Directory handle returned by {@link module:fs#opendir|opendir()}.
+ *
+ * @typedef {{
+ *   fileno: function(): ?int,
+ *   read: function(): ?string,
+ *   tell: function(): ?int,
+ *   seek: function(int): ?boolean,
+ *   close: function(): ?boolean
+ * }} FsDir
+ */
+
+/**
+ * File status information returned by {@link module:fs#stat|stat()} and
+ * {@link module:fs#lstat|lstat()}.
+ *
+ * @typedef {{
+ *   dev: int, ino: int, mode: int, nlink: int,
+ *   uid: int, gid: int, rdev: int, size: int,
+ *   blksize: int, blocks: int,
+ *   atime: int, mtime: int, ctime: int,
+ *   type: string
+ * }} FileStatResult
+ */
+
+/**
+ * Filesystem statistics returned by {@link module:fs#statvfs|statvfs()}.
+ *
+ * @typedef {{
+ *   bsize: int, frsize: int, blocks: int, bfree: int, bavail: int,
+ *   files: int, ffree: int, favail: int, fsid: int, flag: int, namemax: int,
+ *   freesize: int, totalsize: int, type: ?int
+ * }} StatVFSResult
+ */
+
+/**
  * Query error information.
  *
  * Returns a string containing a description of the last occurred error or
@@ -73,7 +140,6 @@ export function error() {};
  *
  * @returns {?int}
  */
-export function proc() {};
 
 /**
  * Reads a chunk of data from the program handle.
@@ -129,7 +195,6 @@ export function proc() {};
  * // Example 4: Read until encountering the character ':'
  * const field = fp.read(":");
  */
-export function proc(length) {};
 
 /**
  * Writes a chunk of data to the program handle.
@@ -162,7 +227,6 @@ export function proc(length) {};
  *
  * fp.write("Hello world!\n");
  */
-export function proc(data) {};
 
 /**
  * Forces a write of all buffered data to the underlying handle.
@@ -176,7 +240,6 @@ export function proc(data) {};
  * @returns {?boolean}
  *
  */
-export function proc() {};
 
 /**
  * Obtains the number of the handle's underlying file descriptor.
@@ -189,7 +252,6 @@ export function proc() {};
  *
  * @returns {?int}
  */
-export function proc() {};
 
 /**
  * Starts a process and returns a handle representing the executed process.
@@ -215,7 +277,7 @@ export function proc() {};
  * @param {string} [mode="r"]
  * The open mode of the process handle.
  *
- * @returns {?module:fs.proc}
+ * @returns {?FsProc}
  *
  * @example
  * // Open a process
@@ -237,7 +299,6 @@ export function popen(command, mode) {};
  *
  * @returns {?boolean}
  */
-export function file() {};
 
 /**
  * Reads a chunk of data from the file handle.
@@ -293,7 +354,6 @@ export function file() {};
  * // Example 4: Read until encountering the character ':'
  * const field = fp.read(":");
  */
-export function file(length) {};
 
 /**
  * Writes a chunk of data to the file handle.
@@ -326,7 +386,6 @@ export function file(length) {};
  *
  * fp.write("Hello world!\n");
  */
-export function file(data) {};
 
 /**
  * Set file read position.
@@ -367,7 +426,6 @@ export function file(data) {};
  * fp.seek(-10, 2);            // set position to ten bytes before EOF ...
  * print(fp.read(100), "\n");  // ... reads 10 bytes at most
  */
-export function file(offset, position) {};
 
 /**
  * Truncate file to a given size
@@ -383,7 +441,6 @@ export function file(offset, position) {};
  *
  * @returns {?boolean}
  */
-export function file(offset) {};
 
 /**
  * Locks or unlocks a file.
@@ -408,7 +465,6 @@ export function file(offset) {};
  *
  * @returns {?boolean}
  */
-export function file(op) {};
 
 /**
  * Obtain current read position.
@@ -423,7 +479,6 @@ export function file(op) {};
  *
  * @returns {?int}
  */
-export function file() {};
 
 /**
  * Check for TTY.
@@ -441,7 +496,6 @@ export function file() {};
  * @returns {?boolean}
  *
  */
-export function file() {};
 
 /**
  * Forces a write of all buffered data to the underlying handle.
@@ -455,7 +509,6 @@ export function file() {};
  * @returns {?boolean}
  *
  */
-export function file() {};
 
 /**
  * Obtains the number of the handle's underlying file descriptor.
@@ -468,7 +521,6 @@ export function file() {};
  *
  * @returns {?int}
  */
-export function file() {};
 
 /**
  * Performs an ioctl operation on the file.
@@ -510,7 +562,6 @@ export function file() {};
  *
  * @returns {?int|?string}
  */
-export function file(direction, type, num, value) {};
 
 /**
  * Opens a file.
@@ -552,7 +603,7 @@ export function file(direction, type, num, value) {};
  * @param {int} [perm=0o666]
  * The file creation permissions (for modes `w…` and `a…`)
  *
- * @returns {?module:fs.file}
+ * @returns {?FsFile}
  *
  * @example
  * // Open a file in read-only mode
@@ -634,7 +685,6 @@ export function dup2(oldfd, newfd) {};
  *
  * @returns {?int}
  */
-export function dir() {};
 
 /**
  * Read the next entry from the open directory.
@@ -649,7 +699,6 @@ export function dir() {};
  *
  * @returns {?string}
  */
-export function dir() {};
 
 /**
  * Obtain current read position.
@@ -667,7 +716,6 @@ export function dir() {};
  *
  * @returns {?int}
  */
-export function dir() {};
 
 /**
  * Set read position.
@@ -698,7 +746,6 @@ export function dir() {};
  *
  * print(handle.read(), "\n");  // prints the first entry again
  */
-export function dir(offset) {};
 
 /**
  * Closes the directory handle.
@@ -713,7 +760,6 @@ export function dir(offset) {};
  *
  * @returns {?boolean}
  */
-export function dir() {};
 
 /**
  * Opens a directory and returns a directory handle associated with the open
@@ -728,7 +774,7 @@ export function dir() {};
  * @param {string} path
  * The path to the directory.
  *
- * @returns {?module:fs.dir}
+ * @returns {?FsDir}
  *
  * @example
  * // Open a directory
@@ -768,7 +814,7 @@ export function readlink(path) {};
  * @param {string} path
  * The path to the file or directory.
  *
- * @returns {?module:fs.FileStatResult}
+ * @returns {?FileStatResult}
  *
  * @example
  * // Get information about a file
@@ -789,7 +835,7 @@ export function stat(path) {};
  * @param {string} path
  * The path to the file or directory.
  *
- * @returns {?module:fs.FileStatResult}
+ * @returns {?FileStatResult}
  *
  * @example
  * // Get information about a directory
@@ -816,7 +862,7 @@ export function lstat(path) {};
  * @param {string} path
  * The path to the directory or file with which to query the filesystem.
  *
- * @returns {?module:fs.StatVFSResult}
+ * @returns {?StatVFSResult}
  *
  * @example
  * // Get filesystem statistics for a path
@@ -1078,7 +1124,6 @@ export function glob(pattern) {};
  * // Get the directory name of a path
  * const directoryName = dirname('/path/to/file.txt');
  */
-export function dirname(path) {};
 
 /**
  * Retrieves the base name of a path.
@@ -1147,7 +1192,7 @@ export function lsdir(path) {};
  * @param {string} [template="/tmp/XXXXXX"]
  * The path template to use when forming the temporary file name.
  *
- * @returns {?module:fs.file}
+ * @returns {?FsFile}
  *
  * @example
  * // Create a unique temporary file in the current working directory
@@ -1339,7 +1384,7 @@ export function realpath(path) {};
  *
  * @function module:fs#pipe
  *
- * @returns {?module:fs.file[]}
+ * @returns {?FsFile[]}
  *
  * @example
  * // Create a pipe

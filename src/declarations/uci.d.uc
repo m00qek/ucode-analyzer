@@ -33,6 +33,31 @@
  */
 
 /**
+ * UCI cursor returned by {@link module:uci#cursor|cursor()}.
+ *
+ * @typedef {{
+ *   load: function(string): ?boolean,
+ *   unload: function(string): ?boolean,
+ *   get: function(string, ?string, ?string): ?(string|string[]),
+ *   get_all: function(?string, ?string): ?object,
+ *   get_first: function(string, string, ?string): ?(string|string[]),
+ *   add: function(string, string): ?string,
+ *   set: function(string, string, *, ?*): ?boolean,
+ *   delete: function(string, string, ?string): ?boolean,
+ *   list_append: function(string, string, string, *): ?boolean,
+ *   list_remove: function(string, string, string, *): ?boolean,
+ *   rename: function(string, string, string, string): ?boolean,
+ *   reorder: function(string, string, int): ?boolean,
+ *   save: function(?string): ?boolean,
+ *   commit: function(?string): ?boolean,
+ *   revert: function(?string): ?boolean,
+ *   changes: function(?string): ?object,
+ *   foreach: function(string, ?string, function): ?boolean,
+ *   configs: function(): ?string[]
+ * }} UciCursor
+ */
+
+/**
  * Query error information.
  *
  * Returns a string containing a description of the last occurred error or
@@ -92,7 +117,7 @@ export function error() {};
  * @param {module:uci.cursor.ParserFlags}
  * Parser flags to change.
  *
- * @returns {?module:uci.cursor}
+ * @returns {?UciCursor}
  */
 export function cursor(config_dir, delta_dir, config2_dir) {};
 
@@ -117,7 +142,6 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  *
  * @returns {?boolean}
  */
-export function cursor(config) {};
 
 /**
  * Explicitly unload configuration file.
@@ -139,7 +163,6 @@ export function cursor(config) {};
  *
  * @returns {?boolean}
  */
-export function cursor(config) {};
 
 /**
  * Query a single option value or section type.
@@ -182,7 +205,6 @@ export function cursor(config) {};
  * // Query a section type (should yield 'interface')
  * ctx.get('network', 'lan');
  */
-export function cursor(config, section, option) {};
 
 /**
  * Query a complete section or configuration.
@@ -211,7 +233,7 @@ export function cursor(config, section, option) {};
  * The name of the section to query within the configuration. If omitted a
  * nested dictionary containing all section values is returned.
  *
- * @returns {?(Object<string, module:uci.cursor.SectionObject>|module:uci.cursor.SectionObject)}
+ * @returns {?object}
  *
  * @example
  * const ctx = cursor(…);
@@ -222,7 +244,6 @@ export function cursor(config, section, option) {};
  * // Dump the entire dhcp configuration
  * ctx.get_all('dhcp');
  */
-export function cursor(config, section) {};
 
 /**
  * Query option value or name of first section of given type.
@@ -266,7 +287,6 @@ export function cursor(config, section) {};
  * // Figure out name of first network interface section (usually "loopback")
  * ctx.get_first('network', 'interface');
  */
-export function cursor(config, type, option) {};
 
 /**
  * Add anonymous section to given configuration.
@@ -311,7 +331,6 @@ export function cursor(config, type, option) {};
  * ctx.set('firewall', sid, 'target', 'ACCEPT');
  * …
  */
-export function cursor(config, type) {};
 
 /**
  * Set option value or add named section in given configuration.
@@ -367,7 +386,6 @@ export function cursor(config, type) {};
  * // Delete 'disabled' option in first wifi-iface section
  * ctx.set('wireless', '@wifi-iface[0]', 'disabled', '');
  */
-export function cursor(config, section, option_or_type, value) {};
 
 /**
  * Delete an option or section from given configuration.
@@ -413,7 +431,6 @@ export function cursor(config, section, option_or_type, value) {};
  * // Delete last firewall rule
  * ctx.delete('firewall', '@rule[-1]');
  */
-export function cursor(config, section, option) {};
 
 /**
  * Add an item to a list option in given configuration.
@@ -456,7 +473,6 @@ export function cursor(config, section, option) {};
  * // Add a port to the first redirect section
  * ctx.add_list('firewall', '@redirect[0]', 'src_dport', '8080');
  */
-export function cursor(config, section, option, value) {};
 
 /**
  * Remove an item from a list option in given configuration.
@@ -499,7 +515,6 @@ export function cursor(config, section, option, value) {};
  * // Remove a port from the first redirect section
  * ctx.delete_list('firewall', '@redirect[0]', 'src_dport', '8080');
  */
-export function cursor(config, section, option, value) {};
 
 /**
  * Rename an option or section in given configuration.
@@ -550,7 +565,6 @@ export function cursor(config, section, option, value) {};
  * // Rename 'wan' interface to 'external'
  * ctx.rename('network', 'wan', 'external');
  */
-export function cursor(config, section, option_or_name, name) {};
 
 /**
  * Reorder sections in given configuration.
@@ -617,7 +631,6 @@ export function cursor(config, section, option_or_name, name) {};
  * for (let sid in values)
  *   ctx.reorder('firewall', sid, position++);
  */
-export function cursor(config, section, index) {};
 
 /**
  * Save accumulated cursor changes to delta directory.
@@ -663,7 +676,6 @@ export function cursor(config, section, index) {};
  * @see {@link module:uci.cursor#commit|commit()}
  * @see {@link module:uci.cursor#revert|revert()}
  */
-export function cursor(config) {};
 
 /**
  * Update configuration files with accumulated cursor changes.
@@ -696,7 +708,6 @@ export function cursor(config) {};
  * ctx.set('system', '@system[0]', 'hostname', 'example.org');
  * ctx.commit('system');
  */
-export function cursor(config) {};
 
 /**
  * Revert accumulated cursor changes and associated delta records.
@@ -730,7 +741,6 @@ export function cursor(config) {};
  *
  * @see {@link module:uci.cursor#save|save()}
  */
-export function cursor(config) {};
 
 /**
  * Enumerate pending changes.
@@ -754,7 +764,7 @@ export function cursor(config) {};
  * The name of the configuration file to enumerate changes for, e.g. `"system"`
  * to query pending changes for the `/etc/config/system` file.
  *
- * @returns {?Object<string, module:uci.cursor.ChangeRecord[]>}
+ * @returns {?object}
  *
  * @example
  * const ctx = cursor(…);
@@ -765,7 +775,6 @@ export function cursor(config) {};
  * // Explicitly load and enumerate changes for the "system" configuration
  * const deltas = ctx.changes('system');
  */
-export function cursor(config) {};
 
 /**
  * Iterate configuration sections.
@@ -809,7 +818,6 @@ export function cursor(config) {};
  * ctx.foreach('network', 'interface',
  * 	   section => print(`Have interface ${section[".name"]}\n`));
  */
-export function cursor(config, type, callback) {};
 
 /**
  * Enumerate existing configurations.
@@ -831,5 +839,4 @@ export function cursor(config, type, callback) {};
  * // Enumerate all present configuration file names
  * const configurations = ctx.configs();
  */
-export function cursor() {};
 

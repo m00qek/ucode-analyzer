@@ -33,6 +33,31 @@
  */
 
 /**
+ * File descriptor handle returned by {@link module:io#new|new()},
+ * {@link module:io#open|open()}, {@link module:io#pipe|pipe()}, and
+ * {@link module:io#from|from()}.
+ *
+ * @typedef {{
+ *   ptsname: function(): ?string,
+ *   tcgetattr: function(): ?object,
+ *   tcsetattr: function(object, ?int): ?boolean,
+ *   grantpt: function(): ?boolean,
+ *   unlockpt: function(): ?boolean,
+ *   read: function(int): ?string,
+ *   write: function(*): ?int,
+ *   seek: function(?int, ?int): ?boolean,
+ *   tell: function(): ?int,
+ *   dup: function(): ?IoHandle,
+ *   dup2: function(int): ?boolean,
+ *   fileno: function(): ?int,
+ *   fcntl: function(int, ?int): *,
+ *   ioctl: function(int, int, int, *): *,
+ *   isatty: function(): ?boolean,
+ *   close: function(): ?boolean
+ * }} IoHandle
+ */
+
+/**
  * Query error information.
  *
  * Returns a string containing a description of the last occurred error or
@@ -71,7 +96,6 @@ export function error() {};
  * const slave_name = master.ptsname();
  * print(slave_name, "\n");
  */
-export function handle() {};
 
 /**
  * Gets terminal attributes.
@@ -93,7 +117,6 @@ export function handle() {};
  * if (attrs)
  *     print("Input flags: ", attrs.iflag, "\n");
  */
-export function handle() {};
 
 /**
  * Sets terminal attributes.
@@ -129,7 +152,6 @@ export function handle() {};
  * attrs.lflag &= ~0x0000008; // Disable ECHO
  * handle.tcsetattr(attrs, TCSANOW);
  */
-export function handle(attrs, when) {};
 
 /**
  * Grants access to a pseudo-terminal slave device.
@@ -154,7 +176,6 @@ export function handle(attrs, when) {};
  *     print("Granted access to slave device\n");
  * }
  */
-export function handle() {};
 
 /**
  * Unlocks a pseudo-terminal slave device.
@@ -178,7 +199,6 @@ export function handle() {};
  *     print("Unlocked slave device\n");
  * }
  */
-export function handle() {};
 
 /**
  * Reads data from the file descriptor.
@@ -202,7 +222,6 @@ export function handle() {};
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
  * const data = handle.read(1024);
  */
-export function handle(length) {};
 
 /**
  * Writes data to the file descriptor.
@@ -225,7 +244,6 @@ export function handle(length) {};
  * const handle = io.open('/tmp/test.txt', O_WRONLY | O_CREAT);
  * handle.write('Hello World\n');
  */
-export function handle(data) {};
 
 /**
  * Sets the file descriptor position.
@@ -256,7 +274,6 @@ export function handle(data) {};
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
  * handle.seek(100, 0);  // Seek to byte 100 from start
  */
-export function handle(offset, whence) {};
 
 /**
  * Gets the current file descriptor position.
@@ -273,7 +290,6 @@ export function handle(offset, whence) {};
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
  * const pos = handle.tell();
  */
-export function handle() {};
 
 /**
  * Duplicates the file descriptor.
@@ -286,13 +302,12 @@ export function handle() {};
  *
  * @function module:io.handle#dup
  *
- * @returns {?module:io.handle}
+ * @returns {?IoHandle}
  *
  * @example
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
  * const dup_handle = handle.dup();
  */
-export function handle() {};
 
 /**
  * Duplicates the file descriptor to a specific descriptor number.
@@ -315,7 +330,6 @@ export function handle() {};
  * const handle = io.open('/tmp/test.txt', O_WRONLY);
  * handle.dup2(2);  // Redirect stderr to the file
  */
-export function handle(newfd) {};
 
 /**
  * Gets the file descriptor number.
@@ -332,7 +346,6 @@ export function handle(newfd) {};
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
  * print(handle.fileno(), "\n");
  */
-export function handle() {};
 
 /**
  * Performs fcntl() operations on the file descriptor.
@@ -354,7 +367,7 @@ export function handle() {};
  * @param {int} [arg]
  * Optional argument for the command.
  *
- * @returns {?(int|module:io.handle)}
+ * @returns {?*}
  *
  * @example
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
@@ -362,7 +375,6 @@ export function handle() {};
  * handle.fcntl(F_SETFL, flags | O_NONBLOCK);
  * const dup_handle = handle.fcntl(F_DUPFD, 10);  // Returns io.handle
  */
-export function handle(cmd, arg) {};
 
 /**
  * Performs an ioctl operation on the file descriptor.
@@ -407,7 +419,6 @@ export function handle(cmd, arg) {};
  * const handle = io.open('/dev/tty', O_RDWR);
  * const size = handle.ioctl(IOC_DIR_READ, 0x54, 0x13, 8);  // TIOCGWINSZ
  */
-export function handle(direction, type, num, value) {};
 
 /**
  * Checks if the file descriptor refers to a terminal.
@@ -427,7 +438,6 @@ export function handle(direction, type, num, value) {};
  * if (handle.isatty())
  *     print("Running in a terminal\n");
  */
-export function handle() {};
 
 /**
  * Closes the file descriptor.
@@ -447,7 +457,6 @@ export function handle() {};
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
  * handle.close();
  */
-export function handle() {};
 
 /**
  * Creates an io.handle from a file descriptor number.
@@ -463,7 +472,7 @@ export function handle() {};
  * @param {int} fd
  * The file descriptor number.
  *
- * @returns {?module:io.handle}
+ * @returns {?IoHandle}
  *
  * @example
  * // Wrap stdin
@@ -493,7 +502,7 @@ export function new(fd) {};
  * @param {int} [mode=0o666]
  * The file creation mode (used with O_CREAT).
  *
- * @returns {?module:io.handle}
+ * @returns {?IoHandle}
  *
  * @example
  * const handle = io.open('/tmp/test.txt', O_RDWR | O_CREAT, 0o644);
@@ -517,7 +526,7 @@ export function open(path, flags, mode) {};
  *
  * @function module:io#pipe
  *
- * @returns {?Array<module:io.handle>}
+ * @returns {?IoHandle[]}
  *
  * @example
  * const [reader, writer] = io.pipe();
@@ -545,7 +554,7 @@ export function pipe() {};
  * @param {*} value
  * The value to convert.
  *
- * @returns {?module:io.handle}
+ * @returns {?IoHandle}
  *
  * @example
  * import { open as fsopen } from 'fs';
