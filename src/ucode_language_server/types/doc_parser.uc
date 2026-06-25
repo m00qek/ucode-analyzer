@@ -174,6 +174,7 @@ export function parseDoc(commentText) {
 		typedef: null,
 		deprecated: null,
 		since: null,
+		examples: [],
 	};
 
 	for (let i = 0; i < ts.namedChildCount(root); i++) {
@@ -237,6 +238,10 @@ export function parseDoc(commentText) {
 		} else if (ntype === 'since_tag') {
 			let descNode = ts.childByField(node, 'description');
 			result.since = descText(descNode, commentText);
+
+		} else if (ntype === 'example_tag') {
+			let descNode = ts.childByField(node, 'description');
+			if (descNode) push(result.examples, descText(descNode, commentText));
 		}
 	}
 

@@ -193,6 +193,32 @@ describe('parseDoc — type forms', () => {
 	});
 });
 
+describe('parseDoc — @example', () => {
+	it('captures a single @example block', () => {
+		let doc = parseDoc("/**\n * @example\n * let x = foo(1, 2);\n */");
+		assert.match(1, length(doc.examples));
+		assert.match('let x = foo(1, 2);', doc.examples[0]);
+	});
+
+	it('captures multiple @example blocks independently', () => {
+		let doc = parseDoc("/**\n * @example\n * foo(1);\n * @example\n * foo(2);\n */");
+		assert.match(2, length(doc.examples));
+		assert.match('foo(1);', doc.examples[0]);
+		assert.match('foo(2);', doc.examples[1]);
+	});
+
+	it('returns empty examples array when no @example tags', () => {
+		let doc = parseDoc("/** @param {string} x */");
+		assert.match(0, length(doc.examples));
+	});
+
+	it('captures multi-line example body', () => {
+		let doc = parseDoc("/**\n * @example\n * let a = 1;\n * let b = 2;\n */");
+		assert.match(1, length(doc.examples));
+		assert.match('let a = 1;\nlet b = 2;', doc.examples[0]);
+	});
+});
+
 describe('typeToString', () => {
 	it('primitive', () => { assert.match('string', typeToString(prim('string'))); });
 	it('any',       () => { assert.match('*',      typeToString({ kind: 'any' })); });

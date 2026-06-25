@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_language_server.documents';
-import { hover } from 'ucode_language_server.hover';
+import { hover } from 'ucode_language_server.handlers.hover';
 import { invalidateUri } from 'ucode_language_server.memo';
 
 let URI = 'file:///test.uc';
