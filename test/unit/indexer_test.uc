@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
-import { extractExports, extractImports, resolveModule } from 'ucode_language_server.indexer';
+import { extractExports, extractImports, resolveModule } from 'ucode_language_server.dag.indexer';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -70,6 +70,56 @@ describe('indexer.extractExports', () => {
 
 		assert.match(null, exps[0].doc);
 	});
+
+	it('extracts memberRef for member-expression re-export', () => {
+		let text = 'export const describe = dsl.describe;';
+		let exps = extractExports(text, parse(text));
+
+		assert.match(1, length(exps));
+		assert.match('describe', exps[0].name);
+		assert.match({ alias: 'dsl', member: 'describe' }, exps[0].memberRef);
+	});
+
+	it('memberRef is null for plain value exports', () => {
+		let text = 'export const X = 42;';
+		let exps = extractExports(text, parse(text));
+
+		assert.match(null, exps[0].memberRef);
+	});
+
+	it('stores position for an exported function', () => {
+		let text = 'export function foo(x) { return x; };';
+		let exps = extractExports(text, parse(text));
+
+		// 'foo' starts at col 16 (after 'export function ')
+		assert.match({ line: 0, character: 16 }, exps[0].position);
+	});
+
+	it('stores position for an exported const', () => {
+		let text = 'export const BAR = 42;';
+		let exps = extractExports(text, parse(text));
+
+		// 'BAR' starts at col 13 (after 'export const ')
+		assert.match({ line: 0, character: 13 }, exps[0].position);
+	});
+
+	it('stores position across multiple lines', () => {
+		let text = 'export function a() {};\nexport const b = 1;';
+		let exps = extractExports(text, parse(text));
+
+		assert.match({ line: 0, character: 16 }, exps[0].position);
+		assert.match({ line: 1, character: 13 }, exps[1].position);
+	});
+
+	it('stores position for export-clause exports', () => {
+		// function greet() {} export { greet };  — greet is at col 9
+		let text = 'function greet() {}\nexport { greet };';
+		let exps = extractExports(text, parse(text));
+
+		assert.match('greet', exps[0].name);
+		// local 'greet' starts at col 9 on line 0 (after 'function ')
+		assert.match({ line: 0, character: 9 }, exps[0].position);
+	});
 });
 
 describe('indexer.extractImports', () => {
@@ -130,5 +180,16 @@ describe('indexer.resolveModule', () => {
 	it('returns null for unknown module', () => {
 		let uri = resolveModule('nonexistent.module', ['/app/src'], '/app');
 		assert.match(null, uri);
+	});
+
+	it('resolves declaration file directly under lib path (no extra declarations/ prefix)', () => {
+		// When libPath itself is a declarations dir, .d.uc lives at absLib/<name>.d.uc
+		let uri = resolveModule('uci', ['/app/src/declarations'], '/app');
+		assert.match('file:///app/src/declarations/uci.d.uc', uri);
+	});
+
+	it('resolves dot-separated declaration file directly under lib path', () => {
+		let uri = resolveModule('uci', ['/app/src'], '/app');
+		assert.match('file:///app/src/declarations/uci.d.uc', uri);
 	});
 });
