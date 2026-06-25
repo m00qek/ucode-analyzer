@@ -1,6 +1,6 @@
 import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
-import * as dag from 'ucode_language_server.dag';
+import * as dag from 'ucode_language_server.dag.dag';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -150,5 +150,68 @@ describe('dag edges', () => {
 		let exps = dag.exportsOf(URI_B);
 		assert.match(1, length(exps));
 		assert.match('b_new_export', exps[0].name);
+	});
+});
+
+describe('dag resolveExport / resolveExportLocation', () => {
+	beforeEach(() => {
+		reset();
+		dag.addFromDisk(TS_URI);
+	});
+
+	it('resolveExport returns the entry for a direct export', () => {
+		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
+		let exp = dag.resolveExport(URI_B, 'foo');
+		assert.match(true, exp !== null);
+		assert.match('foo', exp.name);
+		assert.match('function', exp.kind);
+	});
+
+	it('resolveExport returns null for an unknown export name', () => {
+		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
+		assert.match(null, dag.resolveExport(URI_B, 'nope'));
+	});
+
+	it('resolveExport follows a memberRef chain to the original definition', () => {
+		// URI_A re-exports ts.parse as 'parse' — chain must follow to TS_URI.
+		let textA = "import * as ts from 'tree_sitter';\nexport const parse = ts.parse;";
+		dag.add(URI_A, textA, parse(textA));
+		let exp = dag.resolveExport(URI_A, 'parse');
+		assert.match(true, exp !== null);
+		assert.match('parse', exp.name);
+	});
+
+	it('resolveExportLocation returns { uri, name } for a direct export', () => {
+		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
+		let loc = dag.resolveExportLocation(URI_B, 'foo');
+		assert.match(URI_B, loc.uri);
+		assert.match('foo', loc.name);
+	});
+
+	it('resolveExportLocation follows chain and returns the final { uri, name }', () => {
+		let textA = "import * as ts from 'tree_sitter';\nexport const parse = ts.parse;";
+		dag.add(URI_A, textA, parse(textA));
+		let loc = dag.resolveExportLocation(URI_A, 'parse');
+		assert.match(TS_URI, loc.uri);
+		assert.match('parse', loc.name);
+	});
+
+	it('resolveExportLocation falls back to { uri, name } for an unknown export', () => {
+		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
+		let loc = dag.resolveExportLocation(URI_B, 'nope');
+		assert.match(URI_B, loc.uri);
+		assert.match('nope', loc.name);
+	});
+
+	it('resolveExport and resolveExportLocation agree on the chain destination', () => {
+		let textA = "import * as ts from 'tree_sitter';\nexport const parse = ts.parse;";
+		dag.add(URI_A, textA, parse(textA));
+		let exp = dag.resolveExport(URI_A, 'parse');
+		let loc = dag.resolveExportLocation(URI_A, 'parse');
+		// Both must land on the same export in TS_URI.
+		assert.match(TS_URI, loc.uri);
+		assert.match('parse', loc.name);
+		assert.match(true, exp !== null);
+		assert.match('parse', exp.name);
 	});
 });
