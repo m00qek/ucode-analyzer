@@ -1,3 +1,4 @@
+// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
 /**
  * # DNS Resolution Module
  *
