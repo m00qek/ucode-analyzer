@@ -285,6 +285,23 @@ export function resolveModule(specifier, libraryPaths, workspaceDir) {
 	return null;
 };
 
+// Return the parsed JSDoc for the first /** */ comment in the file, if it has
+// a description. This is the module-level doc (e.g. @module utest.assert).
+export function extractModuleDoc(text, tree) {
+	let root = ts.rootNode(tree);
+	let children = ts.namedChildren(root);
+	for (let i = 0; i < length(children); i++) {
+		let c = children[i];
+		if (ts.nodeType(c) !== 'comment') break;
+		let txt = ts.text(c, text);
+		if (substr(txt, 0, 3) !== '/**') break;
+		let doc = parseDoc(txt);
+		if (doc.description) return doc;
+		break;
+	}
+	return null;
+};
+
 // Walk every /** */ comment in the file and register any @typedef it contains.
 // Removes stale entries for this uri first so re-indexing stays consistent.
 export function extractTypedefs(uri, text, tree) {

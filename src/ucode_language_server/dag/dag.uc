@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as ts from 'tree_sitter';
-import { extractExports, extractImports, extractTypedefs, resolveModule } from 'ucode_language_server.dag.indexer';
+import { extractExports, extractImports, extractTypedefs, extractModuleDoc, resolveModule } from 'ucode_language_server.dag.indexer';
 import * as type_registry from 'ucode_language_server.types.registry';
 
 let _parser = ts.newParser(ts.ucode());
@@ -61,8 +61,9 @@ function addOutEdges(uri, imports) {
 function indexNode(uri, text, tree) {
 	let exps = extractExports(text, tree);
 	let imps = resolveAll(extractImports(text, tree));
+	let moduleDoc = extractModuleDoc(text, tree);
 	removeOutEdges(uri);
-	_nodes[uri] = { exports: exps, imports: imps };
+	_nodes[uri] = { exports: exps, imports: imps, moduleDoc };
 	addOutEdges(uri, imps);
 	extractTypedefs(uri, text, tree);
 }
@@ -125,6 +126,10 @@ export function exportsOf(uri) {
 
 export function importsOf(uri) {
 	return _nodes[uri] ? _nodes[uri].imports : null;
+};
+
+export function moduleDocOf(uri) {
+	return _nodes[uri] ? _nodes[uri].moduleDoc : null;
 };
 
 export function reverseDeps(uri) {

@@ -98,6 +98,13 @@ export function hover(doc, position) {
 
 	if (ts.nodeType(node) === 'identifier') {
 		let expDoc = importedDoc(doc.uri, label) ?? resolvedExportDoc(doc.uri, label);
+		if (!expDoc && type.kind === 'module') {
+			let modUri = dag.resolveSpecifier(type.path);
+			if (modUri) {
+				if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
+				expDoc = dag.moduleDocOf(modUri);
+			}
+		}
 		if (!expDoc && type.kind !== 'module') expDoc = builtinDoc(label);
 		if (expDoc) md = renderDoc(expDoc, md);
 	} else if (ts.nodeType(node) === 'property_identifier') {

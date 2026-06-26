@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
-import { extractExports, extractImports, resolveModule } from 'ucode_language_server.dag.indexer';
+import { extractExports, extractImports, extractModuleDoc, resolveModule } from 'ucode_language_server.dag.indexer';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -246,5 +246,29 @@ describe('indexer.resolveModule', () => {
 	it('resolves dot-separated declaration file directly under lib path', () => {
 		let uri = resolveModule('uci', ['/app/src'], '/app');
 		assert.match('file:///app/src/declarations/uci.d.uc', uri);
+	});
+});
+
+describe('indexer.extractModuleDoc', () => {
+	it('returns null when file has no leading doc comment', () => {
+		let text = 'export function foo() {}';
+		assert.match(null, extractModuleDoc(text, parse(text)));
+	});
+
+	it('returns null when leading comment has no description', () => {
+		let text = '/** @param {string} x */\nexport function foo(x) {}';
+		assert.match(null, extractModuleDoc(text, parse(text)));
+	});
+
+	it('returns the parsed doc for a leading /** */ with a description', () => {
+		let text = '/**\n * Module for doing things.\n * @module mymod\n */\nexport function foo() {}';
+		let doc = extractModuleDoc(text, parse(text));
+		assert.match(true, doc !== null);
+		assert.match('Module for doing things.', doc.description);
+	});
+
+	it('returns null when the first comment is a line comment', () => {
+		let text = '// not a jsdoc\nexport function foo() {}';
+		assert.match(null, extractModuleDoc(text, parse(text)));
 	});
 });
