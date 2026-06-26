@@ -179,9 +179,22 @@ function memberExprDef(uri, doc, memberExpr, propName, offset) {
 		}
 	}
 
-	// Scope-based: object has a typedef'd record type → find member in type registry
+	// Scope-based: infer the type of the object
 	let scope = buildScope(uri, doc.text, doc.tree, offset);
 	let objType = inferNode(objNode, doc.text, uri, scope, 0);
+
+	// Module type (e.g. named import whose value is a whole module)
+	if (objType && objType.kind === 'module') {
+		let modUri = dag.resolveSpecifier(objType.path);
+		if (modUri) {
+			if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
+			let loc = dag.resolveExportLocation(modUri, propName);
+			let exp = dag.resolveExport(loc.uri, loc.name);
+			if (exp) return resolveExportDefinition(loc.uri, loc.name);
+		}
+	}
+
+	// Record type: find member in type registry
 	return locationOfMember(objType, propName);
 }
 
