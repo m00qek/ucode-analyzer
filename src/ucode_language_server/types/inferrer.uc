@@ -373,6 +373,14 @@ function inferMember(node, source, uri, scope, depth) {
 		if (dagResult) return dagResult;
 	}
 	let objType = _infer(objNode, source, uri, scope, (depth ?? 0) + 1);
+	if (objType && objType.kind === 'module') {
+		let modUri = dag.resolveSpecifier(objType.path);
+		if (modUri) {
+			if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
+			let exp = dag.resolveExport(modUri, propName);
+			if (exp) return exportType(exp);
+		}
+	}
 	if (objType && objType.kind !== 'unknown')
 		return memberOfType(objType, propName);
 	return UNKNOWN;

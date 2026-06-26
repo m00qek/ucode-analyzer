@@ -1053,3 +1053,35 @@ describe('inferrer — importScope: object-literal export typed as record', () =
 		assert.match('function', scope.bindings['ns'].fields[0].type.kind);
 	});
 });
+
+describe('inferrer — member access on module-typed expression', () => {
+	let TS_URI = 'file:///app/src/tree_sitter.uc';
+
+	// Return the property_identifier node from `x.member;` expression text.
+	function moduleMemberNode(text) {
+		let tree  = parse(text);
+		let root  = ts.rootNode(tree);
+		let stmt  = ts.namedChild(root, 0);   // expression_statement
+		let mexpr = ts.namedChild(stmt, 0);   // member_expression
+		return ts.namedChild(mexpr, 1);
+	}
+
+	it('resolves member of a module-typed binding when module is pre-indexed', () => {
+		dag.addFromDisk(TS_URI);
+		let propNode = moduleMemberNode('x.parse;');
+		let scope = makeScope(null);
+		scopeSet(scope, 'x', { kind: 'module', path: 'tree_sitter' });
+		let type = inferNode(propNode, 'x.parse;', URI, scope, 0);
+		assert.match('function', type.kind);
+	});
+
+	it('lazy-indexes the module from disk when not yet in the DAG', () => {
+		// tree_sitter is NOT pre-indexed — the inferrer must call addFromDisk itself.
+		dag.remove(TS_URI);
+		let propNode = moduleMemberNode('x.parse;');
+		let scope = makeScope(null);
+		scopeSet(scope, 'x', { kind: 'module', path: 'tree_sitter' });
+		let type = inferNode(propNode, 'x.parse;', URI, scope, 0);
+		assert.match('function', type.kind);
+	});
+});
