@@ -118,6 +118,7 @@ export function extractExports(text, tree) {
 				if (!nameNode || ts.nodeType(nameNode) !== 'identifier') continue;
 				let init = ts.childByField(varDecl, 'value');
 				let memberRef = null;
+				let localRef  = null;
 				if (init && ts.nodeType(init) === 'member_expression') {
 					let obj  = ts.namedChild(init, 0);
 					let prop = ts.namedChild(init, 1);
@@ -125,8 +126,10 @@ export function extractExports(text, tree) {
 					    prop && (ts.nodeType(prop) === 'property_identifier' ||
 					             ts.nodeType(prop) === 'identifier'))
 						memberRef = { alias: ts.text(obj, text), member: ts.text(prop, text) };
+				} else if (init && ts.nodeType(init) === 'identifier') {
+					localRef = ts.text(init, text);
 				}
-				push(result, { name: ts.text(nameNode, text), kind, doc, memberRef,
+				push(result, { name: ts.text(nameNode, text), kind, doc, memberRef, localRef,
 				               position: pos(ts.startByte(nameNode)) });
 			}
 		} else if (declType === 'export_clause') {

@@ -181,6 +181,34 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		assert.match('parse', exp.name);
 	});
 
+	it('resolveExport follows a localRef chain (named import re-export with rename)', () => {
+		// URI_A imports tree_sitter.parse as _parse and re-exports it as 'parse'.
+		// resolveExport must follow the localRef chain through the named import alias.
+		let textA = "import { parse as _parse } from 'tree_sitter';\nexport const parse = _parse;";
+		dag.add(URI_A, textA, parse(textA));
+		let exp = dag.resolveExport(URI_A, 'parse');
+		assert.match(true, exp !== null);
+		assert.match('parse', exp.name);
+		assert.match('function', exp.kind);
+	});
+
+	it('resolveExportLocation follows localRef chain to the final { uri, name }', () => {
+		let textA = "import { parse as _parse } from 'tree_sitter';\nexport const parse = _parse;";
+		dag.add(URI_A, textA, parse(textA));
+		let loc = dag.resolveExportLocation(URI_A, 'parse');
+		assert.match(TS_URI, loc.uri);
+		assert.match('parse', loc.name);
+	});
+
+	it('resolveExport follows localRef without rename (import { X } then export const X = X)', () => {
+		// URI_A does: import { parse } from 'tree_sitter'; export const parse = parse;
+		let textA = "import { parse } from 'tree_sitter';\nexport const parse = parse;";
+		dag.add(URI_A, textA, parse(textA));
+		let exp = dag.resolveExport(URI_A, 'parse');
+		assert.match(true, exp !== null);
+		assert.match('function', exp.kind);
+	});
+
 	it('resolveExportLocation returns { uri, name } for a direct export', () => {
 		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
 		let loc = dag.resolveExportLocation(URI_B, 'foo');

@@ -152,11 +152,19 @@ function _resolveExportFull(uri, name) {
 	for (let i = 0; i < length(node.exports); i++) {
 		let exp = node.exports[i];
 		if (exp.name !== name) continue;
-		if (!exp.memberRef) return { exp, uri, name };
+		if (!exp.memberRef && !exp.localRef) return { exp, uri, name };
 		for (let j = 0; j < length(node.imports); j++) {
 			let imp = node.imports[j];
-			if (imp.alias !== exp.memberRef.alias || !imp.resolvedUri) continue;
-			return _resolveExportFull(imp.resolvedUri, exp.memberRef.member) ?? { exp, uri, name };
+			if (!imp.resolvedUri) continue;
+			if (exp.memberRef) {
+				if (imp.alias !== exp.memberRef.alias) continue;
+				return _resolveExportFull(imp.resolvedUri, exp.memberRef.member) ?? { exp, uri, name };
+			} else {
+				// localRef: export const X = importedAlias
+				if (imp.alias || index(imp.symbols, exp.localRef) < 0) continue;
+				let remoteName = (imp.renames && imp.renames[exp.localRef]) ?? exp.localRef;
+				return _resolveExportFull(imp.resolvedUri, remoteName) ?? { exp, uri, name };
+			}
 		}
 		return { exp, uri, name };
 	}
