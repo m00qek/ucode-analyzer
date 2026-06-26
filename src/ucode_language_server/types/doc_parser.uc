@@ -264,8 +264,8 @@ export function typeToString(type) {
 	if (k === 'union')
 		return join(' | ', map(type.members, typeToString));
 	if (k === 'record') {
-		let parts = map(type.fields, (f) => f.name + ': ' + typeToString(f.type));
-		return '{ ' + join(', ', parts) + ' }';
+		// Show field names only — field types are accessible by hovering each member.
+		return '{ ' + join(', ', map(type.fields, (f) => f.name)) + ' }';
 	}
 	if (k === 'function') {
 		let ps = map(type.params, (p) => (p.name ? p.name + ': ' : '') + typeToString(p.type));

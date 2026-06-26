@@ -135,7 +135,7 @@ function exportType(exp) {
 		if (!exp.doc) return UNKNOWN;
 		return {
 			kind: 'function',
-			params: map(exp.doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
+			params: map(filter(exp.doc.params, (p) => !match(p.name, /\./)), (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
 			return: (exp.doc.returns ? exp.doc.returns.type : null) ?? UNKNOWN,
 		};
 	}
