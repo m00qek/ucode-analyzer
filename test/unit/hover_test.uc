@@ -3,15 +3,20 @@ import * as documents from 'ucode_language_server.documents';
 import { hover } from 'ucode_language_server.handlers.hover';
 import { invalidateUri } from 'ucode_language_server.memo';
 import * as dag from 'ucode_language_server.dag.dag';
+import * as templates from 'ucode_language_server.templates';
 
 let URI = 'file:///test.uc';
 
 let _config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
+// Config with selfSrcDir so hover uses the built-in templates (not the fallback).
+let _full_config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] }, selfSrcDir: '/app/src' };
+
 dag.init(_config);
 
 afterEach(() => {
 	documents.close(URI);
 	invalidateUri(URI);
+	templates.resetCache();
 });
 
 describe('hover', () => {
@@ -88,5 +93,52 @@ describe('hover — property_identifier in member expression', () => {
 		assert.match(true, index(result.contents.value, 'parse') >= 0);
 		// JSDoc description is rendered (not just the type string)
 		assert.match(true, index(result.contents.value, 'Parse source text') >= 0);
+	});
+});
+
+describe('hover — via templates (selfSrcDir set)', () => {
+	let TS_URI = 'file:///app/src/tree_sitter.uc';
+
+	it('function hover renders Parameters section from function template', () => {
+		dag.addFromDisk(TS_URI);
+		let text = "import * as ts from 'tree_sitter';\nts.parse;";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		dag.add(URI, doc.text, doc.tree);
+
+		// line 1, character 3 → 'parse' property_identifier
+		let result = hover(doc, { line: 1, character: 3 }, _full_config);
+
+		assert.match('object', type(result));
+		assert.match(true, index(result.contents.value, 'parse') >= 0);
+		assert.match(true, index(result.contents.value, '**Parameters:**') >= 0);
+	});
+
+	it('module hover renders module specifier from module template', () => {
+		dag.addFromDisk(TS_URI);
+		let text = "import * as ts from 'tree_sitter';\nts;";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		dag.add(URI, doc.text, doc.tree);
+
+		// line 1, character 0 → 'ts' namespace alias
+		let result = hover(doc, { line: 1, character: 0 }, _full_config);
+
+		assert.match('object', type(result));
+		// module template uses "module 'specifier'" format
+		assert.match(true, index(result.contents.value, "module 'tree_sitter'") >= 0);
+	});
+
+	it('default hover renders code fence for primitive type', () => {
+		let text = "let x = 42;";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		dag.add(URI, doc.text, doc.tree);
+
+		let result = hover(doc, { line: 0, character: 4 }, _full_config);
+
+		assert.match('object', type(result));
+		assert.match(true, index(result.contents.value, 'x') >= 0);
+		assert.match(true, index(result.contents.value, 'int') >= 0);
 	});
 });

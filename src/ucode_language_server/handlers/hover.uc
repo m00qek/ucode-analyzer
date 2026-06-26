@@ -3,6 +3,7 @@ import { positionToOffset } from 'ucode_language_server.positions';
 import { inferNode, buildScope, stdlibUri } from 'ucode_language_server.types.inferrer';
 import { typeToString } from 'ucode_language_server.types.doc_parser';
 import * as dag from 'ucode_language_server.dag.dag';
+import * as templates from 'ucode_language_server.templates';
 
 function nodeAtOffset(node, offset) {
 	let count = ts.namedChildCount(node);
@@ -14,7 +15,6 @@ function nodeAtOffset(node, offset) {
 	return node;
 }
 
-// Find the parsed JSDoc for a builtin in stdlib.d.uc.
 function builtinDoc(name) {
 	let uri = stdlibUri();
 	if (!uri) return null;
@@ -26,7 +26,6 @@ function builtinDoc(name) {
 	return null;
 }
 
-// Find the parsed JSDoc for a named import resolved via the DAG.
 function importedDoc(uri, name) {
 	let imps = dag.importsOf(uri);
 	if (!imps) return null;
@@ -40,17 +39,11 @@ function importedDoc(uri, name) {
 	return null;
 }
 
-// Follow the full export chain for name in uri and return the original definition's doc.
-// Covers both direct exports (with their own doc) and re-exports (localRef/memberRef chains).
 function resolvedExportDoc(uri, name) {
 	let exp = dag.resolveExport(uri, name);
 	return (exp && exp.doc) ? exp.doc : null;
 }
 
-// Return the doc for a property_identifier node inside a member_expression.
-// Handles two cases:
-//   module type  — look up the member as a direct export of the module
-//   record type  — look up the doc stored in the record field
 function modulePropertyDoc(uri, propNode, source, scope) {
 	let parent = ts.parent(propNode);
 	if (!parent || ts.nodeType(parent) !== 'member_expression') return null;
@@ -71,14 +64,63 @@ function modulePropertyDoc(uri, propNode, source, scope) {
 	return null;
 }
 
-function renderDoc(expDoc, md) {
-	if (expDoc.description) md += '\n\n' + expDoc.description;
-	for (let i = 0; i < length(expDoc.examples); i++)
-		md += '\n\n**Example:**\n```ucode\n' + expDoc.examples[i] + '\n```';
-	return md;
+// Build the structured context object passed to hover templates.
+// Merges inferred type fields with JSDoc descriptions so templates
+// receive pre-resolved, ready-to-render data.
+function buildHoverCtx(label, type, doc) {
+	let ctx = {
+		label,
+		kind:    type.kind,
+		typeStr: typeToString(type),
+		doc:     doc ? { description: doc.description ?? null, examples: doc.examples ?? [] } : null,
+		typeToString,
+	};
+
+	if (type.kind === 'function') {
+		// Build a merged params list: inferred typeStr + JSDoc description.
+		// type.params is derived from doc.params so names align reliably.
+		let docParamMap = {};
+		for (let p in (doc?.params ?? []))
+			docParamMap[p.name] = p;
+		ctx.params = map(type.params ?? [], (p) => {
+			let dp = docParamMap[p.name];
+			return {
+				name: p.name,
+				typeStr: typeToString(p.type),
+				description: dp?.description ?? null,
+			};
+		});
+		ctx.returns = type.returns ? {
+			typeStr: typeToString(type.returns),
+			description: doc?.returns?.description ?? null,
+		} : null;
+	}
+
+	if (type.kind === 'record') {
+		ctx.fields = map(type.fields ?? [], (f) => ({
+			name: f.name,
+			typeStr: f.type ? typeToString(f.type) : null,
+			description: f.doc?.description ?? null,
+		}));
+	}
+
+	if (type.kind === 'module') {
+		let modUri = dag.resolveSpecifier(type.path);
+		let modDoc = null;
+		if (modUri) {
+			if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
+			modDoc = dag.moduleDocOf(modUri);
+		}
+		ctx.module = {
+			specifier: type.path,
+			description: modDoc?.description ?? null,
+		};
+	}
+
+	return ctx;
 }
 
-export function hover(doc, position) {
+export function hover(doc, position, config) {
 	let offset = positionToOffset(doc.text, doc.lineTable, position);
 	let root = ts.rootNode(doc.tree);
 	if (offset >= ts.endByte(root)) return null;
@@ -90,26 +132,31 @@ export function hover(doc, position) {
 	if (type.kind === 'unknown') return null;
 
 	let label = ts.text(node, doc.text);
-	let typeStr = typeToString(type);
-	let md = sprintf('```ucode\n%s: %s\n```', label, typeStr);
 
+	let expDoc = null;
 	if (ts.nodeType(node) === 'identifier') {
-		let expDoc = importedDoc(doc.uri, label) ?? resolvedExportDoc(doc.uri, label);
-		if (!expDoc && type.kind === 'module') {
-			let modUri = dag.resolveSpecifier(type.path);
-			if (modUri) {
-				if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
-				expDoc = dag.moduleDocOf(modUri);
-			}
-		}
+		expDoc = importedDoc(doc.uri, label) ?? resolvedExportDoc(doc.uri, label);
 		if (!expDoc && type.kind !== 'module') expDoc = builtinDoc(label);
-		if (expDoc) md = renderDoc(expDoc, md);
 	} else if (ts.nodeType(node) === 'property_identifier') {
-		let expDoc = modulePropertyDoc(doc.uri, node, doc.text, scope);
-		if (expDoc) md = renderDoc(expDoc, md);
+		expDoc = modulePropertyDoc(doc.uri, node, doc.text, scope);
 	}
 
-	return {
-		contents: { kind: 'markdown', value: md },
-	};
+	let ctx = buildHoverCtx(label, type, expDoc);
+
+	let templateName = 'hover/' + (
+		type.kind === 'function' ? 'function' :
+		type.kind === 'record'   ? 'record'   :
+		type.kind === 'module'   ? 'module'   :
+		                           'default'
+	);
+
+	let md = templates.renderTemplate(templateName, ctx, config ?? {});
+
+	if (md === null) {
+		// Fallback when no template file is found (misconfigured selfSrcDir).
+		md = sprintf('```ucode\n%s: %s\n```', label, ctx.typeStr);
+		if (expDoc?.description) md += '\n\n' + expDoc.description;
+	}
+
+	return { contents: { kind: 'markdown', value: md } };
 };

@@ -1,16 +1,16 @@
 import * as protocol from 'ucode_language_server.protocol';
 import * as documents from 'ucode_language_server.documents';
-import { hover as hoverDoc } from 'ucode_language_server.hover';
-import { definition as definitionDoc } from 'ucode_language_server.definition';
-import { completion as completionDoc } from 'ucode_language_server.completion';
+import { hover as hoverDoc } from 'ucode_language_server.handlers.hover';
+import { definition as definitionDoc } from 'ucode_language_server.handlers.definition';
+import { completion as completionDoc } from 'ucode_language_server.handlers.completion';
 import * as glob from 'ucode_language_server.glob';
-import * as dag from 'ucode_language_server.dag';
+import * as dag from 'ucode_language_server.dag.dag';
 import { invalidateUri } from 'ucode_language_server.memo';
-import { diagnosticsFor } from 'ucode_language_server.diagnostics';
-import { signatureHelp as signatureHelpDoc } from 'ucode_language_server.signature_help';
-import { references as referencesDoc } from 'ucode_language_server.references';
-import { documentSymbols as documentSymbolsDoc } from 'ucode_language_server.document_symbols';
-import { rename as renameDoc } from 'ucode_language_server.rename';
+import { diagnosticsFor } from 'ucode_language_server.handlers.diagnostics';
+import { signatureHelp as signatureHelpDoc } from 'ucode_language_server.handlers.signature_help';
+import { references as referencesDoc } from 'ucode_language_server.handlers.references';
+import { documentSymbols as documentSymbolsDoc } from 'ucode_language_server.handlers.document_symbols';
+import { rename as renameDoc } from 'ucode_language_server.handlers.rename';
 import { initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
 
 export function run(config) {
@@ -46,11 +46,19 @@ export function run(config) {
 					dag.addFromDisk('file://' + path);
 			}
 
-			let stdlibUri = dag.resolveSpecifier('stdlib');
-			if (!stdlibUri && config.selfSrcDir) {
-				stdlibUri = dag.resolveSpecifierIn([config.selfSrcDir], 'stdlib');
-				if (stdlibUri) dag.addFromDisk(stdlibUri);
+			if (config.selfSrcDir) {
+				let files = glob.scan(config.selfSrcDir + '/declarations', ['**/*.uc'], []);
+				for (let path in files)
+					dag.addFromDisk('file://' + path);
 			}
+
+			for (let sysPath in (config.systemLibPaths ?? [])) {
+				let files = glob.scan(sysPath, ['**/*.uc'], []);
+				for (let path in files)
+					dag.addFromDisk('file://' + path);
+			}
+
+			let stdlibUri = dag.resolveSpecifier('stdlib');
 			if (stdlibUri) initBuiltinsFromDag(stdlibUri);
 		},
 
@@ -93,7 +101,7 @@ export function run(config) {
 
 		'textDocument/hover': function(msg) {
 			let doc = documents.get(msg.params.textDocument.uri);
-			protocol.respond(msg.id, doc ? hoverDoc(doc, msg.params.position) : null);
+			protocol.respond(msg.id, doc ? hoverDoc(doc, msg.params.position, config) : null);
 		},
 
 		'textDocument/definition': function(msg) {
