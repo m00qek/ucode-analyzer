@@ -115,7 +115,7 @@ export function error() {};
  * set to a different path for special purpose applications, or even disabled
  * by setting this parameter to an empty string.
  *
- * @param {module:uci.cursor.ParserFlags}
+ * @param {int} [flags]
  * Parser flags to change.
  *
  * @returns {?UciCursor}
@@ -469,10 +469,10 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * const ctx = cursor(…);
  *
  * // Add '192.168.1.1' to the 'dns' list in the 'lan' interface
- * ctx.add_list('network', 'lan', 'dns', '192.168.1.1');
+ * ctx.list_append('network', 'lan', 'dns', '192.168.1.1');
  *
  * // Add a port to the first redirect section
- * ctx.add_list('firewall', '@redirect[0]', 'src_dport', '8080');
+ * ctx.list_append('firewall', '@redirect[0]', 'src_dport', '8080');
  */
 
 /**
@@ -511,10 +511,10 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * const ctx = cursor(…);
  *
  * // Remove '8.8.8.8' from the 'dns' list in the 'lan' interface
- * ctx.delete_list('network', 'lan', 'dns', '8.8.8.8');
+ * ctx.list_remove('network', 'lan', 'dns', '8.8.8.8');
  *
  * // Remove a port from the first redirect section
- * ctx.delete_list('firewall', '@redirect[0]', 'src_dport', '8080');
+ * ctx.list_remove('firewall', '@redirect[0]', 'src_dport', '8080');
  */
 
 /**
@@ -806,7 +806,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * @param {?string} type
  * Invoke the callback only for sections of the specified type.
  *
- * @param {module:uci.cursor.SectionCallback} callback
+ * @param {function} callback
  * The callback to invoke for each section, will receive a section dictionary
  * as sole argument.
  *

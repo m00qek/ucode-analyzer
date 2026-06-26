@@ -63,7 +63,7 @@
  * @typedef {{
  *   get: function(*): ?string,
  *   set: function(*, *, ?int): ?string,
- *   delete: function(*, ?boolean): *,
+ *   delete: function(*, ?boolean): boolean|?string,
  *   delete_all: function(?function): boolean,
  *   foreach: function(function): boolean,
  *   iterator: function(): ?BpfMapIter,

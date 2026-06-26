@@ -172,10 +172,10 @@
  *
  * @typedef {{
  *   reply: function(*): ?boolean,
- *   defer: function(): void,
- *   get_fd: function(): ?int,
+ *   defer: function(): ?boolean,
+ *   get_fd: function(): int,
  *   set_fd: function(int): ?boolean,
- *   error: function(int): void,
+ *   error: function(int): ?boolean,
  *   new_channel: function(function, ?function, ?int): ?UbusChannel
  * }} UbusRequest
  */
@@ -193,8 +193,8 @@
  * Published object handle returned by {@link module:ubus.connection#publish|publish()}.
  *
  * @typedef {{
- *   notify: function(string, ?object, ?function, ?function, ?function, ?int): ?UbusNotify,
- *   remove: function(): void,
+ *   notify: function(string, ?*, ?function, ?function, ?function, ?int): ?UbusNotify,
+ *   remove: function(): ?boolean,
  *   subscribed: function(): boolean
  * }} UbusObject
  */
@@ -203,7 +203,7 @@
  * Event listener handle returned by {@link module:ubus.connection#listener|listener()}.
  *
  * @typedef {{
- *   remove: function(): void
+ *   remove: function(): ?boolean
  * }} UbusListener
  */
 
@@ -211,9 +211,9 @@
  * Subscriber handle returned by {@link module:ubus.connection#subscriber|subscriber()}.
  *
  * @typedef {{
- *   subscribe: function(string): boolean,
- *   unsubscribe: function(string): boolean,
- *   remove: function(): void
+ *   subscribe: function(string): ?boolean,
+ *   unsubscribe: function(string): ?boolean,
+ *   remove: function(): ?boolean
  * }} UbusSubscriber
  */
 
@@ -930,43 +930,6 @@ export function connect(socket, timeout) {};
  */
 
 /**
- * Send a reply to an asynchronous method call.
- *
- * Sends the specified data as a reply to the incoming method call. This
- * function should be called within a published object's method handler.
- *
- * Returns `true` on success.
- *
- * Returns `null` if the reply could not be sent.
- *
- * @function module:ubus.request#reply
- *
- * @param {*} data
- * The data to send as reply. Can be any JSON-serializable value.
- *
- * @returns {boolean}
- *
- * @example
- * // Synchronous reply
- * const obj = publish("my.service", {
- *     hello: (req, msg) => {
- *         req.reply({ message: "Hello " + msg.name });
- *     }
- * });
- *
- * @example
- * // Asynchronous reply after defer completes
- * const obj = publish("my.service", {
- *     some_method: (req) => {
- *         ubus_conn.defer("other.object", "other_method", {},
- *             (rc, data) => {
- *                 req.reply({ result: data });
- *             });
- *     }
- * });
- */
-
-/**
  * Disconnect from the ubus bus.
  *
  * Closes the connection to the ubus bus and releases associated resources.
@@ -1062,7 +1025,7 @@ export function connect(socket, timeout) {};
  *
  * @function module:ubus#open_channel
  *
- * @param {int|module:fs.file|module:socket.socket} fd
+ * @param {int|FsFile|Socket} fd
  * The file descriptor or resource of the channel to connect to. When a plain
  * integer fd is passed, the ubus channel takes ownership and closes it on
  * disconnect. When a resource object with a `fileno()` method is passed, the

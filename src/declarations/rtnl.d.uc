@@ -94,8 +94,8 @@ export function request(cmd, flags, payload) {};
  * @function module:rtnl#listener
  *
  * @param {function} callback - The callback function to invoke when a message is received
- * @param {Array<string>} [commands] - Array of netlink commands to listen for (optional)
- * @param {Array<int>} [groups] - Array of multicast groups to join (optional)
+ * @param {string[]} [commands] - Array of netlink commands to listen for (optional)
+ * @param {int[]} [groups] - Array of multicast groups to join (optional)
  *
  * @returns {?RtnlListener}
  *
@@ -114,7 +114,7 @@ export function listener(callback, commands, groups) {};
  *
  * @function module:rtnl.listener#set_commands
  *
- * @param {Array<string>} commands - Array of netlink commands to listen for
+ * @param {string[]} commands - Array of netlink commands to listen for
  *
  * @returns {boolean} - true if successful, false on error
  *

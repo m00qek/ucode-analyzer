@@ -298,7 +298,7 @@
  * @example
  * // TXT record with multiple elements
  * const txtResult = query(['_spf.facebook.com'], { type: ['TXT'], txt_as_array: true });
- * printf(txtResult, "\n");
+ * print(txtResult, "\n");
  * // {
  * //   "_spf.facebook.com": {
  * //     "TXT": [

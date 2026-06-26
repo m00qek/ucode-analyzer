@@ -40,8 +40,8 @@
  *
  * @typedef {{
  *   ptsname: function(): ?string,
- *   tcgetattr: function(): ?object,
- *   tcsetattr: function(object, ?int): ?boolean,
+ *   tcgetattr: function(): ?*,
+ *   tcsetattr: function(*, ?int): ?boolean,
  *   grantpt: function(): ?boolean,
  *   unlockpt: function(): ?boolean,
  *   read: function(int): ?string,
@@ -110,7 +110,7 @@ export function error() {};
  *
  * @function module:io.handle#tcgetattr
  *
- * @returns {?object}
+ * @returns {?*}
  *
  * @example
  * const handle = io.open('/dev/tty', O_RDWR);
@@ -139,7 +139,7 @@ export function error() {};
  *
  * @function module:io.handle#tcsetattr
  *
- * @param {Object} attrs
+ * @param {*} attrs
  * The terminal attributes to set.
  *
  * @param {int} [when=0]

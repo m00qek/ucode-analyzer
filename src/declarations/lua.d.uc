@@ -34,11 +34,11 @@
  * Lua VM instance returned by {@link module:lua#create|create()}.
  *
  * @typedef {{
- *   invoke: function(string, ...*): *,
+ *   invoke: function(string, *): *,
  *   eval:   function(string): *,
  *   include: function(string): *,
  *   set:    function(*): ?boolean,
- *   get:    function(string, ...*): ?LuaValue
+ *   get:    function(string, *): ?LuaValue
  * }} LuaVm
  */
 
@@ -52,10 +52,10 @@
  * values derived from a VM share its lifetime.
  *
  * @typedef {{
- *   call:     function(...*): *,
- *   invoke:   function(*, ...*): *,
- *   get:      function(...*): ?LuaValue,
- *   getraw:   function(...*): ?LuaValue,
+ *   call:     function(*): *,
+ *   invoke:   function(*, *): *,
+ *   get:      function(*): ?LuaValue,
+ *   getraw:   function(*): ?LuaValue,
  *   getmt:    function(?string): ?LuaValue,
  *   value:    function(): *,
  *   tostring: function(): string

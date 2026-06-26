@@ -129,14 +129,14 @@ export function init() {};
  *
  * @example
  * // Run the uloop event loop indefinitely
- * const success = uloop.run();
+ * const rc = uloop.run();
  * if (rc == null)
  *     die(`Error occurred during uloop execution: ${uloop.error()}\n`);
  * else if (rc != 0)
  *     printf("uloop event loop was interrupted by a signal: %d\n", rc);
  *
  * // Run the uloop event loop for 1000 milliseconds
- * const success = uloop.run(1000);
+ * const rc = uloop.run(1000);
  * if (rc == null)
  *     die(`Error occurred during uloop execution: ${uloop.error()}\n`);
  * else if (rc != 0)
@@ -303,7 +303,7 @@ export function done() {};
  * Optional. The timeout duration in milliseconds. Defaults to -1, indicating
  * the timer is not initially armed.
  *
- * @param {Function} callback
+ * @param {function} callback
  * The callback function to be executed when the timer expires.
  *
  * @returns {?UloopTimer}
@@ -346,7 +346,7 @@ export function timer(timeout, callback) {};
  *
  * @function module:uloop.handle#handle
  *
- * @returns {module:fs.file|module:fs.proc|module:socket.socket}
+ * @returns {FsFile|FsProc|Socket}
  * The underlying file or socket instance associated with the handle.
  *
  * @example
@@ -384,10 +384,10 @@ export function timer(timeout, callback) {};
  *
  * @function module:uloop#handle
  *
- * @param {int|module:fs.file|module:fs.proc|module:socket.socket|module:io.handle} handle
+ * @param {int|FsFile|FsProc|Socket|IoHandle} handle
  * The file handle (descriptor number, file or socket instance).
  *
- * @param {Function} callback
+ * @param {function} callback
  * The callback function to be invoked when the specified IO events occur.
  *
  * @param {int} events
@@ -417,7 +417,7 @@ export function handle(handle, callback, events) {};
  * Returns the process ID.
  *
  * This method returns the process ID (PID) of the operating system process
- * launched by {@link module:uloop#process|process().
+ * launched by {@link module:uloop#process|process()}.
  *
  * @function module:uloop.process#pid
  *
@@ -468,7 +468,7 @@ export function handle(handle, callback, events) {};
  * @param {Object<string, *>} [env]
  * Optional. A dictionary describing environment variables for the process.
  *
- * @param {Function} callback
+ * @param {function} callback
  * The callback function to be invoked when the invoked process ends.
  *
  * @returns {?UloopProcess}
@@ -584,7 +584,7 @@ export function process(executable, args, env, callback) {};
  * Returns the process ID.
  *
  * This method returns the process ID (PID) of the underlying forked process
- * launched by {@link module:uloop#task|task().
+ * launched by {@link module:uloop#task|task()}.
  *
  * @function module:uloop.task#pid
  *
@@ -655,14 +655,14 @@ export function process(executable, args, env, callback) {};
  *
  * @function module:uloop#task
  *
- * @param {Function} taskFunction
+ * @param {function} taskFunction
  * The task function to be invoked as a background process.
  *
- * @param {Function} [outputCallback]
+ * @param {function} [outputCallback]
  * Optional. The output callback function to be invoked when output is received
  * from the task. It is invoked with the output data as the argument.
  *
- * @param {Function} [inputCallback]
+ * @param {function} [inputCallback]
  * Optional. The input callback function to be invoked when input is required
  * by the task. It is invoked with a function to send input to the task
  * as the argument.
@@ -799,7 +799,7 @@ export function task(taskFunction, outputCallback, inputCallback) {};
  * Optional. The interval duration in milliseconds. Defaults to -1, indicating
  * the interval is not initially armed.
  *
- * @param {Function} callback
+ * @param {function} callback
  * The callback function to be executed when the interval expires.
  *
  * @returns {?UloopInterval}
@@ -864,7 +864,7 @@ export function interval(timeout, callback) {};
  * @param {string|int} signal
  * The signal name string (with or without "SIG" prefix) or signal number.
  *
- * @param {Function} callback
+ * @param {function} callback
  * The callback function to be invoked when the specified Unix signal is caught.
  *
  * @returns {?UloopSignal}

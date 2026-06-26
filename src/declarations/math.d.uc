@@ -213,11 +213,11 @@ export function sinh(x) {};
  *
  * @returns {float}
  * @example
- * atan(-100); // -1.0
- * atan(-10);  // -0.99999999587769
- * atan(0);    // 0.0
- * atan(10);   // 0.99999999587769
- * atan(100);  // 1.0
+ * tanh(-100); // -1.0
+ * tanh(-10);  // -0.99999999587769
+ * tanh(0);    // 0.0
+ * tanh(10);   // 0.99999999587769
+ * tanh(100);  // 1.0
  */
 export function tanh(x) {};
 
@@ -683,8 +683,8 @@ export function isinf(x) {};
  * The number to return the radian value for.
  *
  * @returns {float}
- * Returns the absolute value or `NaN` if the given argument could
- * not be converted to a number.
+ * Returns the radian equivalent of the given degree value, or `NaN` if the
+ * argument could not be converted to a number.
  * @example
  * deg2rad(180);   // 3.1415926535898
  * deg2rad("180"); // 3.1415926535898
@@ -700,8 +700,8 @@ export function deg2rad(number) {};
  * The number to return the degree value for.
  *
  * @returns {float}
- * Returns the absolute value or `NaN` if the given argument could
- * not be converted to a number.
+ * Returns the degree equivalent of the given radian value, or `NaN` if the
+ * argument could not be converted to a number.
  * @example
  * rad2deg(3.1415926535898);   // 180.0
  * rad2deg("3.1415926535898"); // 180.0
@@ -797,9 +797,9 @@ export function sign(x) {};
  * @param {float} x number
  *
  * @returns {int}
- * Returns -1 or 1 for negative and positive inputs respectively, 0 if the given
- * number is zero, -1 for -0.0, or `NaN` if the given argument could not be
- * converted to a number.
+ * Returns a non-zero value (true) if the sign bit of `x` is set (negative),
+ * or `0` (false) if the sign bit is clear (positive or zero). Returns `NaN`
+ * if the argument cannot be converted to a number.
  * @example
  * signbit(2);    // 1
  * signbit(-8);   // -1

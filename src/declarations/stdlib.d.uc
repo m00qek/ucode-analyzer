@@ -9,6 +9,43 @@
  */
 
 /**
+ * Broken-down date/time object returned by {@link module:core#localtime|localtime()}
+ * and {@link module:core#gmtime|gmtime()}, and accepted by
+ * {@link module:core#timelocal|timelocal()} and {@link module:core#timegm|timegm()}.
+ *
+ * Note: `mon`, `wday`, and `yday` are 1-based (unlike C's `struct tm`).
+ * `year` is the actual four-digit year (not years since 1900).
+ *
+ * @typedef {{
+ *   sec:   int,
+ *   min:   int,
+ *   hour:  int,
+ *   mday:  int,
+ *   mon:   int,
+ *   year:  int,
+ *   wday:  int,
+ *   yday:  int,
+ *   isdst: boolean
+ * }} TimeSpec
+ */
+
+/**
+ * Compilation option object accepted by {@link module:core#loadstring|loadstring()}
+ * and {@link module:core#loadfile|loadfile()}.
+ *
+ * Unrecognized keys are ignored; unspecified options default to those of the
+ * running program.
+ *
+ * @typedef {{
+ *   lstrip_blocks:      ?boolean,
+ *   trim_blocks:        ?boolean,
+ *   strict_declarations: ?boolean,
+ *   raw_mode:           ?boolean,
+ *   module_search_path: ?string[]
+ * }} ParseConfig
+ */
+
+/**
  * Print any of the given values to stdout.
  *
  * The `print()` function writes a string representation of each given argument
@@ -1665,7 +1702,7 @@ export function uniq(array) {};
  * containing broken-down date and time information according to the local
  * system timezone.
  *
- * See {@link module:core.TimeSpec|TimeSpec} for a description of the fields.
+ * See {@link TimeSpec|TimeSpec} for a description of the fields.
  *
  * Note that in contrast to the underlying `localtime(3)` C library function,
  * the values for `mon`, `wday`, and `yday` are 1-based, and the `year` is
@@ -1676,7 +1713,7 @@ export function uniq(array) {};
  * @param {int} [epoch]
  * The epoch timestamp.
  *
- * @returns {module:core.TimeSpec}
+ * @returns {TimeSpec}
  *
  * @example
  * localtime(1647953502);
@@ -1705,7 +1742,7 @@ export function localtime(epoch) {};
  * @param {int} [epoch]
  * The epoch timestamp.
  *
- * @returns {module:core.TimeSpec}
+ * @returns {TimeSpec}
  *
  * @example
  * gmtime(1647953502);
@@ -1739,7 +1776,7 @@ export function gmtime(epoch) {};
  *
  * @function module:core#timelocal
  *
- * @param {module:core.TimeSpec} datetimespec
+ * @param {TimeSpec} datetimespec
  * The broken-down date and time dictionary.
  *
  * @returns {?int}
@@ -1758,7 +1795,7 @@ export function timelocal(datetimespec) {};
  *
  * @function module:core#timegm
  *
- * @param {module:core.TimeSpec} datetimespec
+ * @param {TimeSpec} datetimespec
  * The broken-down date and time dictionary.
  *
  * @returns {?int}
@@ -1890,7 +1927,7 @@ export function gc(operation, argument) {};
  *  - If `options` is omitted or a non-object value, the compile options of the
  *    running ucode program are reused.
  *
- * See {@link module:core.ParseConfig|ParseConfig} for known keys within the
+ * See {@link ParseConfig|ParseConfig} for known keys within the
  * `options` object. Unrecognized keys are ignored, unspecified options default
  * to those of the running program.
  *
@@ -1903,7 +1940,7 @@ export function gc(operation, argument) {};
  * @param {string} code
  * The code string to compile.
  *
- * @param {module:core.ParseConfig} [options]
+ * @param {ParseConfig} [options]
  * The options for compilation.
  *
  * @returns {Function}
@@ -1935,7 +1972,7 @@ export function loadstring(code, options) {};
  * @param {string} path
  * The path of the file to compile.
  *
- * @param {module:core.ParseConfig} [options]
+ * @param {ParseConfig} [options]
  * The options for compilation.
  *
  * @returns {Function}

@@ -37,7 +37,7 @@
  *
  * @function module:zlib#deflate
  *
- * @param {string} str_or_resource
+ * @param {*} str_or_resource
  * The string or resource object to be compressed.
  *
  * @param {?boolean} [gzip=false]
@@ -53,7 +53,7 @@
  * const deflated = deflate(content);
  *
  * // deflate content using fastest compression
- * const deflated = deflate(content, Z_BEST_SPEED);
+ * const deflated = deflate(content, false, Z_BEST_SPEED);
  */
 export function deflate(str_or_resource, gzip, level) {};
 
@@ -73,8 +73,8 @@ export function deflate(str_or_resource, gzip, level) {};
  *
  * @function module:zlib#inflate
  *
- * @param {string} str_or_resource
- * The string or resource object to be parsed as JSON.
+ * @param {*} str_or_resource
+ * The string or resource object to be decompressed.
  *
  * @returns {?string}
  */

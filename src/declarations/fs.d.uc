@@ -639,7 +639,7 @@ export function open(path, mode, perm) {};
  * @param {string} [mode="r"]
  * The open mode.
  *
- * @returns {Object}
+ * @returns {?FsFile}
  *
  * @example
  * // Associate file descriptors of stdin and stdout with handles
@@ -1088,7 +1088,7 @@ export function rename(oldPath, newPath) {};
  *
  * @function module:fs#glob
  *
- * @param {...Arguments} pattern
+ * @param {...string} pattern
  *
  * @returns {?string[]}
  *
@@ -1125,6 +1125,7 @@ export function glob(pattern) {};
  * // Get the directory name of a path
  * const directoryName = dirname('/path/to/file.txt');
  */
+export function dirname(path) {};
 
 /**
  * Retrieves the base name of a path.
@@ -1263,7 +1264,7 @@ export function mkdtemp(template) {};
  * @param {string} path
  * The path to the file or directory.
  *
- * @param {int} [mode="f"]
+ * @param {string} [mode="f"]
  * Optional access mode.
  *
  * @returns {?boolean}
@@ -1369,7 +1370,7 @@ export function writefile(path, data, limit) {};
  *
  * @example
  * // Resolve the absolute path of a file
- * const absolutePath = realpath('path/to/file', 'utf8');
+ * const absolutePath = realpath('path/to/file');
  */
 export function realpath(path) {};
 

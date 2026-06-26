@@ -70,7 +70,7 @@
  *   reset_key_input: function(): boolean,
  *   get_line: function(?boolean): ?UlineLineInfo,
  *   get_window: function(): ?UlineWindowInfo,
- *   set_state: function(object): ?boolean,
+ *   set_state: function(*): ?boolean,
  *   set_hint: function(string): ?boolean,
  *   set_uloop: function(?function): ?boolean,
  *   hide_prompt: function(): void,
@@ -104,7 +104,7 @@
  *
  * @function module:uline#new
  *
- * @param {object} data
+ * @param {*} data
  * Editor configuration:
  *
  * - `cb` {object} **(required)** — callback dispatch table. All callbacks
@@ -187,7 +187,7 @@ export function new(data) {};
  *
  * @function module:uline#arg_parser
  *
- * @param {object} [opts]
+ * @param {*} [opts]
  * Parser options:
  * - `line_separator` {string} — a single character that splits the token
  *   stream into groups. When set, {@link module:uline.argp#parse|parse()}
@@ -364,7 +364,7 @@ export function getpass(prompt) {};
  *
  * @function module:uline.state#set_state
  *
- * @param {object} obj
+ * @param {*} obj
  * State changes to apply:
  * - `prompt` {string} — primary prompt text (VT100 escapes permitted).
  * - `line` {string} — replace the primary line buffer.

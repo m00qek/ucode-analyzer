@@ -43,7 +43,7 @@
 
 /** @typedef {{ fd: Socket, events: int }} PollSpec */
 
-/** @typedef {{ data: *, length: int, ancillary: object[], address: ?SocketAddress }} ReceivedMessage */
+/** @typedef {{ data: *, length: int, ancillary: *[], address: ?SocketAddress }} ReceivedMessage */
 
 /** @typedef {{ uid: int, gid: int, pid: int }} PeerCredentials */
 
@@ -81,7 +81,7 @@
  *
  * Returns `null` if an error occurred.
  *
- * @function Socket#setopt
+ * @function module:socket.socket#setopt
  *
  * @param {int} level
  * The protocol level at which the option resides. This can be a level such as
@@ -111,7 +111,7 @@
  *
  * Returns `null` if an error occurred or if the option is not supported.
  *
- * @function Socket#getopt
+ * @function module:socket.socket#getopt
  *
  * @param {int} level
  * The protocol level at which the option resides. This can be a level such as
@@ -135,7 +135,7 @@
  *
  * Returns `-1` if an error occurred.
  *
- * @function Socket#fileno
+ * @function module:socket.socket#fileno
  *
  * @returns {int}
  */
@@ -352,7 +352,7 @@ export function addrinfo(hostname, service, hints) {};
  * instead of a tuple is provided, the requested poll flags default to
  * `POLLIN|POLLERR|POLLHUP` for this socket.
  *
- * @returns {PollSpec[]}
+ * @returns {?PollSpec[]}
  *
  * @example
  * let x = socket.connect("example.org", 80);
@@ -410,7 +410,7 @@ export function poll(timeout, sockets) {};
  * block until either a connection was successfull or the underlying operating
  * system timeout is reached.
  *
- * @returns {Socket}
+ * @returns {?Socket}
  *
  * @example
  * // Resolve host, try to connect to both resulting IPv4 and IPv6 addresses
@@ -468,7 +468,7 @@ export function connect(host, service, hints, timeout) {};
  * @param {boolean} [reuseaddr]
  * Whether to set the SO_REUSEADDR option before calling bind().
  *
- * @returns {Socket}
+ * @returns {?Socket}
  *
  * @example
  * // Listen for incoming TCP connections on port 80
@@ -589,7 +589,7 @@ export function pair(type) {};
  * Returns `true` if the connection is successfully established.
  * Returns `null` if an error occurred during the connection attempt.
  *
- * @function Socket#connect
+ * @function module:socket.socket#connect
  *
  * @param {string|SocketAddress} address
  * The address of the remote endpoint to connect to.
@@ -609,7 +609,7 @@ export function pair(type) {};
  * Returns the number of bytes sent.
  * Returns `null` if an error occurred during the send operation.
  *
- * @function Socket#send
+ * @function module:socket.socket#send
  *
  * @param {*} data
  * The data to be sent through the socket. String data is sent as-is, any other
@@ -657,7 +657,7 @@ export function pair(type) {};
  * Returns an empty string if the remote side closed the socket.
  * Returns `null` if an error occurred during the receive operation.
  *
- * @function Socket#recv
+ * @function module:socket.socket#recv
  *
  * @param {int} [length=4096]
  * The maximum number of bytes to receive.
@@ -686,7 +686,7 @@ export function pair(type) {};
  *
  * Returns `null` if an error occurred.
  *
- * @function Socket#sendmsg
+ * @function module:socket.socket#sendmsg
  *
  * @param {*} [data]
  * The data to be sent. If a string is provided, it is sent as is. If an array
@@ -694,7 +694,7 @@ export function pair(type) {};
  * values are implicitly converted to a string and sent. If omitted, only
  * ancillary data and address are considered.
  *
- * @param {object[]|string} [ancillaryData]
+ * @param {*[]|string} [ancillaryData]
  * Optional ancillary data to be sent. If an array is provided, each element is
  * converted to a control message. If a string is provided, it is sent as-is
  * without further interpretation. Refer to
@@ -739,7 +739,7 @@ export function pair(type) {};
  *
  * Returns `null` if an error occurred during the receive operation.
  *
- * @function Socket#recvmsg
+ * @function module:socket.socket#recvmsg
  *
  * @param {int[]|int} [sizes]
  * Specifies the sizes of the buffers used for receiving the message. If an
@@ -787,7 +787,7 @@ export function pair(type) {};
  *
  * Returns `null` on error, e.g. when the address is in use.
  *
- * @function Socket#bind
+ * @function module:socket.socket#bind
  *
  * @param {string|SocketAddress} address
  * The IP address to bind the socket to.
@@ -819,7 +819,7 @@ export function pair(type) {};
  * Returns `true` if the socket is successfully marked as passive.
  * Returns `null` if an error occurred, e.g. when the requested port is in use.
  *
- * @function Socket#listen
+ * @function module:socket.socket#listen
  *
  * @param {int} [backlog=128]
  * The maximum length of the queue of pending connections.
@@ -860,7 +860,7 @@ export function pair(type) {};
  *
  * Returns `null` if an error occurred.
  *
- * @function Socket#accept
+ * @function module:socket.socket#accept
  *
  * @param {Object} [address]
  * An optional dictionary to receive the address details of the peer socket.
@@ -898,7 +898,7 @@ export function pair(type) {};
  * Returns `true` if the shutdown operation is successful.
  * Returns `null` if an error occurred.
  *
- * @function Socket#shutdown
+ * @function module:socket.socket#shutdown
  *
  * @param {int} how
  * Specifies which half of the connection to shut down.
@@ -928,7 +928,7 @@ export function pair(type) {};
  * Returns the remote credentials if the operation is successful.
  * Returns `null` on error.
  *
- * @function Socket#peercred
+ * @function module:socket.socket#peercred
  *
  * @returns {?PeerCredentials}
  *
@@ -951,7 +951,7 @@ export function pair(type) {};
  * Returns the remote address if the operation is successful.
  * Returns `null` on error.
  *
- * @function Socket#peername
+ * @function module:socket.socket#peername
  *
  * @returns {?SocketAddress}
  *
@@ -976,7 +976,7 @@ export function pair(type) {};
  * Returns the local address if the operation is successful.
  * Returns `null` on error.
  *
- * @function Socket#sockname
+ * @function module:socket.socket#sockname
  *
  * @returns {?SocketAddress}
  *
@@ -1002,7 +1002,7 @@ export function pair(type) {};
  * Returns `true` if the socket was successfully closed.
  * Returns `null` on error.
  *
- * @function Socket#close
+ * @function module:socket.socket#close
  *
  * @returns {?boolean}
  *
