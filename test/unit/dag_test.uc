@@ -181,25 +181,33 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		assert.match('parse', exp.name);
 	});
 
-	it('resolveExport follows a namespace re-export (export const X = moduleAlias)', () => {
-		// URI_A re-exports the whole tree_sitter namespace as 'ts'.
-		// resolveExport should find the 'ts' export in TS_URI (same name).
-		let textA = "import * as ts from 'tree_sitter';\nexport const ts = ts;";
+	it('resolveExport follows a namespace re-export to a same-named export in the source module', () => {
+		// URI_A: import * as ts from 'tree_sitter'; export const parse = ts;
+		// 'parse' exists in tree_sitter — the chain must find it there.
+		let textA = "import * as ts from 'tree_sitter';\nexport const parse = ts;";
 		dag.add(URI_A, textA, parse(textA));
-		let exp = dag.resolveExport(URI_A, 'ts');
-		// Should resolve to TS_URI's 'ts' export if it exists, or fall back gracefully.
-		// The key assertion: it doesn't return the re-exporting file's own entry.
+		let exp = dag.resolveExport(URI_A, 'parse');
 		assert.match(true, exp !== null);
+		assert.match('parse', exp.name);
+		assert.match('function', exp.kind);
 	});
 
 	it('resolveExportLocation of namespace re-export points to the source module', () => {
-		// URI_A: import * as ts from 'tree_sitter'; export const parse = ts;
-		// 'parse' is not in tree_sitter, so falls back — but the chain IS attempted.
 		let textA = "import * as ts from 'tree_sitter';\nexport const parse = ts;";
 		dag.add(URI_A, textA, parse(textA));
 		let loc = dag.resolveExportLocation(URI_A, 'parse');
-		// Falls back to TS_URI because 'parse' is found there via the namespace chain.
 		assert.match(TS_URI, loc.uri);
+	});
+
+	it('resolveExport of namespace re-export synthesises module type when source is not indexed', () => {
+		// URI_A: import * as ts from 'unknown_module'; export const ns = ts;
+		// 'unknown_module' is not on disk — resolvedUri is null.
+		// Must not return null; must return a synthetic exp with _moduleSpecifier.
+		let textA = "import * as ts from 'unknown_module';\nexport const ns = ts;";
+		dag.add(URI_A, textA, parse(textA));
+		let exp = dag.resolveExport(URI_A, 'ns');
+		assert.match(true, exp !== null);
+		assert.match('unknown_module', exp._moduleSpecifier);
 	});
 
 	it('resolveExport follows a localRef chain (named import re-export with rename)', () => {

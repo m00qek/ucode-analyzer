@@ -130,6 +130,7 @@ function precedingDoc(node, source) {
 // ── DAG helpers ────────────────────────────────────────────────────────────
 
 function exportType(exp) {
+	if (exp._moduleSpecifier) return { kind: 'module', path: exp._moduleSpecifier };
 	if (exp.kind === 'function') {
 		if (!exp.doc) return UNKNOWN;
 		return {

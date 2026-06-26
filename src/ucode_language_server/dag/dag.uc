@@ -155,17 +155,24 @@ function _resolveExportFull(uri, name) {
 		if (!exp.memberRef && !exp.localRef) return { exp, uri, name };
 		for (let j = 0; j < length(node.imports); j++) {
 			let imp = node.imports[j];
-			if (!imp.resolvedUri) continue;
 			if (exp.memberRef) {
-				if (imp.alias !== exp.memberRef.alias) continue;
+				if (!imp.resolvedUri || imp.alias !== exp.memberRef.alias) continue;
 				return _resolveExportFull(imp.resolvedUri, exp.memberRef.member) ?? { exp, uri, name };
 			} else if (imp.alias === exp.localRef) {
 				// namespace re-export: export const X = moduleAlias
-				// Look for an export named X in the module — same name, different file.
-				return _resolveExportFull(imp.resolvedUri, name) ?? { exp, uri, name };
+				// Try to find an export named X in the module; fall back to a
+				// synthetic module-typed entry so the type is never UNKNOWN.
+				if (imp.resolvedUri) {
+					let r = _resolveExportFull(imp.resolvedUri, name);
+					if (r) return r;
+				}
+				let synth = { name: exp.name, kind: 'const', doc: exp.doc,
+				               _moduleSpecifier: imp.specifier,
+				               memberRef: null, localRef: null, properties: null };
+				return { exp: synth, uri, name };
 			} else {
 				// localRef: export const X = importedAlias (named import)
-				if (imp.alias || index(imp.symbols, exp.localRef) < 0) continue;
+				if (!imp.resolvedUri || imp.alias || index(imp.symbols, exp.localRef) < 0) continue;
 				let remoteName = (imp.renames && imp.renames[exp.localRef]) ?? exp.localRef;
 				return _resolveExportFull(imp.resolvedUri, remoteName) ?? { exp, uri, name };
 			}
