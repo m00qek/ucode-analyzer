@@ -200,3 +200,17 @@ export function resolveExportLocation(uri, name) {
 	let r = _resolveExportFull(uri, name);
 	return r ? { uri: r.uri, name: r.name } : { uri, name };
 };
+
+// Resolve a named member of a module specifier.
+// Lazy-indexes the module from disk if not yet in the DAG, follows the full
+// export chain, and returns { exp, uri, name } or null if not found.
+// This is the single authoritative place for the "module type → member" lookup
+// used by type inference, hover, and go-to-definition.
+export function resolveMember(specifier, propName) {
+	let modUri = resolveSpecifier(specifier);
+	if (!modUri) return null;
+	if (!_nodes[modUri]) addFromDisk(modUri);
+	let loc = resolveExportLocation(modUri, propName);
+	let exp = resolveExport(loc.uri, loc.name);
+	return exp ? { exp, uri: loc.uri, name: loc.name } : null;
+};

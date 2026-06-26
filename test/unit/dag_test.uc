@@ -272,3 +272,32 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		assert.match('parse', exp.name);
 	});
 });
+
+describe('dag.resolveMember', () => {
+	beforeEach(reset);
+
+	it('returns { exp, uri, name } for an existing export', () => {
+		let r = dag.resolveMember('tree_sitter', 'parse');
+		assert.match(true, r !== null);
+		assert.match(TS_URI, r.uri);
+		assert.match('parse', r.name);
+		assert.match('function', r.exp.kind);
+	});
+
+	it('returns null for an unknown specifier', () => {
+		assert.match(null, dag.resolveMember('does.not.exist', 'foo'));
+	});
+
+	it('returns null for a specifier that resolves but has no such export', () => {
+		assert.match(null, dag.resolveMember('tree_sitter', 'doesNotExist'));
+	});
+
+	it('lazy-indexes the module on first access', () => {
+		// tree_sitter is not yet in the DAG after reset
+		assert.match(null, dag.exportsOf(TS_URI));
+		let r = dag.resolveMember('tree_sitter', 'parse');
+		assert.match(true, r !== null);
+		// Now the module is indexed as a side-effect
+		assert.match(true, dag.exportsOf(TS_URI) !== null);
+	});
+});

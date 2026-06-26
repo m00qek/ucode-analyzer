@@ -185,13 +185,8 @@ function memberExprDef(uri, doc, memberExpr, propName, offset) {
 
 	// Module type (e.g. named import whose value is a whole module)
 	if (objType && objType.kind === 'module') {
-		let modUri = dag.resolveSpecifier(objType.path);
-		if (modUri) {
-			if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
-			let loc = dag.resolveExportLocation(modUri, propName);
-			let exp = dag.resolveExport(loc.uri, loc.name);
-			if (exp) return resolveExportDefinition(loc.uri, loc.name);
-		}
+		let r = dag.resolveMember(objType.path, propName);
+		if (r) return resolveExportDefinition(r.uri, r.name);
 	}
 
 	// Record type: find member in type registry

@@ -59,11 +59,8 @@ function modulePropertyDoc(uri, propNode, source, scope) {
 	let objType  = inferNode(objNode, source, uri, scope, 0);
 	if (!objType) return null;
 	if (objType.kind === 'module') {
-		let modUri = dag.resolveSpecifier(objType.path);
-		if (!modUri) return null;
-		if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
-		let exp = dag.resolveExport(modUri, propName);
-		return (exp && exp.doc) ? exp.doc : null;
+		let r = dag.resolveMember(objType.path, propName);
+		return (r && r.exp.doc) ? r.exp.doc : null;
 	}
 	if (objType.kind === 'record') {
 		for (let i = 0; i < length(objType.fields); i++) {
