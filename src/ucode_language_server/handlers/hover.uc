@@ -40,15 +40,11 @@ function importedDoc(uri, name) {
 	return null;
 }
 
-// Find the parsed JSDoc for an export in the same file.
-function localDoc(uri, name) {
-	let exps = dag.exportsOf(uri);
-	if (!exps) return null;
-	for (let i = 0; i < length(exps); i++) {
-		let exp = exps[i];
-		if (exp.name === name && exp.doc) return exp.doc;
-	}
-	return null;
+// Follow the full export chain for name in uri and return the original definition's doc.
+// Covers both direct exports (with their own doc) and re-exports (localRef/memberRef chains).
+function resolvedExportDoc(uri, name) {
+	let exp = dag.resolveExport(uri, name);
+	return (exp && exp.doc) ? exp.doc : null;
 }
 
 function renderDoc(expDoc, md) {
@@ -74,7 +70,7 @@ export function hover(doc, position) {
 	let md = sprintf('```ucode\n%s: %s\n```', label, typeStr);
 
 	if (ts.nodeType(node) === 'identifier') {
-		let expDoc = importedDoc(doc.uri, label) ?? builtinDoc(label) ?? localDoc(doc.uri, label);
+		let expDoc = importedDoc(doc.uri, label) ?? resolvedExportDoc(doc.uri, label) ?? builtinDoc(label);
 		if (expDoc) md = renderDoc(expDoc, md);
 	}
 
