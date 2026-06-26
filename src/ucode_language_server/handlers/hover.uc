@@ -47,6 +47,21 @@ function resolvedExportDoc(uri, name) {
 	return (exp && exp.doc) ? exp.doc : null;
 }
 
+// Return the doc for a property_identifier node inside a member_expression when the
+// object resolves to a module type (e.g. assert.match where assert: module:utest.assert).
+function modulePropertyDoc(uri, propNode, source, scope) {
+	let parent = ts.parent(propNode);
+	if (!parent || ts.nodeType(parent) !== 'member_expression') return null;
+	let objNode = ts.namedChild(parent, 0);
+	let objType = inferNode(objNode, source, uri, scope, 0);
+	if (!objType || objType.kind !== 'module') return null;
+	let modUri = dag.resolveSpecifier(objType.path);
+	if (!modUri) return null;
+	if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
+	let exp = dag.resolveExport(modUri, ts.text(propNode, source));
+	return (exp && exp.doc) ? exp.doc : null;
+}
+
 function renderDoc(expDoc, md) {
 	if (expDoc.description) md += '\n\n' + expDoc.description;
 	for (let i = 0; i < length(expDoc.examples); i++)
@@ -72,6 +87,9 @@ export function hover(doc, position) {
 	if (ts.nodeType(node) === 'identifier') {
 		let expDoc = importedDoc(doc.uri, label) ?? resolvedExportDoc(doc.uri, label);
 		if (!expDoc && type.kind !== 'module') expDoc = builtinDoc(label);
+		if (expDoc) md = renderDoc(expDoc, md);
+	} else if (ts.nodeType(node) === 'property_identifier') {
+		let expDoc = modulePropertyDoc(doc.uri, node, doc.text, scope);
 		if (expDoc) md = renderDoc(expDoc, md);
 	}
 
