@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from 'utest';
+import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_language_server.dag.dag';
 import { inferNode, buildScope, initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
@@ -1022,5 +1022,34 @@ describe('inferrer — importScope: renamed imports', () => {
 		let scope = buildScope(URI, text, tree, offset);
 		assert.match(true, 'parse' in scope.bindings);
 		assert.match('function', scope.bindings['parse'].kind);
+	});
+});
+
+describe('inferrer — importScope: object-literal export typed as record', () => {
+	let MY_URI = 'file:///app/src/mymod.uc';
+	// Uses explicit pair syntax (greet: greet) to avoid shorthand property nodes.
+	let modContent = "/** @param {string} s @returns {int} */\nfunction greet(s) { return 0; }\nexport const ns = { greet: greet };";
+
+	beforeEach(() => {
+		dag.init(_config);
+		dag.remove(URI);
+		dag.remove(MY_URI);
+		invalidateUri(URI);
+	});
+
+	it('imported object-literal const is typed as a record with correct fields', () => {
+		mock.global.patch('fs', {
+			data: { '/app/src/mymod.uc': modContent },
+			behavior: { stat: (path) => (path === '/app/src/mymod.uc') ? { type: 'file', size: length(modContent) } : null }
+		});
+		dag.add(MY_URI, modContent, parse(modContent));
+		let importText = "import { ns } from 'mymod';\nns;";
+		let tree = parse(importText);
+		dag.add(URI, importText, tree);
+		let scope = buildScope(URI, importText, tree, length(importText) - 1);
+		mock.global.unpatch('fs');
+		assert.match('record', scope.bindings['ns'].kind);
+		assert.match('greet', scope.bindings['ns'].fields[0].name);
+		assert.match('function', scope.bindings['ns'].fields[0].type.kind);
 	});
 });

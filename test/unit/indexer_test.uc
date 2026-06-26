@@ -87,6 +87,41 @@ describe('indexer.extractExports', () => {
 		assert.match(null, exps[0].memberRef);
 	});
 
+	it('properties is null for non-object exports', () => {
+		let text = 'export const X = 42;';
+		let exps = extractExports(text, parse(text));
+		assert.match(null, exps[0].properties);
+	});
+
+	it('populates properties for object-literal exports with function-expression values', () => {
+		let text = "export const ns = { /** @param {string} s @returns {int} */ greet: function(s) {}, go: function() {} };";
+		let exps = extractExports(text, parse(text));
+
+		assert.match(1, length(exps));
+		let props = exps[0].properties;
+		assert.match(true, props !== null);
+		assert.match(2, length(props));
+		assert.match('greet', props[0].name);
+		assert.match('function', props[0].kind);
+		assert.match(true, props[0].doc !== null);
+		assert.match('s', props[0].doc.params[0].name);
+		assert.match('go', props[1].name);
+		assert.match('function', props[1].kind);
+	});
+
+	it('populates properties for object-literal exports with identifier values (resolves local decl)', () => {
+		let text = "/** @param {string} s @returns {int} */ function greet(s) { return 0; }\nexport const ns = { greet: greet };";
+		let exps = extractExports(text, parse(text));
+
+		let props = exps[0].properties;
+		assert.match(true, props !== null);
+		assert.match(1, length(props));
+		assert.match('greet', props[0].name);
+		assert.match('function', props[0].kind);
+		assert.match(true, props[0].doc !== null);
+		assert.match('s', props[0].doc.params[0].name);
+	});
+
 	it('stores position for an exported function', () => {
 		let text = 'export function foo(x) { return x; };';
 		let exps = extractExports(text, parse(text));

@@ -130,16 +130,24 @@ function precedingDoc(node, source) {
 // ── DAG helpers ────────────────────────────────────────────────────────────
 
 function exportType(exp) {
-	if (!exp.doc) return UNKNOWN;
-	let doc = exp.doc;
 	if (exp.kind === 'function') {
+		if (!exp.doc) return UNKNOWN;
 		return {
 			kind: 'function',
-			params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
-			return: (doc.returns ? doc.returns.type : null) ?? UNKNOWN,
+			params: map(exp.doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
+			return: (exp.doc.returns ? exp.doc.returns.type : null) ?? UNKNOWN,
 		};
 	}
-	return (doc.returns ? doc.returns.type : null) ?? UNKNOWN;
+	if (exp.properties) {
+		let fields = [];
+		for (let i = 0; i < length(exp.properties); i++) {
+			let prop = exp.properties[i];
+			push(fields, { name: prop.name, type: exportType(prop) });
+		}
+		return { kind: 'record', fields };
+	}
+	if (!exp.doc) return UNKNOWN;
+	return (exp.doc.returns ? exp.doc.returns.type : null) ?? UNKNOWN;
 }
 
 // Look up a symbol imported by name into uri (import { foo } from 'mod').

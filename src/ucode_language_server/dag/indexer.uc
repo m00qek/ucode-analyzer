@@ -75,6 +75,39 @@ function importSpecifier(stmt, text) {
 	return null;
 }
 
+// Walk an object literal and return property descriptors { name, kind, doc }.
+// For function-expression values the preceding /** */ inside the object is used.
+// For identifier values the local declaration (function or const) is resolved.
+function extractObjectProperties(objectNode, root, text) {
+	let props = [];
+	for (let i = 0; i < ts.namedChildCount(objectNode); i++) {
+		let pair = ts.namedChild(objectNode, i);
+		if (ts.nodeType(pair) !== 'pair') continue;
+		let keyNode = ts.childByField(pair, 'key');
+		if (!keyNode) continue;
+		let kt = ts.nodeType(keyNode);
+		if (kt !== 'property_identifier' && kt !== 'identifier') continue;
+		let name = ts.text(keyNode, text);
+		let valNode = ts.childByField(pair, 'value');
+		let vtype = valNode ? ts.nodeType(valNode) : null;
+		let kind, doc;
+		if (vtype === 'function_expression' || vtype === 'arrow_function') {
+			kind = 'function';
+			let docText = precedingDocText(pair, objectNode, text);
+			doc = docText ? parseDoc(docText) : null;
+		} else if (vtype === 'identifier') {
+			let info = localDeclInfo(root, text, ts.text(valNode, text));
+			kind = info.kind;
+			doc  = info.doc;
+		} else {
+			kind = 'value';
+			doc  = null;
+		}
+		push(props, { name, kind, doc });
+	}
+	return props;
+}
+
 export function extractExports(text, tree) {
 	let result = [];
 	let root = ts.rootNode(tree);
@@ -117,8 +150,9 @@ export function extractExports(text, tree) {
 				let nameNode = ts.namedChild(varDecl, 0);
 				if (!nameNode || ts.nodeType(nameNode) !== 'identifier') continue;
 				let init = ts.childByField(varDecl, 'value');
-				let memberRef = null;
-				let localRef  = null;
+				let memberRef  = null;
+				let localRef   = null;
+				let properties = null;
 				if (init && ts.nodeType(init) === 'member_expression') {
 					let obj  = ts.namedChild(init, 0);
 					let prop = ts.namedChild(init, 1);
@@ -128,8 +162,10 @@ export function extractExports(text, tree) {
 						memberRef = { alias: ts.text(obj, text), member: ts.text(prop, text) };
 				} else if (init && ts.nodeType(init) === 'identifier') {
 					localRef = ts.text(init, text);
+				} else if (init && ts.nodeType(init) === 'object') {
+					properties = extractObjectProperties(init, root, text);
 				}
-				push(result, { name: ts.text(nameNode, text), kind, doc, memberRef, localRef,
+				push(result, { name: ts.text(nameNode, text), kind, doc, memberRef, localRef, properties,
 				               position: pos(ts.startByte(nameNode)) });
 			}
 		} else if (declType === 'export_clause') {
