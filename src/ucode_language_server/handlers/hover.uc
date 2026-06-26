@@ -47,19 +47,31 @@ function resolvedExportDoc(uri, name) {
 	return (exp && exp.doc) ? exp.doc : null;
 }
 
-// Return the doc for a property_identifier node inside a member_expression when the
-// object resolves to a module type (e.g. assert.match where assert: module:utest.assert).
+// Return the doc for a property_identifier node inside a member_expression.
+// Handles two cases:
+//   module type  — look up the member as a direct export of the module
+//   record type  — look up the doc stored in the record field
 function modulePropertyDoc(uri, propNode, source, scope) {
 	let parent = ts.parent(propNode);
 	if (!parent || ts.nodeType(parent) !== 'member_expression') return null;
-	let objNode = ts.namedChild(parent, 0);
-	let objType = inferNode(objNode, source, uri, scope, 0);
-	if (!objType || objType.kind !== 'module') return null;
-	let modUri = dag.resolveSpecifier(objType.path);
-	if (!modUri) return null;
-	if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
-	let exp = dag.resolveExport(modUri, ts.text(propNode, source));
-	return (exp && exp.doc) ? exp.doc : null;
+	let objNode  = ts.namedChild(parent, 0);
+	let propName = ts.text(propNode, source);
+	let objType  = inferNode(objNode, source, uri, scope, 0);
+	if (!objType) return null;
+	if (objType.kind === 'module') {
+		let modUri = dag.resolveSpecifier(objType.path);
+		if (!modUri) return null;
+		if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
+		let exp = dag.resolveExport(modUri, propName);
+		return (exp && exp.doc) ? exp.doc : null;
+	}
+	if (objType.kind === 'record') {
+		for (let i = 0; i < length(objType.fields); i++) {
+			let f = objType.fields[i];
+			if (f.name === propName && f.doc) return f.doc;
+		}
+	}
+	return null;
 }
 
 function renderDoc(expDoc, md) {

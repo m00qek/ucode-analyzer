@@ -122,6 +122,26 @@ describe('indexer.extractExports', () => {
 		assert.match('s', props[0].doc.params[0].name);
 	});
 
+	it('populates nested properties for object-literal exports with object values', () => {
+		let text = "export const api = { /** @param {string} s @returns {int} */ fn: function(s) {}, sub: { /** @param {string} x */ go: function(x) {} } };";
+		let exps = extractExports(text, parse(text));
+
+		assert.match(1, length(exps));
+		let props = exps[0].properties;
+		assert.match(2, length(props));
+		assert.match('fn', props[0].name);
+		assert.match('function', props[0].kind);
+		assert.match('sub', props[1].name);
+		assert.match('object', props[1].kind);
+		let subProps = props[1].properties;
+		assert.match(true, subProps !== null);
+		assert.match(1, length(subProps));
+		assert.match('go', subProps[0].name);
+		assert.match('function', subProps[0].kind);
+		assert.match(true, subProps[0].doc !== null);
+		assert.match('x', subProps[0].doc.params[0].name);
+	});
+
 	it('stores position for an exported function', () => {
 		let text = 'export function foo(x) { return x; };';
 		let exps = extractExports(text, parse(text));

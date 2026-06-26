@@ -75,9 +75,10 @@ function importSpecifier(stmt, text) {
 	return null;
 }
 
-// Walk an object literal and return property descriptors { name, kind, doc }.
+// Walk an object literal and return property descriptors { name, kind, doc, properties }.
 // For function-expression values the preceding /** */ inside the object is used.
 // For identifier values the local declaration (function or const) is resolved.
+// For nested object literals the function recurses, populating properties.
 function extractObjectProperties(objectNode, root, text) {
 	let props = [];
 	for (let i = 0; i < ts.namedChildCount(objectNode); i++) {
@@ -90,20 +91,27 @@ function extractObjectProperties(objectNode, root, text) {
 		let name = ts.text(keyNode, text);
 		let valNode = ts.childByField(pair, 'value');
 		let vtype = valNode ? ts.nodeType(valNode) : null;
-		let kind, doc;
+		let kind, doc, properties;
 		if (vtype === 'function_expression' || vtype === 'arrow_function') {
-			kind = 'function';
+			kind       = 'function';
 			let docText = precedingDocText(pair, objectNode, text);
-			doc = docText ? parseDoc(docText) : null;
+			doc        = docText ? parseDoc(docText) : null;
+			properties = null;
 		} else if (vtype === 'identifier') {
-			let info = localDeclInfo(root, text, ts.text(valNode, text));
-			kind = info.kind;
-			doc  = info.doc;
+			let info   = localDeclInfo(root, text, ts.text(valNode, text));
+			kind       = info.kind;
+			doc        = info.doc;
+			properties = null;
+		} else if (vtype === 'object') {
+			kind       = 'object';
+			doc        = null;
+			properties = extractObjectProperties(valNode, root, text);
 		} else {
-			kind = 'value';
-			doc  = null;
+			kind       = 'value';
+			doc        = null;
+			properties = null;
 		}
-		push(props, { name, kind, doc });
+		push(props, { name, kind, doc, properties });
 	}
 	return props;
 }

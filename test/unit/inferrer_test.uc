@@ -1054,6 +1054,62 @@ describe('inferrer — importScope: object-literal export typed as record', () =
 	});
 });
 
+describe('inferrer — member access on record-typed expression (nested object export)', () => {
+	let MOD_URI = 'file:///app/src/nested.uc';
+
+	beforeEach(() => {
+		dag.init(_config);
+		dag.remove(URI);
+		dag.remove(MOD_URI);
+		invalidateUri(URI);
+	});
+
+	it('resolves member of a nested object export to function type', () => {
+		// export const api = { sub: { /** @returns {int} */ go: function() {} } };
+		// Importing { api } and accessing api.sub.go must yield a function type.
+		let modText = "export const api = { sub: { /** @returns {int} */ go: function() {} } };";
+		dag.add(MOD_URI, modText, parse(modText));
+		mock.global.patch('fs', {
+			data: { '/app/src/nested.uc': modText },
+			behavior: { stat: (path) => (path === '/app/src/nested.uc') ? { type: 'file', size: length(modText) } : null }
+		});
+		let text = "import { api } from 'nested';\napi.sub.go;";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let offset = length(text) - 1;
+		let scope = buildScope(URI, text, tree, offset);
+		mock.global.unpatch('fs');
+
+		// api → record; api.sub → record; api.sub.go → function
+		assert.match('record', scope.bindings['api'].kind);
+		let subField = scope.bindings['api'].fields[0];
+		assert.match('sub', subField.name);
+		assert.match('record', subField.type.kind);
+		let goField = subField.type.fields[0];
+		assert.match('go', goField.name);
+		assert.match('function', goField.type.kind);
+	});
+
+	it('record field carries doc for hover lookup', () => {
+		let modText = "export const api = { /** @param {string} s @returns {int} */ greet: function(s) {} };";
+		dag.add(MOD_URI, modText, parse(modText));
+		mock.global.patch('fs', {
+			data: { '/app/src/nested.uc': modText },
+			behavior: { stat: (path) => (path === '/app/src/nested.uc') ? { type: 'file', size: length(modText) } : null }
+		});
+		let text = "import { api } from 'nested';\napi.greet;";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, length(text) - 1);
+		mock.global.unpatch('fs');
+
+		let field = scope.bindings['api'].fields[0];
+		assert.match('greet', field.name);
+		assert.match(true, field.doc !== null);
+		assert.match('s', field.doc.params[0].name);
+	});
+});
+
 describe('inferrer — member access on module-typed expression', () => {
 	let TS_URI = 'file:///app/src/tree_sitter.uc';
 

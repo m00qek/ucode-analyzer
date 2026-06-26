@@ -143,7 +143,7 @@ function exportType(exp) {
 		let fields = [];
 		for (let i = 0; i < length(exp.properties); i++) {
 			let prop = exp.properties[i];
-			push(fields, { name: prop.name, type: exportType(prop) });
+			push(fields, { name: prop.name, type: exportType(prop), doc: prop.doc });
 		}
 		return { kind: 'record', fields };
 	}
