@@ -195,7 +195,7 @@ export function create() {};
  *
  * @function module:lua.vm#set
  *
- * @param {string|object} name_or_obj
+ * @param {string|*} name_or_obj
  * Either a string global name, or an object whose keys become global names.
  *
  * @param {*} [value]

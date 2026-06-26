@@ -682,7 +682,7 @@ export function buffer(initialData) {};
  * @see {@link module:struct#unpack|struct.unpack()}
  *
  * @example
- * const values = buf.get('II');
+ * const values = buf.read('II');
  */
 
 /**

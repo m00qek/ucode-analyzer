@@ -93,7 +93,7 @@
  * @param {string|FsFile|FsProc} file
  * The file path or open file handle to write report to.
  *
- * @return {?boolean}
+ * @returns {?boolean}
  */
 export function memdump(file) {};
 
@@ -113,7 +113,7 @@ export function memdump(file) {};
  * The number of callframes up the call trace should start, `0` is this function
  * itself, `1` the function calling it and so on.
  *
- * @return {StackTraceEntry[]}
+ * @returns {StackTraceEntry[]}
  */
 export function traceback(level) {};
 
@@ -130,7 +130,7 @@ export function traceback(level) {};
  *
  * @function module:debug#sourcepos
  *
- * @return {?SourcePosition}
+ * @returns {?SourcePosition}
  */
 export function sourcepos() {};
 
@@ -150,7 +150,7 @@ export function sourcepos() {};
  * @param {*} value
  * The value to query information for.
  *
- * @return {?ValueInformation}
+ * @returns {?ValueInformation}
  */
 export function getinfo(value) {};
 

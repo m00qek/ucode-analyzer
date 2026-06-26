@@ -199,7 +199,6 @@
  *   NL80211_CMD_CHANNEL_SWITCH_STARTED_NOTIFY: int,
  *   NL80211_CMD_ADD_TX_TS: int,
  *   NL80211_CMD_DEL_TX_TS: int,
- *   NL80211_CMD_GET_MPP: int,
  *   NL80211_IFTYPE_ADHOC: int,
  *   NL80211_IFTYPE_STATION: int,
  *   NL80211_IFTYPE_AP: int,
@@ -268,9 +267,9 @@
  * inside a `uloop.run()` loop.
  *
  * @typedef {{
- *   set_commands: function(int[]|int): void,
+ *   set_commands: function(int[]|int): null,
  *   request: function(int, ?int, ?*): *,
- *   close: function(): void
+ *   close: function(): null
  * }} Nl80211Listener
  */
 

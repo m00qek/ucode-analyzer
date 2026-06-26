@@ -61,14 +61,14 @@
  *
  * @typedef {{
  *   free: function(): void,
- *   ssl_init: function(?object): ?boolean,
+ *   ssl_init: function(?*): ?boolean,
  *   set_url: function(string, ?string): ?boolean,
  *   set_proxy_url: function(string, ?string): ?boolean,
  *   set_timeout: function(int): ?boolean,
- *   get_headers: function(): ?object,
+ *   get_headers: function(): ?*,
  *   connect: function(): ?boolean,
  *   disconnect: function(): boolean,
- *   request: function(string, ?object): ?boolean,
+ *   request: function(string, ?*): ?boolean,
  *   redirect: function(): ?boolean,
  *   status: function(): ?UclientStatus,
  *   read: function(?int): ?string
@@ -100,7 +100,7 @@
  * HTTP Basic authentication credentials in `"user:password"` form, or
  * `null` to omit authentication.
  *
- * @param {object} cb
+ * @param {*} cb
  * Dispatch object whose properties are optional callback functions:
  *
  * - `header_done(self)` — invoked once all response headers have been
@@ -175,7 +175,7 @@ export function new(url, auth_str, cb) {};
  *
  * @function module:uclient.handle#ssl_init
  *
- * @param {object} [opts]
+ * @param {*} [opts]
  * Optional SSL configuration:
  * - `cert_file` {string} — path to PEM client certificate file
  * - `key_file` {string} — path to PEM private key file
@@ -262,7 +262,7 @@ export function new(url, auth_str, cb) {};
  *
  * @function module:uclient.handle#get_headers
  *
- * @returns {?object}
+ * @returns {?*}
  *
  * @example
  * const client = uclient(url, null, {
@@ -315,7 +315,7 @@ export function new(url, auth_str, cb) {};
  * HTTP method: `"GET"`, `"HEAD"`, `"POST"`, `"PUT"`, `"DELETE"`, or
  * `"PROPPATCH"`.
  *
- * @param {object} [opts]
+ * @param {*} [opts]
  * Optional request options:
  * - `headers` {object} — additional request headers
  * - `post_data` {string} — body to send before `get_post_data` is called

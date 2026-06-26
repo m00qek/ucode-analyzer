@@ -44,7 +44,7 @@
 /**
  * Netlink listener handle returned by {@link module:rtnl#listener|listener()}.
  *
- * @typedef {{ set_commands: function(string[]): boolean, close: function(): boolean }} RtnlListener
+ * @typedef {{ set_commands: function(int[]): boolean, close: function(): boolean }} RtnlListener
  */
 
 /**
@@ -94,7 +94,7 @@ export function request(cmd, flags, payload) {};
  * @function module:rtnl#listener
  *
  * @param {function} callback - The callback function to invoke when a message is received
- * @param {string[]} [commands] - Array of netlink commands to listen for (optional)
+ * @param {int[]} [commands] - Array of netlink commands to listen for (optional)
  * @param {int[]} [groups] - Array of multicast groups to join (optional)
  *
  * @returns {?RtnlListener}

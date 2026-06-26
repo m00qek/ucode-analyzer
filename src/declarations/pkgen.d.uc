@@ -141,7 +141,7 @@ export function error() {};
  *
  * @function module:pkgen#generate_key
  *
- * @param {object} opts
+ * @param {*} opts
  * Key generation options:
  * - `type` {string} **(required)** — `"rsa"` or `"ec"`
  * - `size` {int} (RSA only, default `2048`) — key length in bits
@@ -246,7 +246,7 @@ export function cert_info(certstr) {};
  *
  * @function module:pkgen#generate_cert
  *
- * @param {object} opts
+ * @param {*} opts
  * Certificate options:
  * - `subject_name` {string} **(required)** — subject distinguished name in
  *   mbedtls string format, e.g. `"CN=client,O=ACME,C=US"`.
@@ -321,7 +321,7 @@ export function generate_cert(opts) {};
  *
  * @function module:pkgen#generate_pkcs12
  *
- * @param {object} opts
+ * @param {*} opts
  * Bundle options:
  * - `password` {string} **(required)** — bundle password. Converted to
  *   UTF-16BE for PKCS#12 key derivation.

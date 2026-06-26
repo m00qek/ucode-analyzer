@@ -465,7 +465,7 @@ export function handle(handle, callback, events) {};
  * Optional. An array of strings representing the arguments passed to the
  * executable.
  *
- * @param {Object<string, *>} [env]
+ * @param {*} [env]
  * Optional. A dictionary describing environment variables for the process.
  *
  * @param {function} callback
@@ -830,7 +830,7 @@ export function interval(timeout, callback) {};
  *
  * @example
  * // Get the signal number that the uloop signal handler is responding to
- * const sighandler = uloop.signal("SIGINT", () => printf("Cought INT\n"));
+ * const sighandler = uloop.signal("SIGINT", () => printf("Caught INT\n"));
  * printf("Signal number: %d\n", sighandler.signo());
  */
 

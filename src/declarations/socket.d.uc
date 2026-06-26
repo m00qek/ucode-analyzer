@@ -268,11 +268,11 @@ export function sockaddr(address) {};
  * @returns {?{hostname: string, service: string}}
  *
  * @see {@link module:socket~"Socket Types"|Socket Types}
- * @see {@link module:socket~"Name Info Constants"|AName Info Constants}
+ * @see {@link module:socket~"Name Info Constants"|Name Info Constants}
  *
  * @example
  * // Resolve a network address into hostname and service name
- * const result = network.getnameinfo('192.168.1.1:80');
+ * const result = nameinfo('192.168.1.1:80');
  * print(result); // { "hostname": "example.com", "service": "http" }
  */
 export function nameinfo(address, flags) {};
@@ -297,7 +297,7 @@ export function nameinfo(address, flags) {};
  * Optional service name to resolve. If not provided, the service field of the
  * resulting address information structures is left uninitialized.
  *
- * @param {Object} [hints]
+ * @param {*} [hints]
  * Optional hints object that provides additional control over the resolution
  * process. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
@@ -394,7 +394,7 @@ export function poll(timeout, sockets) {};
  * a port number. Optional if host is specified as
  * {@link SocketAddress|SocketAddress}.
  *
- * @param {Object} [hints]
+ * @param {*} [hints]
  * Optional preferences for the socket. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
  * - `socktype`: The socket type (`SOCK_STREAM`, `SOCK_DGRAM`, etc.).
@@ -452,7 +452,7 @@ export function connect(host, service, hints, timeout) {};
  * a port number. Optional if host is specified as
  * {@link SocketAddress|SocketAddress}.
  *
- * @param {Object} [hints]
+ * @param {*} [hints]
  * Optional preferences for the socket. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
  * - `socktype`: The socket type (`SOCK_STREAM`, `SOCK_DGRAM`, etc.).
@@ -665,7 +665,7 @@ export function pair(type) {};
  * @param {int} [flags]
  * Optional flags that modify the behavior of the receive operation.
  *
- * @param {Object} [address]
+ * @param {*} [address]
  * An object where the function will store the address from which the data was
  * received. If provided, it will be filled with the details obtained from the
  * sockaddr argument of the underlying `recvfrom()` syscall. See the type
@@ -764,7 +764,7 @@ export function pair(type) {};
  * const sk = socket.listen({ family: socket.AF_UNIX, path: "/tmp/socket" });
  * sk.setopt(socket.SOL_SOCKET, socket.SO_PASSCRED, true);
  *
- * const msg = sk.recvmsg(1024, 1024); *
+ * const msg = sk.recvmsg(1024, 1024);
  * for (let cmsg in msg.ancillary)
  *   if (cmsg.level == socket.SOL_SOCKET && cmsg.type == socket.SCM_RIGHTS)
  *     print(`Got some descriptors: ${cmsg.data}!\n`);
@@ -862,7 +862,7 @@ export function pair(type) {};
  *
  * @function module:socket.socket#accept
  *
- * @param {Object} [address]
+ * @param {*} [address]
  * An optional dictionary to receive the address details of the peer socket.
  * See {@link SocketAddress|SocketAddress} for details.
  *

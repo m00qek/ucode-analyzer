@@ -207,8 +207,8 @@ export function openlog(ident, options, facility) {};
  * syslog(LOG_INFO, "This message will be logged with default settings.");
  *
  * // Selectively override used facility by OR-ing numeric constant
- * const password =" secret";
- * syslog(LOG_DEBUG|LOG_AUTHPRIV, "The password %s has been wrong", secret);
+ * const password = "secret";
+ * syslog(LOG_DEBUG|LOG_AUTHPRIV, "The password %s has been wrong", password);
  *
  * // Using priority names for logging
  * syslog("emerg", "System shutdown imminent!");

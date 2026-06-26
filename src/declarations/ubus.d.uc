@@ -147,12 +147,12 @@
  * Connection handle returned by {@link module:ubus#connect|connect()}.
  *
  * @typedef {{
- *   list: function(?string): ?object,
- *   call: function(string, string, ?object, ?int, ?int, ?function): ?object,
- *   defer: function(string, string, ?object, function, ?function, ?int, ?function): ?UbusDeferred,
- *   publish: function(string, object, ?function): ?UbusObject,
+ *   list: function(?string): ?*,
+ *   call: function(string, string, ?*, ?int, ?int, ?function): ?*,
+ *   defer: function(string, string, ?*, function, ?function, ?int, ?function): ?UbusDeferred,
+ *   publish: function(string, ?*, ?function): ?UbusObject,
  *   listener: function(string, function): ?UbusListener,
- *   event: function(string, ?object): ?boolean,
+ *   event: function(string, ?*): ?boolean,
  *   subscriber: function(function, ?function, ?string[]): ?UbusSubscriber,
  *   disconnect: function(): boolean
  * }} UbusConnection
@@ -162,8 +162,8 @@
  * Channel handle returned by {@link module:ubus#open_channel|open_channel()}.
  *
  * @typedef {{
- *   request: function(string, ?object, ?int, ?int, ?function): ?object,
- *   defer: function(string, ?object, function, ?function, ?int, ?function): ?UbusDeferred
+ *   request: function(string, ?*, ?int, ?int, ?function): ?*,
+ *   defer: function(string, ?*, function, ?function, ?int, ?function): ?UbusDeferred
  * }} UbusChannel
  */
 
@@ -308,7 +308,7 @@ export function connect(socket, timeout) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {Object} [data]
+ * @param {*} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {string|boolean} [return="single"]
@@ -339,7 +339,7 @@ export function connect(socket, timeout) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {Object} [data]
+ * @param {*} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {string|boolean} [return="single"]
@@ -377,7 +377,7 @@ export function connect(socket, timeout) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {Object} [data]
+ * @param {*} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {function} [cb]
@@ -430,7 +430,7 @@ export function connect(socket, timeout) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {Object} [data]
+ * @param {*} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {function} [cb]
@@ -468,7 +468,7 @@ export function connect(socket, timeout) {};
  *
  * @function module:ubus.request#reply
  *
- * @param {Object} [reply]
+ * @param {*} [reply]
  * The reply data to send as an object with field names and values.
  *
  * @param {int} [rcode=0]
@@ -637,7 +637,7 @@ export function connect(socket, timeout) {};
  * @param {string} type
  * The notification type string.
  *
- * @param {Object} [data]
+ * @param {*} [data]
  * Optional notification data as an object with field names and values.
  *
  * @param {function} [data_cb]
@@ -724,7 +724,7 @@ export function connect(socket, timeout) {};
  * @param {string} object_name
  * The name to register the object under.
  *
- * @param {Object} [methods]
+ * @param {*} [methods]
  * Optional object defining methods with `call` functions and optional
  * `args` type specifications.
  *
@@ -811,7 +811,7 @@ export function connect(socket, timeout) {};
  * @param {string} event_type
  * The type string identifying the event.
  *
- * @param {Object} [event_data]
+ * @param {*} [event_data]
  * Optional event data as an object with field names and values.
  *
  * @returns {?boolean}
@@ -839,10 +839,9 @@ export function connect(socket, timeout) {};
  *
  * @example
  * const conn = connect();
- * const sub = conn.subscriber("my.object", (event) => {
+ * const sub = conn.subscriber((event) => {
  *     printf("Notification: type=%s, data=%.J\n", event.type, event.data);
  * });
- * // … later, to re-subscribe …
  * sub.subscribe("my.object");
  */
 

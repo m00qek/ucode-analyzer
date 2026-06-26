@@ -55,7 +55,7 @@ export function abs(number) {};
  * Calculates the arc cosine of `x`.
  *
  * On success, this function returns the principal value of the arc
- * cosine of `x` in radians; the return value is in the range [pi, 0].
+ * cosine of `x` in radians; the return value is in the range [0, pi].
  *
  *  - If `x` is -1, pi is returned.
  *  - If `x` is  0, pi/2 is returned.
@@ -525,7 +525,7 @@ export function cbrt(x) {};
  * hypot(2, 2);   // 2.8284271247462
  * hypot(1, 1);   // 1.4142135623731
  * hypot(0, 0);   // 0.0
- * hypot(-1, -1); // -1.4142135623731
+ * hypot(-1, -1); // 1.4142135623731
  */
 export function hypot(x, y) {};
 
@@ -789,22 +789,23 @@ export function clamp(x, upper, lower) {};
 export function sign(x) {};
 
 /**
- * Returns -1 or 1 depending on the sign of the given number, or 0 if the given
- * number itself is zero. IEEE-754 behaviour.
+ * Returns a non-zero value if the sign bit of `x` is set (i.e. `x` is
+ * negative), or `0` if the sign bit is clear (positive or zero).
+ * IEEE-754 behaviour: distinguishes `-0` from `+0`.
  *
  * @function module:math#signbit
  *
  * @param {float} x number
  *
  * @returns {int}
- * Returns a non-zero value (true) if the sign bit of `x` is set (negative),
- * or `0` (false) if the sign bit is clear (positive or zero). Returns `NaN`
- * if the argument cannot be converted to a number.
+ * Returns a non-zero value if `x` is negative (including `-0.0`), or `0`
+ * if `x` is positive or `+0`. Returns `NaN` if the argument cannot be
+ * converted to a number.
  * @example
- * signbit(2);    // 1
- * signbit(-8);   // -1
+ * signbit(2);    // 0
+ * signbit(-8);   // 1
  * signbit(0);    // 0
- * signbit(-0.0); // -1
+ * signbit(-0.0); // 1
  * signbit(-0);   // 0
  */
 export function signbit(x) {};

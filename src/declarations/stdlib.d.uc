@@ -496,7 +496,7 @@ export function lc(s) {};
  *
  * 1. The array value
  * 2. The current index
- * 3. The array being filtered
+ * 3. The array being mapped
  *
  * (Note that the `filter` function behaves similarly to `map` with respect
  * to its `fn` parameters.)
@@ -1215,7 +1215,7 @@ export function match(str, pattern) {};
  * @param {RegExp|string} pattern
  * The pattern to be replaced.
  *
- * @param {Function|string} replace
+ * @param {function|string} replace
  * The replacement value.
  *
  * @param {int} [limit]
@@ -1334,7 +1334,7 @@ export function include(path, scope) {};
  *
  * @function module:core#render
  *
- * @param {string|Function} path_or_func
+ * @param {string|function} path_or_func
  * The path to the file or the function to be rendered.
  *
  * @param {Object|*} [scope_or_fnarg1]
@@ -1706,7 +1706,7 @@ export function uniq(array) {};
  *
  * Note that in contrast to the underlying `localtime(3)` C library function,
  * the values for `mon`, `wday`, and `yday` are 1-based, and the `year` is
- * 1900-based.
+ * the actual four-digit year (not years since 1900).
  *
  * @function module:core#localtime
  *
@@ -1727,7 +1727,7 @@ export function uniq(array) {};
  * //     year: 2022,
  * //     wday: 2,
  * //     yday: 81,
- * //     isdst: 0
+ * //     isdst: false
  * // }
  */
 export function localtime(epoch) {};
@@ -1756,7 +1756,7 @@ export function localtime(epoch) {};
  * //     year: 2022,
  * //     wday: 2,
  * //     yday: 81,
- * //     isdst: 0
+ * //     isdst: false
  * // }
  */
 export function gmtime(epoch) {};
@@ -1943,7 +1943,7 @@ export function gc(operation, argument) {};
  * @param {ParseConfig} [options]
  * The options for compilation.
  *
- * @returns {Function}
+ * @returns {function}
  *
  * @example
  * let fn1 = loadstring("Hello, {{ name }}", { raw_mode: false });
@@ -1975,7 +1975,7 @@ export function loadstring(code, options) {};
  * @param {ParseConfig} [options]
  * The options for compilation.
  *
- * @returns {Function}
+ * @returns {function}
  *
  * @example
  * loadfile("./templates/example.uc");  // function main() { ... }
@@ -2013,7 +2013,7 @@ export function loadfile(path, options) {};
  *
  * @function module:core#call
  *
- * @param {Function} fn
+ * @param {function} fn
  * Function value to call.
  *
  * @param {*} [ctx=null]
@@ -2098,10 +2098,10 @@ export function call(fn, ctx, scope, arg) {};
  * @param {int|string} signal
  * The signal to query/set handler for.
  *
- * @param {Function|string} [handler]
+ * @param {function|string} [handler]
  * The signal handler to install for the given signal.
  *
- * @returns {Function|string}
+ * @returns {function|string}
  *
  * @example
  * // Ignore signals

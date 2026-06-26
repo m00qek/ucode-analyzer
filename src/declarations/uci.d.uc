@@ -40,7 +40,7 @@
  *   load: function(string): ?boolean,
  *   unload: function(string): ?boolean,
  *   get: function(string, ?string, ?string): ?(string|string[]),
- *   get_all: function(?string, ?string): ?object,
+ *   get_all: function(?string, ?string): ?*,
  *   get_first: function(string, string, ?string): ?(string|string[]),
  *   add: function(string, string): ?string,
  *   set: function(string, string, *, ?*): ?boolean,
@@ -52,7 +52,7 @@
  *   save: function(?string): ?boolean,
  *   commit: function(?string): ?boolean,
  *   revert: function(?string): ?boolean,
- *   changes: function(?string): ?object,
+ *   changes: function(?string): ?*,
  *   foreach: function(string, ?string, function): ?boolean,
  *   configs: function(): ?string[]
  * }} UciCursor
@@ -83,7 +83,7 @@ export function error() {};
  *
  * A uci cursor is a context for interacting with uci configuration files. It's
  * purpose is to cache and hold changes made to loaded configuration states
- * until those changes are written out to disk or discared.
+ * until those changes are written out to disk or discarded.
  *
  * Unsaved and uncommitted changes in a cursor instance are private and not
  * visible to other cursor instances instantiated by the same program or other
@@ -234,7 +234,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * The name of the section to query within the configuration. If omitted a
  * nested dictionary containing all section values is returned.
  *
- * @returns {?object}
+ * @returns {?*}
  *
  * @example
  * const ctx = cursor(…);
@@ -347,7 +347,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * In either case, the given configuration is implicitly loaded into the cursor
  * if not already present.
  *
- * Returns the `true` if the named section was added or the specified option was
+ * Returns `true` if the named section was added or the specified option was
  * set.
  *
  * Returns `null` on error, e.g. if the targeted configuration was not found or
@@ -400,7 +400,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * In either case, the given configuration is implicitly loaded into the cursor
  * if not already present.
  *
- * Returns the `true` if specified option or section has been deleted.
+ * Returns `true` if specified option or section has been deleted.
  *
  * Returns `null` on error, e.g. if the targeted configuration was not found or
  * if an invalid value was passed.
@@ -487,7 +487,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  *
  * Returns `true` if the item was successfully removed from the list.
  *
- * Returns `null` on error, e.g. if the targeted option was not foundor if an
+ * Returns `null` on error, e.g. if the targeted option was not found or if an
  * invalid value was passed.
  *
  * @function module:uci.cursor#list_remove
@@ -530,7 +530,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * In either case, the given configuration is implicitly loaded into the cursor
  * if not already present.
  *
- * Returns the `true` if specified option or section has been renamed.
+ * Returns `true` if specified option or section has been renamed.
  *
  * Returns `null` on error, e.g. if the targeted configuration was not found or
  * if an invalid value was passed.
@@ -576,7 +576,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * The given configuration is implicitly loaded into the cursor if not already
  * present.
  *
- * Returns the `true` if specified section has been moved.
+ * Returns `true` if specified section has been moved.
  *
  * Returns `null` on error, e.g. if the targeted configuration was not found or
  * if an invalid value was passed.
@@ -655,7 +655,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * functionality is required, changes may be committed directly using `commit()`
  * instead, bypassing any delta record creation.
  *
- * Returns the `true` if operation completed successfully.
+ * Returns `true` if operation completed successfully.
  *
  * Returns `null` on error, e.g. if the requested configuration was not loaded
  * or when a file system error occurred.
@@ -690,7 +690,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * configuration files with either present delta records or yet unsaved
  * cursor changes are updated.
  *
- * Returns the `true` if operation completed successfully.
+ * Returns `true` if operation completed successfully.
  *
  * Returns `null` on error, e.g. if the requested configuration was not loaded
  * or when a file system error occurred.
@@ -721,7 +721,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * configuration files with either present delta records or yet unsaved
  * cursor changes are reverted.
  *
- * Returns the `true` if operation completed successfully.
+ * Returns `true` if operation completed successfully.
  *
  * Returns `null` on error, e.g. if the requested configuration was not loaded
  * or when a file system error occurred.
@@ -765,7 +765,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * The name of the configuration file to enumerate changes for, e.g. `"system"`
  * to query pending changes for the `/etc/config/system` file.
  *
- * @returns {?object}
+ * @returns {?*}
  *
  * @example
  * const ctx = cursor(…);

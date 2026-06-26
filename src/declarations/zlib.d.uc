@@ -111,7 +111,7 @@ export function deflater(gzip, level) {};
  *
  * Input data must be a string, it is internally compressed by the zlib `deflate()` routine,
  * the end result is buffered according to the requested `flush` mode until read via
- * {@link module:zlib.zstrmd#read}.
+ * {@link module:zlib.deflate#read}.
  * Valid `flush`values are `Z_NO_FLUSH` (the default),
  * `Z_SYNC_FLUSH, Z_PARTIAL_FLUSH, Z_FULL_FLUSH, Z_FINISH`.
  * If `flush` is `Z_FINISH` then no more data can be written to the stream.

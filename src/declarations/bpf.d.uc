@@ -206,7 +206,7 @@ export function set_debug_handler(handler) {};
  * Filesystem path to the BPF ELF object file (e.g.
  * `"/usr/lib/bpf/classifier.o"`).
  *
- * @param {object} [opts]
+ * @param {*} [opts]
  * Optional load-time configuration:
  * - `rodata` {string} — raw bytes written verbatim into the first
  *   `.rodata` map before loading. The length must exactly match the
@@ -402,7 +402,7 @@ export function tc_detach(ifname, type, prio) {};
  * const val = map.get(42);
  *
  * // Struct key via struct module
- * import { unpack } from 'struct';
+ * import { pack } from 'struct';
  * const raw = map.get(pack('>I', [192 << 24 | 168 << 16 | 1 << 8 | 1]));
  */
 
