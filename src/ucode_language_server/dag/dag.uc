@@ -159,8 +159,12 @@ function _resolveExportFull(uri, name) {
 			if (exp.memberRef) {
 				if (imp.alias !== exp.memberRef.alias) continue;
 				return _resolveExportFull(imp.resolvedUri, exp.memberRef.member) ?? { exp, uri, name };
+			} else if (imp.alias === exp.localRef) {
+				// namespace re-export: export const X = moduleAlias
+				// Look for an export named X in the module — same name, different file.
+				return _resolveExportFull(imp.resolvedUri, name) ?? { exp, uri, name };
 			} else {
-				// localRef: export const X = importedAlias
+				// localRef: export const X = importedAlias (named import)
 				if (imp.alias || index(imp.symbols, exp.localRef) < 0) continue;
 				let remoteName = (imp.renames && imp.renames[exp.localRef]) ?? exp.localRef;
 				return _resolveExportFull(imp.resolvedUri, remoteName) ?? { exp, uri, name };

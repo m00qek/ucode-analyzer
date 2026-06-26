@@ -70,7 +70,8 @@ export function hover(doc, position) {
 	let md = sprintf('```ucode\n%s: %s\n```', label, typeStr);
 
 	if (ts.nodeType(node) === 'identifier') {
-		let expDoc = importedDoc(doc.uri, label) ?? resolvedExportDoc(doc.uri, label) ?? builtinDoc(label);
+		let expDoc = importedDoc(doc.uri, label) ?? resolvedExportDoc(doc.uri, label);
+		if (!expDoc && type.kind !== 'module') expDoc = builtinDoc(label);
 		if (expDoc) md = renderDoc(expDoc, md);
 	}
 

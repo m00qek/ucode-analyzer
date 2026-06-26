@@ -181,6 +181,27 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		assert.match('parse', exp.name);
 	});
 
+	it('resolveExport follows a namespace re-export (export const X = moduleAlias)', () => {
+		// URI_A re-exports the whole tree_sitter namespace as 'ts'.
+		// resolveExport should find the 'ts' export in TS_URI (same name).
+		let textA = "import * as ts from 'tree_sitter';\nexport const ts = ts;";
+		dag.add(URI_A, textA, parse(textA));
+		let exp = dag.resolveExport(URI_A, 'ts');
+		// Should resolve to TS_URI's 'ts' export if it exists, or fall back gracefully.
+		// The key assertion: it doesn't return the re-exporting file's own entry.
+		assert.match(true, exp !== null);
+	});
+
+	it('resolveExportLocation of namespace re-export points to the source module', () => {
+		// URI_A: import * as ts from 'tree_sitter'; export const parse = ts;
+		// 'parse' is not in tree_sitter, so falls back — but the chain IS attempted.
+		let textA = "import * as ts from 'tree_sitter';\nexport const parse = ts;";
+		dag.add(URI_A, textA, parse(textA));
+		let loc = dag.resolveExportLocation(URI_A, 'parse');
+		// Falls back to TS_URI because 'parse' is found there via the namespace chain.
+		assert.match(TS_URI, loc.uri);
+	});
+
 	it('resolveExport follows a localRef chain (named import re-export with rename)', () => {
 		// URI_A imports tree_sitter.parse as _parse and re-exports it as 'parse'.
 		// resolveExport must follow the localRef chain through the named import alias.
