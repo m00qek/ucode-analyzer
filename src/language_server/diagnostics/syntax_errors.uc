@@ -1,13 +1,7 @@
 import * as ts from 'tree_sitter';
-import { offsetToPosition, buildLineTable } from 'language_server.positions';
+import { buildLineTable, rangeOf } from 'language_server.positions';
 
 let SEVERITY_ERROR = 1;
-
-function rangeOf(text, lineTable, node) {
-	let start = offsetToPosition(text, lineTable, ts.startByte(node));
-	let end   = offsetToPosition(text, lineTable, ts.endByte(node));
-	return { start, end };
-}
 
 // Walk the AST and collect all ERROR nodes.
 // tree-sitter inserts an ERROR node wherever it could not parse the source;

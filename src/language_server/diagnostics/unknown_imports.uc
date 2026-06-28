@@ -1,15 +1,8 @@
 import * as ts from 'tree_sitter';
-import { offsetToPosition, buildLineTable } from 'language_server.positions';
+import { buildLineTable, rangeOf } from 'language_server.positions';
 import * as dag from 'language_server.dag.dag';
 
 let SEVERITY_ERROR = 1;
-
-function rangeOf(text, node) {
-	let lineTable = buildLineTable(text);
-	let start = offsetToPosition(text, lineTable, ts.startByte(node));
-	let end   = offsetToPosition(text, lineTable, ts.endByte(node));
-	return { start, end };
-}
 
 export function unknownImports(uri, doc) {
 	let imps = dag.importsOf(uri);
@@ -20,6 +13,7 @@ export function unknownImports(uri, doc) {
 		if (!imps[i].resolvedUri) unresolved[imps[i].specifier] = true;
 	if (!length(keys(unresolved))) return [];
 
+	let lineTable = buildLineTable(doc.text);
 	let diags = [];
 	let reported = {};
 	let root = ts.rootNode(doc.tree);
@@ -37,7 +31,7 @@ export function unknownImports(uri, doc) {
 			if (unresolved[specifier] && !exists(reported, specifier)) {
 				reported[specifier] = true;
 				push(diags, {
-					range: rangeOf(doc.text, c),
+					range: rangeOf(doc.text, lineTable, c),
 					severity: SEVERITY_ERROR,
 					message: sprintf("Cannot find module '%s'", specifier),
 				});

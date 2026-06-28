@@ -1,16 +1,10 @@
 import * as ts from 'tree_sitter';
-import { offsetToPosition, buildLineTable } from 'language_server.positions';
+import { buildLineTable, rangeOf } from 'language_server.positions';
 
 // LSP SymbolKind constants
 let KIND_FUNCTION  = 12;
 let KIND_VARIABLE  = 13;
 let KIND_CONSTANT  = 14;
-
-function rangeOf(text, lineTable, node) {
-	let start = offsetToPosition(text, lineTable, ts.startByte(node));
-	let end   = offsetToPosition(text, lineTable, ts.endByte(node));
-	return { start, end };
-}
 
 // Recursively collect DocumentSymbol entries from node into result.
 //

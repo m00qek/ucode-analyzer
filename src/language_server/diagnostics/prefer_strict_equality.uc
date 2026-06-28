@@ -1,13 +1,7 @@
 import * as ts from 'tree_sitter';
-import { offsetToPosition, buildLineTable } from 'language_server.positions';
+import { buildLineTable, rangeOf } from 'language_server.positions';
 
 let SEVERITY_HINT = 4;
-
-function rangeOf(text, lineTable, node) {
-	let start = offsetToPosition(text, lineTable, ts.startByte(node));
-	let end   = offsetToPosition(text, lineTable, ts.endByte(node));
-	return { start, end };
-}
 
 function collect(node, source, lineTable, out) {
 	if (ts.nodeType(node) === 'binary_expression') {

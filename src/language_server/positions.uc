@@ -114,3 +114,9 @@ export function offsetToPosition(text, lineTable, offset) {
 
 	return { line, character };
 };
+
+export function rangeOf(text, lineTable, node) {
+	let start = offsetToPosition(text, lineTable, ts.startByte(node));
+	let end   = offsetToPosition(text, lineTable, ts.endByte(node));
+	return { start, end };
+};

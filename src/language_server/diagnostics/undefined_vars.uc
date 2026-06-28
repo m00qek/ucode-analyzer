@@ -1,15 +1,9 @@
 import * as ts from 'tree_sitter';
-import { offsetToPosition, buildLineTable } from 'language_server.positions';
+import { buildLineTable, rangeOf } from 'language_server.positions';
 import * as dag from 'language_server.dag.dag';
 import { stdlibUri } from 'language_server.types.inferrer';
 
 let SEVERITY_WARNING = 2;
-
-function rangeOf(text, lineTable, node) {
-	let start = offsetToPosition(text, lineTable, ts.startByte(node));
-	let end   = offsetToPosition(text, lineTable, ts.endByte(node));
-	return { start, end };
-}
 
 // ── Scope helpers ─────────────────────────────────────────────────────────────
 
