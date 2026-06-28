@@ -123,3 +123,71 @@ describe('positions (nodeAtOffset)', () => {
 		assert.match('program', ts.nodeType(pos.nodeAtOffset(root, 999)));
 	});
 });
+
+describe('positions (docBefore)', () => {
+	let _p = ts.newParser(ts.ucode());
+
+	function parse(text) { return ts.parse(_p, text); }
+	function root(text) { return ts.rootNode(parse(text)); }
+
+	// Find the first named child with the given node type.
+	// Safer than index arithmetic because comment nodes are named in
+	// tree-sitter-ucode, so namedChild(r, 0) may be the comment, not the stmt.
+	function findChild(parent, nodeType) {
+		let children = ts.namedChildren(parent);
+		for (let i = 0; i < length(children); i++)
+			if (ts.nodeType(children[i]) === nodeType) return children[i];
+		return null;
+	}
+
+	function findChildren(parent, nodeType) {
+		let result = [];
+		let children = ts.namedChildren(parent);
+		for (let i = 0; i < length(children); i++)
+			if (ts.nodeType(children[i]) === nodeType) push(result, children[i]);
+		return result;
+	}
+
+	it('returns null when no comment precedes the statement', () => {
+		let text = 'export function foo() {};';
+		let r = root(text);
+		assert.match(null, pos.docBefore(findChild(r, 'export_statement'), r, text));
+	});
+
+	it('returns the /** */ text immediately before the statement', () => {
+		let text = '/** doc */\nexport function foo() {};';
+		let r = root(text);
+		assert.match('/** doc */', pos.docBefore(findChild(r, 'export_statement'), r, text));
+	});
+
+	it('returns null for a // line comment — only /** */ counts', () => {
+		let text = '// not jsdoc\nexport function foo() {};';
+		let r = root(text);
+		assert.match(null, pos.docBefore(findChild(r, 'export_statement'), r, text));
+	});
+
+	it('resets when a named node intervenes between /** */ and statement', () => {
+		let text = '/** doc */\nexport function a() {};\nexport function b() {};';
+		let r = root(text);
+		let stmts = findChildren(r, 'export_statement');
+		assert.match(null, pos.docBefore(stmts[1], r, text));
+	});
+
+	it('picks the last /** */ when two appear consecutively', () => {
+		let text = '/** first */\n/** second */\nexport function foo() {};';
+		let r = root(text);
+		assert.match('/** second */', pos.docBefore(findChild(r, 'export_statement'), r, text));
+	});
+
+	it('works for a pair inside an object literal (non-root parent)', () => {
+		let text = 'export const ns = { /** greet */ greet: function() {} };';
+		let r = root(text);
+		let expStmt = findChild(r, 'export_statement');
+		let lexDecl = ts.namedChild(expStmt, 0);
+		let varDecl = ts.namedChild(lexDecl, 0);
+		let objNode = ts.childByField(varDecl, 'value');
+		let pair    = findChild(objNode, 'pair');
+		let docTxt  = pos.docBefore(pair, objNode, text);
+		assert.match(true, docTxt !== null && index(docTxt, 'greet') >= 0);
+	});
+});

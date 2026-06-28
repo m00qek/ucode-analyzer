@@ -2,26 +2,8 @@ import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import { parseDoc } from 'ucode_language_server.types.doc_parser';
 import * as type_registry from 'ucode_language_server.types.registry';
-import { buildLineTable, offsetToPosition } from 'ucode_language_server.positions';
+import { buildLineTable, offsetToPosition, docBefore } from 'ucode_language_server.positions';
 
-// Return the text of the /** */ block immediately before stmt among root's
-// children, or null if none. A // comment or any other statement resets.
-function precedingDocText(stmt, root, text) {
-	let stmtStart = ts.startByte(stmt);
-	let found = null;
-	let children = ts.children(root);
-	for (let i = 0; i < length(children); i++) {
-		let c = children[i];
-		if (ts.startByte(c) >= stmtStart) break;
-		if (ts.nodeType(c) === 'comment') {
-			let txt = ts.text(c, text);
-			found = (substr(txt, 0, 3) === '/**') ? txt : null;
-		} else if (ts.isNamed(c)) {
-			found = null;
-		}
-	}
-	return found;
-}
 
 function dotToSlash(s) {
 	let out = '';
@@ -41,7 +23,7 @@ function localDeclInfo(root, text, name) {
 		if (nt === 'function_declaration') {
 			let nameNode = ts.namedChild(stmt, 0);
 			if (nameNode && ts.text(nameNode, text) === name) {
-				let docText = precedingDocText(stmt, root, text);
+				let docText = docBefore(stmt, root, text);
 				return { kind: 'function', doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
 			}
 		} else if (nt === 'lexical_declaration') {
@@ -53,7 +35,7 @@ function localDeclInfo(root, text, name) {
 				let init = ts.childByField(vd, 'value');
 				let it = init ? ts.nodeType(init) : null;
 				let kind = (it === 'arrow_function' || it === 'function_expression') ? 'function' : 'let';
-				let docText = precedingDocText(stmt, root, text);
+				let docText = docBefore(stmt, root, text);
 				return { kind, doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
 			}
 		}
@@ -94,7 +76,7 @@ function extractObjectProperties(objectNode, root, text) {
 		let kind, doc, properties;
 		if (vtype === 'function_expression' || vtype === 'arrow_function') {
 			kind       = 'function';
-			let docText = precedingDocText(pair, objectNode, text);
+			let docText = docBefore(pair, objectNode, text);
 			doc        = docText ? parseDoc(docText) : null;
 			properties = null;
 		} else if (vtype === 'identifier') {
@@ -134,7 +116,7 @@ export function extractExports(text, tree) {
 
 		let declType = ts.nodeType(decl);
 
-		let docText = precedingDocText(stmt, root, text);
+		let docText = docBefore(stmt, root, text);
 		let doc = docText ? parseDoc(docText) : null;
 
 		if (declType === 'function_declaration') {

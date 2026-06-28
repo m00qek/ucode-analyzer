@@ -11,6 +11,26 @@ export function nodeAtOffset(node, offset) {
 	return node;
 };
 
+// Return the text of the /** */ comment immediately before stmt among parent's
+// children, or null. A // comment or any intervening named node resets the
+// search — only an unbroken /** */ directly before stmt counts.
+export function docBefore(stmt, parent, text) {
+	let stmtStart = ts.startByte(stmt);
+	let found = null;
+	let children = ts.children(parent);
+	for (let i = 0; i < length(children); i++) {
+		let c = children[i];
+		if (ts.startByte(c) >= stmtStart) break;
+		if (ts.nodeType(c) === 'comment') {
+			let txt = ts.text(c, text);
+			found = (substr(txt, 0, 3) === '/**') ? txt : null;
+		} else if (ts.isNamed(c)) {
+			found = null;
+		}
+	}
+	return found;
+};
+
 // Build a table of byte offsets at which each line starts.
 // lines[n] is the byte offset of the first byte on line n.
 export function buildLineTable(text) {

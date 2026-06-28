@@ -5,15 +5,15 @@ import { unify, substitute } from 'ucode_language_server.types.unifier';
 import { memoGet, memoSet } from 'ucode_language_server.memo';
 import { makeScope, scopeGet, scopeSet } from 'ucode_language_server.types.scope';
 import { UNKNOWN, BOOL, STR, INT, NULL_T, unionOf, memberOfType } from 'ucode_language_server.types.type_utils';
+import { docBefore } from 'ucode_language_server.positions';
 
 let _builtinScope = makeScope(null);
 let _stdlibUri    = null;
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
 
-// Return the text of the /** */ comment immediately before the nearest
-// statement containing node (stopping at program or statement_block).
-// Any intervening named node or // comment resets.
+// Walk up to the nearest enclosing program or statement_block, then return
+// the /** */ immediately before the containing statement via docBefore.
 function precedingDoc(node, source) {
 	let target = node;
 	let p = ts.parent(target);
@@ -23,22 +23,7 @@ function precedingDoc(node, source) {
 		target = p;
 		p = ts.parent(target);
 	}
-	if (!p) return null;
-
-	let targetStart = ts.startByte(target);
-	let found = null;
-	let children = ts.children(p);
-	for (let i = 0; i < length(children); i++) {
-		let c = children[i];
-		if (ts.startByte(c) >= targetStart) break;
-		if (ts.nodeType(c) === 'comment') {
-			let txt = ts.text(c, source);
-			found = (substr(txt, 0, 3) === '/**') ? txt : null;
-		} else if (ts.isNamed(c)) {
-			found = null;
-		}
-	}
-	return found;
+	return p ? docBefore(target, p, source) : null;
 }
 
 // ── DAG helpers ────────────────────────────────────────────────────────────
