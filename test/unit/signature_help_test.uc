@@ -96,4 +96,27 @@ describe('signatureHelp', () => {
 		assert.match(true, result !== null);
 		assert.match(3, length(result.signatures[0].parameters));
 	});
+
+	it('resolves generic T to the concrete type inferred from the first argument', () => {
+		// arrow functions in let bindings do not pick up JSDoc; function declarations do.
+		let text = [
+			'/**',
+			' * @template T',
+			' * @param {T} a',
+			' * @param {T} b',
+			' * @returns {T}',
+			' */',
+			'function pair(a, b) { return a; }',
+			'pair(1, 2);',
+		];
+		let src = join('\n', text) + '\n';
+		documents.open(URI, src, 1);
+		dag.add(URI, src, documents.get(URI).tree);
+
+		// cursor on '2' (second arg) — T should be resolved to 'int' from first arg
+		let result = signatureHelp(URI, documents.get(URI), { line: 7, character: 7 });
+
+		assert.match(true, result !== null);
+		assert.match(true, index(result.signatures[0].label, 'int') >= 0);
+	});
 });

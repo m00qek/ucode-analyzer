@@ -2,6 +2,7 @@ import * as ts from 'tree_sitter';
 import { positionToOffset } from 'ucode_language_server.positions';
 import { buildScope, inferNode } from 'ucode_language_server.types.inferrer';
 import { typeToString } from 'ucode_language_server.types.doc_parser';
+import { unify, substitute } from 'ucode_language_server.types.unifier';
 
 // Walk the tree depth-first; return the innermost call_expression whose
 // arguments node contains offset.
@@ -74,8 +75,20 @@ export function signatureHelp(uri, doc, position) {
 	let fnType  = inferNode(fnNode, doc.text, uri, scope);
 	if (!fnType || fnType.kind !== 'function') return null;
 
+	// Resolve generic type parameters from the arguments already supplied.
+	// Unifying each argument's inferred type against its declared parameter type
+	// builds bindings like {T: int}, then substitute applies them to the whole
+	// function type so the label shows concrete types instead of T.
+	let bindings = {};
+	let args = ts.namedChildren(argsNode);
+	for (let i = 0; i < length(args); i++) {
+		let paramType = (i < length(fnType.params)) ? (fnType.params[i].type ?? { kind: 'unknown' }) : { kind: 'unknown' };
+		unify(paramType, inferNode(args[i], doc.text, uri, scope), bindings, 0);
+	}
+	let concreteFnType = substitute(fnType, bindings);
+
 	let fnName = ts.text(fnNode, doc.text);
-	let sig    = buildSignature(fnName, fnType);
+	let sig    = buildSignature(fnName, concreteFnType);
 	let active = activeParam(argsNode, offset);
 	active = min(active, length(sig.parameters) - 1);
 
