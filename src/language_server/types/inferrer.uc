@@ -30,7 +30,7 @@ function precedingDoc(node, source) {
 
 function exportType(exp) {
 	if (exp._moduleSpecifier) return { kind: 'module', path: exp._moduleSpecifier };
-	if (exp.kind === 'function') {
+	if (exp.kind === 'function' || (exp.doc && (length(exp.doc.params) > 0 || exp.doc.returns))) {
 		if (!exp.doc) return UNKNOWN;
 		return {
 			kind: 'function',

@@ -4,9 +4,8 @@
  * mod/native.c is a thin, mechanical FFI layer with minimal validation.
  * This module is where argument-checking with useful error messages,
  * structured results, and collection helpers (looping over children in
- * ucode instead of C) belong. Functions that are pure renames of a native
- * one are just re-exported directly; only the ones that add real
- * validation/logic are wrapped.
+ * ucode instead of C) belong. Pure native pass-throughs are re-exported
+ * as const; only functions that add validation or logic are wrapped.
  */
 
 import * as native from 'tree_sitter.native';
@@ -48,17 +47,13 @@ function pointAt(source, byteOffset) {
  * Return the tree-sitter language handle for the ucode grammar.
  * @returns {Language}
  */
-export function ucode() {
-	return native.ts_language_ucode();
-};
+export const ucode = native.ts_language_ucode;
 
 /**
  * Return the tree-sitter language handle for the ucdocs grammar.
  * @returns {Language}
  */
-export function ucdocs() {
-	return native.ts_language_ucdocs();
-};
+export const ucdocs = native.ts_language_ucdocs;
 
 // ── Parser lifecycle ──────────────────────────────────────────────────────
 
@@ -135,27 +130,21 @@ export function reparse(parser, oldTree, oldSource, newSource, startByte, oldEnd
  * @param {Tree} tree
  * @returns {Node}
  */
-export function rootNode(tree) {
-	return native.ts_root_node(tree);
-};
+export const rootNode = native.ts_root_node;
 
 /**
  * Return the grammar node type name of a node (e.g. 'identifier', 'string').
  * @param {Node} node
  * @returns {string}
  */
-export function nodeType(node) {
-	return native.ts_node_type(node);
-};
+export const nodeType = native.ts_node_type;
 
 /**
  * Return true if node is a named node (as opposed to an anonymous token).
  * @param {Node} node
  * @returns {boolean}
  */
-export function isNamed(node) {
-	return native.ts_node_is_named(node);
-};
+export const isNamed = native.ts_node_is_named;
 
 /**
  * Return the source text that node spans.
@@ -173,36 +162,28 @@ export function text(node, source) {
  * @param {Node} node
  * @returns {int}
  */
-export function startByte(node) {
-	return native.ts_node_start_byte(node);
-};
+export const startByte = native.ts_node_start_byte;
 
 /**
  * Return the byte offset of the end of node in the source (exclusive).
  * @param {Node} node
  * @returns {int}
  */
-export function endByte(node) {
-	return native.ts_node_end_byte(node);
-};
+export const endByte = native.ts_node_end_byte;
 
 /**
  * Return the total number of children of node (named and anonymous).
  * @param {Node} node
  * @returns {int}
  */
-export function childCount(node) {
-	return native.ts_node_child_count(node);
-};
+export const childCount = native.ts_node_child_count;
 
 /**
  * Return the number of named children of node.
  * @param {Node} node
  * @returns {int}
  */
-export function namedChildCount(node) {
-	return native.ts_node_named_child_count(node);
-};
+export const namedChildCount = native.ts_node_named_child_count;
 
 /**
  * Return the i-th child of node (named and anonymous, 0-based).
@@ -210,9 +191,7 @@ export function namedChildCount(node) {
  * @param {int} index
  * @returns {?Node}
  */
-export function child(node, index) {
-	return native.ts_node_child(node, index);
-};
+export const child = native.ts_node_child;
 
 /**
  * Return the i-th named child of node (0-based).
@@ -220,9 +199,7 @@ export function child(node, index) {
  * @param {int} index
  * @returns {?Node}
  */
-export function namedChild(node, index) {
-	return native.ts_node_named_child(node, index);
-};
+export const namedChild = native.ts_node_named_child;
 
 /**
  * Return the first child of node with the given field name, or null.
@@ -241,9 +218,7 @@ export function childByField(node, name) {
  * @param {Node} node
  * @returns {?Node}
  */
-export function parent(node) {
-	return native.ts_node_parent(node);
-};
+export const parent = native.ts_node_parent;
 
 /**
  * Return all children of node (named and anonymous) as an array.
@@ -293,9 +268,7 @@ export function newQuery(language, source) {
  * @param {Query} query
  * @returns {int}
  */
-export function patternCount(query) {
-	return native.ts_query_pattern_count(query);
-};
+export const patternCount = native.ts_query_pattern_count;
 
 /*
  * Tree-sitter's C core only hands back the raw predicate step array for a

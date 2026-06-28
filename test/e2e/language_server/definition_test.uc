@@ -80,7 +80,7 @@ describe('textDocument/definition', () => {
 	});
 
 	it('follows a named import to an inline export function', () => {
-		// parse is at line 80 col 16 in tree_sitter.uc (after 'export function ')
+		// parse is at line 75 col 16 in tree_sitter.uc (after 'export function ')
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
 				text: "import { parse } from 'tree_sitter';\nparse;\n" },
@@ -94,7 +94,7 @@ describe('textDocument/definition', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, index(resp.result.uri, 'tree_sitter') >= 0);
-		assert.match(80, resp.result.range.start.line);
+		assert.match(75, resp.result.range.start.line);
 		assert.match(16, resp.result.range.start.character);
 	});
 
@@ -207,7 +207,7 @@ describe('textDocument/definition', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, index(resp.result.uri, 'tree_sitter') >= 0);
-		assert.match(80, resp.result.range.start.line);
+		assert.match(75, resp.result.range.start.line);
 		assert.match(16, resp.result.range.start.character);
 	});
 
@@ -241,7 +241,7 @@ describe('textDocument/definition', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, index(resp.result.uri, 'tree_sitter') >= 0);
-		assert.match(80, resp.result.range.start.line);
+		assert.match(75, resp.result.range.start.line);
 		assert.match(16, resp.result.range.start.character);
 	});
 });
