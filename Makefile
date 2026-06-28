@@ -76,7 +76,7 @@ test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 		test/unit/language_server/types/
 
 test-e2e: .docker-image $(BUILD_DIR)/tree_sitter_native.so
-	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) test/e2e/
+	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) -j 8 test/e2e/language_server/
 
 test-integration: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/integration/language_server/utest.config.uc $(REPORTER) test/integration/language_server/

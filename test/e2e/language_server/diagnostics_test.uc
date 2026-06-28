@@ -1,0 +1,58 @@
+import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import * as lsp from 'client';
+
+describe('textDocument/publishDiagnostics', () => {
+	let proc;
+
+	beforeEach(() => {
+		proc = lsp.connect();
+		lsp.initialize(proc);
+	});
+
+	afterEach(() => {
+		lsp.shutdown(proc);
+		assert.match(0, lsp.close(proc));
+	});
+
+	it('sends notification with error diagnostic for unresolvable import', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { foo } from 'no_such_module';" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		assert.match('file:///t.uc', notif.params.uri);
+		assert.match(1, length(notif.params.diagnostics));
+		assert.match(1, notif.params.diagnostics[0].severity);  // ERROR
+	});
+
+	it('sends notification with empty diagnostics for a valid file', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		assert.match(0, length(notif.params.diagnostics));
+	});
+
+	it('re-sends diagnostics on didChange', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
+		}});
+		lsp.receiveNotification(proc);  // consume the didOpen notification
+
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
+			textDocument: { uri: 'file:///t.uc', version: 2 },
+			contentChanges: [{ text: "import { foo } from 'bad_module';" }],
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		assert.match(1, length(notif.params.diagnostics));
+	});
+});
