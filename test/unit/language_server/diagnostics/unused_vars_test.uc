@@ -94,6 +94,15 @@ describe('diagnostics — unused variables', () => {
 		assert.match(true, index(names, "'inner_unused' is declared but never used") >= 0);
 	});
 
+	it('warns for a variable declared inside an if-body that is never used', () => {
+		let text = "if (true) { let inner_unused = 1; }\n";
+		documents.open(URI, text, 1);
+
+		let diags = unusedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(true, index(names, "'inner_unused' is declared but never used") >= 0);
+	});
+
 	it('warns when outer variable is shadowed by inner function param and never used outside', () => {
 		// Outer x is never used (only the param declaration site shadows it).
 		// Before fix: the x in formal_parameters was counted as a use → no warning.

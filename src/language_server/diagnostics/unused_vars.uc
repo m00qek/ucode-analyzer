@@ -69,11 +69,10 @@ function collectDeclarations(root, source, out) {
 			return;
 		}
 
-		if (nt === 'statement_block' || nt === 'program') {
-			for (let i = 0; i < ts.namedChildCount(node); i++)
-				walk(ts.namedChild(node, i));
-			return;
-		}
+		// Default: recurse into all named children so declarations inside
+		// if/while/for/try bodies are not missed.
+		for (let i = 0; i < ts.namedChildCount(node); i++)
+			walk(ts.namedChild(node, i));
 	}
 	walk(root);
 }
