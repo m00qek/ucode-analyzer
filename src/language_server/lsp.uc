@@ -85,6 +85,7 @@ export function run(config) {
 		'textDocument/didOpen': function(msg) {
 			let td = msg.params.textDocument;
 			documents.open(td.uri, td.text, td.version);
+			dag.markOpen(td.uri);
 			let doc = documents.get(td.uri);
 			invalidateUri(td.uri);
 			let cascaded = dag.update(td.uri, doc.text, doc.tree);
@@ -114,6 +115,7 @@ export function run(config) {
 		'textDocument/didClose': function(msg) {
 			let uri = msg.params.textDocument.uri;
 			documents.close(uri);
+			dag.markClosed(uri);
 			protocol.notify('textDocument/publishDiagnostics', { uri, diagnostics: [] });
 		},
 
@@ -143,7 +145,9 @@ export function run(config) {
 		'textDocument/references': function(msg) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
-			protocol.respond(msg.id, doc ? referencesDoc(uri, doc, msg.params.position) : null);
+			let ctx = msg.params.context;
+			let includeDecl = (ctx && ctx.includeDeclaration === false) ? false : true;
+			protocol.respond(msg.id, doc ? referencesDoc(uri, doc, msg.params.position, includeDecl) : null);
 		},
 
 		'textDocument/documentSymbol': function(msg) {

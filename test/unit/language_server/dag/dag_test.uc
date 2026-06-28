@@ -301,3 +301,65 @@ describe('dag.resolveMember', () => {
 		assert.match(true, dag.exportsOf(TS_URI) !== null);
 	});
 });
+
+describe('dag circular re-export guard', () => {
+	beforeEach(reset);
+
+	it('resolveExport does not recurse infinitely on a circular re-export', () => {
+		// A re-exports from B, B re-exports from A — without a visited guard this
+		// would infinite-loop; with it we must return null cleanly.
+		let URI_C = 'file:///app/src/c.uc';
+		let textA = "import { bFoo } from 'b';\nexport const aFoo = bFoo;";
+		let textB = "import { aFoo } from 'a';\nexport const bFoo = aFoo;";
+
+		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'] } });
+		dag.add(URI_A, textA, parse(textA));
+		dag.add(URI_B, textB, parse(textB));
+		dag.remove(URI_C);
+
+		// Must return without hanging; result is null or a valid entry.
+		let result = dag.resolveExport(URI_A, 'aFoo');
+		// The important assertion is that we reached here at all (no infinite loop).
+		assert.match(true, result === null || result.name === 'aFoo');
+	});
+});
+
+describe('dag markOpen / cascade skip', () => {
+	// URI_B imports tree_sitter (which exists on disk), so B is a reverse dep of TS_URI.
+	// When TS_URI is updated, the cascade would normally re-index B from disk.
+	let TEXT_B_IMPORTS_TS_OPEN = "import * as ts from 'tree_sitter';\nexport function openVersion() {};";
+	let TEXT_B_IMPORTS_TS_DISK = "import * as ts from 'tree_sitter';\nexport function diskVersion() {};";
+	let TEXT_TS_UPDATED = "export const ts_updated = true;";
+
+	beforeEach(() => {
+		reset();
+		dag.addFromDisk(TS_URI);
+		dag.add(URI_B, TEXT_B_IMPORTS_TS_OPEN, parse(TEXT_B_IMPORTS_TS_OPEN));
+	});
+
+	it('cascade update does not overwrite an open file from disk', () => {
+		dag.markOpen(URI_B);
+
+		mock.global.patch('fs', { data: { '/app/src/b.uc': TEXT_B_IMPORTS_TS_DISK } });
+		dag.update(TS_URI, TEXT_TS_UPDATED, parse(TEXT_TS_UPDATED));
+		mock.global.unpatch('fs');
+
+		let exps = dag.exportsOf(URI_B);
+		let names = map(exps ?? [], (e) => e.name);
+		assert.match(true, index(names, 'openVersion') >= 0);
+		assert.match(false, index(names, 'diskVersion') >= 0);
+	});
+
+	it('markClosed allows cascade to re-index from disk again', () => {
+		dag.markOpen(URI_B);
+		dag.markClosed(URI_B);
+
+		mock.global.patch('fs', { data: { '/app/src/b.uc': TEXT_B_IMPORTS_TS_DISK } });
+		dag.update(TS_URI, TEXT_TS_UPDATED, parse(TEXT_TS_UPDATED));
+		mock.global.unpatch('fs');
+
+		let exps = dag.exportsOf(URI_B);
+		let names = map(exps ?? [], (e) => e.name);
+		assert.match(true, index(names, 'diskVersion') >= 0);
+	});
+});

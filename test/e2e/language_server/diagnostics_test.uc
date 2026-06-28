@@ -24,8 +24,10 @@ describe('textDocument/publishDiagnostics', () => {
 
 		assert.match('textDocument/publishDiagnostics', notif.method);
 		assert.match('file:///t.uc', notif.params.uri);
-		assert.match(1, length(notif.params.diagnostics));
-		assert.match(1, notif.params.diagnostics[0].severity);  // ERROR
+		// Expect at least one ERROR-severity diagnostic for the bad import.
+		// (An unused-import WARNING for 'foo' may also be present.)
+		let errDiags = filter(notif.params.diagnostics, (d) => d.severity === 1);
+		assert.match(true, length(errDiags) >= 1);
 	});
 
 	it('sends notification with empty diagnostics for a valid file', () => {
@@ -81,9 +83,11 @@ describe('textDocument/publishDiagnostics', () => {
 		let notif = lsp.receiveNotification(proc);
 
 		assert.match('textDocument/publishDiagnostics', notif.method);
-		assert.match(1, length(notif.params.diagnostics));
-		assert.match(1, notif.params.diagnostics[0].severity);
-		assert.match(true, index(notif.params.diagnostics[0].message, 'noSuchExport') >= 0);
+		// Expect at least one ERROR about the missing export.
+		// (An unused-import WARNING for 'noSuchExport' may also be present.)
+		let errDiags = filter(notif.params.diagnostics, (d) =>
+			d.severity === 1 && index(d.message, 'noSuchExport') >= 0);
+		assert.match(true, length(errDiags) >= 1);
 	});
 
 	it('hints for == with severity 4 (Hint)', () => {
@@ -129,6 +133,7 @@ describe('textDocument/publishDiagnostics', () => {
 		let notif = lsp.receiveNotification(proc);
 
 		assert.match('textDocument/publishDiagnostics', notif.method);
-		assert.match(1, length(notif.params.diagnostics));
+		// Expect at least one diagnostic (bad import error; unused-import warning may also appear).
+		assert.match(true, length(notif.params.diagnostics) >= 1);
 	});
 });

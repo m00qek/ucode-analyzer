@@ -8,6 +8,7 @@ let _config = {};
 let _nodes = {};
 let _outEdges = {};
 let _inEdges = {};
+let _openUris = {};
 
 function uriToPath(uri) {
 	return substr(uri, 7);
@@ -79,7 +80,11 @@ function readAndParse(path) {
 
 export function init(config) {
 	_config = config;
+	_openUris = {};
 };
+
+export function markOpen(uri) { _openUris[uri] = true; };
+export function markClosed(uri) { delete _openUris[uri]; };
 
 // Index with provided content (no cascade — used for initial workspace scan).
 export function add(uri, text, tree) {
@@ -107,8 +112,10 @@ export function update(uri, text, tree) {
 
 	while (qi < length(queue)) {
 		let next = queue[qi++];
-		let parsed = readAndParse(uriToPath(next));
-		if (parsed) indexNode(next, parsed.text, parsed.tree);
+		if (!_openUris[next]) {
+			let parsed = readAndParse(uriToPath(next));
+			if (parsed) indexNode(next, parsed.text, parsed.tree);
+		}
 
 		for (let dep in (_inEdges[next] ?? []))
 			if (!visited[dep]) { visited[dep] = true; push(queue, dep); }
@@ -121,6 +128,7 @@ export function remove(uri) {
 	removeOutEdges(uri);
 	delete _nodes[uri];
 	delete _inEdges[uri];
+	delete _openUris[uri];
 	type_registry.removeUri(uri);
 };
 
@@ -159,7 +167,12 @@ export function resolveSpecifierIn(paths, specifier) {
 
 // Follow member-access re-export chains and return { exp, uri, name } for the
 // final definition, or null if name is not exported from uri at all.
-function _resolveExportFull(uri, name) {
+// `visited` guards against circular re-export chains (A re-exports B re-exports A).
+function _resolveExportFull(uri, name, visited) {
+	if (!visited) visited = {};
+	let key = uri + '\x00' + name;
+	if (visited[key]) return null;
+	visited[key] = true;
 	let node = _nodes[uri];
 	if (!node) return null;
 	for (let i = 0; i < length(node.exports); i++) {
@@ -170,13 +183,13 @@ function _resolveExportFull(uri, name) {
 			let imp = node.imports[j];
 			if (exp.memberRef) {
 				if (!imp.resolvedUri || imp.alias !== exp.memberRef.alias) continue;
-				return _resolveExportFull(imp.resolvedUri, exp.memberRef.member) ?? { exp, uri, name };
+				return _resolveExportFull(imp.resolvedUri, exp.memberRef.member, visited) ?? { exp, uri, name };
 			} else if (imp.alias === exp.localRef) {
 				// namespace re-export: export const X = moduleAlias
 				// Try to find an export named X in the module; fall back to a
 				// synthetic module-typed entry so the type is never UNKNOWN.
 				if (imp.resolvedUri) {
-					let r = _resolveExportFull(imp.resolvedUri, name);
+					let r = _resolveExportFull(imp.resolvedUri, name, visited);
 					if (r) return r;
 				}
 				let synth = { name: exp.name, kind: 'const', doc: exp.doc,
@@ -187,7 +200,7 @@ function _resolveExportFull(uri, name) {
 				// localRef: export const X = importedAlias (named import)
 				if (!imp.resolvedUri || imp.alias || index(imp.symbols, exp.localRef) < 0) continue;
 				let remoteName = (imp.renames && imp.renames[exp.localRef]) ?? exp.localRef;
-				return _resolveExportFull(imp.resolvedUri, remoteName) ?? { exp, uri, name };
+				return _resolveExportFull(imp.resolvedUri, remoteName, visited) ?? { exp, uri, name };
 			}
 		}
 		return { exp, uri, name };
