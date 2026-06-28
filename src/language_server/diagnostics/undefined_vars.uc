@@ -166,6 +166,13 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
+	// ── export { foo as bar }: only `foo` is a variable reference; `bar` is not ─
+	if (nt === 'export_specifier') {
+		let nameNode = ts.childByField(node, 'name');
+		if (nameNode) walk(nameNode, scope, source, globals, lineTable, out);
+		return;
+	}
+
 	// ── Function expression / arrow: inner scope ───────────────────────────────
 	if (nt === 'function_expression' || nt === 'arrow_function') {
 		let inner = makeScope(scope);

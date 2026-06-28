@@ -164,6 +164,25 @@ describe('diagnostics — undefined variables', () => {
 		assert.match(true, index(names, "'ghost' is not defined") >= 0);
 	});
 
+	it('does not warn for the alias in export { foo as bar }', () => {
+		let text = "let foo = 1;\nexport { foo as bar };\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'bar' is not defined") >= 0);
+		assert.match(false, index(names, "'foo' is not defined") >= 0);
+	});
+
+	it('does warn when the local name in export { ghost as bar } is undefined', () => {
+		let text = "export { ghost as bar };\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(true, index(names, "'ghost' is not defined") >= 0);
+	});
+
 	it('does not warn for a catch variable inside a catch block', () => {
 		let text = "try { } catch(e) { e; }\n";
 		documents.open(URI, text, 1);
