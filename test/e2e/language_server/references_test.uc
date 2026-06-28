@@ -46,4 +46,24 @@ describe('textDocument/references', () => {
 		assert.match(1, resp.id);
 		assert.match(null, resp.result);
 	});
+
+	it('does not include same-named identifiers from a different scope', () => {
+		// Each function has a parameter `x`; references on one must not include the other.
+		let text = "function a(x) { return x; }\nfunction b(x) { return x; }\n";
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/references', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 0, character: 11 },  // `x` parameter in function a
+		}});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(2, resp.id);
+		// Only 2 results: declaration + use inside a; function b's x is excluded.
+		assert.match(2, length(resp.result));
+		for (let loc in resp.result)
+			assert.match(0, loc.range.start.line);
+	});
 });

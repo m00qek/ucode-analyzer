@@ -69,3 +69,35 @@ describe('rename', () => {
 		assert.match(9,  e.range.end.character);
 	});
 });
+
+describe('rename — scope awareness', () => {
+	it('renames only the binding in the correct scope, not shadowed names', () => {
+		// Two functions both named parameter `val`.  Renaming one must not touch the other.
+		let text = "function a(val) { return val; }\nfunction b(val) { return val; }\n";
+		documents.open(URI, text, 1);
+
+		// cursor on `val` in function a (line 0, char 11)
+		let edit = rename(URI, documents.get(URI), { line: 0, character: 11 }, 'value');
+
+		let edits = edit.changes[URI];
+		// Only 2 edits: the parameter declaration and its use inside `a`.
+		assert.match(2, length(edits));
+		// All edits are on line 0 (inside function a).
+		for (let e in edits)
+			assert.match(0, e.range.start.line);
+	});
+
+	it('renames a shadowing inner binding without touching the outer binding', () => {
+		let text = "let n = 1;\nfunction foo() {\n  let n = 2;\n  return n;\n}\n";
+		documents.open(URI, text, 1);
+
+		// cursor on inner `n` (line 2, char 6) — the one inside foo()
+		let edit = rename(URI, documents.get(URI), { line: 2, character: 6 }, 'm');
+
+		let edits = edit.changes[URI];
+		// Only 2 edits: inner declaration + inner use. NOT the outer `n`.
+		assert.match(2, length(edits));
+		for (let e in edits)
+			assert.match(true, e.range.start.line >= 2);
+	});
+});

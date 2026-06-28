@@ -49,4 +49,27 @@ describe('textDocument/rename', () => {
 		assert.match(1, resp.id);
 		assert.match(null, resp.result);
 	});
+
+	it('renames only the binding in scope, not same-named identifiers in other scopes', () => {
+		// Two functions each declare a local `n`.  Renaming one must not affect the other.
+		let text = "function a(n) { return n; }\nfunction b(n) { return n; }\n";
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/rename', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 0, character: 11 },  // `n` parameter in function a
+			newName: 'num',
+		}});
+
+		let resp = lsp.receive(proc);
+		let edits = resp.result.changes['file:///t.uc'];
+
+		// Only 2 edits: parameter declaration + use inside a.  Function b unchanged.
+		assert.match(2, length(edits));
+		for (let e in edits) {
+			assert.match('num', e.newText);
+			assert.match(0, e.range.start.line);
+		}
+	});
 });
