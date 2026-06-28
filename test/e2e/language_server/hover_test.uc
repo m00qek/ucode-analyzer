@@ -124,6 +124,26 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(true, index(val, 'Parameters') >= 0);
 	});
 
+	it('optional-chain member obj?.prop: hover shows inner type, not nullable wrapper', () => {
+		// Regression: inferMember wraps optional-chain results in {kind:'nullable'}.
+		// hover must unwrap it before dispatch so the correct template is used.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let obj = { x: 1 };\nobj?.x;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 5 },
+		}});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(1, resp.id);
+		// Should return a non-null hover result (inner type is int, not nullable).
+		assert.match(true, resp.result !== null);
+		assert.match(true, resp.result.contents.value !== '');
+	});
+
 	it('record type object literal: shows field names in Members section', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,

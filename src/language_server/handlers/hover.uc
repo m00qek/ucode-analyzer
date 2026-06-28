@@ -121,6 +121,7 @@ export function hover(doc, position, config) {
 
 	let scope = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(node));
 	let type = inferNode(node, doc.text, doc.uri, scope, 0);
+	if (type && type.kind === 'nullable') type = type.inner;
 
 	if (type.kind === 'unknown') return null;
 
