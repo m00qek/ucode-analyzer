@@ -86,6 +86,22 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(true, index(notif.params.diagnostics[0].message, 'noSuchExport') >= 0);
 	});
 
+	it('hints for == with severity 4 (Hint)', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = 1;\nlet y = x == 1;\ny;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+		let diags = notif.params.diagnostics;
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		let eqDiag = null;
+		for (let d in diags) if (index(d.message, '===') >= 0) { eqDiag = d; break; }
+		assert.match(true, eqDiag !== null);
+		assert.match(4, eqDiag.severity);
+	});
+
 	it('reports syntax error for malformed code', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,

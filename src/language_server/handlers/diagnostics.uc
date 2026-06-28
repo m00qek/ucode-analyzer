@@ -3,6 +3,7 @@ import { unknownImports }         from 'language_server.diagnostics.unknown_impo
 import { unknownImportSymbols }   from 'language_server.diagnostics.unknown_import_symbols';
 import { unusedVars }             from 'language_server.diagnostics.unused_vars';
 import { undefinedVars }          from 'language_server.diagnostics.undefined_vars';
+import { preferStrictEquality }   from 'language_server.diagnostics.prefer_strict_equality';
 
 export function diagnosticsFor(uri, doc) {
 	let diags = [];
@@ -11,5 +12,6 @@ export function diagnosticsFor(uri, doc) {
 	for (let d in unknownImportSymbols(uri, doc)) push(diags, d);
 	for (let d in unusedVars(doc))                push(diags, d);
 	for (let d in undefinedVars(doc))             push(diags, d);
+	for (let d in preferStrictEquality(doc))      push(diags, d);
 	return diags;
 };
