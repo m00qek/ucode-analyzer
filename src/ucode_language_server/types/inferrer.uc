@@ -382,180 +382,194 @@ function inferMember(node, source, uri, scope, depth) {
 	return UNKNOWN;
 }
 
-function inferInner(node, source, uri, scope, depth) {
-	let ntype = ts.nodeType(node);
+// ── Node-type handlers ─────────────────────────────────────────────────────
 
-	if (ntype === 'number')
-		return match(ts.text(node, source), /\./)
-			? { kind: 'primitive', name: 'float' } : INT;
-	if (ntype === 'string' || ntype === 'template_string') return STR;
-	if (ntype === 'true' || ntype === 'false') return BOOL;
-	if (ntype === 'null') return NULL_T;
+function inferNumber(node, source) {
+	return match(ts.text(node, source), /\./)
+		? { kind: 'primitive', name: 'float' } : INT;
+}
 
-	if (ntype === 'identifier') {
-		let name = ts.text(node, source);
-		return scopeGet(scope, name) ?? dagNamedLookup(uri, name) ?? UNKNOWN;
-	}
+function inferIdentifier(node, source, uri, scope) {
+	let name = ts.text(node, source);
+	return scopeGet(scope, name) ?? dagNamedLookup(uri, name) ?? UNKNOWN;
+}
 
-	// Cursor on a property name in obj.prop — infer the whole member expression.
-	if (ntype === 'property_identifier') {
-		let parent = ts.parent(node);
-		if (parent && ts.nodeType(parent) === 'member_expression')
-			return inferMember(parent, source, uri, scope, depth);
-		return UNKNOWN;
-	}
-
-	if (ntype === 'parenthesized_expression') {
-		let inner = ts.namedChild(node, 0);
-		return inner ? _infer(inner, source, uri, scope, depth + 1) : UNKNOWN;
-	}
-
-	if (ntype === 'unary_expression') {
-		let op = ts.nodeType(ts.child(node, 0));
-		if (op === '!') return BOOL;
-		let operand = ts.namedChild(node, 0);
-		return operand ? _infer(operand, source, uri, scope, depth + 1) : UNKNOWN;
-	}
-
-	if (ntype === 'binary_expression') {
-		let op = ts.nodeType(ts.child(node, 1));
-		if (op === '<'  || op === '>'  || op === '<=' || op === '>=' ||
-		    op === '==' || op === '!=' || op === '&&' || op === '||')
-			return BOOL;
-		let left  = ts.namedChild(node, 0);
-		let right = ts.namedChild(node, 1);
-		if (op === '+') {
-			let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;
-			let rt = right ? _infer(right, source, uri, scope, depth + 1) : UNKNOWN;
-			if ((lt.kind === 'primitive' && lt.name === 'string') ||
-			    (rt.kind === 'primitive' && rt.name === 'string'))
-				return STR;
-		}
-		return left ? _infer(left, source, uri, scope, depth + 1) : INT;
-	}
-
-	if (ntype === 'ternary_expression') {
-		let a = ts.namedChild(node, 1);
-		let b = ts.namedChild(node, 2);
-		let ta = a ? _infer(a, source, uri, scope, depth + 1) : UNKNOWN;
-		let tb = b ? _infer(b, source, uri, scope, depth + 1) : UNKNOWN;
-		if (ta.kind === tb.kind && ta.kind === 'primitive' && ta.name === tb.name)
-			return ta;
-		return { kind: 'union', members: [ta, tb] };
-	}
-
-	if (ntype === 'array') {
-		let n = ts.namedChildCount(node);
-		if (n === 0) return { kind: 'generic', base: 'list', params: [UNKNOWN] };
-		let members = [];
-		for (let i = 0; i < n; i++) {
-			let t = _infer(ts.namedChild(node, i), source, uri, scope, depth + 1);
-			let seen = false;
-			for (let j = 0; j < length(members); j++) {
-				let m = members[j];
-				if (m.kind === t.kind && (m.kind !== 'primitive' || m.name === t.name)) {
-					seen = true; break;
-				}
-			}
-			if (!seen) push(members, t);
-		}
-		let elem = length(members) === 1 ? members[0] : { kind: 'union', members };
-		return { kind: 'generic', base: 'list', params: [elem] };
-	}
-
-	if (ntype === 'object') {
-		let fields = [];
-		for (let i = 0; i < ts.namedChildCount(node); i++) {
-			let pair = ts.namedChild(node, i);
-			if (ts.nodeType(pair) !== 'pair') continue;
-			let keyNode = ts.childByField(pair, 'key');
-			let valNode = ts.childByField(pair, 'value');
-			if (!keyNode) continue;
-			let kt = ts.nodeType(keyNode);
-			let keyName = (kt === 'property_identifier' || kt === 'identifier')
-				? ts.text(keyNode, source) : null;
-			if (!keyName) continue;
-			push(fields, { name: keyName, type: valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN });
-		}
-		return { kind: 'record', fields };
-	}
-
-	if (ntype === 'call_expression')   return inferCall(node, source, uri, scope, depth);
-	if (ntype === 'member_expression') return inferMember(node, source, uri, scope, depth);
-
-	if (ntype === 'arrow_function')
-		return inferArrow(node, source, uri, scope, depth, null);
-
-	if (ntype === 'function_expression') {
-		let docTxt = precedingDoc(node, source);
-		let doc = docTxt ? parseDoc(docTxt) : null;
-		// @returns declared: trust it and skip body inference.
-		if (doc && doc.returns && doc.returns.type) {
-			return {
-				kind: 'function',
-				params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
-				return: doc.returns.type,
-			};
-		}
-		// @param annotations present: use them as the expected type so they take
-		// priority over callbackExpectedType (which would otherwise override JSDoc).
-		let expected = (doc && length(doc.params) > 0)
-			? { kind: 'function', params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })), return: UNKNOWN }
-			: null;
-		return inferArrow(node, source, uri, scope, depth, expected);
-	}
-
-	if (ntype === 'return_statement') {
-		let expr = ts.namedChild(node, 0);
-		return expr ? _infer(expr, source, uri, scope, depth + 1) : NULL_T;
-	}
-
-	if (ntype === 'lexical_declaration') {
-		processDecl(node, source, uri, scope, depth);
-		return UNKNOWN;
-	}
-
-	if (ntype === 'function_declaration') {
-		let docTxt = precedingDoc(node, source);
-		let doc = docTxt ? parseDoc(docTxt) : null;
-		let docParams = (doc && doc.params) ? doc.params : [];
-
-		// Params: from JSDoc @param when annotated, otherwise one UNKNOWN entry per
-		// formal parameter so addParamScope can still bind the names.
-		let params = [];
-		if (length(docParams) > 0) {
-			params = map(docParams, (p) => ({ name: p.name, type: p.type ?? UNKNOWN }));
-		} else {
-			for (let i = 0; i < ts.namedChildCount(node); i++) {
-				let child = ts.namedChild(node, i);
-				if (ts.nodeType(child) !== 'formal_parameters') continue;
-				for (let j = 0; j < ts.namedChildCount(child); j++) {
-					let p = ts.namedChild(child, j);
-					if (ts.nodeType(p) !== 'identifier') continue;
-					push(params, { name: ts.text(p, source), type: UNKNOWN });
-				}
-				break;
-			}
-		}
-
-		// Return type: declared via @returns, or infer from all return statements.
-		let ret = (doc && doc.returns && doc.returns.type) ? doc.returns.type : UNKNOWN;
-		if (ret === UNKNOWN) {
-			let body = ts.childByField(node, 'body');
-			if (body) {
-				let bodyScope = makeScope(scope);
-				for (let i = 0; i < length(params); i++)
-					scopeSet(bodyScope, params[i].name, params[i].type ?? UNKNOWN);
-				let rets = [];
-				_collectReturns(body, source, uri, bodyScope, depth, rets);
-				ret = unionOf(rets);
-			}
-		}
-		return { kind: 'function', params, return: ret };
-	}
-
+// Cursor on a property name in obj.prop — infer the whole member expression.
+function inferPropertyIdentifier(node, source, uri, scope, depth) {
+	let parent = ts.parent(node);
+	if (parent && ts.nodeType(parent) === 'member_expression')
+		return inferMember(parent, source, uri, scope, depth);
 	return UNKNOWN;
 }
+
+function inferParenthesized(node, source, uri, scope, depth) {
+	let inner = ts.namedChild(node, 0);
+	return inner ? _infer(inner, source, uri, scope, depth + 1) : UNKNOWN;
+}
+
+function inferUnary(node, source, uri, scope, depth) {
+	let op = ts.nodeType(ts.child(node, 0));
+	if (op === '!') return BOOL;
+	let operand = ts.namedChild(node, 0);
+	return operand ? _infer(operand, source, uri, scope, depth + 1) : UNKNOWN;
+}
+
+function inferBinary(node, source, uri, scope, depth) {
+	let op = ts.nodeType(ts.child(node, 1));
+	if (op === '<'  || op === '>'  || op === '<=' || op === '>=' ||
+	    op === '==' || op === '!=' || op === '&&' || op === '||')
+		return BOOL;
+	let left  = ts.namedChild(node, 0);
+	let right = ts.namedChild(node, 1);
+	if (op === '+') {
+		let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;
+		let rt = right ? _infer(right, source, uri, scope, depth + 1) : UNKNOWN;
+		if ((lt.kind === 'primitive' && lt.name === 'string') ||
+		    (rt.kind === 'primitive' && rt.name === 'string'))
+			return STR;
+	}
+	return left ? _infer(left, source, uri, scope, depth + 1) : INT;
+}
+
+function inferTernary(node, source, uri, scope, depth) {
+	let a = ts.namedChild(node, 1);
+	let b = ts.namedChild(node, 2);
+	let ta = a ? _infer(a, source, uri, scope, depth + 1) : UNKNOWN;
+	let tb = b ? _infer(b, source, uri, scope, depth + 1) : UNKNOWN;
+	if (ta.kind === tb.kind && ta.kind === 'primitive' && ta.name === tb.name)
+		return ta;
+	return { kind: 'union', members: [ta, tb] };
+}
+
+function inferArray(node, source, uri, scope, depth) {
+	let n = ts.namedChildCount(node);
+	if (n === 0) return { kind: 'generic', base: 'list', params: [UNKNOWN] };
+	let members = [];
+	for (let i = 0; i < n; i++) {
+		let t = _infer(ts.namedChild(node, i), source, uri, scope, depth + 1);
+		let seen = false;
+		for (let j = 0; j < length(members); j++) {
+			let m = members[j];
+			if (m.kind === t.kind && (m.kind !== 'primitive' || m.name === t.name)) {
+				seen = true; break;
+			}
+		}
+		if (!seen) push(members, t);
+	}
+	let elem = length(members) === 1 ? members[0] : { kind: 'union', members };
+	return { kind: 'generic', base: 'list', params: [elem] };
+}
+
+function inferObject(node, source, uri, scope, depth) {
+	let fields = [];
+	for (let i = 0; i < ts.namedChildCount(node); i++) {
+		let pair = ts.namedChild(node, i);
+		if (ts.nodeType(pair) !== 'pair') continue;
+		let keyNode = ts.childByField(pair, 'key');
+		let valNode = ts.childByField(pair, 'value');
+		if (!keyNode) continue;
+		let kt = ts.nodeType(keyNode);
+		let keyName = (kt === 'property_identifier' || kt === 'identifier')
+			? ts.text(keyNode, source) : null;
+		if (!keyName) continue;
+		push(fields, { name: keyName, type: valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN });
+	}
+	return { kind: 'record', fields };
+}
+
+function inferFunctionExpr(node, source, uri, scope, depth) {
+	let docTxt = precedingDoc(node, source);
+	let doc = docTxt ? parseDoc(docTxt) : null;
+	// @returns declared: trust it and skip body inference.
+	if (doc && doc.returns && doc.returns.type) {
+		return {
+			kind: 'function',
+			params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
+			return: doc.returns.type,
+		};
+	}
+	// @param annotations present: use them as the expected type so they take
+	// priority over callbackExpectedType (which would otherwise override JSDoc).
+	let expected = (doc && length(doc.params) > 0)
+		? { kind: 'function', params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })), return: UNKNOWN }
+		: null;
+	return inferArrow(node, source, uri, scope, depth, expected);
+}
+
+function inferReturnStatement(node, source, uri, scope, depth) {
+	let expr = ts.namedChild(node, 0);
+	return expr ? _infer(expr, source, uri, scope, depth + 1) : NULL_T;
+}
+
+function inferLexicalDecl(node, source, uri, scope, depth) {
+	processDecl(node, source, uri, scope, depth);
+	return UNKNOWN;
+}
+
+function inferFunctionDecl(node, source, uri, scope, depth) {
+	let docTxt = precedingDoc(node, source);
+	let doc = docTxt ? parseDoc(docTxt) : null;
+	let docParams = (doc && doc.params) ? doc.params : [];
+
+	// Params: from JSDoc @param when annotated, otherwise one UNKNOWN entry per
+	// formal parameter so addParamScope can still bind the names.
+	let params = [];
+	if (length(docParams) > 0) {
+		params = map(docParams, (p) => ({ name: p.name, type: p.type ?? UNKNOWN }));
+	} else {
+		for (let i = 0; i < ts.namedChildCount(node); i++) {
+			let child = ts.namedChild(node, i);
+			if (ts.nodeType(child) !== 'formal_parameters') continue;
+			for (let j = 0; j < ts.namedChildCount(child); j++) {
+				let p = ts.namedChild(child, j);
+				if (ts.nodeType(p) !== 'identifier') continue;
+				push(params, { name: ts.text(p, source), type: UNKNOWN });
+			}
+			break;
+		}
+	}
+
+	// Return type: declared via @returns, or infer from all return statements.
+	let ret = (doc && doc.returns && doc.returns.type) ? doc.returns.type : UNKNOWN;
+	if (ret === UNKNOWN) {
+		let body = ts.childByField(node, 'body');
+		if (body) {
+			let bodyScope = makeScope(scope);
+			for (let i = 0; i < length(params); i++)
+				scopeSet(bodyScope, params[i].name, params[i].type ?? UNKNOWN);
+			let rets = [];
+			_collectReturns(body, source, uri, bodyScope, depth, rets);
+			ret = unionOf(rets);
+		}
+	}
+	return { kind: 'function', params, return: ret };
+}
+
+// ── Dispatch table ─────────────────────────────────────────────────────────
+
+let INFER = {
+	'number':                   inferNumber,
+	'string':                   () => STR,
+	'template_string':          () => STR,
+	'true':                     () => BOOL,
+	'false':                    () => BOOL,
+	'null':                     () => NULL_T,
+	'identifier':               inferIdentifier,
+	'property_identifier':      inferPropertyIdentifier,
+	'parenthesized_expression': inferParenthesized,
+	'unary_expression':         inferUnary,
+	'binary_expression':        inferBinary,
+	'ternary_expression':       inferTernary,
+	'array':                    inferArray,
+	'object':                   inferObject,
+	'call_expression':          inferCall,
+	'member_expression':        inferMember,
+	'arrow_function':           (node, source, uri, scope, depth) => inferArrow(node, source, uri, scope, depth, null),
+	'function_expression':      inferFunctionExpr,
+	'return_statement':         inferReturnStatement,
+	'lexical_declaration':      inferLexicalDecl,
+	'function_declaration':     inferFunctionDecl,
+};
 
 // ── Scope building ─────────────────────────────────────────────────────────
 
@@ -696,7 +710,8 @@ _infer = function(node, source, uri, scope, depth) {
 	let offset = ts.startByte(node);
 	let cached = memoGet(uri, offset, ntype);
 	if (cached) return cached;
-	let type = inferInner(node, source, uri, scope, depth);
+	let h = INFER[ntype];
+	let type = h ? h(node, source, uri, scope, depth) : UNKNOWN;
 	memoSet(uri, offset, ntype, type);
 	return type;
 };
