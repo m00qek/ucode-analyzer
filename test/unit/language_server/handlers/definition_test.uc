@@ -263,3 +263,68 @@ describe('definition — function parameters', () => {
 		assert.match(null, result);
 	});
 });
+
+describe('definition — member expression (record type, named import)', () => {
+	beforeEach(() => {
+		dag.init(_config);
+		dag.addFromDisk(TS_URI);
+	});
+
+	afterEach(() => dag.remove(TS_URI));
+
+	it('jumps to record field key when cursor is on property of named import', () => {
+		// tree_sitter exports { newParser, parse, ... } as top-level functions,
+		// but also queryMatches etc.  Use a local record to keep the test
+		// self-contained and independent of tree_sitter.uc layout.
+		let text = "let api = { greet: function(name) {}, bye: function() {} };\napi.greet;";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		// cursor on 'greet' in 'api.greet' — line 1, character 4
+		let result = definition(URI, documents.get(URI), { line: 1, character: 4 });
+
+		assert.match(true, result !== null);
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(12, result.range.start.character);  // 'greet' after '{ '
+	});
+
+	it('returns null when property does not exist on the record', () => {
+		let text = "let api = { greet: function() {} };\napi.doesNotExist;";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let result = definition(URI, documents.get(URI), { line: 1, character: 4 });
+
+		assert.match(null, result);
+	});
+});
+
+describe('definition — chained member expression', () => {
+	beforeEach(() => dag.init(_config));
+
+	it('jumps to a field on a nested record (a.b.c where a.b is a record)', () => {
+		// 'api.sub.go' — api.sub is a record with field 'go'
+		let text = "let api = { sub: { go: function() {}, stop: function() {} } };\napi.sub.go;";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		// cursor on 'go' in 'api.sub.go' — line 1, character 8
+		let result = definition(URI, documents.get(URI), { line: 1, character: 8 });
+
+		assert.match(true, result !== null);
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(19, result.range.start.character);  // 'go' after '{ sub: { '
+	});
+
+	it('returns null when intermediate member does not exist', () => {
+		let text = "let api = { sub: { go: function() {} } };\napi.missing.go;";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let result = definition(URI, documents.get(URI), { line: 1, character: 12 });
+
+		assert.match(null, result);
+	});
+});

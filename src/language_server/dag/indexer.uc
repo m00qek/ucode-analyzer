@@ -61,7 +61,7 @@ function importSpecifier(stmt, text) {
 // For function-expression values the preceding /** */ inside the object is used.
 // For identifier values the local declaration (function or const) is resolved.
 // For nested object literals the function recurses, populating properties.
-function extractObjectProperties(objectNode, root, text) {
+function extractObjectProperties(objectNode, root, text, pos) {
 	let props = [];
 	for (let i = 0; i < ts.namedChildCount(objectNode); i++) {
 		let pair = ts.namedChild(objectNode, i);
@@ -87,13 +87,13 @@ function extractObjectProperties(objectNode, root, text) {
 		} else if (vtype === 'object') {
 			kind       = 'object';
 			doc        = null;
-			properties = extractObjectProperties(valNode, root, text);
+			properties = extractObjectProperties(valNode, root, text, pos);
 		} else {
 			kind       = 'value';
 			doc        = null;
 			properties = null;
 		}
-		push(props, { name, kind, doc, properties });
+		push(props, { name, kind, doc, properties, position: pos ? pos(ts.startByte(keyNode)) : null });
 	}
 	return props;
 }
@@ -153,7 +153,7 @@ export function extractExports(text, tree) {
 				} else if (init && ts.nodeType(init) === 'identifier') {
 					localRef = ts.text(init, text);
 				} else if (init && ts.nodeType(init) === 'object') {
-					properties = extractObjectProperties(init, root, text);
+					properties = extractObjectProperties(init, root, text, pos);
 				}
 				push(result, { name: ts.text(nameNode, text), kind, doc, memberRef, localRef, properties,
 				               position: pos(ts.startByte(nameNode)) });

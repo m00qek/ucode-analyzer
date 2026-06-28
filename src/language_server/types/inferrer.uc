@@ -5,7 +5,7 @@ import { unify, substitute } from 'language_server.types.unifier';
 import { memoGet, memoSet } from 'language_server.memo';
 import { makeScope, scopeGet, scopeSet } from 'language_server.types.scope';
 import { UNKNOWN, BOOL, STR, INT, NULL_T, unionOf, memberOfType } from 'language_server.types.type_utils';
-import { docBefore } from 'language_server.positions';
+import { buildLineTable, offsetToPosition, docBefore } from 'language_server.positions';
 
 let _builtinScope = makeScope(null);
 let _stdlibUri    = null;
@@ -28,7 +28,7 @@ function precedingDoc(node, source) {
 
 // ── DAG helpers ────────────────────────────────────────────────────────────
 
-function exportType(exp) {
+function exportType(exp, sourceUri) {
 	if (exp._moduleSpecifier) return { kind: 'module', path: exp._moduleSpecifier };
 	if (exp.kind === 'function' || (exp.doc && (length(exp.doc.params) > 0 || exp.doc.returns))) {
 		if (!exp.doc) return UNKNOWN;
@@ -42,9 +42,9 @@ function exportType(exp) {
 		let fields = [];
 		for (let i = 0; i < length(exp.properties); i++) {
 			let prop = exp.properties[i];
-			push(fields, { name: prop.name, type: exportType(prop), doc: prop.doc });
+			push(fields, { name: prop.name, type: exportType(prop, sourceUri), doc: prop.doc, position: prop.position });
 		}
-		return { kind: 'record', fields };
+		return { kind: 'record', fields, sourceUri };
 	}
 	if (!exp.doc) return UNKNOWN;
 	return (exp.doc.returns ? exp.doc.returns.type : null) ?? UNKNOWN;
@@ -58,8 +58,9 @@ function dagNamedLookup(uri, name) {
 		let imp = imps[i];
 		if (!imp.resolvedUri || index(imp.symbols, name) < 0) continue;
 		let remoteName = (imp.renames && imp.renames[name]) ?? name;
-		let exp = dag.resolveExport(imp.resolvedUri, remoteName);
-		if (exp) return exportType(exp);
+		let loc = dag.resolveExportLocation(imp.resolvedUri, remoteName);
+		let exp = dag.resolveExport(loc.uri, loc.name);
+		if (exp) return exportType(exp, loc.uri);
 	}
 	return null;
 }
@@ -71,8 +72,9 @@ function dagMemberLookup(uri, alias, member) {
 	for (let i = 0; i < length(imps); i++) {
 		let imp = imps[i];
 		if (imp.alias !== alias || !imp.resolvedUri) continue;
-		let exp = dag.resolveExport(imp.resolvedUri, member);
-		return exp ? exportType(exp) : null;
+		let loc = dag.resolveExportLocation(imp.resolvedUri, member);
+		let exp = dag.resolveExport(loc.uri, loc.name);
+		return exp ? exportType(exp, loc.uri) : null;
 	}
 	return null;
 }
@@ -236,7 +238,7 @@ function inferMember(node, source, uri, scope, depth) {
 	let objType = _infer(objNode, source, uri, scope, (depth ?? 0) + 1);
 	if (objType && objType.kind === 'module') {
 		let r = dag.resolveMember(objType.path, propName);
-		if (r) return exportType(r.exp);
+		if (r) return exportType(r.exp, r.uri);
 	}
 	if (objType && objType.kind !== 'unknown')
 		return memberOfType(objType, propName);
@@ -322,6 +324,7 @@ function inferArray(node, source, uri, scope, depth) {
 }
 
 function inferObject(node, source, uri, scope, depth) {
+	let lineTable = buildLineTable(source);
 	let fields = [];
 	for (let i = 0; i < ts.namedChildCount(node); i++) {
 		let pair = ts.namedChild(node, i);
@@ -333,9 +336,10 @@ function inferObject(node, source, uri, scope, depth) {
 		let keyName = (kt === 'property_identifier' || kt === 'identifier')
 			? ts.text(keyNode, source) : null;
 		if (!keyName) continue;
-		push(fields, { name: keyName, type: valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN });
+		let position = offsetToPosition(source, lineTable, ts.startByte(keyNode));
+		push(fields, { name: keyName, type: valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN, position });
 	}
-	return { kind: 'record', fields };
+	return { kind: 'record', fields, sourceUri: uri };
 }
 
 function inferFunctionExpr(node, source, uri, scope, depth) {
@@ -450,8 +454,9 @@ export function importScope(uri) {
 		for (let j = 0; j < length(imp.symbols); j++) {
 			let localName = imp.symbols[j];
 			let remoteName = (imp.renames && imp.renames[localName]) ?? localName;
-			let r = dag.resolveExport(imp.resolvedUri, remoteName);
-			if (r) scopeSet(scope, localName, exportType(r));
+			let loc = dag.resolveExportLocation(imp.resolvedUri, remoteName);
+			let r = dag.resolveExport(loc.uri, loc.name);
+			if (r) scopeSet(scope, localName, exportType(r, loc.uri));
 		}
 	}
 	return scope;
@@ -483,6 +488,6 @@ export function initBuiltinsFromDag(uri) {
 	_stdlibUri = uri;
 	let s = makeScope(null);
 	for (let i = 0; i < length(exps); i++)
-		scopeSet(s, exps[i].name, exportType(exps[i]));
+		scopeSet(s, exps[i].name, exportType(exps[i], uri));
 	_builtinScope = s;
 };

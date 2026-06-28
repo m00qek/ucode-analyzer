@@ -244,4 +244,23 @@ describe('textDocument/definition', () => {
 		assert.match(75, resp.result.range.start.line);
 		assert.match(16, resp.result.range.start.character);
 	});
+
+	it('jumps to the field definition when cursor is on a member of a named import record', () => {
+		// assert is a named import from utest whose type is a record.
+		// Cursor on 'match' in 'assert.match' — should jump to 'match' key in assert.uc.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { assert } from 'utest';\nassert.match;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 7 },  // 'match' in 'assert.match'
+		}});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(resp.result.uri, 'assert') >= 0);
+	});
 });

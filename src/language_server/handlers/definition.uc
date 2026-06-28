@@ -105,21 +105,25 @@ function namespaceDef(uri, name) {
 	return null;
 }
 
-// Resolve a member name in a type to a file Location via the type registry.
-// Returns the location of the @typedef that defines the record containing propName,
-// or null if the type doesn't resolve to a record with that field.
+// Resolve a member name in a type to a file Location.
+// Handles direct record types (with sourceUri+position from exportType/inferObject)
+// and typedef refs (via the type registry).
 function locationOfMember(type, propName, depth) {
 	if (!depth) depth = 0;
 	if (depth > 5 || !type) return null;
+	if (type.kind === 'record') {
+		if (!type.sourceUri) return null;
+		for (let i = 0; i < length(type.fields); i++) {
+			let f = type.fields[i];
+			if (f.name !== propName) continue;
+			let pos = f.position ?? { line: 0, character: 0 };
+			return { uri: type.sourceUri, range: { start: pos, end: pos } };
+		}
+		return null;
+	}
 	if (type.kind === 'ref') {
 		let def = type_registry.lookup(type.name);
 		if (!def) return null;
-		if (def.type && def.type.kind === 'record') {
-			for (let i = 0; i < length(def.type.fields); i++)
-				if (def.type.fields[i].name === propName)
-					return { uri: def.sourceUri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } };
-			return null;
-		}
 		return locationOfMember(def.type, propName, depth + 1);
 	}
 	return null;
@@ -152,25 +156,30 @@ function resolveExportDefinition(resolvedUri, name) {
 
 // If cursor is on a property_identifier inside a member_expression, resolve
 // via namespace import DAG or scope-based type inference.
+// Handles both simple `obj.prop` (objNode is identifier) and chained `a.b.prop`
+// (objNode is a member_expression — inferNode recurses through the chain).
 function memberExprDef(uri, doc, memberExpr, propName, offset) {
 	let objNode = ts.namedChild(memberExpr, 0);
-	if (!objNode || ts.nodeType(objNode) !== 'identifier') return null;
-	let objName = ts.text(objNode, doc.text);
+	if (!objNode) return null;
 
-	// Namespace import: import * as objName from 'mod' → look up propName in mod
-	let imps = dag.importsOf(uri);
-	if (imps) {
-		for (let i = 0; i < length(imps); i++) {
-			let imp = imps[i];
-			if (imp.alias !== objName || !imp.resolvedUri) continue;
-			let loc = dag.resolveExportLocation(imp.resolvedUri, propName);
-			let exp = dag.resolveExport(loc.uri, loc.name);
-			if (!exp) return null;
-			return resolveExportDefinition(loc.uri, loc.name);
+	// Namespace import fast path: only applies when the object is a direct alias.
+	if (ts.nodeType(objNode) === 'identifier') {
+		let objName = ts.text(objNode, doc.text);
+		let imps = dag.importsOf(uri);
+		if (imps) {
+			for (let i = 0; i < length(imps); i++) {
+				let imp = imps[i];
+				if (imp.alias !== objName || !imp.resolvedUri) continue;
+				let loc = dag.resolveExportLocation(imp.resolvedUri, propName);
+				let exp = dag.resolveExport(loc.uri, loc.name);
+				if (!exp) return null;
+				return resolveExportDefinition(loc.uri, loc.name);
+			}
 		}
 	}
 
-	// Scope-based: infer the type of the object
+	// Scope-based: infer the type of the object.
+	// inferNode handles identifiers and chained member_expressions alike.
 	let scope = buildScope(uri, doc.text, doc.tree, offset);
 	let objType = inferNode(objNode, doc.text, uri, scope, 0);
 
@@ -180,7 +189,7 @@ function memberExprDef(uri, doc, memberExpr, propName, offset) {
 		if (r) return resolveExportDefinition(r.uri, r.name);
 	}
 
-	// Record type: find member in type registry
+	// Record type: find member using stored position and sourceUri
 	return locationOfMember(objType, propName);
 }
 
