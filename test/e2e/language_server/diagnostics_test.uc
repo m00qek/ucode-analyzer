@@ -39,6 +39,19 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(0, length(notif.params.diagnostics));
 	});
 
+	it('reports syntax error for malformed code', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = ;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		assert.match(true, length(notif.params.diagnostics) > 0);
+		assert.match(1, notif.params.diagnostics[0].severity);
+	});
+
 	it('re-sends diagnostics on didChange', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
