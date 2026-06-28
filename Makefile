@@ -68,13 +68,13 @@ mod/compile_flags.txt: $(BUILD_DIR)/include
 test: test-unit test-e2e
 
 test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
-	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) test/unit/
+	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) test/unit/language_server/
 
 test-e2e: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) test/e2e/
 
 test-integration: .docker-image $(BUILD_DIR)/tree_sitter_native.so
-	@$(TEST_IMAGE) utest -c test/integration/utest.config.uc $(REPORTER) test/integration/
+	@$(TEST_IMAGE) utest -c test/integration/language_server/utest.config.uc $(REPORTER) test/integration/language_server/
 
 shell: TEST_OPTS := -it
 shell: .docker-image
