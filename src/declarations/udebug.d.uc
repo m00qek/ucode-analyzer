@@ -218,7 +218,7 @@ export function init(path, auto) {};
  *
  * @function module:udebug#create_ring
  *
- * @param {*} meta
+ * @param {Object} meta
  * Ring configuration:
  * - `name` {string} — ring name as registered with the daemon, e.g.
  *   `"myapp/packets"`. By convention, `"process/ringname"` is used.
@@ -270,7 +270,7 @@ export function create_ring(meta) {};
  *
  * @function module:udebug#get_ring
  *
- * @param {*} desc
+ * @param {Object} desc
  * Ring descriptor as reported by the daemon:
  * - `id` {int} — ring ID assigned by the daemon.
  * - `proc_name` {string} — owning process name.
@@ -357,7 +357,7 @@ export function trace_ring(instance) {};
  * @param {string} [path]
  * Output file path. If omitted or `null`, writes to stdout.
  *
- * @param {*} [meta]
+ * @param {Object} [meta]
  * Optional PCAPng section header metadata:
  * - `hw` {string} — hardware description.
  * - `os` {string} — operating system description.
@@ -396,7 +396,7 @@ export function pcap_file(path, meta) {};
  * @param {string|int} port
  * Destination UDP port.
  *
- * @param {*} [meta]
+ * @param {Object} [meta]
  * Optional PCAPng section header metadata (same fields as
  * {@link module:udebug#pcap_file|pcap_file()}).
  *
@@ -471,7 +471,7 @@ export function foreach_packet(snapshot, fn) {};
  *
  * @function module:udebug.wbuf#add
  *
- * @param {*} data
+ * @param {any} data
  * Data to append. Strings are written as-is; arrays are recursively
  * flattened; all other values are stringified.
  *

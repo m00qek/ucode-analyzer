@@ -82,7 +82,7 @@
  *
  * @function module:core#print
  *
- * @param {...*} values
+ * @param {...any} values
  * Arbitrary values to print
  *
  * @returns {int}
@@ -130,7 +130,7 @@ export function length(x) {};
  * @param {Array|string} arr_or_str
  * The array or string to search for the value.
  *
- * @param {*} needle
+ * @param {any} needle
  * The value to find within the array or string.
  *
  * @returns {?int}
@@ -158,7 +158,7 @@ export function index(arr_or_str, needle) {};
  * @param {Array|string} arr_or_str
  * The array or string to search for the value.
  *
- * @param {*} needle
+ * @param {any} needle
  * The value to find within the array or string.
  *
  * @returns {?int}
@@ -179,13 +179,15 @@ export function rindex(arr_or_str, needle) {};
  *
  * @function module:core#push
  *
- * @param {Array} arr
+ * @template T
+ *
+ * @param {Array<T>} arr
  * The array to push values to.
  *
- * @param {...*} [values]
+ * @param {...T} [values]
  * The values to push.
  *
- * @returns {*}
+ * @returns {?T}
  *
  * @example
  * let x = [ 1, 2, 3 ];
@@ -243,13 +245,15 @@ export function shift(arr) {};
  *
  * @function module:core#unshift
  *
- * @param {Array} arr
+ * @template T
+ *
+ * @param {Array<T>} arr
  * The array to which the values will be added.
  *
- * @param {...*}
+ * @param {...T}
  * Values to add.
  *
- * @returns {*}
+ * @returns {T}
  *
  * @example
  * let x = [ 3, 4, 5 ];
@@ -400,7 +404,7 @@ export function filter(arr, fn) {};
  *
  * @function module:core#hex
  *
- * @param {*} x
+ * @param {any} x
  * The hexadecimal string to be converted.
  *
  * @returns {int}
@@ -414,7 +418,7 @@ export function hex(x) {};
  *
  * @function module:core#int
  *
- * @param {*} x
+ * @param {any} x
  * The value to be converted to an integer.
  *
  * @param {int} [base]
@@ -448,7 +452,7 @@ export function int(x, base) {};
  * @param {string} sep
  * The separator to be used in joining the array elements.
  *
- * @param {Array<*>} arr
+ * @param {Array<any>} arr
  * The array to be joined into a string.
  *
  * @returns {?string}
@@ -466,7 +470,7 @@ export function join(sep, arr) {};
  * @param {Object} obj
  * The object from which to retrieve the key names.
  *
- * @returns {?Array}
+ * @returns {?Array<string>}
  */
 export function keys(obj) {};
 
@@ -593,7 +597,7 @@ export function ord(s, offset) {};
  *
  * @function module:core#type
  *
- * @param {*} x
+ * @param {any} x
  * The value to determine the type of.
  *
  * @returns {?string}
@@ -612,10 +616,12 @@ export function type(x) {};
  *
  * @function module:core#reverse
  *
- * @param {Array|string} arr_or_str
+ * @template T
+ *
+ * @param {Array<T>|string} arr_or_str
  * The input array or string.
  *
- * @returns {?(Array|string)}
+ * @returns {?(Array<T>|string)}
  *
  * @example
  * reverse([1, 2, 3]);   // [ 3, 2, 1 ]
@@ -677,7 +683,7 @@ export function sort(arr, fn) {};
  * @param {int} [len]
  * The number of elements to remove.
  *
- * @param {...*} [elements]
+ * @param {...T} [elements]
  * The elements to insert.
  *
  * @returns {Array<T>}
@@ -807,7 +813,7 @@ export function time() {};
  *
  * @function module:core#uc
  *
- * @param {*} str
+ * @param {any} str
  * The string to be converted to uppercase.
  *
  * @returns {?string}
@@ -848,10 +854,10 @@ export function uchr() {};
  *
  * @function module:core#values
  *
- * @param {*} obj
+ * @param {any} obj
  * The object from which to extract values.
  *
- * @returns {?Array}
+ * @returns {?Array<any>}
  *
  * @example
  * values({ foo: true, bar: false });   // [true, false]
@@ -935,7 +941,7 @@ export function rtrim(str, c) {};
  * @param {string} fmt
  * The format string.
  *
- * @param {...*}
+ * @param {...any}
  * Arguments to be formatted.
  *
  * @returns {string}
@@ -975,7 +981,7 @@ export function sprintf(fmt) {};
  * @param {string} fmt
  * The format string.
  *
- * @param {...*}
+ * @param {...any}
  * Arguments to be formatted.
  *
  * @returns {int}
@@ -1081,7 +1087,7 @@ export function printf(fmt) {};
  * @param {string} name
  * The name of the module to require in dotted notation.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * // Require the `example/acme.uc` or `example/acme.so` module
@@ -1255,7 +1261,7 @@ export function replace(str, pattern, replace, limit) {};
  * @param {string} str_or_resource
  * The string or resource object to be parsed as JSON.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * json('{"a":true, "b":123}')   // { "a": true, "b": 123 }
@@ -1338,13 +1344,13 @@ export function include(path, scope) {};
  * @param {string|function} path_or_func
  * The path to the file or the function to be rendered.
  *
- * @param {Object|*} [scope_or_fnarg1]
+ * @param {any} [scope_or_fnarg1]
  * The optional scope or the first argument for the function.
  *
- * @param {*} [fnarg2]
+ * @param {any} [fnarg2]
  * The second argument for the function.
  *
- * @param {...*} [fnargN]
+ * @param {...any} [fnargN]
  * Additional arguments for the function.
  *
  * @returns {string}
@@ -1368,7 +1374,7 @@ export function render(path_or_func, scope_or_fnarg1, fnarg2, fnargN) {};
  *
  * @function module:core#warn
  *
- * @param {...*} x
+ * @param {...any} x
  * The values to be printed.
  *
  * @returns {int}
@@ -1495,7 +1501,7 @@ export function sleep(milliseconds) {};
  *
  * @function module:core#assert
  *
- * @param {*} cond
+ * @param {any} cond
  * The value to check for truthiness.
  *
  * @param {string} [message]
@@ -1562,7 +1568,7 @@ export function regexp(source, flags) {};
  *
  * @function module:core#wildcard
  *
- * @param {*} subject
+ * @param {any} subject
  * The subject to match against the wildcard pattern.
  *
  * @param {string} pattern
@@ -1605,10 +1611,12 @@ export function sourcepath(depth, dironly) {};
  *
  * @function module:core#min
  *
- * @param {...*} [val]
+ * @template T
+ *
+ * @param {...T} [val]
  * The values to compare.
  *
- * @returns {*}
+ * @returns {?T}
  *
  * @example
  * min(5, 2.1, 3, "abc", 0.3);            // Returns 0.3
@@ -1624,10 +1632,12 @@ export function min(val) {};
  *
  * @function module:core#max
  *
- * @param {...*} [val]
+ * @template T
+ *
+ * @param {...T} [val]
  * The values to compare.
  *
- * @returns {*}
+ * @returns {?T}
  *
  * @example
  * max(5, 2.1, 3, "abc", 0.3);            // Returns 5
@@ -1905,7 +1915,7 @@ export function hexdec(hexstring, skipchars) {};
  * @param {string} [operation]
  * The operation to perform.
  *
- * @param {*} [argument]
+ * @param {any} [argument]
  * The argument for the operation.
  *
  * @returns {?(boolean|int)}
@@ -2014,19 +2024,21 @@ export function loadfile(path, options) {};
  *
  * @function module:core#call
  *
- * @param {function} fn
+ * @template R
+ *
+ * @param {(...any) => R} fn
  * Function value to call.
  *
- * @param {*} [ctx=null]
+ * @param {any} [ctx=null]
  * `this` context for the invoked function.
  *
  * @param {Object} [scope=null]
  * Global environment for the invoked function.
  *
- * @param {...*} [arg]
+ * @param {...any} [arg]
  * Additional arguments to pass to the invoked function.
  *
- * @returns {*}
+ * @returns {?R}
  *
  * @example
  * // Override this context

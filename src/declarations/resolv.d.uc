@@ -221,7 +221,7 @@
  * of domain name strings. IP addresses can also be provided for reverse
  * DNS lookups.
  *
- * @param {*} [options]
+ * @param {Object} [options]
  * Query options object.
  *
  * @param {string[]} [options.type]
@@ -249,7 +249,7 @@
  * Return TXT record strings as array elements instead of space-joining all
  * record strings into one single string per record.
  *
- * @returns {*}
+ * @returns {Object}
  * Object containing DNS query results. Keys are domain names, values are
  * objects containing arrays of records grouped by type, or error information
  * for failed queries.

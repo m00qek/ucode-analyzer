@@ -207,7 +207,7 @@ export function set_debug_handler(handler) {};
  * Filesystem path to the BPF ELF object file (e.g.
  * `"/usr/lib/bpf/classifier.o"`).
  *
- * @param {*} [opts]
+ * @param {Object} [opts]
  * Optional load-time configuration:
  * - `rodata` {string} — raw bytes written verbatim into the first
  *   `.rodata` map before loading. The length must exactly match the

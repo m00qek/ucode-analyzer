@@ -323,22 +323,22 @@
 /**
  * Precompiled struct format instance returned by {@link module:struct#new|new()}.
  *
- * @typedef {{ pack: function(*): string, unpack: function(string, ?int): *[] }} StructInstance
+ * @typedef {{ pack: function(...any): string, unpack: function(string, ?int): any[] }} StructInstance
  */
 
 /**
  * Incremental struct buffer returned by {@link module:struct#buffer|buffer()}.
  *
  * @typedef {{
- *   pos: function(?int): *,
- *   length: function(?int): *,
+ *   pos: function(?int): int|StructBuffer,
+ *   length: function(?int): int|StructBuffer,
  *   start: function(): StructBuffer,
  *   end: function(): StructBuffer,
- *   put: function(string, *): StructBuffer,
- *   get: function(string | int): *,
- *   read: function(string): *[],
+ *   put: function(string, ...any): StructBuffer,
+ *   get: function(string | int): any,
+ *   read: function(string): any[],
  *   slice: function(?int, ?int): string,
- *   set: function(*, ?int, ?int): StructBuffer,
+ *   set: function(any, ?int, ?int): StructBuffer,
  *   pull: function(): string
  * }} StructBuffer
  */
@@ -360,7 +360,7 @@
  * @param {string} format
  * The format string.
  *
- * @param {...*} values
+ * @param {...any} values
  * Variable number of values to pack.
  *
  * @returns {string}
@@ -397,7 +397,7 @@ export function pack(format, values) {};
  * @param {int} [offset=0]
  * The offset within the input string to start unpacking from.
  *
- * @returns {*[]}
+ * @returns {any[]}
  *
  * @example
  * // Unpack three consecutive unsigned int values in network byte order.
@@ -446,7 +446,7 @@ export function new(format) {};
  *
  * @function module:struct.instance#pack
  *
- * @param {...*} values
+ * @param {...any} values
  * Variable number of values to pack.
  *
  * @returns {string}
@@ -478,7 +478,7 @@ export function new(format) {};
  * @param {int} [offset=0]
  * The offset within the input string to start unpacking from.
  *
- * @returns {*[]}
+ * @returns {any[]}
  *
  * @example
  * const fmt = struct.new(…);
@@ -619,7 +619,7 @@ export function buffer(initialData) {};
  * @param {string} format
  * The format string specifying how to pack the data.
  *
- * @param {...*} values
+ * @param {...any} values
  * The values to pack into the buffer.
  *
  * @returns {StructBuffer}
@@ -651,7 +651,7 @@ export function buffer(initialData) {};
  * @param {string|int} format
  * The format string specifying how to unpack the data.
  *
- * @returns {*}
+ * @returns {any}
  * The unpacked value.
  *
  * @see {@link module:struct#unpack|struct.unpack()}
@@ -677,7 +677,7 @@ export function buffer(initialData) {};
  * @param {string} format
  * The format string specifying how to unpack the data.
  *
- * @returns {*[]}
+ * @returns {any[]}
  * An array containing the unpacked values.
  *
  * @see {@link module:struct#unpack|struct.unpack()}

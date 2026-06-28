@@ -235,7 +235,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * The name of the section to query within the configuration. If omitted a
  * nested dictionary containing all section values is returned.
  *
- * @returns {?*}
+ * @returns {?any}
  *
  * @example
  * const ctx = cursor(…);
@@ -766,7 +766,7 @@ export function cursor(config_dir, delta_dir, config2_dir) {};
  * The name of the configuration file to enumerate changes for, e.g. `"system"`
  * to query pending changes for the `/etc/config/system` file.
  *
- * @returns {?*}
+ * @returns {?any}
  *
  * @example
  * const ctx = cursor(…);

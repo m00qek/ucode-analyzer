@@ -58,7 +58,7 @@
  * When created with a `line_separator`, `args` is a `string[][]` (one array
  * per group) and `pos` mirrors that shape.
  *
- * @typedef {{ args: *, pos: *, missing: ?string }} UlineParseResult
+ * @typedef {{ args: any, pos: any, missing: ?string }} UlineParseResult
  */
 
 /**
@@ -71,7 +71,7 @@
  *   reset_key_input: function(): boolean,
  *   get_line: function(?boolean): ?UlineLineInfo,
  *   get_window: function(): ?UlineWindowInfo,
- *   set_state: function(*): ?boolean,
+ *   set_state: function(Object): ?boolean,
  *   set_hint: function(string): ?boolean,
  *   set_uloop: function(?function): ?boolean,
  *   hide_prompt: function(): void,
@@ -105,7 +105,7 @@
  *
  * @function module:uline#new
  *
- * @param {*} data
+ * @param {Object} data
  * Editor configuration:
  *
  * - `cb` {object} **(required)** — callback dispatch table. All callbacks
@@ -188,7 +188,7 @@ export function new(data) {};
  *
  * @function module:uline#arg_parser
  *
- * @param {*} [opts]
+ * @param {Object} [opts]
  * Parser options:
  * - `line_separator` {string} — a single character that splits the token
  *   stream into groups. When set, {@link module:uline.argp#parse|parse()}
@@ -365,7 +365,7 @@ export function getpass(prompt) {};
  *
  * @function module:uline.state#set_state
  *
- * @param {*} obj
+ * @param {Object} obj
  * State changes to apply:
  * - `prompt` {string} — primary prompt text (VT100 escapes permitted).
  * - `line` {string} — replace the primary line buffer.

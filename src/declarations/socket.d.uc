@@ -44,7 +44,7 @@
 
 /** @typedef {{ fd: Socket, events: int }} PollSpec */
 
-/** @typedef {{ data: *, length: int, ancillary: *[], address: ?SocketAddress }} ReceivedMessage */
+/** @typedef {{ data: any, length: int, ancillary: any[], address: ?SocketAddress }} ReceivedMessage */
 
 /** @typedef {{ uid: int, gid: int, pid: int }} PeerCredentials */
 
@@ -93,7 +93,7 @@
  * The socket option to set. This can be an integer representing the option,
  * such as `SO_REUSEADDR`, or a constant defined by the system.
  *
- * @param {*} value
+ * @param {any} value
  * The value to set the option to. The type of this argument depends on the
  * specific option being set. It can be an integer, a boolean, a string, or a
  * dictionary representing the value to set. If a dictionary is provided, it is
@@ -123,7 +123,7 @@
  * The socket option to retrieve. This can be an integer representing the
  * option, such as `SO_REUSEADDR`, or a constant defined by the system.
  *
- * @returns {?*}
+ * @returns {?any}
  * The value of the requested option. The type of the returned value depends
  * on the specific option being retrieved. It can be an integer, a boolean, a
  * string, or a dictionary representing a complex data structure.
@@ -510,7 +510,7 @@ export function nameinfo(address, flags) {};
  * Optional service name to resolve. If not provided, the service field of the
  * resulting address information structures is left uninitialized.
  *
- * @param {*} [hints]
+ * @param {Object} [hints]
  * Optional hints object that provides additional control over the resolution
  * process. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
@@ -607,7 +607,7 @@ export function poll(timeout, sockets) {};
  * a port number. Optional if host is specified as
  * {@link SocketAddress|SocketAddress}.
  *
- * @param {*} [hints]
+ * @param {Object} [hints]
  * Optional preferences for the socket. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
  * - `socktype`: The socket type (`SOCK_STREAM`, `SOCK_DGRAM`, etc.).
@@ -665,7 +665,7 @@ export function connect(host, service, hints, timeout) {};
  * a port number. Optional if host is specified as
  * {@link SocketAddress|SocketAddress}.
  *
- * @param {*} [hints]
+ * @param {Object} [hints]
  * Optional preferences for the socket. It can contain the following properties:
  * - `family`: The preferred address family (`AF_INET` or `AF_INET6`).
  * - `socktype`: The socket type (`SOCK_STREAM`, `SOCK_DGRAM`, etc.).
@@ -826,7 +826,7 @@ export function pair(type) {};
  *
  * @function module:socket.socket#send
  *
- * @param {*} data
+ * @param {any} data
  * The data to be sent through the socket. String data is sent as-is, any other
  * type is implicitly converted to a string first before being sent on the
  * socket.
@@ -880,7 +880,7 @@ export function pair(type) {};
  * @param {int} [flags]
  * Optional flags that modify the behavior of the receive operation.
  *
- * @param {*} [address]
+ * @param {Object} [address]
  * An object where the function will store the address from which the data was
  * received. If provided, it will be filled with the details obtained from the
  * sockaddr argument of the underlying `recvfrom()` syscall. See the type
@@ -903,13 +903,13 @@ export function pair(type) {};
  *
  * @function module:socket.socket#sendmsg
  *
- * @param {*} [data]
+ * @param {any} [data]
  * The data to be sent. If a string is provided, it is sent as is. If an array
  * is specified, each item is sent as a separate `struct iovec`. Non-string
  * values are implicitly converted to a string and sent. If omitted, only
  * ancillary data and address are considered.
  *
- * @param {*[]|string} [ancillaryData]
+ * @param {any[]|string} [ancillaryData]
  * Optional ancillary data to be sent. If an array is provided, each element is
  * converted to a control message. If a string is provided, it is sent as-is
  * without further interpretation. Refer to
@@ -1077,7 +1077,7 @@ export function pair(type) {};
  *
  * @function module:socket.socket#accept
  *
- * @param {*} [address]
+ * @param {Object} [address]
  * An optional dictionary to receive the address details of the peer socket.
  * See {@link SocketAddress|SocketAddress} for details.
  *

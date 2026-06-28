@@ -101,11 +101,11 @@ export function create() {};
  * @param {string} name
  * Name of the Lua global function to call.
  *
- * @param {...*} args
+ * @param {...any} args
  * Arguments to pass. See value marshalling rules in
  * {@link module:lua|module description}.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * L.eval('function greet(who) return "Hello, " .. who end');
@@ -133,7 +133,7 @@ export function create() {};
  * @param {string} source
  * Lua source code to compile and run.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * L.eval('x = 42');
@@ -165,7 +165,7 @@ export function create() {};
  * @param {string} path
  * Filesystem path to the Lua file.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * L.include('/usr/share/myapp/init.lua');
@@ -196,10 +196,10 @@ export function create() {};
  *
  * @function module:lua.vm#set
  *
- * @param {string|*} name_or_obj
+ * @param {any} name_or_obj
  * Either a string global name, or an object whose keys become global names.
  *
- * @param {*} [value]
+ * @param {any} [value]
  * The value to assign (only used when the first argument is a string).
  *
  * @returns {?boolean}
@@ -238,7 +238,7 @@ export function create() {};
  * @param {string} name
  * Lua global variable name.
  *
- * @param {...*} keys
+ * @param {...any} keys
  * Optional chain of table keys to traverse.
  *
  * @returns {?LuaValue}
@@ -268,10 +268,10 @@ export function create() {};
  *
  * @function module:lua.value#call
  *
- * @param {...*} args
+ * @param {...any} args
  * Arguments to pass to the Lua function.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * L.eval('function square(x) return x * x end');
@@ -290,13 +290,13 @@ export function create() {};
  *
  * @function module:lua.value#invoke
  *
- * @param {*} method
+ * @param {any} method
  * Method key (usually a string) to look up in the table.
  *
- * @param {...*} args
+ * @param {...any} args
  * Additional arguments after `self`.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * L.eval('obj = { greet = function(self, name) return "Hi " .. name end }');
@@ -315,7 +315,7 @@ export function create() {};
  *
  * @function module:lua.value#get
  *
- * @param {...*} keys
+ * @param {...any} keys
  * Chain of table keys to traverse.
  *
  * @returns {?LuaValue}
@@ -336,7 +336,7 @@ export function create() {};
  *
  * @function module:lua.value#getraw
  *
- * @param {...*} keys
+ * @param {...any} keys
  * Chain of raw table keys to traverse.
  *
  * @returns {?LuaValue}
@@ -385,7 +385,7 @@ export function create() {};
  *
  * @function module:lua.value#value
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * L.eval('t = { 1, 2, 3 }');

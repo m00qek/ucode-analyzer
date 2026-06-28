@@ -64,14 +64,14 @@
  * Local variable information returned by {@link module:debug#getlocal|getlocal()}
  * and {@link module:debug#setlocal|setlocal()}.
  *
- * @typedef {{ name: string, value: * }} LocalInfo
+ * @typedef {{ name: string, value: any }} LocalInfo
  */
 
 /**
  * Upvalue (captured variable) information returned by {@link module:debug#getupval|getupval()}
  * and {@link module:debug#setupval|setupval()}.
  *
- * @typedef {{ name: string, value: * }} UpvalInfo
+ * @typedef {{ name: string, value: any }} UpvalInfo
  */
 
 /**
@@ -148,7 +148,7 @@ export function sourcepos() {};
  *
  * @function module:debug#getinfo
  *
- * @param {*} value
+ * @param {any} value
  * The value to query information for.
  *
  * @returns {?ValueInformation}
@@ -219,7 +219,7 @@ export function getlocal(level, variable) {};
  * @param {string|int} variable
  * The variable index or variable name to update.
  *
- * @param {*} [value=null]
+ * @param {any} [value=null]
  * The value to set the local variable to.
  *
  * @returns {?LocalInfo}
@@ -300,7 +300,7 @@ export function getupval(target, variable) {};
  * @param {string|int} variable
  * The variable index or variable name to update.
  *
- * @param {*} value
+ * @param {any} value
  * The value to set the variable to.
  *
  * @returns {?UpvalInfo}

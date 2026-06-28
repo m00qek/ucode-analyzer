@@ -37,7 +37,7 @@
  *
  * @function module:math#abs
  *
- * @param {*} number
+ * @param {int|double} number
  * The number to return the absolute value for.
  *
  * @returns {float}
@@ -59,10 +59,10 @@ export function abs(number) {};
  *
  * @function module:math#atan2
  *
- * @param {*} y
+ * @param {int|double} y
  * The `y` value.
  *
- * @param {*} x
+ * @param {int|double} x
  * The `x` value.
  *
  * @returns {float}

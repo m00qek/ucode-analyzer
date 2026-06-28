@@ -571,7 +571,7 @@ describe('inferrer — builtins', () => {
 		assert.match(prim('string'), t.return);
 	});
 
-	it('keys is in scope with nullable list<*> return type', () => {
+	it('keys is in scope with nullable list<string> return type', () => {
 		let text = "";
 		let tree = parse(text);
 		dag.add(URI, text, tree);
@@ -579,7 +579,7 @@ describe('inferrer — builtins', () => {
 
 		let t = scopeGet(scope, 'keys');
 		assert.match('function', t.kind);
-		assert.match({ kind: 'nullable', inner: { kind: 'generic', base: 'list', params: [{ kind: 'unknown' }] } }, t.return);
+		assert.match({ kind: 'nullable', inner: { kind: 'generic', base: 'list', params: [{ kind: 'primitive', name: 'string' }] } }, t.return);
 	});
 
 	it('builtins do not pollute scope.bindings — they live in the parent chain', () => {

@@ -256,7 +256,7 @@
  * - `msg.mac` — MAC address `"aa:bb:cc:dd:ee:ff"` (string)
  * - `msg.wdev` — wireless device ID (integer)
  *
- * @typedef {{ cmd: int, msg: * }} Nl80211Event
+ * @typedef {{ cmd: int, msg: any }} Nl80211Event
  */
 
 /**
@@ -370,11 +370,11 @@ export function error() {};
  * Netlink message flags (`NLM_F_*`). Use `NLM_F_DUMP` to request a full
  * dump of all matching entries. Range 0–0xffff.
  *
- * @param {*} [payload]
+ * @param {Object} [payload]
  * Attribute map to include in the request message. Keys are snake_case
  * attribute names; values are coerced to the appropriate attribute type.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * import { request, const: C } from 'nl80211';
@@ -570,10 +570,10 @@ export function listener(callback, cmds) {};
  * @param {int} [flags=0]
  * Netlink message flags (`NLM_F_*`).
  *
- * @param {*} [payload]
+ * @param {Object} [payload]
  * Attribute map to include in the request message.
  *
- * @returns {*}
+ * @returns {any}
  *
  * @example
  * import * as nl80211 from 'nl80211';

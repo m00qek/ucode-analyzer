@@ -309,7 +309,7 @@ export function connect(socket, timeout) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {string|boolean} [return="single"]
@@ -323,7 +323,7 @@ export function connect(socket, timeout) {};
  * @param {function} [fd_cb]
  * Optional callback function invoked when a file descriptor is received.
  *
- * @returns {?*}
+ * @returns {?any}
  */
 
 /**
@@ -340,7 +340,7 @@ export function connect(socket, timeout) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {string|boolean} [return="single"]
@@ -352,7 +352,7 @@ export function connect(socket, timeout) {};
  * @param {function} [fd_cb]
  * Optional callback function invoked when a file descriptor is received.
  *
- * @returns {?*}
+ * @returns {?any}
  *
  * @example
  * const chan = open_channel(…);
@@ -378,7 +378,7 @@ export function connect(socket, timeout) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {function} [cb]
@@ -431,7 +431,7 @@ export function connect(socket, timeout) {};
  * @param {string} method
  * The name of the method to invoke.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional method arguments as an object with field names and values.
  *
  * @param {function} [cb]
@@ -469,7 +469,7 @@ export function connect(socket, timeout) {};
  *
  * @function module:ubus.request#reply
  *
- * @param {*} [reply]
+ * @param {Object} [reply]
  * The reply data to send as an object with field names and values.
  *
  * @param {int} [rcode=0]
@@ -638,7 +638,7 @@ export function connect(socket, timeout) {};
  * @param {string} type
  * The notification type string.
  *
- * @param {*} [data]
+ * @param {Object} [data]
  * Optional notification data as an object with field names and values.
  *
  * @param {function} [data_cb]
@@ -725,7 +725,7 @@ export function connect(socket, timeout) {};
  * @param {string} object_name
  * The name to register the object under.
  *
- * @param {*} [methods]
+ * @param {Object} [methods]
  * Optional object defining methods with `call` functions and optional
  * `args` type specifications.
  *
@@ -812,7 +812,7 @@ export function connect(socket, timeout) {};
  * @param {string} event_type
  * The type string identifying the event.
  *
- * @param {*} [event_data]
+ * @param {Object} [event_data]
  * Optional event data as an object with field names and values.
  *
  * @returns {?boolean}

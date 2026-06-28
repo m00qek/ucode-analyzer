@@ -101,7 +101,7 @@
  * HTTP Basic authentication credentials in `"user:password"` form, or
  * `null` to omit authentication.
  *
- * @param {*} cb
+ * @param {Object} cb
  * Dispatch object whose properties are optional callback functions:
  *
  * - `header_done(self)` — invoked once all response headers have been
@@ -176,7 +176,7 @@ export function new(url, auth_str, cb) {};
  *
  * @function module:uclient.handle#ssl_init
  *
- * @param {*} [opts]
+ * @param {Object} [opts]
  * Optional SSL configuration:
  * - `cert_file` {string} — path to PEM client certificate file
  * - `key_file` {string} — path to PEM private key file
@@ -263,7 +263,7 @@ export function new(url, auth_str, cb) {};
  *
  * @function module:uclient.handle#get_headers
  *
- * @returns {?*}
+ * @returns {?Object}
  *
  * @example
  * const client = uclient(url, null, {
@@ -316,7 +316,7 @@ export function new(url, auth_str, cb) {};
  * HTTP method: `"GET"`, `"HEAD"`, `"POST"`, `"PUT"`, `"DELETE"`, or
  * `"PROPPATCH"`.
  *
- * @param {*} [opts]
+ * @param {Object} [opts]
  * Optional request options:
  * - `headers` {object} — additional request headers
  * - `post_data` {string} — body to send before `get_post_data` is called

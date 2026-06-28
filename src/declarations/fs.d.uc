@@ -219,7 +219,7 @@ export function error() {};
  *
  * @function module:fs.proc#write
  *
- * @param {*} data
+ * @param {any} data
  * The data to be written.
  *
  * @returns {?int}
@@ -378,7 +378,7 @@ export function popen(command, mode) {};
  *
  * @function module:fs.file#write
  *
- * @param {*} data
+ * @param {any} data
  * The data to be written.
  *
  * @returns {?int}
@@ -1310,7 +1310,7 @@ export function readfile(path, limit) {};
  * @param {string} path
  * The path to the file.
  *
- * @param {*} data
+ * @param {any} data
  * The data to be written.
  *
  * @param {int} [limit]

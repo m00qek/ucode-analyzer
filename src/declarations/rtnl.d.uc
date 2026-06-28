@@ -84,9 +84,9 @@ export function error() {};
  *
  * @param {string} cmd - The netlink command to send
  * @param {int} flags - The netlink flags for the request
- * @param {*} payload - The payload data for the request
+ * @param {Object} payload - The payload data for the request
  *
- * @returns {?*} - The response data or null on error
+ * @returns {?any} - The response data or null on error
  *
  * @example
  * // Send a route request

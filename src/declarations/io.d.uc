@@ -147,7 +147,7 @@ export function error() {};
  *
  * @function module:io.handle#tcgetattr
  *
- * @returns {?*}
+ * @returns {?Object}
  *
  * @example
  * const handle = io.open('/dev/tty', O_RDWR);
@@ -176,7 +176,7 @@ export function error() {};
  *
  * @function module:io.handle#tcsetattr
  *
- * @param {*} attrs
+ * @param {Object} attrs
  * The terminal attributes to set.
  *
  * @param {int} [when=0]
@@ -273,7 +273,7 @@ export function error() {};
  *
  * @function module:io.handle#write
  *
- * @param {*} data
+ * @param {any} data
  * The data to write.
  *
  * @returns {?int}
@@ -405,7 +405,7 @@ export function error() {};
  * @param {int} [arg]
  * Optional argument for the command.
  *
- * @returns {?*}
+ * @returns {?any}
  *
  * @example
  * const handle = io.open('/tmp/test.txt', O_RDONLY);
@@ -589,7 +589,7 @@ export function pipe() {};
  *
  * @function module:io#from
  *
- * @param {*} value
+ * @param {any} value
  * The value to convert.
  *
  * @returns {?IoHandle}

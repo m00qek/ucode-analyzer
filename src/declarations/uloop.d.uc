@@ -51,11 +51,11 @@
 
 /** @typedef {{ set: function(int): ?boolean, remaining: function(): int, cancel: function(): boolean }} UloopTimer */
 
-/** @typedef {{ fileno: function(): int, handle: function(): *, delete: function(): void }} UloopHandle */
+/** @typedef {{ fileno: function(): int, handle: function(): any, delete: function(): void }} UloopHandle */
 
 /** @typedef {{ pid: function(): int, delete: function(): boolean }} UloopProcess */
 
-/** @typedef {{ send: function(*): ?boolean, receive: function(): ?*, sending: function(): boolean, receiving: function(): boolean }} UloopPipe */
+/** @typedef {{ send: function(any): ?boolean, receive: function(): ?any, sending: function(): boolean, receiving: function(): boolean }} UloopPipe */
 
 /** @typedef {{ pid: function(): int, kill: function(): ?boolean, finished: function(): boolean }} UloopTask */
 
@@ -466,7 +466,7 @@ export function handle(handle, callback, events) {};
  * Optional. An array of strings representing the arguments passed to the
  * executable.
  *
- * @param {*} [env]
+ * @param {?Object} [env]
  * Optional. A dictionary describing environment variables for the process.
  *
  * @param {function} callback
@@ -494,7 +494,7 @@ export function process(executable, args, env, callback) {};
  *
  * @function module:uloop.pipe#send
  *
- * @param {*} msg
+ * @param {any} msg
  * The message to be serialized and sent over the pipe. It can be of arbitrary type.
  *
  * @returns {?boolean}
@@ -522,7 +522,7 @@ export function process(executable, args, env, callback) {};
  *
  * @function module:uloop.pipe#receive
  *
- * @returns {?*}
+ * @returns {?any}
  * Returns the deserialized message read from the task communication pipe.
  * Returns `null` on error, such as when there's no input callback registered
  * on the task handle.

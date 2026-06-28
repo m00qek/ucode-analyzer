@@ -187,11 +187,11 @@ export function openlog(ident, options, facility) {};
  *
  * See {@link LogPriority|LogPriority} for recognized priority names.
  *
- * @param {*} format
+ * @param {any} format
  * The sprintf-like format string for the log message, or any other, non-null,
  * non-string value type which will be implicitly stringified and logged as-is.
  *
- * @param {...*} [args]
+ * @param {...any} [args]
  * In case a format string value was provided in the previous argument, then
  * all subsequent arguments are used to replace the placeholders in the format
  * string.
@@ -323,11 +323,11 @@ export function ulog_open(channel, facility, ident) {};
  *
  * See {@link LogPriority|LogPriority} for recognized priority names.
  *
- * @param {*} format
+ * @param {any} format
  * The sprintf-like format string for the log message, or any other, non-null,
  * non-string value type which will be implicitly stringified and logged as-is.
  *
- * @param {...*} [args]
+ * @param {...any} [args]
  * In case a format string value was provided in the previous argument, then
  * all subsequent arguments are used to replace the placeholders in the format
  * string.
@@ -427,11 +427,11 @@ export function ulog_threshold(priority) {};
  *
  * @function module:log#INFO
  *
- * @param {*} format
+ * @param {any} format
  * The sprintf-like format string for the log message, or any other, non-null,
  * non-string value type which will be implicitly stringified and logged as-is.
  *
- * @param {...*} [args]
+ * @param {...any} [args]
  * In case a format string value was provided in the previous argument, then
  * all subsequent arguments are used to replace the placeholders in the format
  * string.
@@ -452,11 +452,11 @@ export function INFO(format, args) {};
  *
  * @function module:log#NOTE
  *
- * @param {*} format
+ * @param {any} format
  * The sprintf-like format string for the log message, or any other, non-null,
  * non-string value type which will be implicitly stringified and logged as-is.
  *
- * @param {...*} [args]
+ * @param {...any} [args]
  * In case a format string value was provided in the previous argument, then
  * all subsequent arguments are used to replace the placeholders in the format
  * string.
@@ -477,11 +477,11 @@ export function NOTE(format, args) {};
  *
  * @function module:log#WARN
  *
- * @param {*} format
+ * @param {any} format
  * The sprintf-like format string for the log message, or any other, non-null,
  * non-string value type which will be implicitly stringified and logged as-is.
  *
- * @param {...*} [args]
+ * @param {...any} [args]
  * In case a format string value was provided in the previous argument, then
  * all subsequent arguments are used to replace the placeholders in the format
  * string.
@@ -502,11 +502,11 @@ export function WARN(format, args) {};
  *
  * @function module:log#ERR
  *
- * @param {*} format
+ * @param {any} format
  * The sprintf-like format string for the log message, or any other, non-null,
  * non-string value type which will be implicitly stringified and logged as-is.
  *
- * @param {...*} [args]
+ * @param {...any} [args]
  * In case a format string value was provided in the previous argument, then
  * all subsequent arguments are used to replace the placeholders in the format
  * string.

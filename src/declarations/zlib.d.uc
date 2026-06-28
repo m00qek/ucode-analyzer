@@ -38,7 +38,7 @@
  *
  * @function module:zlib#deflate
  *
- * @param {*} str_or_resource
+ * @param {any} str_or_resource
  * The string or resource object to be compressed.
  *
  * @param {?boolean} [gzip=false]
@@ -84,7 +84,7 @@ export function deflate(str_or_resource, gzip, level) {};
  *
  * @function module:zlib#inflate
  *
- * @param {*} str_or_resource
+ * @param {any} str_or_resource
  * The string or resource object to be decompressed.
  *
  * @returns {?string}
