@@ -127,6 +127,33 @@ describe('diagnostics — undefined variables', () => {
 		assert.match(false, index(names, "'x' is not defined") >= 0);
 	});
 
+	it('does not warn for the loop variable in a C-style for condition', () => {
+		let text = "for (let i = 0; i < 10; i++) { }\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'i' is not defined") >= 0);
+	});
+
+	it('does not warn for the loop variable in a C-style for increment', () => {
+		let text = "for (let i = 0; i < 10; i++) { }\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let msgs = filter(diags, (d) => index(d.message, "'i'") >= 0);
+		assert.match(0, length(msgs));
+	});
+
+	it('warns for undefined reference in C-style for initializer value', () => {
+		let text = "for (let i = ghost; i < 10; i++) { }\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(true, index(names, "'ghost' is not defined") >= 0);
+	});
+
 	it('does not warn for a catch variable inside a catch block', () => {
 		let text = "try { } catch(e) { e; }\n";
 		documents.open(URI, text, 1);

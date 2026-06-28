@@ -230,14 +230,31 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	// ── C-style for: condition/increment in outer scope ───────────────────────
+	// ── C-style for ──────────────────────────────────────────────────────────────
 	if (nt === 'for_statement') {
+		// Walk the initializer RHS in the outer scope first (catches undefined refs
+		// in `let i = someUndefined()`), then bind the declared name(s) into an
+		// inner scope so the condition and increment can see them.
+		let inner = makeScope(scope);
+		let init = ts.childByField(node, 'initializer');
+		if (init && ts.nodeType(init) === 'lexical_declaration') {
+			for (let i = 0; i < ts.namedChildCount(init); i++) {
+				let vd = ts.namedChild(init, i);
+				if (ts.nodeType(vd) !== 'variable_declarator') continue;
+				let val = ts.childByField(vd, 'value');
+				if (val) walk(val, scope, source, globals, lineTable, out);
+				let nm = ts.childByField(vd, 'name');
+				if (nm && ts.nodeType(nm) === 'identifier') bind(inner, ts.text(nm, source));
+			}
+		} else if (init) {
+			walk(init, scope, source, globals, lineTable, out);
+		}
 		let cond = ts.childByField(node, 'condition');
-		if (cond) walk(cond, scope, source, globals, lineTable, out);
+		if (cond) walk(cond, inner, source, globals, lineTable, out);
 		let inc = ts.childByField(node, 'increment');
-		if (inc) walk(inc, scope, source, globals, lineTable, out);
+		if (inc) walk(inc, inner, source, globals, lineTable, out);
 		let body = ts.childByField(node, 'body');
-		if (body) walk(body, scope, source, globals, lineTable, out);
+		if (body) walk(body, inner, source, globals, lineTable, out);
 		return;
 	}
 
