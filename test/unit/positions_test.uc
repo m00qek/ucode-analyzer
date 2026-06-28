@@ -1,4 +1,5 @@
 import { describe, it, assert } from 'utest';
+import * as ts from 'tree_sitter';
 import * as pos from 'ucode_language_server.positions';
 
 describe('positions (buildLineTable)', () => {
@@ -93,5 +94,32 @@ describe('positions (multibyte UTF-8)', () => {
 			let p = pos.offsetToPosition(text, lt, off);
 			assert.match(off, pos.positionToOffset(text, lt, p));
 		}
+	});
+});
+
+describe('positions (nodeAtOffset)', () => {
+	let _p = ts.newParser(ts.ucode());
+
+	function parse(text) { return ts.parse(_p, text); }
+
+	// 'let foo = 1;' — 'foo' is at bytes 4–6
+	it('drills to the identifier node', () => {
+		let text = 'let foo = 1;';
+		let root = ts.rootNode(parse(text));
+		assert.match('identifier', ts.nodeType(pos.nodeAtOffset(root, 4)));
+	});
+
+	// 'let x = 42;' — '42' starts at byte 8
+	it('drills to the number node', () => {
+		let text = 'let x = 42;';
+		let root = ts.rootNode(parse(text));
+		assert.match('number', ts.nodeType(pos.nodeAtOffset(root, 8)));
+	});
+
+	it('returns the given node when no named child contains offset', () => {
+		let text = 'let x = 1;';
+		let root = ts.rootNode(parse(text));
+		// offset past end of file — no child matches, returns root itself
+		assert.match('program', ts.nodeType(pos.nodeAtOffset(root, 999)));
 	});
 });

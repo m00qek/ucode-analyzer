@@ -1,15 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition, buildLineTable } from 'ucode_language_server.positions';
-
-function nodeAtOffset(node, offset) {
-	let count = ts.namedChildCount(node);
-	for (let i = 0; i < count; i++) {
-		let child = ts.namedChild(node, i);
-		if (ts.startByte(child) <= offset && offset < ts.endByte(child))
-			return nodeAtOffset(child, offset);
-	}
-	return node;
-}
+import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'ucode_language_server.positions';
 
 // Collect all identifier nodes with matching text from the tree.
 function collectIdentifiers(node, name, source, result) {

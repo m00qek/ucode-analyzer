@@ -1,21 +1,10 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition, buildLineTable } from 'ucode_language_server.positions';
+import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'ucode_language_server.positions';
 import * as dag from 'ucode_language_server.dag.dag';
 import * as fs from 'fs';
 import { inferNode, stdlibUri } from 'ucode_language_server.types.inferrer';
 import { buildScope } from 'ucode_language_server.types.scope_builder';
 import * as type_registry from 'ucode_language_server.types.registry';
-
-// Walk to the deepest named node containing offset.
-function nodeAtOffset(node, offset) {
-	let count = ts.namedChildCount(node);
-	for (let i = 0; i < count; i++) {
-		let child = ts.namedChild(node, i);
-		if (ts.startByte(child) <= offset && offset < ts.endByte(child))
-			return nodeAtOffset(child, offset);
-	}
-	return node;
-}
 
 // Return an LSP Location object for byte offset inside uri.
 function location(uri, text, byteOffset) {

@@ -1,3 +1,16 @@
+import * as ts from 'tree_sitter';
+
+// Walk to the deepest named node that contains offset.
+export function nodeAtOffset(node, offset) {
+	let count = ts.namedChildCount(node);
+	for (let i = 0; i < count; i++) {
+		let child = ts.namedChild(node, i);
+		if (ts.startByte(child) <= offset && offset < ts.endByte(child))
+			return nodeAtOffset(child, offset);
+	}
+	return node;
+};
+
 // Build a table of byte offsets at which each line starts.
 // lines[n] is the byte offset of the first byte on line n.
 export function buildLineTable(text) {

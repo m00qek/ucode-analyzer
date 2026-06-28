@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset } from 'ucode_language_server.positions';
+import { positionToOffset, nodeAtOffset } from 'ucode_language_server.positions';
 import { inferNode } from 'ucode_language_server.types.inferrer';
 import { buildScope } from 'ucode_language_server.types.scope_builder';
 import { typeToString } from 'ucode_language_server.types.doc_parser';
@@ -7,16 +7,6 @@ import * as dag from 'ucode_language_server.dag.dag';
 import * as templates from 'ucode_language_server.templates';
 import { resolveDoc } from 'ucode_language_server.doc_resolver';
 import * as platform from 'ucode_language_server.platform';
-
-function nodeAtOffset(node, offset) {
-	let count = ts.namedChildCount(node);
-	for (let i = 0; i < count; i++) {
-		let child = ts.namedChild(node, i);
-		if (ts.startByte(child) <= offset && offset < ts.endByte(child))
-			return nodeAtOffset(child, offset);
-	}
-	return node;
-}
 
 // JSDoc descriptions often start with "- text" (dash from @param formatting).
 // Strip the leading dash so it doesn't combine with the template's "—" separator.
