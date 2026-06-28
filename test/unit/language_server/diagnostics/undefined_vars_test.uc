@@ -191,4 +191,41 @@ describe('diagnostics — undefined variables', () => {
 		let names = map(diags, (d) => d.message);
 		assert.match(false, index(names, "'e' is not defined") >= 0);
 	});
+
+	it('does not warn for a rest parameter used in the function body', () => {
+		let text = "function f(...args) { return args; }\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'args' is not defined") >= 0);
+	});
+
+	it('does not warn for a named function expression referring to itself recursively', () => {
+		let text = "let f = function fact(n) { return n > 1 ? n * fact(n - 1) : 1; };\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'fact' is not defined") >= 0);
+	});
+
+	it('does not warn for loop variable in a braceless for-in body', () => {
+		let text = "let arr = [1];\nfor (let x in arr) x;\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'x' is not defined") >= 0);
+	});
+
+	it('does not warn for the value variable in for (let k, v in obj)', () => {
+		let text = "let obj = {};\nfor (let k, v in obj) { k; v; }\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'k' is not defined") >= 0);
+		assert.match(false, index(names, "'v' is not defined") >= 0);
+	});
 });

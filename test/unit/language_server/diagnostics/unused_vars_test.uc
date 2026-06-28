@@ -135,4 +135,40 @@ describe('diagnostics — unused variables', () => {
 		let xDiags = filter(diags, (d) => index(d.message, "'x'") >= 0);
 		assert.match(0, length(xDiags));
 	});
+
+	it('warns for a named import that is never referenced', () => {
+		let text = "import { foo } from 'tree_sitter';\n";
+		documents.open(URI, text, 1);
+
+		let diags = unusedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(true, index(names, "'foo' is declared but never used") >= 0);
+	});
+
+	it('does not warn for a named import that is used', () => {
+		let text = "import { parse } from 'tree_sitter';\nparse('x');\n";
+		documents.open(URI, text, 1);
+
+		let diags = unusedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'parse' is declared but never used") >= 0);
+	});
+
+	it('warns for a namespace import alias that is never referenced', () => {
+		let text = "import * as ts from 'tree_sitter';\n";
+		documents.open(URI, text, 1);
+
+		let diags = unusedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(true, index(names, "'ts' is declared but never used") >= 0);
+	});
+
+	it('does not warn for a namespace import alias that is used', () => {
+		let text = "import * as ts from 'tree_sitter';\nts.parse;\n";
+		documents.open(URI, text, 1);
+
+		let diags = unusedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'ts' is declared but never used") >= 0);
+	});
 });

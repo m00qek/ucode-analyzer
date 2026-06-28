@@ -30,6 +30,33 @@ function collectDeclarations(root, source, out) {
 	function walk(node) {
 		let nt = ts.nodeType(node);
 
+		if (nt === 'import_statement') {
+			for (let i = 0; i < ts.namedChildCount(node); i++) {
+				let clause = ts.namedChild(node, i);
+				if (ts.nodeType(clause) !== 'import_clause') continue;
+				for (let j = 0; j < ts.namedChildCount(clause); j++) {
+					let part = ts.namedChild(clause, j);
+					let pnt = ts.nodeType(part);
+					if (pnt === 'namespace_import') {
+						let alias = ts.namedChild(part, 0);
+						if (alias && ts.nodeType(alias) === 'identifier')
+							push(out, { name: ts.text(alias, source), declByte: ts.startByte(alias), nameNode: alias });
+					} else if (pnt === 'named_imports') {
+						for (let k = 0; k < ts.namedChildCount(part); k++) {
+							let spec = ts.namedChild(part, k);
+							if (ts.nodeType(spec) !== 'import_specifier') continue;
+							let count = ts.namedChildCount(spec);
+							if (count === 0) continue;
+							let localNode = ts.namedChild(spec, count - 1);
+							if (localNode && ts.nodeType(localNode) === 'identifier')
+								push(out, { name: ts.text(localNode, source), declByte: ts.startByte(localNode), nameNode: localNode });
+						}
+					}
+				}
+			}
+			return;
+		}
+
 		if (nt === 'lexical_declaration') {
 			for (let i = 0; i < ts.namedChildCount(node); i++) {
 				let vd = ts.namedChild(node, i);
@@ -77,18 +104,24 @@ function collectDeclarations(root, source, out) {
 	walk(root);
 }
 
-// Collect the startByte of every identifier occurrence (including shorthand
-// property `{ x }`) in the tree that matches targetName.
-// Skips formal_parameters to avoid treating inner function params with the same
-// name as uses of the outer variable being checked.
-function collectAllIdentifierBytes(node, source, targetName, out) {
-	let nt = ts.nodeType(node);
-	if (nt === 'formal_parameters') return;
-	if ((nt === 'identifier' || nt === 'shorthand_property_identifier') &&
-	    ts.text(node, source) === targetName)
-		push(out, ts.startByte(node));
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		collectAllIdentifierBytes(ts.namedChild(node, i), source, targetName, out);
+// Build a map of { name → [startBytes] } for every identifier in the tree
+// in a single pass. Skips formal_parameters to avoid counting inner function
+// params as uses of an outer variable with the same name.
+function buildIdentifierIndex(root, source) {
+	let idx = {};
+	function walk(node) {
+		let nt = ts.nodeType(node);
+		if (nt === 'formal_parameters') return;
+		if (nt === 'identifier' || nt === 'shorthand_property_identifier') {
+			let name = ts.text(node, source);
+			if (!exists(idx, name)) idx[name] = [];
+			push(idx[name], ts.startByte(node));
+		}
+		for (let i = 0; i < ts.namedChildCount(node); i++)
+			walk(ts.namedChild(node, i));
+	}
+	walk(root);
+	return idx;
 }
 
 export function unusedVars(doc) {
@@ -99,6 +132,8 @@ export function unusedVars(doc) {
 	let decls = [];
 	collectDeclarations(root, source, decls);
 
+	let byName = buildIdentifierIndex(root, source);
+
 	let diags = [];
 	for (let i = 0; i < length(decls); i++) {
 		let decl = decls[i];
@@ -106,12 +141,8 @@ export function unusedVars(doc) {
 		// Exported names are consumed externally — never warn.
 		if (isExported(decl.nameNode)) continue;
 
-		// Collect all identifier bytes for this name in the whole file.
-		let allBytes = [];
-		collectAllIdentifierBytes(root, source, decl.name, allBytes);
-
-		// If every occurrence is the declaration itself, it is unused.
-		// (The declaration byte always appears in allBytes.)
+		// If every occurrence of this name is the declaration byte itself, it is unused.
+		let allBytes = byName[decl.name] ?? [];
 		let hasUse = false;
 		for (let j = 0; j < length(allBytes); j++) {
 			if (allBytes[j] !== decl.declByte) { hasUse = true; break; }

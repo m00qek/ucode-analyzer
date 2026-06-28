@@ -12,7 +12,13 @@ function bind(scope, name) { scopeSet(scope, name, true); }
 function bindFormalParams(paramsNode, scope, source) {
 	for (let i = 0; i < ts.namedChildCount(paramsNode); i++) {
 		let p = ts.namedChild(paramsNode, i);
-		if (ts.nodeType(p) === 'identifier') bind(scope, ts.text(p, source));
+		if (ts.nodeType(p) === 'identifier') {
+			bind(scope, ts.text(p, source));
+		} else if (ts.nodeType(p) === 'rest_element') {
+			let inner = ts.namedChild(p, 0);
+			if (inner && ts.nodeType(inner) === 'identifier')
+				bind(scope, ts.text(inner, source));
+		}
 	}
 }
 
@@ -32,6 +38,9 @@ function bindForInVar(block, scope, source) {
 			if (nm) bind(scope, ts.text(nm, source));
 		}
 	}
+	// Bind the optional value variable in `for (let k, v in obj)`.
+	let value = ts.childByField(parent, 'value');
+	if (value && ts.nodeType(value) === 'identifier') bind(scope, ts.text(value, source));
 }
 
 function bindForVar(block, scope, source) {
@@ -149,6 +158,12 @@ function walk(node, scope, source, globals, lineTable, out) {
 
 	if (nt === 'function_expression' || nt === 'arrow_function') {
 		let inner = makeScope(scope);
+		// Named function_expression: bind its own name so recursive calls inside don't warn.
+		if (nt === 'function_expression') {
+			let nameNode = ts.childByField(node, 'name');
+			if (nameNode && ts.nodeType(nameNode) === 'identifier')
+				bind(inner, ts.text(nameNode, source));
+		}
 		// Field access: `parameters` → formal_parameters for multi-param (works for
 		// named/anonymous function_expression). `parameter` → bare ident for `x => expr`.
 		let params = ts.childByField(node, 'parameters');
@@ -184,7 +199,17 @@ function walk(node, scope, source, globals, lineTable, out) {
 		let right = ts.childByField(node, 'right');
 		if (right) walk(right, scope, source, globals, lineTable, out);
 		let body = ts.childByField(node, 'body');
-		if (body) walk(body, scope, source, globals, lineTable, out);
+		if (body) {
+			if (ts.nodeType(body) === 'statement_block') {
+				// statement_block handler calls bindForInVar automatically.
+				walk(body, scope, source, globals, lineTable, out);
+			} else {
+				// No-brace body: bind loop var into an explicit inner scope.
+				let inner = makeScope(scope);
+				bindForInVar(body, inner, source);
+				walk(body, inner, source, globals, lineTable, out);
+			}
+		}
 		return;
 	}
 
