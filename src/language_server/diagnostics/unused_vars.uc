@@ -86,8 +86,11 @@ function collectDeclarations(root, source, out) {
 
 // Collect the startByte of every identifier occurrence (including shorthand
 // property `{ x }`) in the tree that matches targetName.
+// Skips formal_parameters to avoid treating inner function params with the same
+// name as uses of the outer variable being checked.
 function collectAllIdentifierBytes(node, source, targetName, out) {
 	let nt = ts.nodeType(node);
+	if (nt === 'formal_parameters') return;
 	if ((nt === 'identifier' || nt === 'shorthand_property_identifier') &&
 	    ts.text(node, source) === targetName)
 		push(out, ts.startByte(node));

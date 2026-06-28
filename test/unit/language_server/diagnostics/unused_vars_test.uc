@@ -94,6 +94,18 @@ describe('diagnostics — unused variables', () => {
 		assert.match(true, index(names, "'inner_unused' is declared but never used") >= 0);
 	});
 
+	it('warns when outer variable is shadowed by inner function param and never used outside', () => {
+		// Outer x is never used (only the param declaration site shadows it).
+		// Before fix: the x in formal_parameters was counted as a use → no warning.
+		// After fix: formal_parameters is skipped → outer x has zero uses → warning.
+		let text = "let x = 1;\nfunction f(x) { }\nf(2);\n";
+		documents.open(URI, text, 1);
+
+		let diags = unusedVars(documents.get(URI));
+		let xDiags = filter(diags, (d) => index(d.message, "'x'") >= 0);
+		assert.match(true, length(xDiags) > 0);
+	});
+
 	it('does not warn when a variable is used as a shorthand property { x }', () => {
 		let text = "let x = 1;\nlet obj = { x };\nobj;\n";
 		documents.open(URI, text, 1);
