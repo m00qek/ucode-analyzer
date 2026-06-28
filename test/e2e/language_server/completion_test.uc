@@ -106,4 +106,32 @@ describe('textDocument/completion', () => {
 		assert.match(true, index(labels, 'throws') >= 0);    // assert member
 		assert.match(false, index(labels, 'y') >= 0);        // local — must NOT appear
 	});
+
+	it('general context includes language keywords with kind 14', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = 1;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+
+		let resp = lsp.receive(proc);
+		let items = resp.result;
+		let labels = map(items, (i) => i.label);
+
+		// Keywords present
+		assert.match(true, index(labels, 'if') >= 0);
+		assert.match(true, index(labels, 'for') >= 0);
+		assert.match(true, index(labels, 'return') >= 0);
+		assert.match(true, index(labels, 'let') >= 0);
+		assert.match(true, index(labels, 'function') >= 0);
+
+		// Keywords have kind 14
+		for (let item in items) {
+			if (item.label === 'if')
+				assert.match(14, item.kind);
+		}
+	});
 });

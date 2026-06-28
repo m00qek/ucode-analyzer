@@ -11,6 +11,15 @@ import * as platform from 'language_server.platform';
 let KIND_FUNCTION = 3;
 let KIND_VARIABLE  = 6;
 let KIND_MODULE    = 9;
+let KIND_KEYWORD   = 14;
+
+// All ucode keywords offered in non-member, non-import contexts.
+let KEYWORDS = [
+	'break', 'case', 'catch', 'const', 'continue', 'default', 'delete',
+	'do', 'else', 'export', 'false', 'finally', 'for', 'function', 'if',
+	'import', 'in', 'instanceof', 'let', 'null', 'return', 'switch',
+	'throw', 'true', 'try', 'typeof', 'void', 'while',
+];
 
 // Walk the tree to find if offset falls inside an import_statement.
 // Returns the specifier string (e.g. 'tree_sitter') or null if not in one.
@@ -226,9 +235,11 @@ export function completion(uri, doc, position) {
 		return membersOfType(objType);
 	}
 
-	// General: scope locals + imported symbols.
+	// General: scope locals + imported symbols + language keywords.
 	let items = scopeItems(uri, doc, offset);
 	let imported = importedItems(uri);
 	for (let i = 0; i < length(imported); i++) push(items, imported[i]);
+	for (let i = 0; i < length(KEYWORDS); i++)
+		push(items, { label: KEYWORDS[i], kind: KIND_KEYWORD });
 	return items;
 };

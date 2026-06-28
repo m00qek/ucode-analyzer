@@ -193,3 +193,65 @@ describe('completion — member (cursor on property)', () => {
 		assert.match(true, index(labels, 'ts') >= 0);  // namespace alias is in scope
 	});
 });
+
+describe('completion — keywords', () => {
+	beforeEach(() => dag.init(_config));
+
+	it('includes language keywords in general completion', () => {
+		let text = "let x = 1;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
+		let labels = map(items, (i) => i.label);
+
+		// A selection of expected keywords
+		assert.match(true, index(labels, 'if') >= 0);
+		assert.match(true, index(labels, 'for') >= 0);
+		assert.match(true, index(labels, 'while') >= 0);
+		assert.match(true, index(labels, 'return') >= 0);
+		assert.match(true, index(labels, 'let') >= 0);
+		assert.match(true, index(labels, 'function') >= 0);
+		assert.match(true, index(labels, 'true') >= 0);
+		assert.match(true, index(labels, 'null') >= 0);
+	});
+
+	it('keyword items have KEYWORD kind (14)', () => {
+		let text = "let x = 1;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
+		let ifItem = null;
+		for (let i in items) if (i.label === 'if') { ifItem = i; break; }
+
+		assert.match(true, ifItem !== null);
+		assert.match(14, ifItem.kind);
+	});
+
+	it('does not include keywords inside member expression context', () => {
+		let text = "let obj = {};\nobj.";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		// cursor right after the dot — member context, no keywords expected
+		let items = completion(URI, documents.get(URI), { line: 1, character: 4 });
+		let labels = map(items, (i) => i.label);
+
+		assert.match(false, index(labels, 'if') >= 0);
+		assert.match(false, index(labels, 'return') >= 0);
+	});
+
+	it('does not include keywords inside import statement context', () => {
+		// Cursor inside the module specifier string
+		let text = "import { x } from 'tree_sitter';\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		// cursor at position 19, inside 'tree_sitter' string
+		let items = completion(URI, documents.get(URI), { line: 0, character: 19 });
+		let labels = map(items, (i) => i.label);
+
+		assert.match(false, index(labels, 'if') >= 0);
+	});
+});
