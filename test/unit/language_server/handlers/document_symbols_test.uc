@@ -82,3 +82,80 @@ describe('documentSymbols', () => {
 		assert.match(3, length(syms));
 	});
 });
+
+describe('documentSymbols — nested declarations', () => {
+	it('finds a function declaration nested inside another function', () => {
+		let text = "function outer() {\n  function inner() {}\n}\n";
+		documents.open(URI, text, 1);
+
+		let syms = documentSymbols(documents.get(URI));
+		let names = sort(map(syms, (s) => s.name));
+
+		assert.match(2, length(syms));
+		assert.match('inner', names[0]);
+		assert.match('outer', names[1]);
+	});
+
+	it('finds an arrow function nested inside a function body', () => {
+		let text = "function outer() {\n  let helper = x => x;\n}\n";
+		documents.open(URI, text, 1);
+
+		let syms = documentSymbols(documents.get(URI));
+		// outer (FUNCTION) + helper (FUNCTION)
+		assert.match(2, length(syms));
+		let names = sort(map(syms, (s) => s.name));
+		assert.match('helper', names[0]);
+		assert.match('outer', names[1]);
+	});
+
+	it('finds a let variable inside a function body', () => {
+		let text = "function setup() {\n  let cfg = {};\n}\n";
+		documents.open(URI, text, 1);
+
+		let syms = documentSymbols(documents.get(URI));
+		assert.match(2, length(syms));
+		let names = sort(map(syms, (s) => s.name));
+		assert.match('cfg', names[0]);
+		assert.match('setup', names[1]);
+	});
+
+	it('emits FUNCTION symbol for function-valued object property', () => {
+		let text = "const M = {\n  foo: x => x,\n  bar: 1,\n};\n";
+		documents.open(URI, text, 1);
+
+		let syms = documentSymbols(documents.get(URI));
+		// M (CONSTANT) + foo (FUNCTION); bar has a numeric value, not a function
+		let names = sort(map(syms, (s) => s.name));
+		assert.match(true, index(names, 'M') >= 0);
+		assert.match(true, index(names, 'foo') >= 0);
+		assert.match(false, index(names, 'bar') >= 0);
+
+		let fooSym = null;
+		for (let s in syms) if (s.name === 'foo') { fooSym = s; break; }
+		assert.match(12, fooSym.kind);
+	});
+
+	it('does not emit symbols for non-function object properties', () => {
+		let text = "const config = { host: 'localhost', port: 80 };\n";
+		documents.open(URI, text, 1);
+
+		let syms = documentSymbols(documents.get(URI));
+		// Only config itself; host/port are plain values
+		assert.match(1, length(syms));
+		assert.match('config', syms[0].name);
+	});
+
+	it('handles deep nesting: function inside function inside function', () => {
+		let text = "function a() {\n  function b() {\n    function c() {}\n  }\n}\n";
+		documents.open(URI, text, 1);
+
+		let syms = documentSymbols(documents.get(URI));
+		let names = sort(map(syms, (s) => s.name));
+		assert.match(3, length(syms));
+		assert.match('a', names[0]);
+		assert.match('b', names[1]);
+		assert.match('c', names[2]);
+		for (let s in syms)
+			assert.match(12, s.kind);
+	});
+});

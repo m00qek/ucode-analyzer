@@ -45,4 +45,39 @@ describe('textDocument/documentSymbol', () => {
 		assert.match(1, resp.id);
 		assert.match(0, length(resp.result));
 	});
+
+	it('finds nested function declarations inside a function body', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "function outer() {\n  function inner() {}\n}\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
+			textDocument: { uri: 'file:///t.uc' },
+		}});
+
+		let resp = lsp.receive(proc);
+		let names = sort(map(resp.result, (s) => s.name));
+
+		assert.match(2, length(resp.result));
+		assert.match('inner', names[0]);
+		assert.match('outer', names[1]);
+	});
+
+	it('finds function-valued object properties', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "const M = { handle: x => x, value: 1 };\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
+			textDocument: { uri: 'file:///t.uc' },
+		}});
+
+		let resp = lsp.receive(proc);
+		let names = sort(map(resp.result, (s) => s.name));
+
+		// M (CONSTANT) + handle (FUNCTION); value is plain, not emitted
+		assert.match(2, length(resp.result));
+		assert.match('M', names[0]);
+		assert.match('handle', names[1]);
+	});
 });

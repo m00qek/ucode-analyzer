@@ -12,69 +12,112 @@ function rangeOf(text, lineTable, node) {
 	return { start, end };
 }
 
-function addVarDecl(stmt, text, lineTable, isConst, result) {
-	let count = ts.namedChildCount(stmt);
-	for (let i = 0; i < count; i++) {
-		let vd = ts.namedChild(stmt, i);
-		if (ts.nodeType(vd) !== 'variable_declarator') continue;
-		let nameNode = ts.childByField(vd, 'name');
-		if (!nameNode) continue;
-		let name  = ts.text(nameNode, text);
-		let valNode = ts.childByField(vd, 'value');
-		let kind  = isConst ? KIND_CONSTANT : KIND_VARIABLE;
-		if (valNode && ts.nodeType(valNode) === 'arrow_function') kind = KIND_FUNCTION;
+// Recursively collect DocumentSymbol entries from node into result.
+//
+// Recognized binding sites:
+//   program / statement_block  → recurse into each named child
+//   export_statement           → unwrap the inner declaration
+//   function_declaration       → emit FUNCTION symbol, recurse into body
+//   lexical_declaration        → emit VARIABLE/CONSTANT/FUNCTION per declarator;
+//                                recurse into the initializer value for nested decls
+//   arrow_function /
+//   function_expression        → recurse into body (reached from lex_decl values)
+//   object                     → emit FUNCTION symbols for function-valued pairs
+//
+// Everything else is a leaf for symbol purposes.
+function walkSymbols(node, text, lineTable, result) {
+	let nt = ts.nodeType(node);
+
+	// ── Containers: recurse into statements ────────────────────────────────
+	if (nt === 'program' || nt === 'statement_block') {
+		for (let i = 0; i < ts.namedChildCount(node); i++)
+			walkSymbols(ts.namedChild(node, i), text, lineTable, result);
+		return;
+	}
+
+	// ── Export: unwrap and process the inner declaration ───────────────────
+	if (nt === 'export_statement') {
+		let inner = ts.namedChild(node, 0);
+		if (inner) walkSymbols(inner, text, lineTable, result);
+		return;
+	}
+
+	// ── Function declaration ────────────────────────────────────────────────
+	if (nt === 'function_declaration') {
+		let nameNode = ts.namedChild(node, 0);
+		if (!nameNode) return;
 		push(result, {
-			name,
-			kind,
-			range:          rangeOf(text, lineTable, stmt),
+			name:           ts.text(nameNode, text),
+			kind:           KIND_FUNCTION,
+			range:          rangeOf(text, lineTable, node),
 			selectionRange: rangeOf(text, lineTable, nameNode),
 		});
+		let body = ts.childByField(node, 'body');
+		if (body) walkSymbols(body, text, lineTable, result);
+		return;
+	}
+
+	// ── Lexical declaration (let / const) ───────────────────────────────────
+	if (nt === 'lexical_declaration') {
+		let kw = ts.child(node, 0);
+		let isConst = kw && ts.text(kw, text) === 'const';
+		for (let i = 0; i < ts.namedChildCount(node); i++) {
+			let vd = ts.namedChild(node, i);
+			if (ts.nodeType(vd) !== 'variable_declarator') continue;
+			let nameNode = ts.childByField(vd, 'name');
+			if (!nameNode) continue;
+			let valNode = ts.childByField(vd, 'value');
+			let kind = isConst ? KIND_CONSTANT : KIND_VARIABLE;
+			if (valNode) {
+				let vt = ts.nodeType(valNode);
+				if (vt === 'arrow_function' || vt === 'function_expression')
+					kind = KIND_FUNCTION;
+			}
+			push(result, {
+				name:           ts.text(nameNode, text),
+				kind,
+				range:          rangeOf(text, lineTable, node),
+				selectionRange: rangeOf(text, lineTable, nameNode),
+			});
+			if (valNode) walkSymbols(valNode, text, lineTable, result);
+		}
+		return;
+	}
+
+	// ── Function values: recurse into body for nested declarations ──────────
+	if (nt === 'arrow_function' || nt === 'function_expression') {
+		let body = ts.childByField(node, 'body');
+		if (body) walkSymbols(body, text, lineTable, result);
+		return;
+	}
+
+	// ── Object literal: emit function-valued properties ─────────────────────
+	if (nt === 'object') {
+		for (let i = 0; i < ts.namedChildCount(node); i++) {
+			let pair = ts.namedChild(node, i);
+			if (ts.nodeType(pair) !== 'pair') continue;
+			let keyNode = ts.childByField(pair, 'key');
+			let valNode = ts.childByField(pair, 'value');
+			if (!keyNode || !valNode) continue;
+			let vt = ts.nodeType(valNode);
+			if (vt === 'arrow_function' || vt === 'function_expression') {
+				push(result, {
+					name:           ts.text(keyNode, text),
+					kind:           KIND_FUNCTION,
+					range:          rangeOf(text, lineTable, pair),
+					selectionRange: rangeOf(text, lineTable, keyNode),
+				});
+				walkSymbols(valNode, text, lineTable, result);
+			}
+		}
+		return;
 	}
 }
 
 export function documentSymbols(doc) {
 	let text      = doc.text;
 	let lineTable = buildLineTable(text);
-	let root      = ts.rootNode(doc.tree);
 	let result    = [];
-
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let stmt = ts.namedChild(root, i);
-		let nt   = ts.nodeType(stmt);
-
-		if (nt === 'lexical_declaration') {
-			let kw = ts.child(stmt, 0);
-			let isConst = kw && ts.text(kw, text) === 'const';
-			addVarDecl(stmt, text, lineTable, isConst, result);
-		} else if (nt === 'function_declaration') {
-			let nameNode = ts.namedChild(stmt, 0);
-			if (!nameNode) continue;
-			push(result, {
-				name:           ts.text(nameNode, text),
-				kind:           KIND_FUNCTION,
-				range:          rangeOf(text, lineTable, stmt),
-				selectionRange: rangeOf(text, lineTable, nameNode),
-			});
-		} else if (nt === 'export_statement') {
-			let decl = ts.namedChild(stmt, 0);
-			if (!decl) continue;
-			let dt = ts.nodeType(decl);
-			if (dt === 'lexical_declaration') {
-				let kw = ts.child(decl, 0);
-				let isConst = kw && ts.text(kw, text) === 'const';
-				addVarDecl(decl, text, lineTable, isConst, result);
-			} else if (dt === 'function_declaration') {
-				let nameNode = ts.namedChild(decl, 0);
-				if (!nameNode) continue;
-				push(result, {
-					name:           ts.text(nameNode, text),
-					kind:           KIND_FUNCTION,
-					range:          rangeOf(text, lineTable, stmt),
-					selectionRange: rangeOf(text, lineTable, nameNode),
-				});
-			}
-		}
-	}
-
+	walkSymbols(ts.rootNode(doc.tree), text, lineTable, result);
 	return result;
 };
