@@ -1,5 +1,5 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
-import * as lsp from 'lsp_client';
+import * as lsp from 'client';
 
 const DOC = {
 	uri: 'file:///test.uc',
