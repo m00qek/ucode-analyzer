@@ -80,6 +80,7 @@ test-e2e: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 
 test-integration: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/integration/language_server/utest.config.uc $(REPORTER) test/integration/language_server/
+	@$(TEST_IMAGE) utest -c test/integration/tree_sitter/utest.config.uc $(REPORTER) test/integration/tree_sitter/
 
 shell: TEST_OPTS := -it
 shell: .docker-image
