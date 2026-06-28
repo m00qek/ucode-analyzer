@@ -84,9 +84,12 @@ function collectDeclarations(root, source, out) {
 	walk(root);
 }
 
-// Collect the startByte of every identifier in the tree (all occurrences).
+// Collect the startByte of every identifier occurrence (including shorthand
+// property `{ x }`) in the tree that matches targetName.
 function collectAllIdentifierBytes(node, source, targetName, out) {
-	if (ts.nodeType(node) === 'identifier' && ts.text(node, source) === targetName)
+	let nt = ts.nodeType(node);
+	if ((nt === 'identifier' || nt === 'shorthand_property_identifier') &&
+	    ts.text(node, source) === targetName)
 		push(out, ts.startByte(node));
 	for (let i = 0; i < ts.namedChildCount(node); i++)
 		collectAllIdentifierBytes(ts.namedChild(node, i), source, targetName, out);

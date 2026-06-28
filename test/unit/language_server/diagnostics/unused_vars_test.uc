@@ -94,6 +94,15 @@ describe('diagnostics — unused variables', () => {
 		assert.match(true, index(names, "'inner_unused' is declared but never used") >= 0);
 	});
 
+	it('does not warn when a variable is used as a shorthand property { x }', () => {
+		let text = "let x = 1;\nlet obj = { x };\nobj;\n";
+		documents.open(URI, text, 1);
+
+		let diags = unusedVars(documents.get(URI));
+		let xDiags = filter(diags, (d) => index(d.message, "'x'") >= 0);
+		assert.match(0, length(xDiags));
+	});
+
 	it('does not warn when a variable shadows an outer one and the outer is used', () => {
 		// outer x used on line 3; inner x used on line 2 — neither is unused
 		let text = "let x = 1;\nfunction f() { let x = 2; return x; }\nx;\n";
