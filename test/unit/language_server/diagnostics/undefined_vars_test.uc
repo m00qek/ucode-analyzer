@@ -62,6 +62,16 @@ describe('diagnostics — undefined variables', () => {
 		assert.match(0, length(undefinedVars(documents.get(URI))));
 	});
 
+	it('does not warn for params of a named function expression', () => {
+		let text = "let f = function myFunc(a, b) { return a + b; };\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'a' is not defined") >= 0);
+		assert.match(false, index(names, "'b' is not defined") >= 0);
+	});
+
 	it('does not warn for a function parameter inside the function body', () => {
 		let text = "function add(a, b) { return a + b; }\n";
 		documents.open(URI, text, 1);
