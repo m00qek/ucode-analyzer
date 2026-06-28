@@ -1,6 +1,6 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
-import { diagnosticsFor } from 'language_server.handlers.diagnostics';
+import { unknownImports } from 'language_server.diagnostics.unknown_imports';
 import * as dag from 'language_server.dag.dag';
 
 let URI = 'file:///test.uc';
@@ -23,9 +23,7 @@ describe('diagnostics — unknown imports', () => {
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
 
-		let diags = diagnosticsFor(URI, documents.get(URI));
-
-		assert.match(0, length(diags));
+		assert.match(0, length(unknownImports(URI, documents.get(URI))));
 	});
 
 	it('returns an error for an import that cannot be resolved', () => {
@@ -33,10 +31,10 @@ describe('diagnostics — unknown imports', () => {
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
 
-		let diags = diagnosticsFor(URI, documents.get(URI));
+		let diags = unknownImports(URI, documents.get(URI));
 
 		assert.match(1, length(diags));
-		assert.match(1, diags[0].severity);  // ERROR
+		assert.match(1, diags[0].severity);
 		assert.match(true, index(diags[0].message, 'no_such_module') >= 0);
 	});
 
@@ -45,10 +43,8 @@ describe('diagnostics — unknown imports', () => {
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
 
-		let diags = diagnosticsFor(URI, documents.get(URI));
-		let r = diags[0].range;
+		let r = unknownImports(URI, documents.get(URI))[0].range;
 
-		// The string 'no_such_module' starts after "import { foo } from " (21 chars)
 		assert.match(0, r.start.line);
 		assert.match(true, r.start.character >= 20);
 	});
@@ -58,9 +54,7 @@ describe('diagnostics — unknown imports', () => {
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
 
-		let diags = diagnosticsFor(URI, documents.get(URI));
-
-		assert.match(2, length(diags));
+		assert.match(2, length(unknownImports(URI, documents.get(URI))));
 	});
 
 	it('returns empty list when there are no imports', () => {
@@ -68,8 +62,6 @@ describe('diagnostics — unknown imports', () => {
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
 
-		let diags = diagnosticsFor(URI, documents.get(URI));
-
-		assert.match(0, length(diags));
+		assert.match(0, length(unknownImports(URI, documents.get(URI))));
 	});
 });
