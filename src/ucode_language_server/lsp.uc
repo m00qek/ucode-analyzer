@@ -76,7 +76,8 @@ export function run(config) {
 			documents.open(td.uri, td.text, td.version);
 			let doc = documents.get(td.uri);
 			invalidateUri(td.uri);
-			dag.update(td.uri, doc.text, doc.tree);
+			let cascaded = dag.update(td.uri, doc.text, doc.tree);
+			for (let dep in cascaded) invalidateUri(dep);
 			protocol.notify('textDocument/publishDiagnostics', {
 				uri: td.uri,
 				diagnostics: diagnosticsFor(td.uri, doc),
@@ -88,7 +89,8 @@ export function run(config) {
 			documents.change(uri, msg.params.contentChanges, msg.params.textDocument.version);
 			let doc = documents.get(uri);
 			invalidateUri(uri);
-			dag.update(uri, doc.text, doc.tree);
+			let cascaded = dag.update(uri, doc.text, doc.tree);
+			for (let dep in cascaded) invalidateUri(dep);
 			protocol.notify('textDocument/publishDiagnostics', {
 				uri,
 				diagnostics: diagnosticsFor(uri, doc),

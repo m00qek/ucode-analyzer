@@ -92,6 +92,7 @@ export function addFromDisk(uri) {
 };
 
 // Re-index a file with the given content, then cascade through reverse deps.
+// Returns the list of dependent URIs that were re-indexed (excluding uri itself).
 export function update(uri, text, tree) {
 	indexNode(uri, text, tree);
 
@@ -111,6 +112,8 @@ export function update(uri, text, tree) {
 		for (let dep in (_inEdges[next] ?? []))
 			if (!visited[dep]) { visited[dep] = true; push(queue, dep); }
 	}
+
+	return queue;
 };
 
 export function remove(uri) {
