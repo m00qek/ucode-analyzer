@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { inferNode, processDecl, importScope } from 'language_server.types.inferrer';
-import { makeScope, scopeGet, scopeSet } from 'language_server.types.scope';
+import { makeScope, scopeGet, scopeSet, scopeHas } from 'language_server.types.scope';
 import { UNKNOWN, STR } from 'language_server.types.type_utils';
 
 // Return all function nodes (function_declaration / arrow_function /
@@ -108,7 +108,7 @@ function processBlock(stmts, source, uri, scope, targetOffset) {
 				if (lhs && rhs && ts.nodeType(lhs) === 'identifier') {
 					let name = ts.text(lhs, source);
 					let newType = inferNode(rhs, source, uri, scope, 0);
-					if (scopeGet(scope, name) !== null && newType.kind !== 'unknown')
+					if (scopeHas(scope, name) && newType.kind !== 'unknown')
 						scopeSet(scope, name, newType);
 				}
 			}

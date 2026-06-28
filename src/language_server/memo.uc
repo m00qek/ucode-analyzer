@@ -3,7 +3,7 @@ let _cache = {};  // uri → { 'startByte|nodeType' → Type }
 export function memoGet(uri, offset, nodeType) {
 	let bucket = _cache[uri];
 	let key = offset + '|' + nodeType;
-	return (bucket && bucket[key] !== null) ? bucket[key] : null;
+	return (bucket && exists(bucket, key)) ? bucket[key] : null;
 };
 
 export function memoSet(uri, offset, nodeType, type) {

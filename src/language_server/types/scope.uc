@@ -7,7 +7,16 @@ export function scopeSet(scope, name, type) {
 };
 
 export function scopeGet(scope, name) {
-	if (scope.bindings[name] !== null) return scope.bindings[name];
+	if (exists(scope.bindings, name)) return scope.bindings[name];
 	if (scope.parent) return scopeGet(scope.parent, name);
 	return null;
+};
+
+export function scopeHas(scope, name) {
+	let s = scope;
+	while (s) {
+		if (exists(s.bindings, name)) return true;
+		s = s.parent;
+	}
+	return false;
 };
