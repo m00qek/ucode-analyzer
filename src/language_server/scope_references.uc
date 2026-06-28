@@ -38,8 +38,14 @@ function collectParams(fnNode, scope, source, targetName, out) {
 		if (ts.nodeType(child) !== 'formal_parameters') continue;
 		for (let j = 0; j < ts.namedChildCount(child); j++) {
 			let param = ts.namedChild(child, j);
-			if (ts.nodeType(param) === 'identifier')
+			let pnt = ts.nodeType(param);
+			if (pnt === 'identifier') {
 				bind(scope, source, param, targetName, out);
+			} else if (pnt === 'rest_element') {
+				let inner = ts.namedChild(param, 0);
+				if (inner && ts.nodeType(inner) === 'identifier')
+					bind(scope, source, inner, targetName, out);
+			}
 		}
 		return;
 	}
@@ -62,6 +68,10 @@ function bindForInVar(block, scope, source, targetName, out) {
 			if (nameNode) bind(scope, source, nameNode, targetName, out);
 		}
 	}
+	// Bind the optional value variable in `for (let k, v in obj)`.
+	let value = ts.childByField(parent, 'value');
+	if (value && ts.nodeType(value) === 'identifier')
+		bind(scope, source, value, targetName, out);
 }
 
 // If block is the body of a C-style for statement, bind its initializer.
@@ -133,7 +143,7 @@ function walk(node, scope, source, targetName, out) {
 	}
 
 	// ── Import: bind locals only, no recursive walk into specifiers ─────────
-	if (nt === 'import_declaration') {
+	if (nt === 'import_statement') {
 		bindImports(node, scope, source, targetName, out);
 		return;
 	}
@@ -204,19 +214,45 @@ function walk(node, scope, source, targetName, out) {
 		let right = ts.childByField(node, 'right');
 		if (right) walk(right, scope, source, targetName, out);
 		let body = ts.childByField(node, 'body');
-		if (body) walk(body, scope, source, targetName, out);
+		if (body) {
+			if (ts.nodeType(body) === 'statement_block') {
+				// statement_block handler calls bindForInVar automatically.
+				walk(body, scope, source, targetName, out);
+			} else {
+				// No-brace body: bind loop var into an explicit inner scope.
+				let inner = makeScope(scope);
+				bindForInVar(body, inner, source, targetName, out);
+				walk(body, inner, source, targetName, out);
+			}
+		}
 		return;
 	}
 
-	// ── C-style for: walk condition/increment in outer scope ────────────────
-	// (The initializer binding is added by bindForVar when the body block is entered.)
+	// ── C-style for: bind initializer in inner scope so condition/increment
+	// can resolve the loop variable. bindForVar pushes the declaration to `out`
+	// when the body block is entered — we only pre-bind here, without pushing.
 	if (nt === 'for_statement') {
+		let inner = makeScope(scope);
+		let init = ts.childByField(node, 'initializer');
+		if (init && ts.nodeType(init) === 'lexical_declaration') {
+			for (let i = 0; i < ts.namedChildCount(init); i++) {
+				let vd = ts.namedChild(init, i);
+				if (ts.nodeType(vd) !== 'variable_declarator') continue;
+				let val = ts.childByField(vd, 'value');
+				if (val) walk(val, scope, source, targetName, out);
+				let nm = ts.childByField(vd, 'name');
+				if (nm && ts.nodeType(nm) === 'identifier')
+					inner.bindings[ts.text(nm, source)] = ts.startByte(nm);
+			}
+		} else if (init) {
+			walk(init, scope, source, targetName, out);
+		}
 		let cond = ts.childByField(node, 'condition');
-		if (cond) walk(cond, scope, source, targetName, out);
+		if (cond) walk(cond, inner, source, targetName, out);
 		let inc = ts.childByField(node, 'increment');
-		if (inc) walk(inc, scope, source, targetName, out);
+		if (inc) walk(inc, inner, source, targetName, out);
 		let body = ts.childByField(node, 'body');
-		if (body) walk(body, scope, source, targetName, out);
+		if (body) walk(body, inner, source, targetName, out);
 		return;
 	}
 
@@ -243,9 +279,10 @@ function identifierAt(node, offset) {
 // Returns null if cursorOffset does not land on an identifier node.
 // Returns an array (possibly empty) of tree-sitter node handles otherwise.
 //
-// The declaration node itself is included in the result; callers that want only
-// use-sites (excluding the declaration) can filter out the first occurrence.
-export function referencesOf(root, source, cursorOffset) {
+// When includeDeclaration is false, the declaration site node (startByte ===
+// declOffset) is excluded from the result.  Defaults to true (LSP spec: the
+// client must opt out explicitly via context.includeDeclaration = false).
+export function referencesOf(root, source, cursorOffset, includeDeclaration) {
 	let cursorNode = identifierAt(root, cursorOffset);
 	if (!cursorNode) return null;
 
@@ -270,8 +307,9 @@ export function referencesOf(root, source, cursorOffset) {
 	// Return only occurrences that share the same anchor.
 	let result = [];
 	for (let i = 0; i < length(all); i++) {
-		if (all[i].declOffset === anchor)
-			push(result, all[i].node);
+		if (all[i].declOffset !== anchor) continue;
+		if (includeDeclaration === false && ts.startByte(all[i].node) === anchor) continue;
+		push(result, all[i].node);
 	}
 	return result;
 };

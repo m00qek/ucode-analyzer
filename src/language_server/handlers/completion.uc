@@ -165,6 +165,10 @@ function importedItems(uri) {
 		} else {
 			// Named imports: offer each imported symbol under its local binding name.
 			let exps = dag.exportsOf(imp.resolvedUri);
+			if (!exps) {
+				dag.addFromDisk(imp.resolvedUri);
+				exps = dag.exportsOf(imp.resolvedUri);
+			}
 			if (!exps) continue;
 			for (let j = 0; j < length(exps); j++) {
 				let exp = exps[j];

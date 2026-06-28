@@ -120,4 +120,42 @@ describe('references — scope awareness', () => {
 		// catch parameter declaration + use = 2
 		assert.match(2, length(locs));
 	});
+
+	it('finds all occurrences of a rest parameter in the function body', () => {
+		let text = "function f(...args) { return args[0]; }\n";
+		documents.open(URI, text, 1);
+
+		// cursor on 'args' in body (line 0, char 29)
+		let locs = references(URI, documents.get(URI), { line: 0, character: 29 });
+
+		// rest-element binding (declaration) + use in return = 2
+		assert.match(2, length(locs));
+	});
+
+	it('finds loop variable references in C-style for condition and increment', () => {
+		let text = "for (let i = 0; i < 10; i++) { i; }\n";
+		documents.open(URI, text, 1);
+
+		// cursor on 'i' in the condition (line 0, character 16)
+		let locs = references(URI, documents.get(URI), { line: 0, character: 16 });
+
+		// declaration + condition + increment + body = 4
+		assert.match(4, length(locs));
+	});
+
+	it('excludes declaration site when includeDeclaration is false', () => {
+		let text = "let x = 1;\nx;\nx;\n";
+		documents.open(URI, text, 1);
+
+		// cursor on declaration 'x' at (0, 4)
+		let all  = references(URI, documents.get(URI), { line: 0, character: 4 }, true);
+		let refs = references(URI, documents.get(URI), { line: 0, character: 4 }, false);
+
+		// with declaration: 3 (decl + 2 uses); without: 2 (uses only)
+		assert.match(3, length(all));
+		assert.match(2, length(refs));
+		// none of the ref-only locations should be on the declaration line
+		for (let l in refs)
+			assert.match(true, l.range.start.line > 0);
+	});
 });
