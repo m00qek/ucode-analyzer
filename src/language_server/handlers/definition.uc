@@ -182,6 +182,7 @@ function memberExprDef(uri, doc, memberExpr, propName, offset) {
 	// inferNode handles identifiers and chained member_expressions alike.
 	let scope = buildScope(uri, doc.text, doc.tree, offset);
 	let objType = inferNode(objNode, doc.text, uri, scope, 0);
+	if (objType && objType.kind === 'nullable') objType = objType.inner;
 
 	// Module type (e.g. named import whose value is a whole module)
 	if (objType && objType.kind === 'module') {

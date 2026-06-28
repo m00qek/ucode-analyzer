@@ -48,6 +48,7 @@ export function resolveDoc(uri, node, source, scope) {
 		let propName = ts.text(node, source);
 		let objType  = inferNode(objNode, source, uri, scope, 0);
 		if (!objType) return { doc: null, modUri: null };
+		if (objType.kind === 'nullable') objType = objType.inner;
 
 		if (objType.kind === 'module') {
 			let r = dag.resolveMember(objType.path, propName);
