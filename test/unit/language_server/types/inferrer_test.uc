@@ -537,6 +537,27 @@ describe('inferrer — function_expression', () => {
 		assert.match('function', t.kind);
 	});
 
+	it('named function_expression: params are not confused with function name', () => {
+		// Regression: inferArrow used namedChild(0) which is the name identifier
+		// for named function_expressions, treating it as a single param.
+		let text = "let f = function myFunc(a, b) { return a; };";
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let stmt = ts.namedChild(root, 0);
+		let decl = ts.namedChild(stmt, 0);
+		let fnNode = ts.childByField(decl, 'value');
+
+		dag.add(URI, text, tree);
+		let scope = buildScope(URI, text, tree, ts.startByte(fnNode));
+		let t = inferNode(fnNode, text, URI, scope, 0);
+
+		assert.match('function', t.kind);
+		// Should have 2 params (a, b), not 1 param ('myFunc')
+		assert.match(2, length(t.params));
+		assert.match('a', t.params[0].name);
+		assert.match('b', t.params[1].name);
+	});
+
 	it('uses JSDoc @returns when present', () => {
 		let text = "/** @param {int} n\n * @returns {string}\n */\nlet f = function(n) { return n; };";
 		let tree = parse(text);

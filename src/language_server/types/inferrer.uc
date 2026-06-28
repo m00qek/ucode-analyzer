@@ -171,20 +171,25 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 		? expectedType.params : [];
 
 	let params = [];
-	let first = ts.namedChild(node, 0);
-	if (first && ts.nodeType(first) === 'formal_parameters') {
-		for (let i = 0; i < ts.namedChildCount(first); i++) {
-			let pnode = ts.namedChild(first, i);
+	// Use field access so named function_expression (first named child is the
+	// function name, not formal_parameters) binds params correctly.
+	let formalParams = ts.childByField(node, 'parameters');
+	if (formalParams) {
+		for (let i = 0; i < ts.namedChildCount(formalParams); i++) {
+			let pnode = ts.namedChild(formalParams, i);
 			if (ts.nodeType(pnode) !== 'identifier') continue;
 			let ptype = (i < length(expectedParams))
 				? (expectedParams[i].type ?? UNKNOWN) : UNKNOWN;
 			push(params, { name: ts.text(pnode, source), type: ptype });
 		}
-	} else if (first && ts.nodeType(first) === 'identifier') {
-		// Single-param arrow `x => ...` — bare identifier, no formal_parameters node.
-		let ptype = length(expectedParams) > 0
-			? (expectedParams[0].type ?? UNKNOWN) : UNKNOWN;
-		push(params, { name: ts.text(first, source), type: ptype });
+	} else {
+		// Single-param arrow `x => ...` — bare identifier in `parameter` field.
+		let param = ts.childByField(node, 'parameter');
+		if (param && ts.nodeType(param) === 'identifier') {
+			let ptype = length(expectedParams) > 0
+				? (expectedParams[0].type ?? UNKNOWN) : UNKNOWN;
+			push(params, { name: ts.text(param, source), type: ptype });
+		}
 	}
 
 	let childScope = makeScope(scope);
