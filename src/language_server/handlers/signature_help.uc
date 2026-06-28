@@ -91,7 +91,10 @@ export function signatureHelp(uri, doc, position) {
 	let fnName = ts.text(fnNode, doc.text);
 	let sig    = buildSignature(fnName, concreteFnType);
 	let active = activeParam(argsNode, offset);
-	active = min(active, length(sig.parameters) - 1);
+	if (length(sig.parameters) > 0)
+		active = min(active, length(sig.parameters) - 1);
+	else
+		active = null;
 
 	return {
 		signatures:      [sig],

@@ -16,6 +16,7 @@ import * as platform from 'language_server.platform';
 
 export function run(config) {
 	let shutdown_requested = false;
+	let initialized = false;
 
 	const handlers = {
 		initialize: function(msg) {
@@ -35,6 +36,7 @@ export function run(config) {
 		},
 
 		initialized: function(msg) {
+			initialized = true;
 			let workspaceDir = config.workspaceDir ?? '/root/project';
 			let ws = config.workspace ?? {};
 			let libPaths = ws.libraryPaths ?? ['src'];
@@ -89,6 +91,7 @@ export function run(config) {
 			for (let dep in cascaded) invalidateUri(dep);
 			protocol.notify('textDocument/publishDiagnostics', {
 				uri: td.uri,
+				version: doc.version,
 				diagnostics: diagnosticsFor(td.uri, doc),
 			});
 		},
@@ -97,17 +100,21 @@ export function run(config) {
 			let uri = msg.params.textDocument.uri;
 			documents.change(uri, msg.params.contentChanges, msg.params.textDocument.version);
 			let doc = documents.get(uri);
+			if (!doc) return;
 			invalidateUri(uri);
 			let cascaded = dag.update(uri, doc.text, doc.tree);
 			for (let dep in cascaded) invalidateUri(dep);
 			protocol.notify('textDocument/publishDiagnostics', {
 				uri,
+				version: doc.version,
 				diagnostics: diagnosticsFor(uri, doc),
 			});
 		},
 
 		'textDocument/didClose': function(msg) {
-			documents.close(msg.params.textDocument.uri);
+			let uri = msg.params.textDocument.uri;
+			documents.close(uri);
+			protocol.notify('textDocument/publishDiagnostics', { uri, diagnostics: [] });
 		},
 
 		'textDocument/hover': function(msg) {
@@ -157,13 +164,35 @@ export function run(config) {
 	while (true) {
 		let msg = protocol.read_message();
 
-		if (msg === null)
+		if (msg === null) {
+			// EOF or unrecoverable read error — exit cleanly if shutdown was requested.
 			exit(shutdown_requested ? 0 : 1);
+		}
+
+		// After shutdown, reject all requests (notifications are silently ignored).
+		if (shutdown_requested && msg.method !== 'exit') {
+			if ('id' in msg)
+				protocol.error(msg.id, -32600, 'server is shutting down');
+			continue;
+		}
+
+		// Before initialized, only allow initialize / initialized / exit / $/cancel.
+		if (!initialized && msg.method !== 'initialize' && msg.method !== 'initialized' &&
+		    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
+			if ('id' in msg)
+				protocol.error(msg.id, -32002, 'server not yet initialized');
+			continue;
+		}
 
 		let handler = handlers[msg.method];
 
 		if (handler) {
-			handler(msg);
+			try {
+				handler(msg);
+			} catch (e) {
+				if ('id' in msg)
+					protocol.error(msg.id, -32603, sprintf('internal error: %s', e));
+			}
 		} else if ('id' in msg) {
 			protocol.error(msg.id, -32601, sprintf('method not found: %s', msg.method));
 		}

@@ -96,4 +96,59 @@ describe('LSP document sync', () => {
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'unknown/method', params: null });
 		assert.match(1, lsp.receive(proc).id);
 	});
+
+	it('didChange before didOpen does not crash the server', () => {
+		lsp.send(proc, {
+			jsonrpc: '2.0', method: 'textDocument/didChange',
+			params: { textDocument: { uri: DOC.uri, version: 2 }, contentChanges: [{ text: 'let y = 1;' }] },
+		});
+
+		// Server must still respond to a subsequent request.
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'unknown/method', params: null });
+		assert.match(-32601, lsp.receive(proc).error.code);
+	});
+
+	it('didChange with empty contentChanges does not crash the server', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: DOC } });
+		lsp.receiveNotification(proc);  // consume publishDiagnostics
+
+		lsp.send(proc, {
+			jsonrpc: '2.0', method: 'textDocument/didChange',
+			params: { textDocument: { uri: DOC.uri, version: 2 }, contentChanges: [] },
+		});
+
+		// Server must still respond to a subsequent request.
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'unknown/method', params: null });
+		assert.match(-32601, lsp.receive(proc).error.code);
+	});
+
+	it('publishDiagnostics includes document version', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: DOC.uri, languageId: 'ucode', version: 7, text: DOC.text },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		assert.match(7, notif.params.version);
+	});
+
+	it('didClose sends empty publishDiagnostics to clear editor diagnostics', () => {
+		// Open a file that produces a diagnostic (unused variable).
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: DOC.uri, languageId: 'ucode', version: 1, text: 'let unused = 1;' },
+		}});
+		let openNotif = lsp.receiveNotification(proc);
+		assert.match(true, length(openNotif.params.diagnostics) > 0);
+
+		// Close the file — server must clear diagnostics.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didClose',
+			params: { textDocument: { uri: DOC.uri } },
+		});
+		let closeNotif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', closeNotif.method);
+		assert.match(DOC.uri, closeNotif.params.uri);
+		assert.match(0, length(closeNotif.params.diagnostics));
+	});
 });

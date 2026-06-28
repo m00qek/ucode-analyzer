@@ -97,6 +97,17 @@ describe('signatureHelp', () => {
 		assert.match(3, length(result.signatures[0].parameters));
 	});
 
+	it('activeParameter is null for a zero-parameter function', () => {
+		let text = "function noParams() { return 1; }\nnoParams();\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let result = signatureHelp(URI, documents.get(URI), { line: 1, character: 9 });
+
+		assert.match(true, result !== null);
+		assert.match(null, result.activeParameter);
+	});
+
 	it('resolves generic T to the concrete type inferred from the first argument', () => {
 		// arrow functions in let bindings do not pick up JSDoc; function declarations do.
 		let text = [

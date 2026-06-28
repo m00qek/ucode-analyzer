@@ -17,7 +17,7 @@ export function open(uri, text, version) {
 export function change(uri, changes, version) {
 	let doc = _documents[uri];
 
-	if (!doc)
+	if (!doc || !length(changes))
 		return;
 
 	let text = changes[0].text;
