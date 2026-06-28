@@ -1,8 +1,8 @@
 import * as ts from 'tree_sitter';
 import * as fs from 'fs';
-import { parseDoc } from 'ucode_language_server.types.doc_parser';
-import * as type_registry from 'ucode_language_server.types.registry';
-import { buildLineTable, offsetToPosition, docBefore } from 'ucode_language_server.positions';
+import { parseDoc } from 'language_server.types.doc_parser';
+import * as type_registry from 'language_server.types.registry';
+import { buildLineTable, offsetToPosition, docBefore } from 'language_server.positions';
 
 
 function dotToSlash(s) {

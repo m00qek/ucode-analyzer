@@ -1,10 +1,10 @@
 import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
-import * as dag from 'ucode_language_server.dag.dag';
-import { inferNode, initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
-import { buildScope } from 'ucode_language_server.types.scope_builder';
-import { makeScope, scopeSet, scopeGet } from 'ucode_language_server.types.scope';
-import { invalidateUri } from 'ucode_language_server.memo';
+import * as dag from 'language_server.dag.dag';
+import { inferNode, initBuiltinsFromDag } from 'language_server.types.inferrer';
+import { buildScope } from 'language_server.types.scope_builder';
+import { makeScope, scopeSet, scopeGet } from 'language_server.types.scope';
+import { invalidateUri } from 'language_server.memo';
 
 let _parser = ts.newParser(ts.ucode());
 

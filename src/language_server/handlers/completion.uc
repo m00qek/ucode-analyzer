@@ -1,11 +1,11 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset } from 'ucode_language_server.positions';
-import { inferNode } from 'ucode_language_server.types.inferrer';
-import { buildScope } from 'ucode_language_server.types.scope_builder';
-import { typeToString } from 'ucode_language_server.types.doc_parser';
-import * as dag from 'ucode_language_server.dag.dag';
-import * as type_registry from 'ucode_language_server.types.registry';
-import * as platform from 'ucode_language_server.platform';
+import { positionToOffset } from 'language_server.positions';
+import { inferNode } from 'language_server.types.inferrer';
+import { buildScope } from 'language_server.types.scope_builder';
+import { typeToString } from 'language_server.types.doc_parser';
+import * as dag from 'language_server.dag.dag';
+import * as type_registry from 'language_server.types.registry';
+import * as platform from 'language_server.platform';
 
 // LSP CompletionItemKind constants
 let KIND_FUNCTION = 3;

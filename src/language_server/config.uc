@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { scan } from 'ucode_language_server.glob';
+import { scan } from 'language_server.glob';
 
 function readJson(path) {
 	let f = fs.open(path, 'r');

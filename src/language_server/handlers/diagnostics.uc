@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
-import { offsetToPosition, buildLineTable } from 'ucode_language_server.positions';
-import * as dag from 'ucode_language_server.dag.dag';
+import { offsetToPosition, buildLineTable } from 'language_server.positions';
+import * as dag from 'language_server.dag.dag';
 
 let SEVERITY_ERROR = 1;
 

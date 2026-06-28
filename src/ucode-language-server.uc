@@ -2,8 +2,8 @@
 'use strict';
 
 import { docopt } from 'docopt';
-import { load as loadConfig } from 'ucode_language_server.config';
-import { run } from 'ucode_language_server.lsp';
+import { load as loadConfig } from 'language_server.config';
+import { run } from 'language_server.lsp';
 
 const doc = `
 ucode-language-server - LSP server for ucode.

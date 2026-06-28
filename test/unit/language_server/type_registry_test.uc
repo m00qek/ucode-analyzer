@@ -1,5 +1,5 @@
 import { describe, it, assert, beforeEach } from 'utest';
-import * as reg from 'ucode_language_server.types.registry';
+import * as reg from 'language_server.types.registry';
 
 let T_STRING = { kind: 'primitive', name: 'string' };
 let T_INT    = { kind: 'primitive', name: 'int' };

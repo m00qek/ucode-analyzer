@@ -1,9 +1,9 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'ucode_language_server.documents';
-import { hover } from 'ucode_language_server.handlers.hover';
-import { invalidateUri } from 'ucode_language_server.memo';
-import * as dag from 'ucode_language_server.dag.dag';
-import * as templates from 'ucode_language_server.templates';
+import * as documents from 'language_server.documents';
+import { hover } from 'language_server.handlers.hover';
+import { invalidateUri } from 'language_server.memo';
+import * as dag from 'language_server.dag.dag';
+import * as templates from 'language_server.templates';
 
 let URI = 'file:///test.uc';
 

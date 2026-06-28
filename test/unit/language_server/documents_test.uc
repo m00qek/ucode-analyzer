@@ -1,5 +1,5 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'ucode_language_server.documents';
+import * as documents from 'language_server.documents';
 
 describe('documents', () => {
 	afterEach(() => {

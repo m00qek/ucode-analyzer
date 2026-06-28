@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable } from 'ucode_language_server.positions';
+import { buildLineTable } from 'language_server.positions';
 
 let _parser = ts.newParser(ts.ucode());
 let _documents = {};

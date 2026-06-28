@@ -1,10 +1,10 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'ucode_language_server.positions';
-import * as dag from 'ucode_language_server.dag.dag';
+import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'language_server.positions';
+import * as dag from 'language_server.dag.dag';
 import * as fs from 'fs';
-import { inferNode, stdlibUri } from 'ucode_language_server.types.inferrer';
-import { buildScope } from 'ucode_language_server.types.scope_builder';
-import * as type_registry from 'ucode_language_server.types.registry';
+import { inferNode, stdlibUri } from 'language_server.types.inferrer';
+import { buildScope } from 'language_server.types.scope_builder';
+import * as type_registry from 'language_server.types.registry';
 
 let _parser = ts.newParser(ts.ucode());
 

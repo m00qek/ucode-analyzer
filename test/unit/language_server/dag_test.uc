@@ -1,6 +1,6 @@
 import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
-import * as dag from 'ucode_language_server.dag.dag';
+import * as dag from 'language_server.dag.dag';
 
 let _parser = ts.newParser(ts.ucode());
 

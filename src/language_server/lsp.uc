@@ -1,18 +1,18 @@
-import * as protocol from 'ucode_language_server.protocol';
-import * as documents from 'ucode_language_server.documents';
-import { hover as hoverDoc } from 'ucode_language_server.handlers.hover';
-import { definition as definitionDoc } from 'ucode_language_server.handlers.definition';
-import { completion as completionDoc } from 'ucode_language_server.handlers.completion';
-import * as glob from 'ucode_language_server.glob';
-import * as dag from 'ucode_language_server.dag.dag';
-import { invalidateUri } from 'ucode_language_server.memo';
-import { diagnosticsFor } from 'ucode_language_server.handlers.diagnostics';
-import { signatureHelp as signatureHelpDoc } from 'ucode_language_server.handlers.signature_help';
-import { references as referencesDoc } from 'ucode_language_server.handlers.references';
-import { documentSymbols as documentSymbolsDoc } from 'ucode_language_server.handlers.document_symbols';
-import { rename as renameDoc } from 'ucode_language_server.handlers.rename';
-import { initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
-import * as platform from 'ucode_language_server.platform';
+import * as protocol from 'language_server.protocol';
+import * as documents from 'language_server.documents';
+import { hover as hoverDoc } from 'language_server.handlers.hover';
+import { definition as definitionDoc } from 'language_server.handlers.definition';
+import { completion as completionDoc } from 'language_server.handlers.completion';
+import * as glob from 'language_server.glob';
+import * as dag from 'language_server.dag.dag';
+import { invalidateUri } from 'language_server.memo';
+import { diagnosticsFor } from 'language_server.handlers.diagnostics';
+import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.signature_help';
+import { references as referencesDoc } from 'language_server.handlers.references';
+import { documentSymbols as documentSymbolsDoc } from 'language_server.handlers.document_symbols';
+import { rename as renameDoc } from 'language_server.handlers.rename';
+import { initBuiltinsFromDag } from 'language_server.types.inferrer';
+import * as platform from 'language_server.platform';
 
 export function run(config) {
 	let shutdown_requested = false;

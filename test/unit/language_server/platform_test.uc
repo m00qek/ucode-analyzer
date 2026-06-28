@@ -1,5 +1,5 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as platform from 'ucode_language_server.platform';
+import * as platform from 'language_server.platform';
 
 let URI_FS   = 'file:///app/src/declarations/fs.d.uc';
 let URI_IO   = 'file:///app/src/declarations/io.d.uc';

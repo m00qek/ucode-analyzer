@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { offsetToPosition, buildLineTable } from 'ucode_language_server.positions';
+import { offsetToPosition, buildLineTable } from 'language_server.positions';
 
 // LSP SymbolKind constants
 let KIND_FUNCTION  = 12;

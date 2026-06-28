@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
-import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'ucode_language_server.dag.indexer';
+import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'language_server.dag.indexer';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -218,8 +218,8 @@ describe('indexer.extractImports', () => {
 
 describe('indexer.resolveModule', () => {
 	it('resolves dot-separated module to slash path', () => {
-		let uri = resolveModule('ucode_language_server.documents', ['/app/src'], '/app');
-		assert.match('file:///app/src/ucode_language_server/documents.uc', uri);
+		let uri = resolveModule('language_server.documents', ['/app/src'], '/app');
+		assert.match('file:///app/src/language_server/documents.uc', uri);
 	});
 
 	it('resolves simple module name', () => {

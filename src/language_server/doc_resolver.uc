@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
-import * as dag from 'ucode_language_server.dag.dag';
-import { inferNode, stdlibUri } from 'ucode_language_server.types.inferrer';
+import * as dag from 'language_server.dag.dag';
+import { inferNode, stdlibUri } from 'language_server.types.inferrer';
 
 // Resolve JSDoc for the node under the cursor. Tries, in order:
 //   identifier          -> named import -> own-file export -> stdlib builtin

@@ -1,5 +1,5 @@
 import { describe, it, assert, mock, beforeEach } from 'utest';
-import * as templates from 'ucode_language_server.templates';
+import * as templates from 'language_server.templates';
 
 let SELF_SRC = '/app/src';
 

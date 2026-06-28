@@ -1,5 +1,5 @@
 import { describe, it, assert, beforeEach } from 'utest';
-import { memoGet, memoSet, invalidateUri } from 'ucode_language_server.memo';
+import { memoGet, memoSet, invalidateUri } from 'language_server.memo';
 
 let URI_A = 'file:///a.uc';
 let URI_B = 'file:///b.uc';

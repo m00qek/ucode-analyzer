@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
-import * as pos from 'ucode_language_server.positions';
+import * as pos from 'language_server.positions';
 
 describe('positions (buildLineTable)', () => {
 	it('single line', () => {

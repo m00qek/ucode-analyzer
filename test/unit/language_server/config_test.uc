@@ -1,5 +1,5 @@
 import { describe, it, assert, mock } from 'utest';
-import { load } from 'ucode_language_server.config';
+import { load } from 'language_server.config';
 
 let CONFIG_DIR    = '/config';
 let WORKSPACE_DIR = '/workspace';

@@ -1,11 +1,11 @@
 import * as ts from 'tree_sitter';
-import * as dag from 'ucode_language_server.dag.dag';
-import { parseDoc } from 'ucode_language_server.types.doc_parser';
-import { unify, substitute } from 'ucode_language_server.types.unifier';
-import { memoGet, memoSet } from 'ucode_language_server.memo';
-import { makeScope, scopeGet, scopeSet } from 'ucode_language_server.types.scope';
-import { UNKNOWN, BOOL, STR, INT, NULL_T, unionOf, memberOfType } from 'ucode_language_server.types.type_utils';
-import { docBefore } from 'ucode_language_server.positions';
+import * as dag from 'language_server.dag.dag';
+import { parseDoc } from 'language_server.types.doc_parser';
+import { unify, substitute } from 'language_server.types.unifier';
+import { memoGet, memoSet } from 'language_server.memo';
+import { makeScope, scopeGet, scopeSet } from 'language_server.types.scope';
+import { UNKNOWN, BOOL, STR, INT, NULL_T, unionOf, memberOfType } from 'language_server.types.type_utils';
+import { docBefore } from 'language_server.positions';
 
 let _builtinScope = makeScope(null);
 let _stdlibUri    = null;

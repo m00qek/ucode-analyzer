@@ -9,7 +9,7 @@ PKG_LICENSE:=MIT
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
-UCODE_MOD_NAME:=ucode_language_server
+UCODE_MOD_NAME:=language_server
 CMAKE_OPTIONS += -DPKG_NAME=$(UCODE_MOD_NAME)
 
 define Package/$(PKG_NAME)

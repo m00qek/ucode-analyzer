@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import { matchPattern, scan } from 'ucode_language_server.glob';
+import { matchPattern, scan } from 'language_server.glob';
 
 describe('glob.matchPattern', () => {
 	it('matches ** at start', () => {
@@ -48,11 +48,11 @@ describe('glob.scan', () => {
 
 	it('excludes paths matching exclude pattern', () => {
 		let all  = scan('/app/src', ['**/*.uc'], []);
-		let excl = scan('/app/src', ['**/*.uc'], ['ucode_language_server/**']);
+		let excl = scan('/app/src', ['**/*.uc'], ['language_server/**']);
 
 		assert.match(true, length(excl) < length(all));
 		for (let f in excl)
-			assert.match(false, index(f, 'ucode_language_server') >= 0);
+			assert.match(false, index(f, 'language_server') >= 0);
 	});
 
 	it('returns empty list when no files match', () => {

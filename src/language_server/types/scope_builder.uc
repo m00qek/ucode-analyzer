@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
-import { inferNode, processDecl, importScope } from 'ucode_language_server.types.inferrer';
-import { makeScope, scopeGet, scopeSet } from 'ucode_language_server.types.scope';
-import { UNKNOWN, STR } from 'ucode_language_server.types.type_utils';
+import { inferNode, processDecl, importScope } from 'language_server.types.inferrer';
+import { makeScope, scopeGet, scopeSet } from 'language_server.types.scope';
+import { UNKNOWN, STR } from 'language_server.types.type_utils';
 
 // Return all function nodes (function_declaration / arrow_function /
 // function_expression) that contain offset, outermost first.

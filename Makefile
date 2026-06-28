@@ -4,7 +4,7 @@ SDK_ARCH     ?= x86-64
 GIT_COMMIT   ?= $(shell git rev-parse --short HEAD)
 
 PKG_NAME         := ucode-language-server
-UCODE_MOD_NAME   := ucode_language_server
+UCODE_MOD_NAME   := language_server
 PKG_VERSION_BASE := $(shell grep -oP 'PKG_VERSION:=\K.*' openwrt/$(PKG_NAME)/Makefile)
 PKG_VERSION      := $(if $(GIT_COMMIT),$(PKG_VERSION_BASE)~$(GIT_COMMIT),$(PKG_VERSION_BASE))
 

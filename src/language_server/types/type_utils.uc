@@ -1,4 +1,4 @@
-import * as type_registry from 'ucode_language_server.types.registry';
+import * as type_registry from 'language_server.types.registry';
 
 export let UNKNOWN = { kind: 'unknown' };
 export let BOOL    = { kind: 'primitive', name: 'boolean' };
