@@ -6,6 +6,8 @@ import { inferNode, stdlibUri } from 'ucode_language_server.types.inferrer';
 import { buildScope } from 'ucode_language_server.types.scope_builder';
 import * as type_registry from 'ucode_language_server.types.registry';
 
+let _parser = ts.newParser(ts.ucode());
+
 // Return an LSP Location object for byte offset inside uri.
 function location(uri, text, byteOffset) {
 	let lineTable = buildLineTable(text);
@@ -133,8 +135,7 @@ function resolveExportDefinition(resolvedUri, name) {
 	let path = substr(resolvedUri, length('file://'));
 	let text = fs.readfile(path);
 	if (!text) return null;
-	let parser = ts.newParser(ts.ucode());
-	let tree = ts.parse(parser, text);
+	let tree = ts.parse(_parser, text);
 	let root = ts.rootNode(tree);
 	for (let k = 0; k < ts.namedChildCount(root); k++) {
 		let stmt = ts.namedChild(root, k);
