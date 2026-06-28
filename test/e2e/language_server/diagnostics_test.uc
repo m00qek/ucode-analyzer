@@ -29,14 +29,30 @@ describe('textDocument/publishDiagnostics', () => {
 	});
 
 	it('sends notification with empty diagnostics for a valid file', () => {
+		// All declarations are used, no syntax errors, no bad imports.
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = 1;\nx;\n" },
 		}});
 
 		let notif = lsp.receiveNotification(proc);
 
 		assert.match('textDocument/publishDiagnostics', notif.method);
 		assert.match(0, length(notif.params.diagnostics));
+	});
+
+	it('warns for an unused variable with severity WARNING (2)', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let neverUsed = 42;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		assert.match(1, length(notif.params.diagnostics));
+		assert.match(2, notif.params.diagnostics[0].severity);  // WARNING
+		assert.match(true, index(notif.params.diagnostics[0].message, 'neverUsed') >= 0);
 	});
 
 	it('reports error when a named import does not exist in the module', () => {
