@@ -2,23 +2,11 @@ import * as ts from 'tree_sitter';
 import { buildLineTable, rangeOf } from 'language_server.positions';
 import * as dag from 'language_server.dag.dag';
 import { stdlibUri } from 'language_server.types.inferrer';
+import { makeScope, scopeHas, scopeSet } from 'language_server.types.scope';
 
 let SEVERITY_WARNING = 2;
 
-// ── Scope helpers ─────────────────────────────────────────────────────────────
-
-function makeScope(parent) { return { names: {}, parent }; }
-
-function scopeHas(scope, name) {
-	let s = scope;
-	while (s) {
-		if (exists(s.names, name)) return true;
-		s = s.parent;
-	}
-	return false;
-}
-
-function bind(scope, name) { scope.names[name] = true; }
+function bind(scope, name) { scopeSet(scope, name, true); }
 
 // Bind all identifier parameters from a formal_parameters node into scope.
 function bindFormalParams(paramsNode, scope, source) {
