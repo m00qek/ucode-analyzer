@@ -1,7 +1,8 @@
 import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_language_server.dag.dag';
-import { inferNode, buildScope, initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
+import { inferNode, initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
+import { buildScope } from 'ucode_language_server.types.scope_builder';
 import { makeScope, scopeSet, scopeGet } from 'ucode_language_server.types.scope';
 import { invalidateUri } from 'ucode_language_server.memo';
 

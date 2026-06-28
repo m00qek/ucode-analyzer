@@ -1,6 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset } from 'ucode_language_server.positions';
-import { inferNode, buildScope } from 'ucode_language_server.types.inferrer';
+import { inferNode } from 'ucode_language_server.types.inferrer';
+import { buildScope } from 'ucode_language_server.types.scope_builder';
 import { typeToString } from 'ucode_language_server.types.doc_parser';
 import * as dag from 'ucode_language_server.dag.dag';
 import * as templates from 'ucode_language_server.templates';
