@@ -41,6 +41,23 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(0, length(notif.params.diagnostics));
 	});
 
+	it('warns for an undefined identifier reference', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = ghost;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+		let diags = notif.params.diagnostics;
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		// Should include at least a warning for 'ghost' (undefined) and one for 'x' (unused)
+		let ghostDiag = null;
+		for (let d in diags) if (index(d.message, 'ghost') >= 0) { ghostDiag = d; break; }
+		assert.match(true, ghostDiag !== null);
+		assert.match(2, ghostDiag.severity);  // WARNING
+	});
+
 	it('warns for an unused variable with severity WARNING (2)', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
