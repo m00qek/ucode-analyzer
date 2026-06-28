@@ -1,14 +1,14 @@
-let _cache = {};  // uri → { 'startByte:nodeType' → Type }
+let _cache = {};  // uri → { 'startByte|nodeType' → Type }
 
 export function memoGet(uri, offset, nodeType) {
 	let bucket = _cache[uri];
-	let key = offset + ':' + nodeType;
+	let key = offset + '|' + nodeType;
 	return (bucket && bucket[key] !== null) ? bucket[key] : null;
 };
 
 export function memoSet(uri, offset, nodeType, type) {
 	if (!_cache[uri]) _cache[uri] = {};
-	_cache[uri][offset + ':' + nodeType] = type;
+	_cache[uri][offset + '|' + nodeType] = type;
 };
 
 export function invalidateUri(uri) {
