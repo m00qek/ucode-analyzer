@@ -21,6 +21,7 @@ export function unknownImports(uri, doc) {
 	if (!length(keys(unresolved))) return [];
 
 	let diags = [];
+	let reported = {};
 	let root = ts.rootNode(doc.tree);
 	for (let i = 0; i < ts.namedChildCount(root); i++) {
 		let stmt = ts.namedChild(root, i);
@@ -33,12 +34,14 @@ export function unknownImports(uri, doc) {
 				let f = ts.child(c, k);
 				if (ts.nodeType(f) === 'string_fragment') specifier = ts.text(f, doc.text);
 			}
-			if (unresolved[specifier])
+			if (unresolved[specifier] && !exists(reported, specifier)) {
+				reported[specifier] = true;
 				push(diags, {
 					range: rangeOf(doc.text, c),
 					severity: SEVERITY_ERROR,
 					message: sprintf("Cannot find module '%s'", specifier),
 				});
+			}
 		}
 	}
 	return diags;

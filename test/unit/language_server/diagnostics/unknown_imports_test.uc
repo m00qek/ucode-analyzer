@@ -57,6 +57,14 @@ describe('diagnostics — unknown imports', () => {
 		assert.match(2, length(unknownImports(URI, documents.get(URI))));
 	});
 
+	it('reports only one diagnostic when the same bad module is imported twice', () => {
+		let text = "import { a } from 'bad_mod';\nimport { b } from 'bad_mod';\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		assert.match(1, length(unknownImports(URI, documents.get(URI))));
+	});
+
 	it('returns empty list when there are no imports', () => {
 		let text = "let x = 1;\n";
 		documents.open(URI, text, 1);
