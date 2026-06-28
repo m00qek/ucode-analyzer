@@ -16,7 +16,6 @@ function bindFormalParams(paramsNode, scope, source) {
 	}
 }
 
-// ── For-in / for / catch variable binding ────────────────────────────────────
 
 function bindForInVar(block, scope, source) {
 	let parent = ts.parent(block);
@@ -55,7 +54,6 @@ function bindCatchVar(block, scope, source) {
 	if (param && ts.nodeType(param) === 'identifier') bind(scope, ts.text(param, source));
 }
 
-// ── Import binding ───────────────────────────────────────────────────────────
 
 function bindImports(node, scope, source) {
 	for (let i = 0; i < ts.namedChildCount(node); i++) {
@@ -81,12 +79,10 @@ function bindImports(node, scope, source) {
 	}
 }
 
-// ── AST walker ───────────────────────────────────────────────────────────────
 
 function walk(node, scope, source, globals, lineTable, out) {
 	let nt = ts.nodeType(node);
 
-	// ── Identifier reference site ─────────────────────────────────────────────
 	if (nt === 'identifier') {
 		let name = ts.text(node, source);
 		if (!scopeHas(scope, name) && !exists(globals, name))
@@ -110,13 +106,11 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	// ── Import: bind local names, do not recurse (remote names are not refs) ──
 	if (nt === 'import_statement') {
 		bindImports(node, scope, source);
 		return;
 	}
 
-	// ── Lexical declaration: bind name first, then walk initializer ───────────
 	if (nt === 'lexical_declaration') {
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let vd = ts.namedChild(node, i);
@@ -129,7 +123,6 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	// ── Function declaration: name in outer scope, body in inner ─────────────
 	if (nt === 'function_declaration') {
 		let nameNode = ts.childByField(node, 'name');
 		if (nameNode) bind(scope, ts.text(nameNode, source));
@@ -141,28 +134,23 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	// ── Export statement: unwrap ───────────────────────────────────────────────
 	if (nt === 'export_statement') {
 		let inner = ts.namedChild(node, 0);
 		if (inner) walk(inner, scope, source, globals, lineTable, out);
 		return;
 	}
 
-	// ── export { foo as bar }: only `foo` is a variable reference; `bar` is not ─
+	// Only the `name` field is a variable reference; `alias` is the exported name.
 	if (nt === 'export_specifier') {
 		let nameNode = ts.childByField(node, 'name');
 		if (nameNode) walk(nameNode, scope, source, globals, lineTable, out);
 		return;
 	}
 
-	// ── Function expression / arrow: inner scope ───────────────────────────────
 	if (nt === 'function_expression' || nt === 'arrow_function') {
 		let inner = makeScope(scope);
-		// `parameters` field: formal_parameters (multi-param, works for both named
-		// and anonymous function_expression). `parameter` field: bare identifier in
-		// single-param arrow `x => expr`. Using field access avoids the named-child
-		// index shifting that occurred with named function_expression (where the name
-		// identifier is namedChild(0), pushing formal_parameters to namedChild(1)).
+		// Field access: `parameters` → formal_parameters for multi-param (works for
+		// named/anonymous function_expression). `parameter` → bare ident for `x => expr`.
 		let params = ts.childByField(node, 'parameters');
 		if (params) {
 			bindFormalParams(params, inner, source);
@@ -175,15 +163,13 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	// ── Catch clause: do NOT walk the parameter node (it is a declaration site).
-	// The body statement_block will bind it via bindCatchVar. ──────────────────
+	// Do not walk the catch parameter — it is a declaration site, not a ref.
 	if (nt === 'catch_clause') {
 		let body = ts.childByField(node, 'body');
 		if (body) walk(body, scope, source, globals, lineTable, out);
 		return;
 	}
 
-	// ── Statement block: new scope + implicit loop/catch bindings ─────────────
 	if (nt === 'statement_block') {
 		let inner = makeScope(scope);
 		bindForInVar(node, inner, source);
@@ -194,7 +180,6 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	// ── For-in: walk iterable in current scope, body handles binding ──────────
 	if (nt === 'for_in_statement') {
 		let right = ts.childByField(node, 'right');
 		if (right) walk(right, scope, source, globals, lineTable, out);
@@ -203,11 +188,9 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	// ── C-style for ──────────────────────────────────────────────────────────────
 	if (nt === 'for_statement') {
-		// Walk the initializer RHS in the outer scope first (catches undefined refs
-		// in `let i = someUndefined()`), then bind the declared name(s) into an
-		// inner scope so the condition and increment can see them.
+		// Walk initializer RHS in outer scope first, then bind the loop var into an
+		// inner scope so condition/increment can reference it without false positives.
 		let inner = makeScope(scope);
 		let init = ts.childByField(node, 'initializer');
 		if (init && ts.nodeType(init) === 'lexical_declaration') {
@@ -231,19 +214,17 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	// ── Member expression: only walk the object, not the property name ─────────
+	// Property name is not a variable reference; only the object side is.
 	if (nt === 'member_expression') {
 		let obj = ts.childByField(node, 'object');
 		if (obj) walk(obj, scope, source, globals, lineTable, out);
 		return;
 	}
 
-	// ── Default: recurse into named children ────────────────────────────────────
 	for (let i = 0; i < ts.namedChildCount(node); i++)
 		walk(ts.namedChild(node, i), scope, source, globals, lineTable, out);
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
 
 export function undefinedVars(doc) {
 	// Collect builtin names from the stdlib declaration module.
