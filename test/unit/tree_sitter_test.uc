@@ -42,12 +42,88 @@ describe('ts (node/tree lifecycle)', () => {
 		assert.match(pair[1], ts.text(pair[0], pair[1]));
 	});
 
+	it('isNamed() distinguishes named nodes from anonymous tokens', () => {
+		let src = 'let x = 5;';
+		let tree = ts.parse(ts.newParser(ts.ucode()), src);
+		let decl = ts.namedChild(ts.rootNode(tree), 0);  // lexical_declaration
+
+		// child(0) is the anonymous 'let' keyword token
+		assert.match(false, ts.isNamed(ts.child(decl, 0)));
+		// namedChild(0) is the variable_declarator (named)
+		assert.match(true, ts.isNamed(ts.namedChild(decl, 0)));
+	});
+
+	it('startByte() and endByte() span the correct byte range', () => {
+		let src = 'let x = 5;';
+		let tree = ts.parse(ts.newParser(ts.ucode()), src);
+		let varDecl = ts.namedChild(ts.namedChild(ts.rootNode(tree), 0), 0);  // variable_declarator
+		let ident = ts.childByField(varDecl, 'name');  // identifier 'x'
+
+		assert.match(4, ts.startByte(ident));  // 'let ' = 4 bytes
+		assert.match(5, ts.endByte(ident));    // 'x' is 1 byte
+		assert.match('x', ts.text(ident, src));
+	});
+
+	it('childCount() includes anonymous tokens; namedChildCount() does not', () => {
+		let src = 'let x = 5;';
+		let tree = ts.parse(ts.newParser(ts.ucode()), src);
+		let decl = ts.namedChild(ts.rootNode(tree), 0);  // lexical_declaration: 'let' + variable_declarator + ';'
+
+		assert.match(3, ts.childCount(decl));
+		assert.match(1, ts.namedChildCount(decl));
+	});
+
+	it('child() returns anonymous token at index 0; namedChild() skips it', () => {
+		let src = 'let x = 5;';
+		let tree = ts.parse(ts.newParser(ts.ucode()), src);
+		let decl = ts.namedChild(ts.rootNode(tree), 0);  // lexical_declaration
+
+		assert.match('let', ts.nodeType(ts.child(decl, 0)));
+		assert.match('variable_declarator', ts.nodeType(ts.namedChild(decl, 0)));
+	});
+
+	it('children() and namedChildren() lengths match childCount() / namedChildCount()', () => {
+		let src = 'let x = 5, y = 6;';
+		let tree = ts.parse(ts.newParser(ts.ucode()), src);
+		let decl = ts.namedChild(ts.rootNode(tree), 0);  // lexical_declaration
+
+		assert.match(ts.childCount(decl), length(ts.children(decl)));
+		assert.match(ts.namedChildCount(decl), length(ts.namedChildren(decl)));
+	});
+
+	it('childByField() returns the field node; null for unknown field', () => {
+		let src = 'let x = 5;';
+		let tree = ts.parse(ts.newParser(ts.ucode()), src);
+		let varDecl = ts.namedChild(ts.namedChild(ts.rootNode(tree), 0), 0);  // variable_declarator
+
+		let nameNode = ts.childByField(varDecl, 'name');
+		assert.match('identifier', ts.nodeType(nameNode));
+		assert.match('x', ts.text(nameNode, src));
+		assert.match(null, ts.childByField(varDecl, 'no_such_field'));
+	});
+
+	it('parent() returns null for the root node', () => {
+		let tree = ts.parse(ts.newParser(ts.ucode()), 'let x = 5;');
+		assert.match(null, ts.parent(ts.rootNode(tree)));
+	});
+
 	it('rejects a non-language argument to newParser()', () => {
 		assert.throws(() => { ts.newParser('not a language'); });
 	});
 
 	it('rejects a non-node argument to nodeType()', () => {
 		assert.throws(() => { ts.nodeType(null); });
+	});
+
+	it('rejects a non-string source argument to text()', () => {
+		let tree = ts.parse(ts.newParser(ts.ucode()), 'let x = 5;');
+		assert.throws(() => { ts.text(ts.rootNode(tree), 42); });
+	});
+
+	it('rejects a non-string field name in childByField()', () => {
+		let tree = ts.parse(ts.newParser(ts.ucode()), 'let x = 5;');
+		let varDecl = ts.namedChild(ts.namedChild(ts.rootNode(tree), 0), 0);
+		assert.throws(() => { ts.childByField(varDecl, 99); });
 	});
 });
 
@@ -68,6 +144,26 @@ describe('ts (query API)', () => {
 
 		let matches = ts.queryMatches(query, root, src);
 		assert.match(2, length(matches));
+	});
+
+	it('patternCount() returns the number of patterns in a query', () => {
+		let q1 = ts.newQuery(ts.ucode(), '(identifier) @id');
+		assert.match(1, ts.patternCount(q1));
+
+		// alternation counts as 2 separate patterns
+		let q2 = ts.newQuery(ts.ucode(), '(identifier) @id\n(number) @num');
+		assert.match(2, ts.patternCount(q2));
+	});
+
+	it('filters matches with #eq?', () => {
+		let src = 'let x = 5, y = 6;';
+		let root = declarations(src);
+		let query = ts.newQuery(ts.ucode(),
+			'(variable_declarator name: (identifier) @name (#eq? @name "x"))');
+
+		let caps = ts.queryCaptures(query, root, src);
+		assert.match(1, length(caps));
+		assert.match('x', ts.text(caps[0].node, src));
 	});
 
 	it('filters matches with #not-eq?', () => {
@@ -92,8 +188,23 @@ describe('ts (query API)', () => {
 		assert.match('y', ts.text(caps[0].node, src));
 	});
 
+	it('filters matches with #not-match?', () => {
+		let src = 'let x = 5, y = 6;';
+		let root = declarations(src);
+		let query = ts.newQuery(ts.ucode(),
+			'(variable_declarator name: (identifier) @name (#not-match? @name "^y$"))');
+
+		let caps = ts.queryCaptures(query, root, src);
+		assert.match(1, length(caps));
+		assert.match('x', ts.text(caps[0].node, src));
+	});
+
 	it('rejects invalid query syntax', () => {
 		assert.throws(() => { ts.newQuery(ts.ucode(), '(this is not valid'); });
+	});
+
+	it('rejects a non-language argument to newQuery()', () => {
+		assert.throws(() => { ts.newQuery(null, '(identifier) @id'); });
 	});
 });
 
@@ -139,5 +250,19 @@ describe('ts (incremental reparse)', () => {
 		assert.match('let a = 1;', ts.text(ts.namedChild(root2, 0), src2));
 		assert.match('let x = 2;', ts.text(ts.namedChild(root2, 1), src2));
 		assert.match('let b = 3;', ts.text(ts.namedChild(root2, 2), src2));
+	});
+
+	it('rejects a non-string old source argument', () => {
+		let parser = ts.newParser(ts.ucode());
+		let src = 'let x = 1;';
+		let tree = ts.parse(parser, src);
+		assert.throws(() => { ts.reparse(parser, tree, 42, src, 0, 0, 0); });
+	});
+
+	it('rejects a non-string new source argument', () => {
+		let parser = ts.newParser(ts.ucode());
+		let src = 'let x = 1;';
+		let tree = ts.parse(parser, src);
+		assert.throws(() => { ts.reparse(parser, tree, src, 42, 0, 0, 0); });
 	});
 });
