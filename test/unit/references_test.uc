@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_language_server.documents';
-import { references } from 'ucode_language_server.references';
+import { references } from 'ucode_language_server.handlers.references';
 
 let URI = 'file:///test.uc';
 

@@ -99,7 +99,7 @@ describe('hover — property_identifier in member expression', () => {
 describe('hover — via templates (selfSrcDir set)', () => {
 	let TS_URI = 'file:///app/src/tree_sitter.uc';
 
-	it('function hover renders Parameters section from function template', () => {
+	it('function hover renders declaration-form signature and Parameters section', () => {
 		dag.addFromDisk(TS_URI);
 		let text = "import * as ts from 'tree_sitter';\nts.parse;";
 		documents.open(URI, text, 1);
@@ -110,8 +110,11 @@ describe('hover — via templates (selfSrcDir set)', () => {
 		let result = hover(doc, { line: 1, character: 3 }, _full_config);
 
 		assert.match('object', type(result));
-		assert.match(true, index(result.contents.value, 'parse') >= 0);
+		// Signature is declaration-form, not type-annotation form.
+		assert.match(true, index(result.contents.value, 'function parse(') >= 0);
 		assert.match(true, index(result.contents.value, '**Parameters:**') >= 0);
+		// Each param must be on its own line.
+		assert.match(true, index(result.contents.value, '\n- `') >= 0);
 	});
 
 	it('module hover renders module specifier from module template', () => {

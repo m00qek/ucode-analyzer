@@ -64,6 +64,13 @@ function modulePropertyDoc(uri, propNode, source, scope) {
 	return null;
 }
 
+// JSDoc descriptions often start with "- text" (dash from @param formatting).
+// Strip the leading dash so it doesn't combine with the template's "—" separator.
+function cleanDesc(s) {
+	if (!s) return null;
+	return replace(s, /^\s*[-–—]\s*/, '');
+}
+
 // Build the structured context object passed to hover templates.
 // Merges inferred type fields with JSDoc descriptions so templates
 // receive pre-resolved, ready-to-render data.
@@ -77,30 +84,38 @@ function buildHoverCtx(label, type, doc) {
 	};
 
 	if (type.kind === 'function') {
-		// Build a merged params list: inferred typeStr + JSDoc description.
-		// type.params is derived from doc.params so names align reliably.
+		let docParams = doc?.params ?? [];
 		let docParamMap = {};
-		for (let p in (doc?.params ?? []))
+		for (let p in docParams)
 			docParamMap[p.name] = p;
-		ctx.params = map(type.params ?? [], (p) => {
-			let dp = docParamMap[p.name];
-			return {
-				name: p.name,
-				typeStr: typeToString(p.type),
-				description: dp?.description ?? null,
-			};
-		});
+		// Only show the Parameters section when at least one @param is documented.
+		ctx.params = length(docParams) > 0
+			? map(type.params ?? [], (p) => {
+				let dp = docParamMap[p.name];
+				return {
+					name: p.name,
+					typeStr: typeToString(p.type),
+					description: cleanDesc(dp?.description),
+				};
+			})
+			: [];
 		ctx.returns = type.returns ? {
 			typeStr: typeToString(type.returns),
-			description: doc?.returns?.description ?? null,
+			description: cleanDesc(doc?.returns?.description),
 		} : null;
+		// Pre-built declaration-form signature for the code fence.
+		ctx.signature = sprintf('function %s(%s): %s',
+			label,
+			join(', ', map(ctx.params, (p) => p.name + ': ' + p.typeStr)),
+			ctx.returns ? ctx.returns.typeStr : '?'
+		);
 	}
 
 	if (type.kind === 'record') {
 		ctx.fields = map(type.fields ?? [], (f) => ({
 			name: f.name,
 			typeStr: f.type ? typeToString(f.type) : null,
-			description: f.doc?.description ?? null,
+			description: cleanDesc(f.doc?.description),
 		}));
 	}
 

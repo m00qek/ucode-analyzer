@@ -1,25 +1,23 @@
 ```ucode
-{{ label }}: {{ typeStr }}
+{{ signature }}
 ```
-{%- if (doc?.description): %}
+{% if (doc?.description): %}
 
 {{ doc.description }}
-{%- endif %}
-{%- if (length(params ?? []) > 0): %}
+{% endif %}
+{% if (length(params ?? []) > 0): %}
 
 **Parameters:**
-{%- for (let p in params): %}
-- `{{ p.name }}`: `{{ p.typeStr }}`{%- if (p.description): %} — {{ p.description }}{%- endif %}
-{%- endfor %}
-{%- endif %}
-{%- if (returns?.description): %}
+{{ join('\n', map(params, (p) => '- `' + p.name + '`: `' + p.typeStr + '`' + (p.description ? ' — ' + p.description : ''))) }}
+{% endif %}
+{% if (returns?.description): %}
 
 **Returns:** {{ returns.description }}
-{%- endif %}
-{%- for (let ex in (doc?.examples ?? [])): %}
+{% endif %}
+{% for (let ex in (doc?.examples ?? [])): %}
 
 **Example:**
 ```ucode
 {{ ex }}
 ```
-{%- endfor %}
+{% endfor %}

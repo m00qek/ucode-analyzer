@@ -6,9 +6,10 @@ let _parser = ts.newParser(ts.ucdocs());
 
 // The ucdocs extras rule silently consumes \n[ \t]*\** [ \t]* between tokens,
 // but ts.text() returns raw byte spans, so those sequences appear in
-// description node text. Strip them and trim.
+// description node text. Strip the JSDoc line prefix (" * ") but preserve
+// any additional indentation that follows it (e.g. in @example code blocks).
 function cleanDesc(text) {
-	text = replace(text, /\n[ \t]*\*?[ \t]*/g, '\n');
+	text = replace(text, /\n[ \t]*\*?[ \t]?/g, '\n');
 	text = replace(text, /^\s+/, '');
 	text = replace(text, /\s+$/, '');
 	return text;
@@ -250,10 +251,11 @@ export function parseDoc(commentText) {
 
 // Render a type object to its source-level string form.
 export function typeToString(type) {
-	if (!type) return '*';
+	if (!type) return '?';
 	let k = type.kind;
 	if (k === 'primitive' || k === 'param') return type.name;
-	if (k === 'any' || k === 'unknown') return '*';
+	if (k === 'any')     return 'any';
+	if (k === 'unknown') return '?';
 	if (k === 'module') return 'module:' + type.path;
 	if (k === 'generic') return type.base + '<' + join(', ', map(type.params, typeToString)) + '>';
 	if (k === 'nullable') return '?' + typeToString(type.inner);
@@ -271,5 +273,5 @@ export function typeToString(type) {
 		let ps = map(type.params, (p) => (p.name ? p.name + ': ' : '') + typeToString(p.type));
 		return '(' + join(', ', ps) + ') => ' + typeToString(type.return);
 	}
-	return '*';
+	return '?';
 };

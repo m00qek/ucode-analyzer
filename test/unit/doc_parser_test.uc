@@ -217,11 +217,19 @@ describe('parseDoc — @example', () => {
 		assert.match(1, length(doc.examples));
 		assert.match('let a = 1;\nlet b = 2;', doc.examples[0]);
 	});
+
+	it('preserves indentation inside @example blocks', () => {
+		let src = "/**\n * @example\n * if (x) {\n *   doSomething();\n * }\n */";
+		let doc = parseDoc(src);
+		assert.match(1, length(doc.examples));
+		assert.match('if (x) {\n  doSomething();\n}', doc.examples[0]);
+	});
 });
 
 describe('typeToString', () => {
 	it('primitive', () => { assert.match('string', typeToString(prim('string'))); });
-	it('any',       () => { assert.match('*',      typeToString({ kind: 'any' })); });
+	it('any',     () => { assert.match('any', typeToString({ kind: 'any' })); });
+	it('unknown', () => { assert.match('?',   typeToString({ kind: 'unknown' })); });
 	it('param',     () => { assert.match('T',      typeToString(param('T'))); });
 	it('list',      () => { assert.match('list<int>',    typeToString(list_(prim('int')))); });
 	it('dict',      () => { assert.match('dict<string>', typeToString(dict_(prim('string')))); });

@@ -1,7 +1,7 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
 import * as documents from 'ucode_language_server.documents';
-import { diagnosticsFor } from 'ucode_language_server.diagnostics';
-import * as dag from 'ucode_language_server.dag';
+import { diagnosticsFor } from 'ucode_language_server.handlers.diagnostics';
+import * as dag from 'ucode_language_server.dag.dag';
 
 let URI = 'file:///test.uc';
 

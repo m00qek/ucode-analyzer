@@ -1,7 +1,7 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
 import * as documents from 'ucode_language_server.documents';
-import { signatureHelp } from 'ucode_language_server.signature_help';
-import * as dag from 'ucode_language_server.dag';
+import { signatureHelp } from 'ucode_language_server.handlers.signature_help';
+import * as dag from 'ucode_language_server.dag.dag';
 import { invalidateUri } from 'ucode_language_server.memo';
 
 let URI = 'file:///test.uc';

@@ -76,24 +76,61 @@ describe('templates.renderTemplate — built-in defaults', () => {
 		assert.match(true, index(md, '**Example:**') >= 0);
 	});
 
-	it('function template: renders parameter list', () => {
+	it('function template: renders declaration-form signature in code fence', () => {
 		let ctx = {
 			label: 'parse',
+			signature: 'function parse(src: string): tree',
 			typeStr: '(src: string) => tree',
 			doc: { description: 'Parse text.', examples: [] },
 			params: [{ name: 'src', typeStr: 'string', description: 'Source text.' }],
 			returns: { typeStr: 'tree', description: null },
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
-		assert.match(true, index(md, 'parse') >= 0);
+		assert.match(true, index(md, 'function parse(src: string): tree') >= 0);
+	});
+
+	it('function template: renders parameter list with each param on its own line', () => {
+		let ctx = {
+			label: 'match',
+			signature: 'function match(expected: T, actual: T, msg: string): *',
+			typeStr: '(expected: T, actual: T, msg: string) => *',
+			doc: { description: 'Asserts equality.', examples: [] },
+			params: [
+				{ name: 'expected', typeStr: 'T', description: 'The expected value.' },
+				{ name: 'actual',   typeStr: 'T', description: 'The actual value.' },
+				{ name: 'msg',      typeStr: 'string', description: null },
+			],
+			returns: { typeStr: '?', description: null },
+		};
+		let md = templates.renderTemplate('hover/function', ctx, _config);
 		assert.match(true, index(md, '**Parameters:**') >= 0);
-		assert.match(true, index(md, 'src') >= 0);
-		assert.match(true, index(md, 'Source text.') >= 0);
+		// Each param must be on its own line — check newline between items.
+		assert.match(true, index(md, '\n- `expected`') >= 0);
+		assert.match(true, index(md, '\n- `actual`') >= 0);
+		assert.match(true, index(md, '\n- `msg`') >= 0);
+		// Descriptions appear inline after em-dash.
+		assert.match(true, index(md, '— The expected value.') >= 0);
+	});
+
+	it('function template: strips leading dash from descriptions', () => {
+		let ctx = {
+			label: 'f',
+			signature: 'function f(x: int): *',
+			typeStr: '(x: int) => *',
+			doc: { description: null, examples: [] },
+			params: [{ name: 'x', typeStr: 'int', description: 'The value.' }],
+			returns: null,
+		};
+		let md = templates.renderTemplate('hover/function', ctx, _config);
+		// Should not have "— - The value." — description already clean.
+		assert.match(true, index(md, '— The value.') >= 0);
+		assert.match(false, index(md, '— - ') >= 0);
 	});
 
 	it('function template: includes returns description when present', () => {
 		let ctx = {
 			label: 'f',
+			signature: 'function f(): int',
 			typeStr: '() => int',
 			doc: { description: null, examples: [] },
 			params: [],
@@ -104,7 +141,7 @@ describe('templates.renderTemplate — built-in defaults', () => {
 		assert.match(true, index(md, 'The result.') >= 0);
 	});
 
-	it('record template: lists fields', () => {
+	it('record template: lists fields each on its own line', () => {
 		let ctx = {
 			label: 'assert',
 			typeStr: '{ match, throws }',
@@ -117,9 +154,9 @@ describe('templates.renderTemplate — built-in defaults', () => {
 		let md = templates.renderTemplate('hover/record', ctx, _config);
 		assert.match(true, index(md, 'assert') >= 0);
 		assert.match(true, index(md, '**Members:**') >= 0);
-		assert.match(true, index(md, 'match') >= 0);
-		assert.match(true, index(md, 'Assert equality.') >= 0);
-		assert.match(true, index(md, 'throws') >= 0);
+		assert.match(true, index(md, '\n- `match`') >= 0);
+		assert.match(true, index(md, '— Assert equality.') >= 0);
+		assert.match(true, index(md, '\n- `throws`') >= 0);
 	});
 
 	it('module template: renders specifier and description', () => {
