@@ -1144,3 +1144,127 @@ describe('inferrer — member access on module-typed expression', () => {
 		assert.match('function', type.kind);
 	});
 });
+
+describe('inferrer — subscript_expression (array/object indexing)', () => {
+	it('arr[i] returns the list element type', () => {
+		let t = infer("let x = [1, 2, 3][0];");
+		// [1,2,3] is list<int>; [0] extracts the element
+		assert.match('primitive', t.kind);
+		assert.match('int', t.name);
+	});
+
+	it('arr[i] on a typed binding returns the element type', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'items', { kind: 'generic', base: 'list', params: [{ kind: 'primitive', name: 'string' }] });
+		let node = exprNode("let x = items[0];");
+		let t = inferNode(node, "let x = items[0];", URI, scope, 0);
+		assert.match('primitive', t.kind);
+		assert.match('string', t.name);
+	});
+
+	it('obj["key"] returns the record field type', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'obj', {
+			kind: 'record',
+			fields: [{ name: 'count', type: { kind: 'primitive', name: 'int' } }],
+			sourceUri: URI,
+		});
+		let node = exprNode('let x = obj["count"];');
+		let t = inferNode(node, 'let x = obj["count"];', URI, scope, 0);
+		assert.match('primitive', t.kind);
+		assert.match('int', t.name);
+	});
+
+	it('obj["missing"] returns unknown for absent field', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'obj', { kind: 'record', fields: [], sourceUri: URI });
+		let node = exprNode('let x = obj["missing"];');
+		let t = inferNode(node, 'let x = obj["missing"];', URI, scope, 0);
+		assert.match('unknown', t.kind);
+	});
+
+	it('arr?.[i] returns a nullable element type', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'arr', { kind: 'generic', base: 'list', params: [{ kind: 'primitive', name: 'string' }] });
+		let text = "let x = arr?.[0];";
+		let node = exprNode(text);
+		let t = inferNode(node, text, URI, scope, 0);
+		assert.match('nullable', t.kind);
+		assert.match('string', t.inner.name);
+	});
+});
+
+describe('inferrer — optional chaining on member_expression', () => {
+	it('a?.b returns a nullable version of the member type', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'obj', {
+			kind: 'record',
+			fields: [{ name: 'name', type: { kind: 'primitive', name: 'string' } }],
+			sourceUri: URI,
+		});
+		let text = "let x = obj?.name;";
+		let node = exprNode(text);
+		let t = inferNode(node, text, URI, scope, 0);
+		assert.match('nullable', t.kind);
+		assert.match('string', t.inner.name);
+	});
+
+	it('non-optional member returns non-nullable type', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'obj', {
+			kind: 'record',
+			fields: [{ name: 'count', type: { kind: 'primitive', name: 'int' } }],
+			sourceUri: URI,
+		});
+		let text = "let x = obj.count;";
+		let node = exprNode(text);
+		let t = inferNode(node, text, URI, scope, 0);
+		assert.match('primitive', t.kind);
+		assert.match('int', t.name);
+	});
+});
+
+describe('inferrer — spread_element', () => {
+	it('spread of list<T> in array literal contributes T as element type', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'items', { kind: 'generic', base: 'list', params: [{ kind: 'primitive', name: 'string' }] });
+		let text = "let x = [...items];";
+		let node = exprNode(text);
+		let t = inferNode(node, text, URI, scope, 0);
+		// [...list<string>] → list<string>
+		assert.match('generic', t.kind);
+		assert.match('list', t.base);
+		assert.match('string', t.params[0].name);
+	});
+
+	it('spread of record in object literal merges fields', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'base', {
+			kind: 'record',
+			fields: [{ name: 'x', type: { kind: 'primitive', name: 'int' } }],
+			sourceUri: URI,
+		});
+		let text = "let y = { ...base, z: 'hello' };";
+		let node = exprNode(text);
+		let t = inferNode(node, text, URI, scope, 0);
+		assert.match('record', t.kind);
+		let names = sort(map(t.fields, (f) => f.name));
+		// x comes from spread, z from the pair
+		assert.match(true, index(names, 'x') >= 0);
+		assert.match(true, index(names, 'z') >= 0);
+	});
+});
+
+describe('inferrer — shorthand_property_identifier', () => {
+	it('{ x } shorthand resolves x from scope', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'count', { kind: 'primitive', name: 'int' });
+		let text = "let y = { count };";
+		let node = exprNode(text);
+		let t = inferNode(node, text, URI, scope, 0);
+		assert.match('record', t.kind);
+		assert.match(1, length(t.fields));
+		assert.match('count', t.fields[0].name);
+		assert.match('int', t.fields[0].type.name);
+	});
+});

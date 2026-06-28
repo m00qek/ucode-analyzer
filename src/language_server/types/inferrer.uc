@@ -226,23 +226,70 @@ function inferCall(node, source, uri, scope, depth) {
 }
 
 function inferMember(node, source, uri, scope, depth) {
-	let objNode  = ts.namedChild(node, 0);
-	let propNode = ts.namedChild(node, 1);
+	let objNode  = ts.childByField(node, 'object');
+	let propNode = ts.childByField(node, 'property');
 	if (!objNode || !propNode) return UNKNOWN;
 	let propName = ts.text(propNode, source);
+	let result = UNKNOWN;
 	// Namespace import lookup only applies when the object is a direct identifier alias.
 	if (ts.nodeType(objNode) === 'identifier') {
 		let dagResult = dagMemberLookup(uri, ts.text(objNode, source), propName);
-		if (dagResult) return dagResult;
+		if (dagResult) result = dagResult;
 	}
-	let objType = _infer(objNode, source, uri, scope, (depth ?? 0) + 1);
-	if (objType && objType.kind === 'module') {
-		let r = dag.resolveMember(objType.path, propName);
-		if (r) return exportType(r.exp, r.uri);
+	if (result.kind === 'unknown') {
+		let objType = _infer(objNode, source, uri, scope, (depth ?? 0) + 1);
+		if (objType && objType.kind === 'module') {
+			let r = dag.resolveMember(objType.path, propName);
+			if (r) result = exportType(r.exp, r.uri);
+		} else if (objType && objType.kind !== 'unknown') {
+			result = memberOfType(objType, propName);
+		}
 	}
-	if (objType && objType.kind !== 'unknown')
-		return memberOfType(objType, propName);
-	return UNKNOWN;
+	if (ts.childByField(node, 'optional_chain'))
+		return { kind: 'nullable', inner: result };
+	return result;
+}
+
+// Infer arr[i] (list element) or obj["key"] (record field).
+// The optional_chain field on the node indicates `?.[]` syntax, wrapping in nullable.
+function inferSubscript(node, source, uri, scope, depth) {
+	let objNode = ts.childByField(node, 'object');
+	let idxNode = ts.childByField(node, 'index');
+	if (!objNode) return UNKNOWN;
+
+	let objType = _infer(objNode, source, uri, scope, depth + 1);
+	// Unwrap nullable for the lookup, re-wrap at the end if optional chain.
+	let baseType = (objType && objType.kind === 'nullable') ? objType.inner : objType;
+
+	let elem = UNKNOWN;
+	if (baseType && baseType.kind === 'generic' && baseType.base === 'list') {
+		elem = baseType.params[0] ?? UNKNOWN;
+	} else if (baseType && baseType.kind === 'record' && idxNode &&
+	           ts.nodeType(idxNode) === 'string') {
+		for (let i = 0; i < ts.childCount(idxNode); i++) {
+			let c = ts.child(idxNode, i);
+			if (ts.nodeType(c) === 'string_fragment') {
+				elem = memberOfType(baseType, ts.text(c, source));
+				break;
+			}
+		}
+	}
+
+	return ts.childByField(node, 'optional_chain')
+		? { kind: 'nullable', inner: elem }
+		: elem;
+}
+
+// Infer the type contributed by a spread element inside an array or object.
+// In array context: ...list<T> → T (the element type is what gets spread into the array).
+// In object context: caller handles field merging; here return the spread type itself.
+function inferSpread(node, source, uri, scope, depth) {
+	let inner = ts.namedChild(node, 0);
+	if (!inner) return UNKNOWN;
+	let t = _infer(inner, source, uri, scope, depth + 1);
+	if (t && t.kind === 'generic' && t.base === 'list')
+		return t.params[0] ?? UNKNOWN;
+	return t;
 }
 
 // ── Node-type handlers ─────────────────────────────────────────────────────
@@ -327,10 +374,30 @@ function inferObject(node, source, uri, scope, depth) {
 	let lineTable = buildLineTable(source);
 	let fields = [];
 	for (let i = 0; i < ts.namedChildCount(node); i++) {
-		let pair = ts.namedChild(node, i);
-		if (ts.nodeType(pair) !== 'pair') continue;
-		let keyNode = ts.childByField(pair, 'key');
-		let valNode = ts.childByField(pair, 'value');
+		let child = ts.namedChild(node, i);
+		let ct = ts.nodeType(child);
+		if (ct === 'spread_element') {
+			// { ...obj } — merge fields from the spread type into this record.
+			let inner = ts.namedChild(child, 0);
+			if (inner) {
+				let t = _infer(inner, source, uri, scope, depth + 1);
+				if (t && t.kind === 'record') {
+					for (let j = 0; j < length(t.fields); j++)
+						push(fields, t.fields[j]);
+				}
+			}
+			continue;
+		}
+		if (ct === 'shorthand_property_identifier') {
+			// { x } — key and value are both the identifier x
+			let name = ts.text(child, source);
+			let position = offsetToPosition(source, lineTable, ts.startByte(child));
+			push(fields, { name, type: scopeGet(scope, name) ?? UNKNOWN, position });
+			continue;
+		}
+		if (ct !== 'pair') continue;
+		let keyNode = ts.childByField(child, 'key');
+		let valNode = ts.childByField(child, 'value');
 		if (!keyNode) continue;
 		let kt = ts.nodeType(keyNode);
 		let keyName = (kt === 'property_identifier' || kt === 'identifier')
@@ -429,6 +496,8 @@ let INFER = {
 	'object':                   inferObject,
 	'call_expression':          inferCall,
 	'member_expression':        inferMember,
+	'subscript_expression':     inferSubscript,
+	'spread_element':           inferSpread,
 	'arrow_function':           (node, source, uri, scope, depth) => inferArrow(node, source, uri, scope, depth, null),
 	'function_expression':      inferFunctionExpr,
 	'return_statement':         inferReturnStatement,
