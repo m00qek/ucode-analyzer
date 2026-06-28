@@ -1297,3 +1297,55 @@ describe('inferrer — shorthand_property_identifier', () => {
 		assert.match('int', t.fields[0].type.name);
 	});
 });
+
+describe('inferrer — binary_expression &&/||', () => {
+	it('|| returns union of operand types', () => {
+		let t = infer("let x = 1 || 'hello';");
+		assert.match('union', t.kind);
+		let names = sort(map(t.members, (m) => m.name));
+		assert.match(true, index(names, 'int') >= 0);
+		assert.match(true, index(names, 'string') >= 0);
+	});
+
+	it('&& of same type returns that type', () => {
+		let t = infer("let x = 1 && 2;");
+		assert.match('primitive', t.kind);
+		assert.match('int', t.name);
+	});
+
+	it('comparison operators still return bool', () => {
+		assert.match('boolean', infer("let x = 1 < 2;").name);
+		assert.match('boolean', infer("let x = 1 === 2;").name);
+	});
+});
+
+describe('inferrer — unary delete', () => {
+	it('delete returns boolean', () => {
+		let t = infer("let x = delete obj;");
+		assert.match('primitive', t.kind);
+		assert.match('boolean', t.name);
+	});
+
+	it('! still returns boolean', () => {
+		assert.match('boolean', infer("let x = !someVar;").name);
+	});
+});
+
+describe('inferrer — object with string-literal keys', () => {
+	it('"key": value is indexed as a record field', () => {
+		let t = infer('let x = { "host": "localhost", "port": 8080 };');
+		assert.match('record', t.kind);
+		let names = sort(map(t.fields, (f) => f.name));
+		assert.match(true, index(names, 'host') >= 0);
+		assert.match(true, index(names, 'port') >= 0);
+	});
+
+	it('string-keyed field has the correct inferred value type', () => {
+		let t = infer('let x = { "count": 42 };');
+		assert.match('record', t.kind);
+		assert.match(1, length(t.fields));
+		assert.match('count', t.fields[0].name);
+		assert.match('int', t.fields[0].type.name);
+	});
+});
+

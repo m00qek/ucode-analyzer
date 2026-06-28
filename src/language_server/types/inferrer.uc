@@ -31,7 +31,7 @@ function precedingDoc(node, source) {
 function exportType(exp, sourceUri) {
 	if (exp._moduleSpecifier) return { kind: 'module', path: exp._moduleSpecifier };
 	if (exp.kind === 'function' || (exp.doc && (length(exp.doc.params) > 0 || exp.doc.returns))) {
-		if (!exp.doc) return UNKNOWN;
+		if (!exp.doc) return { kind: 'function', params: [], return: UNKNOWN };
 		return {
 			kind: 'function',
 			params: map(filter(exp.doc.params, (p) => !match(p.name, /\./)), (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
@@ -324,19 +324,23 @@ function inferParenthesized(node, source, uri, scope, depth) {
 
 function inferUnary(node, source, uri, scope, depth) {
 	let op = ts.nodeType(ts.child(node, 0));
-	if (op === '!') return BOOL;
+	if (op === '!' || op === 'delete') return BOOL;
 	let operand = ts.namedChild(node, 0);
 	return operand ? _infer(operand, source, uri, scope, depth + 1) : UNKNOWN;
 }
 
 function inferBinary(node, source, uri, scope, depth) {
 	let op = ts.nodeType(ts.child(node, 1));
-	if (op === '<'   || op === '>'   || op === '<=' || op === '>=' ||
-	    op === '=='  || op === '!='  || op === '===' || op === '!=='  ||
-	    op === '&&' || op === '||')
+	if (op === '<'  || op === '>'  || op === '<=' || op === '>=' ||
+	    op === '==' || op === '!=' || op === '===' || op === '!==')
 		return BOOL;
 	let left  = ts.namedChild(node, 0);
 	let right = ts.namedChild(node, 1);
+	if (op === '&&' || op === '||') {
+		let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;
+		let rt = right ? _infer(right, source, uri, scope, depth + 1) : UNKNOWN;
+		return unionOf([lt, rt]);
+	}
 	if (op === '+') {
 		let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;
 		let rt = right ? _infer(right, source, uri, scope, depth + 1) : UNKNOWN;
@@ -406,8 +410,15 @@ function inferObject(node, source, uri, scope, depth) {
 		let valNode = ts.childByField(child, 'value');
 		if (!keyNode) continue;
 		let kt = ts.nodeType(keyNode);
-		let keyName = (kt === 'property_identifier' || kt === 'identifier')
-			? ts.text(keyNode, source) : null;
+		let keyName = null;
+		if (kt === 'property_identifier' || kt === 'identifier') {
+			keyName = ts.text(keyNode, source);
+		} else if (kt === 'string') {
+			for (let k = 0; k < ts.childCount(keyNode); k++) {
+				let f = ts.child(keyNode, k);
+				if (ts.nodeType(f) === 'string_fragment') { keyName = ts.text(f, source); break; }
+			}
+		}
 		if (!keyName) continue;
 		let position = offsetToPosition(source, lineTable, ts.startByte(keyNode));
 		push(fields, { name: keyName, type: valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN, position });
