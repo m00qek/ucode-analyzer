@@ -33,14 +33,14 @@ function pointAt(source, byteOffset) {
 
 // ── Opaque handle types ───────────────────────────────────────────────────
 
-/** @typedef {*} Language — Opaque tree-sitter language handle returned by ts.ucode() or ts.ucdocs(). */
-/** @typedef {*} Parser — Opaque parser instance created by ts.newParser(). */
-/** @typedef {*} Tree — Parsed syntax tree. All node handles become stale after ts.reparse(). */
-/** @typedef {*} Node — Immutable handle to a single syntax node within a Tree. */
-/** @typedef {*} Query — Compiled tree-sitter query pattern object. */
+/** @typedef {any} Language — Opaque tree-sitter language handle returned by ts.ucode() or ts.ucdocs(). */
+/** @typedef {any} Parser — Opaque parser instance created by ts.newParser(). */
+/** @typedef {any} Tree — Parsed syntax tree. All node handles become stale after ts.reparse(). */
+/** @typedef {any} Node — Immutable handle to a single syntax node within a Tree. */
+/** @typedef {any} Query — Compiled tree-sitter query pattern object. */
 
 /** @typedef {{ name: string, node: Node }} QueryCapture — A named capture from a query match. */
-/** @typedef {{ pattern: int, captures: [QueryCapture] }} QueryMatch — A single match produced by ts.queryMatches(). */
+/** @typedef {{ pattern: int, captures: QueryCapture[] }} QueryMatch — A single match produced by ts.queryMatches(). */
 
 // ── Language handles ──────────────────────────────────────────────────────
 
@@ -151,7 +151,7 @@ export function nodeType(node) {
 /**
  * Return true if node is a named node (as opposed to an anonymous token).
  * @param {Node} node
- * @returns {bool}
+ * @returns {boolean}
  */
 export function isNamed(node) {
 	return native.ts_node_is_named(node);
@@ -208,7 +208,7 @@ export function namedChildCount(node) {
  * Return the i-th child of node (named and anonymous, 0-based).
  * @param {Node} node
  * @param {int} index
- * @returns {Node?}
+ * @returns {?Node}
  */
 export function child(node, index) {
 	return native.ts_node_child(node, index);
@@ -218,7 +218,7 @@ export function child(node, index) {
  * Return the i-th named child of node (0-based).
  * @param {Node} node
  * @param {int} index
- * @returns {Node?}
+ * @returns {?Node}
  */
 export function namedChild(node, index) {
 	return native.ts_node_named_child(node, index);
@@ -229,7 +229,7 @@ export function namedChild(node, index) {
  * Field names are grammar-defined (e.g. 'name', 'value', 'body').
  * @param {Node} node
  * @param {string} name — field name
- * @returns {Node?}
+ * @returns {?Node}
  */
 export function childByField(node, name) {
 	expect(type(name) === 'string', 'childByField() expects a field name string');
@@ -239,7 +239,7 @@ export function childByField(node, name) {
 /**
  * Return the parent node of node, or null if node is the root.
  * @param {Node} node
- * @returns {Node?}
+ * @returns {?Node}
  */
 export function parent(node) {
 	return native.ts_node_parent(node);
@@ -248,7 +248,7 @@ export function parent(node) {
 /**
  * Return all children of node (named and anonymous) as an array.
  * @param {Node} node
- * @returns {[Node]}
+ * @returns {Node[]}
  */
 export function children(node) {
 	let result = [];
@@ -262,7 +262,7 @@ export function children(node) {
 /**
  * Return only the named children of node as an array.
  * @param {Node} node
- * @returns {[Node]}
+ * @returns {Node[]}
  */
 export function namedChildren(node) {
 	let result = [];
@@ -375,7 +375,7 @@ function evalPredicate(predicate, captureMap, source) {
  * @param {Query} query
  * @param {Node} node — root of the subtree to search
  * @param {string} source — the source string passed to ts.parse()
- * @returns {[QueryMatch]}
+ * @returns {QueryMatch[]}
  */
 export function queryMatches(query, node, source) {
 	expect(type(source) === 'string', 'queryMatches() expects a source string');
@@ -411,7 +411,7 @@ export function queryMatches(query, node, source) {
  * @param {Query} query
  * @param {Node} node — root of the subtree to search
  * @param {string} source — the source string passed to ts.parse()
- * @returns {[QueryCapture]}
+ * @returns {QueryCapture[]}
  */
 export function queryCaptures(query, node, source) {
 	let result = [];

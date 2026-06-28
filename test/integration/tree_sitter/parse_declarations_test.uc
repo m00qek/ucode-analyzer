@@ -30,12 +30,12 @@ function hasErrors(node) {
 	return false;
 }
 
-describe('declaration JSDoc comments parse without ucdocs errors', () => {
+describe('JSDoc comments in all source files parse without ucdocs errors', () => {
 	let parser_ucode  = ts.newParser(ts.ucode());
 	let parser_ucdocs = ts.newParser(ts.ucdocs());
 	let query = ts.newQuery(ts.ucode(), '(comment) @c');
 
-	let files = sort(walkFiles('/app/src/declarations', '.uc'));
+	let files = sort(walkFiles('/app/src', '.uc'));
 
 	for (let path in files) {
 		it(path, () => {
