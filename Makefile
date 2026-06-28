@@ -28,12 +28,12 @@ TEST_IMAGE = docker run --rm $(TEST_OPTS) \
 	-w /app \
 	$(IMAGE)
 
-.PHONY: compile test test-unit test-e2e shell package
+.PHONY: compile test test-unit test-e2e test-integration shell package
 
 .docker-image: Dockerfile
 	@docker build \
 		--build-arg SDK_ARCH=$(SDK_ARCH) \
-		--build-arg SDK_VERSION=$(SDK_MAJOR_MINOR) \
+		--build-arg SDK_VERSION=$(SDK_VERSION) \
 		-t $(IMAGE) .
 	@touch .docker-image
 
@@ -72,6 +72,9 @@ test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 
 test-e2e: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) test/e2e/
+
+test-integration: .docker-image $(BUILD_DIR)/tree_sitter_native.so
+	@$(TEST_IMAGE) utest -c test/integration/utest.config.uc $(REPORTER) test/integration/
 
 shell: TEST_OPTS := -it
 shell: .docker-image

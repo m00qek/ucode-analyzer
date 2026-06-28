@@ -5,6 +5,7 @@ import { buildScope } from 'ucode_language_server.types.scope_builder';
 import { typeToString } from 'ucode_language_server.types.doc_parser';
 import * as dag from 'ucode_language_server.dag.dag';
 import * as type_registry from 'ucode_language_server.types.registry';
+import * as platform from 'ucode_language_server.platform';
 
 // LSP CompletionItemKind constants
 let KIND_FUNCTION = 3;
@@ -94,19 +95,26 @@ function memberContext(root, source, offset) {
 
 // Completion items for all exports of a resolved module URI.
 // Lazy-indexes the module if not yet in the DAG.
+// Hides the entire module if not installed; hides individual symbols not yet
+// available in the installed version (based on @since).
 function exportsOfModule(resolvedUri) {
 	if (!dag.exportsOf(resolvedUri)) dag.addFromDisk(resolvedUri);
 	let exps = dag.exportsOf(resolvedUri);
 	if (!exps) return [];
-	return map(exps, (exp) => {
+	if (!platform.moduleAvailable(resolvedUri)) return [];
+	let items = [];
+	for (let i = 0; i < length(exps); i++) {
+		let exp = exps[i];
+		if (!platform.symbolAvailable(resolvedUri, exp.doc?.since)) continue;
 		let r = dag.resolveExport(resolvedUri, exp.name) ?? exp;
-		return {
+		push(items, {
 			label: exp.name,
 			kind: (r.kind === 'function') ? KIND_FUNCTION : KIND_VARIABLE,
 			detail: detail(r),
 			documentation: (r.doc && r.doc.description) ? r.doc.description : null,
-		};
-	});
+		});
+	}
+	return items;
 }
 
 // Return completion items for all members of type.

@@ -1,4 +1,5 @@
-// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
+// Source: https://github.com/jow-/ucode
+// Versions: 2025.07.18~3f64c808, 2026.01.16~85922056
 /**
  * # System logging functions
  *
@@ -516,4 +517,41 @@ export function WARN(format, args) {};
  * ERR("This is an error!");
  */
 export function ERR(format, args) {};
+
+/** @type {int} */ export let LOG_PID;
+/** @type {int} */ export let LOG_CONS;
+/** @type {int} */ export let LOG_NDELAY;
+/** @type {int} */ export let LOG_ODELAY;
+/** @type {int} */ export let LOG_NOWAIT;
+/** @type {int} */ export let LOG_AUTH;
+/** @type {int} */ export let LOG_AUTHPRIV;
+/** @type {int} */ export let LOG_CRON;
+/** @type {int} */ export let LOG_DAEMON;
+/** @type {int} */ export let LOG_FTP;
+/** @type {int} */ export let LOG_KERN;
+/** @type {int} */ export let LOG_LPR;
+/** @type {int} */ export let LOG_MAIL;
+/** @type {int} */ export let LOG_NEWS;
+/** @type {int} */ export let LOG_SYSLOG;
+/** @type {int} */ export let LOG_USER;
+/** @type {int} */ export let LOG_UUCP;
+/** @type {int} */ export let LOG_LOCAL0;
+/** @type {int} */ export let LOG_LOCAL1;
+/** @type {int} */ export let LOG_LOCAL2;
+/** @type {int} */ export let LOG_LOCAL3;
+/** @type {int} */ export let LOG_LOCAL4;
+/** @type {int} */ export let LOG_LOCAL5;
+/** @type {int} */ export let LOG_LOCAL6;
+/** @type {int} */ export let LOG_LOCAL7;
+/** @type {int} */ export let LOG_EMERG;
+/** @type {int} */ export let LOG_ALERT;
+/** @type {int} */ export let LOG_CRIT;
+/** @type {int} */ export let LOG_ERR;
+/** @type {int} */ export let LOG_WARNING;
+/** @type {int} */ export let LOG_NOTICE;
+/** @type {int} */ export let LOG_INFO;
+/** @type {int} */ export let LOG_DEBUG;
+/** @type {int} */ export let ULOG_KMSG;
+/** @type {int} */ export let ULOG_SYSLOG;
+/** @type {int} */ export let ULOG_STDIO;
 

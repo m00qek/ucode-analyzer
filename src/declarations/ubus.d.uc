@@ -1,4 +1,5 @@
-// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
+// Source: https://github.com/jow-/ucode
+// Versions: 2025.07.18~3f64c808, 2026.01.16~85922056
 /**
  * # Ubus IPC
  *
@@ -1063,4 +1064,31 @@ export function open_channel(fd, cb, disconnect_cb, timeout) {};
  * @returns {function|boolean}
  */
 export function guard(handler) {};
+
+/** @type {int} */ export let STATUS_OK;
+/** @type {int} */ export let STATUS_INVALID_COMMAND;
+/** @type {int} */ export let STATUS_INVALID_ARGUMENT;
+/** @type {int} */ export let STATUS_METHOD_NOT_FOUND;
+/** @type {int} */ export let STATUS_NOT_FOUND;
+/** @type {int} */ export let STATUS_NO_DATA;
+/** @type {int} */ export let STATUS_PERMISSION_DENIED;
+/** @type {int} */ export let STATUS_TIMEOUT;
+/** @type {int} */ export let STATUS_NOT_SUPPORTED;
+/** @type {int} */ export let STATUS_UNKNOWN_ERROR;
+/** @type {int} */ export let STATUS_CONNECTION_FAILED;
+/** @type {int} */ export let STATUS_NO_MEMORY;
+/** @type {int} */ export let STATUS_PARSE_ERROR;
+/** @type {int} */ export let STATUS_SYSTEM_ERROR;
+/** @type {int} */ export let STATUS_CONTINUE;
+/** @type {string} */ export let SYSTEM_OBJECT_ACL;
+
+export function list(pattern) {};
+export function call(object, method, params, timeout) {};
+export function defer(object, method, params, timeout, cb) {};
+export function disconnect() {};
+export function event(event, cb) {};
+export function listener(pattern, cb) {};
+export function subscriber(object, cb) {};
+export function publish(object, methods) {};
+export function remove(handle) {};
 

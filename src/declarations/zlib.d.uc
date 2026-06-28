@@ -1,4 +1,5 @@
-// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
+// Source: https://github.com/jow-/ucode
+// Versions: 2026.01.16~85922056
 /**
  * # Zlib bindings
  *
@@ -55,6 +56,16 @@
  * // deflate content using fastest compression
  * const deflated = deflate(content, false, Z_BEST_SPEED);
  */
+/** @type {int} */ export let Z_NO_COMPRESSION;
+/** @type {int} */ export let Z_BEST_SPEED;
+/** @type {int} */ export let Z_BEST_COMPRESSION;
+/** @type {int} */ export let Z_DEFAULT_COMPRESSION;
+/** @type {int} */ export let Z_NO_FLUSH;
+/** @type {int} */ export let Z_PARTIAL_FLUSH;
+/** @type {int} */ export let Z_SYNC_FLUSH;
+/** @type {int} */ export let Z_FULL_FLUSH;
+/** @type {int} */ export let Z_FINISH;
+
 export function deflate(str_or_resource, gzip, level) {};
 
 /**

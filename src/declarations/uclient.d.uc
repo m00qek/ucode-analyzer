@@ -1,4 +1,5 @@
-// Source: https://github.com/openwrt/uclient @ daad21fa2c17cae54d37149bf27bb3dd78e50a3f
+// Source: https://github.com/openwrt/uclient
+// Versions: 2024.10.22~88ae8f20, 2026.06.07~daad21fa
 /**
  * # HTTP Client
  *

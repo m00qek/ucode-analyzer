@@ -1,4 +1,5 @@
-// Source: https://github.com/openwrt/luci @ b9681710f4d6b81eeefec4f863dc0bd8ed3917aa (contrib/package/ucode-mod-lua/src/lua.c)
+// Source: https://github.com/openwrt/luci
+// Versions: 1
 /**
  * # Lua VM Bridge
  *

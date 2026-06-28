@@ -12,3 +12,11 @@
 {{ ex }}
 ```
 {%- endfor %}
+{%- if (since): %}
+
+*Since:* `{{ since }}`
+{%- endif %}
+{%- if (unavailable): %}
+
+> ⚠ Not available in the installed version.
+{%- endif %}

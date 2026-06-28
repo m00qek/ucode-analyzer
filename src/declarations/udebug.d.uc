@@ -1,4 +1,5 @@
-// Source: https://github.com/openwrt/udebug @ 875e1a7af6ca9d86524d18169c3a79f4a1920053
+// Source: https://github.com/openwrt/udebug
+// Versions: 2025.08.24~edeb4d6d, 2026.01.16~875e1a7a
 /**
  * # udebug — Shared-memory ring-buffer debug tracing
  *

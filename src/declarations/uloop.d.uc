@@ -1,4 +1,5 @@
-// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
+// Source: https://github.com/jow-/ucode
+// Versions: 2025.07.18~3f64c808, 2026.01.16~85922056
 /**
  * # OpenWrt uloop event loop
  *
@@ -878,4 +879,21 @@ export function interval(timeout, callback) {};
  * });
  */
 export function signal(signal, callback) {};
+
+/** @type {int} */ export let ULOOP_READ;
+/** @type {int} */ export let ULOOP_WRITE;
+/** @type {int} */ export let ULOOP_EDGE_TRIGGER;
+/** @type {int} */ export let ULOOP_BLOCKING;
+
+/**
+ * Get or set the uloop exception handler.
+ *
+ * @function module:uloop#guard
+ *
+ * @param {function} [handler]
+ * The exception handler function to register.
+ *
+ * @returns {function|boolean}
+ */
+export function guard(handler) {};
 

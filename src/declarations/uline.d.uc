@@ -1,4 +1,5 @@
-// Source: https://github.com/openwrt/openwrt @ 85e15f34ace3077d960682564119597dd82afea1 (package/utils/ucode-mod-uline/)
+// Source: https://github.com/openwrt/openwrt
+// Versions: 8
 /**
  * # Interactive Terminal Line Editor
  *

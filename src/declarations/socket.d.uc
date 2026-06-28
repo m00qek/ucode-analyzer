@@ -1,4 +1,5 @@
-// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
+// Source: https://github.com/jow-/ucode
+// Versions: 2025.07.18~3f64c808, 2026.01.16~85922056
 /**
  * # Socket Module
  *
@@ -173,6 +174,218 @@
  * print(socket.error(true), "\n");  //
  */
 export function error(numeric) {};
+
+/** @type {int} */ export let AF_UNSPEC;
+/** @type {int} */ export let AF_UNIX;
+/** @type {int} */ export let AF_INET;
+/** @type {int} */ export let AF_INET6;
+/** @type {int} */ export let AF_PACKET;
+/** @type {int} */ export let SOCK_STREAM;
+/** @type {int} */ export let SOCK_DGRAM;
+/** @type {int} */ export let SOCK_RAW;
+/** @type {int} */ export let SOCK_NONBLOCK;
+/** @type {int} */ export let SOCK_CLOEXEC;
+/** @type {int} */ export let SOCK_PACKET;
+/** @type {int} */ export let MSG_DONTROUTE;
+/** @type {int} */ export let MSG_DONTWAIT;
+/** @type {int} */ export let MSG_EOR;
+/** @type {int} */ export let MSG_NOSIGNAL;
+/** @type {int} */ export let MSG_OOB;
+/** @type {int} */ export let MSG_PEEK;
+/** @type {int} */ export let MSG_TRUNC;
+/** @type {int} */ export let MSG_WAITALL;
+/** @type {int} */ export let MSG_CONFIRM;
+/** @type {int} */ export let MSG_MORE;
+/** @type {int} */ export let MSG_FASTOPEN;
+/** @type {int} */ export let MSG_CMSG_CLOEXEC;
+/** @type {int} */ export let MSG_ERRQUEUE;
+/** @type {int} */ export let IPPROTO_IP;
+/** @type {int} */ export let IP_ADD_MEMBERSHIP;
+/** @type {int} */ export let IP_ADD_SOURCE_MEMBERSHIP;
+/** @type {int} */ export let IP_BLOCK_SOURCE;
+/** @type {int} */ export let IP_DROP_MEMBERSHIP;
+/** @type {int} */ export let IP_DROP_SOURCE_MEMBERSHIP;
+/** @type {int} */ export let IP_HDRINCL;
+/** @type {int} */ export let IP_MSFILTER;
+/** @type {int} */ export let IP_MULTICAST_IF;
+/** @type {int} */ export let IP_MULTICAST_LOOP;
+/** @type {int} */ export let IP_MULTICAST_TTL;
+/** @type {int} */ export let IP_OPTIONS;
+/** @type {int} */ export let IP_PKTINFO;
+/** @type {int} */ export let IP_RECVOPTS;
+/** @type {int} */ export let IP_RECVTOS;
+/** @type {int} */ export let IP_RECVTTL;
+/** @type {int} */ export let IP_RETOPTS;
+/** @type {int} */ export let IP_TOS;
+/** @type {int} */ export let IP_TTL;
+/** @type {int} */ export let IP_UNBLOCK_SOURCE;
+/** @type {int} */ export let IP_BIND_ADDRESS_NO_PORT;
+/** @type {int} */ export let IP_FREEBIND;
+/** @type {int} */ export let IP_MTU;
+/** @type {int} */ export let IP_MTU_DISCOVER;
+/** @type {int} */ export let IP_MULTICAST_ALL;
+/** @type {int} */ export let IP_NODEFRAG;
+/** @type {int} */ export let IP_PASSSEC;
+/** @type {int} */ export let IP_RECVERR;
+/** @type {int} */ export let IP_RECVORIGDSTADDR;
+/** @type {int} */ export let IP_ROUTER_ALERT;
+/** @type {int} */ export let IP_TRANSPARENT;
+/** @type {int} */ export let IPPROTO_IPV6;
+/** @type {int} */ export let IPV6_FLOWINFO_SEND;
+/** @type {int} */ export let IPV6_FLOWINFO;
+/** @type {int} */ export let IPV6_FLOWLABEL_MGR;
+/** @type {int} */ export let IPV6_MULTICAST_HOPS;
+/** @type {int} */ export let IPV6_MULTICAST_IF;
+/** @type {int} */ export let IPV6_MULTICAST_LOOP;
+/** @type {int} */ export let IPV6_RECVTCLASS;
+/** @type {int} */ export let IPV6_TCLASS;
+/** @type {int} */ export let IPV6_UNICAST_HOPS;
+/** @type {int} */ export let IPV6_V6ONLY;
+/** @type {int} */ export let IPV6_ADD_MEMBERSHIP;
+/** @type {int} */ export let IPV6_ADDR_PREFERENCES;
+/** @type {int} */ export let IPV6_ADDRFORM;
+/** @type {int} */ export let IPV6_AUTHHDR;
+/** @type {int} */ export let IPV6_AUTOFLOWLABEL;
+/** @type {int} */ export let IPV6_DONTFRAG;
+/** @type {int} */ export let IPV6_DROP_MEMBERSHIP;
+/** @type {int} */ export let IPV6_DSTOPTS;
+/** @type {int} */ export let IPV6_FREEBIND;
+/** @type {int} */ export let IPV6_HOPLIMIT;
+/** @type {int} */ export let IPV6_HOPOPTS;
+/** @type {int} */ export let IPV6_JOIN_ANYCAST;
+/** @type {int} */ export let IPV6_LEAVE_ANYCAST;
+/** @type {int} */ export let IPV6_MINHOPCOUNT;
+/** @type {int} */ export let IPV6_MTU_DISCOVER;
+/** @type {int} */ export let IPV6_MTU;
+/** @type {int} */ export let IPV6_MULTICAST_ALL;
+/** @type {int} */ export let IPV6_PKTINFO;
+/** @type {int} */ export let IPV6_RECVDSTOPTS;
+/** @type {int} */ export let IPV6_RECVERR;
+/** @type {int} */ export let IPV6_RECVFRAGSIZE;
+/** @type {int} */ export let IPV6_RECVHOPLIMIT;
+/** @type {int} */ export let IPV6_RECVHOPOPTS;
+/** @type {int} */ export let IPV6_RECVORIGDSTADDR;
+/** @type {int} */ export let IPV6_RECVPATHMTU;
+/** @type {int} */ export let IPV6_RECVPKTINFO;
+/** @type {int} */ export let IPV6_RECVRTHDR;
+/** @type {int} */ export let IPV6_ROUTER_ALERT_ISOLATE;
+/** @type {int} */ export let IPV6_ROUTER_ALERT;
+/** @type {int} */ export let IPV6_RTHDR;
+/** @type {int} */ export let IPV6_RTHDRDSTOPTS;
+/** @type {int} */ export let IPV6_TRANSPARENT;
+/** @type {int} */ export let IPV6_UNICAST_IF;
+/** @type {int} */ export let SOL_SOCKET;
+/** @type {int} */ export let SO_ACCEPTCONN;
+/** @type {int} */ export let SO_BROADCAST;
+/** @type {int} */ export let SO_DEBUG;
+/** @type {int} */ export let SO_DONTROUTE;
+/** @type {int} */ export let SO_ERROR;
+/** @type {int} */ export let SO_KEEPALIVE;
+/** @type {int} */ export let SO_LINGER;
+/** @type {int} */ export let SO_OOBINLINE;
+/** @type {int} */ export let SO_RCVBUF;
+/** @type {int} */ export let SO_RCVLOWAT;
+/** @type {int} */ export let SO_RCVTIMEO;
+/** @type {int} */ export let SO_REUSEADDR;
+/** @type {int} */ export let SO_REUSEPORT;
+/** @type {int} */ export let SO_SNDBUF;
+/** @type {int} */ export let SO_SNDLOWAT;
+/** @type {int} */ export let SO_SNDTIMEO;
+/** @type {int} */ export let SO_TIMESTAMP;
+/** @type {int} */ export let SO_TYPE;
+/** @type {int} */ export let SO_ATTACH_BPF;
+/** @type {int} */ export let SO_ATTACH_FILTER;
+/** @type {int} */ export let SO_ATTACH_REUSEPORT_CBPF;
+/** @type {int} */ export let SO_ATTACH_REUSEPORT_EBPF;
+/** @type {int} */ export let SO_BINDTODEVICE;
+/** @type {int} */ export let SO_BUSY_POLL;
+/** @type {int} */ export let SO_DETACH_BPF;
+/** @type {int} */ export let SO_DETACH_FILTER;
+/** @type {int} */ export let SO_DOMAIN;
+/** @type {int} */ export let SO_INCOMING_CPU;
+/** @type {int} */ export let SO_INCOMING_NAPI_ID;
+/** @type {int} */ export let SO_LOCK_FILTER;
+/** @type {int} */ export let SO_MARK;
+/** @type {int} */ export let SO_PASSCRED;
+/** @type {int} */ export let SO_PASSSEC;
+/** @type {int} */ export let SO_PEEK_OFF;
+/** @type {int} */ export let SO_PEERCRED;
+/** @type {int} */ export let SO_PEERSEC;
+/** @type {int} */ export let SO_PRIORITY;
+/** @type {int} */ export let SO_PROTOCOL;
+/** @type {int} */ export let SO_RCVBUFFORCE;
+/** @type {int} */ export let SO_RXQ_OVFL;
+/** @type {int} */ export let SO_SNDBUFFORCE;
+/** @type {int} */ export let SO_TIMESTAMPNS;
+/** @type {int} */ export let SCM_CREDENTIALS;
+/** @type {int} */ export let SCM_RIGHTS;
+/** @type {int} */ export let IPPROTO_TCP;
+/** @type {int} */ export let TCP_FASTOPEN;
+/** @type {int} */ export let TCP_KEEPCNT;
+/** @type {int} */ export let TCP_KEEPINTVL;
+/** @type {int} */ export let TCP_MAXSEG;
+/** @type {int} */ export let TCP_NODELAY;
+/** @type {int} */ export let TCP_CONGESTION;
+/** @type {int} */ export let TCP_CORK;
+/** @type {int} */ export let TCP_DEFER_ACCEPT;
+/** @type {int} */ export let TCP_FASTOPEN_CONNECT;
+/** @type {int} */ export let TCP_INFO;
+/** @type {int} */ export let TCP_KEEPIDLE;
+/** @type {int} */ export let TCP_LINGER2;
+/** @type {int} */ export let TCP_QUICKACK;
+/** @type {int} */ export let TCP_SYNCNT;
+/** @type {int} */ export let TCP_USER_TIMEOUT;
+/** @type {int} */ export let TCP_WINDOW_CLAMP;
+/** @type {int} */ export let SOL_PACKET;
+/** @type {int} */ export let PACKET_ADD_MEMBERSHIP;
+/** @type {int} */ export let PACKET_DROP_MEMBERSHIP;
+/** @type {int} */ export let PACKET_AUXDATA;
+/** @type {int} */ export let PACKET_FANOUT;
+/** @type {int} */ export let PACKET_LOSS;
+/** @type {int} */ export let PACKET_RESERVE;
+/** @type {int} */ export let PACKET_RX_RING;
+/** @type {int} */ export let PACKET_STATISTICS;
+/** @type {int} */ export let PACKET_TIMESTAMP;
+/** @type {int} */ export let PACKET_TX_RING;
+/** @type {int} */ export let PACKET_VERSION;
+/** @type {int} */ export let PACKET_QDISC_BYPASS;
+/** @type {int} */ export let PACKET_MR_PROMISC;
+/** @type {int} */ export let PACKET_MR_MULTICAST;
+/** @type {int} */ export let PACKET_MR_ALLMULTI;
+/** @type {int} */ export let PACKET_HOST;
+/** @type {int} */ export let PACKET_BROADCAST;
+/** @type {int} */ export let PACKET_MULTICAST;
+/** @type {int} */ export let PACKET_OTHERHOST;
+/** @type {int} */ export let PACKET_OUTGOING;
+/** @type {int} */ export let IPPROTO_UDP;
+/** @type {int} */ export let UDP_CORK;
+/** @type {int} */ export let SHUT_RD;
+/** @type {int} */ export let SHUT_WR;
+/** @type {int} */ export let SHUT_RDWR;
+/** @type {int} */ export let AI_ADDRCONFIG;
+/** @type {int} */ export let AI_ALL;
+/** @type {int} */ export let AI_CANONIDN;
+/** @type {int} */ export let AI_CANONNAME;
+/** @type {int} */ export let AI_IDN;
+/** @type {int} */ export let AI_NUMERICHOST;
+/** @type {int} */ export let AI_NUMERICSERV;
+/** @type {int} */ export let AI_PASSIVE;
+/** @type {int} */ export let AI_V4MAPPED;
+/** @type {int} */ export let NI_DGRAM;
+/** @type {int} */ export let NI_IDN;
+/** @type {int} */ export let NI_MAXHOST;
+/** @type {int} */ export let NI_MAXSERV;
+/** @type {int} */ export let NI_NAMEREQD;
+/** @type {int} */ export let NI_NOFQDN;
+/** @type {int} */ export let NI_NUMERICHOST;
+/** @type {int} */ export let NI_NUMERICSERV;
+/** @type {int} */ export let POLLIN;
+/** @type {int} */ export let POLLPRI;
+/** @type {int} */ export let POLLOUT;
+/** @type {int} */ export let POLLERR;
+/** @type {int} */ export let POLLHUP;
+/** @type {int} */ export let POLLNVAL;
+/** @type {int} */ export let POLLRDHUP;
 
 /**
  * Returns a string containing a description of the positive (`errno`) or
@@ -538,6 +751,7 @@ export function create(domain, type, protocol) {};
  * Returns `null` if an error occurred during socket creation.
  *
  * @function module:socket#open
+ * @since 2026.01.16~85922056
  *
  * @param {int} [fd]
  * The file descriptor number
@@ -564,6 +778,7 @@ export function open(fd) {};
  * Returns `null` if an error occurred during socket creation.
  *
  * @function module:socket#pair
+ * @since 2026.01.16~85922056
  *
  * @param {int} [type=SOCK_STREAM]
  * The socket type, e.g., SOCK_STREAM or SOCK_DGRAM. It may also be

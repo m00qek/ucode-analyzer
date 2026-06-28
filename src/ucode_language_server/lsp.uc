@@ -12,6 +12,7 @@ import { references as referencesDoc } from 'ucode_language_server.handlers.refe
 import { documentSymbols as documentSymbolsDoc } from 'ucode_language_server.handlers.document_symbols';
 import { rename as renameDoc } from 'ucode_language_server.handlers.rename';
 import { initBuiltinsFromDag } from 'ucode_language_server.types.inferrer';
+import * as platform from 'ucode_language_server.platform';
 
 export function run(config) {
 	let shutdown_requested = false;
@@ -60,6 +61,14 @@ export function run(config) {
 
 			let stdlibUri = dag.resolveSpecifier('stdlib');
 			if (stdlibUri) initBuiltinsFromDag(stdlibUri);
+
+			let declVersions = {};
+			for (let uri in dag.allUris()) {
+				if (index(uri, '.d.uc') < 0) continue;
+				let v = dag.versionsOf(uri);
+				if (v) declVersions[uri] = v;
+			}
+			platform.init(declVersions);
 		},
 
 		shutdown: function(msg) {

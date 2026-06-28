@@ -1,4 +1,5 @@
-// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
+// Source: https://github.com/jow-/ucode
+// Versions: 2025.07.18~3f64c808, 2026.01.16~85922056
 /**
  * # Digest Functions
  *
@@ -60,40 +61,6 @@ export function sha1(str) {};
  * sha256(123);               // Returns null
  */
 export function sha256(str) {};
-
-/**
- * Calculates the 64-bit FNV-1a non-cryptographic hash of string and returns
- * that hash.
- *
- * Returns `null` if a non-string argument is given.
- *
- * @function module:digest#fnv1a64
- *
- * @param {string} str
- * The string to hash.
- *
- * @returns {?string}
- *
- * @example
- * fnv1a64("This is a test");  // Returns "25f0b040ca8b4ce0"
- * fnv1a64(123);               // Returns null
- */
-export function fnv1a64(str) {};
-
-/**
- * Calculates the 64-bit FNV-1a non-cryptographic hash of a given file and
- * returns that hash.
- *
- * Returns `null` if an error occurred.
- *
- * @function module:digest#fnv1a64_file
- *
- * @param {string} path
- * The path to the file.
- *
- * @returns {?string}
- */
-export function fnv1a64_file(path) {};
 
 /**
  * Calculates the MD2 hash of string and returns that hash.

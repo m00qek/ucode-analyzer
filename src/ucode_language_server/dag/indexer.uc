@@ -287,6 +287,20 @@ export function resolveModule(specifier, libraryPaths, workspaceDir) {
 
 // Return the parsed JSDoc for the first /** */ comment in the file, if it has
 // a description. This is the module-level doc (e.g. @module utest.assert).
+// Extract the ordered version list from a "// Versions: v1, v2, ..." header comment.
+// Returns an array of trimmed version strings, or null if the comment is absent.
+export function extractVersions(text) {
+	let head = substr(text, 0, 512);
+	let m = match(head, /\/\/ Versions: ([^\n]+)/);
+	if (!m) return null;
+	let parts = [];
+	for (let v in split(m[1], /,\s*/)) {
+		let t = trim(v);
+		if (length(t) > 0) push(parts, t);
+	}
+	return length(parts) > 0 ? parts : null;
+};
+
 export function extractModuleDoc(text, tree) {
 	let root = ts.rootNode(tree);
 	let children = ts.namedChildren(root);
@@ -294,7 +308,7 @@ export function extractModuleDoc(text, tree) {
 		let c = children[i];
 		if (ts.nodeType(c) !== 'comment') break;
 		let txt = ts.text(c, text);
-		if (substr(txt, 0, 3) !== '/**') break;
+		if (substr(txt, 0, 3) !== '/**') continue;
 		let doc = parseDoc(txt);
 		if (doc.description) return doc;
 		break;

@@ -1,4 +1,5 @@
-// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
+// Source: https://github.com/jow-/ucode
+// Versions: 2026.01.16~85922056
 /**
  * # I/O Operations
  *
@@ -76,6 +77,42 @@
  * print(io.error(), "\n");
  */
 export function error() {};
+
+/** @type {int} */ export let O_RDONLY;
+/** @type {int} */ export let O_WRONLY;
+/** @type {int} */ export let O_RDWR;
+/** @type {int} */ export let O_CREAT;
+/** @type {int} */ export let O_EXCL;
+/** @type {int} */ export let O_TRUNC;
+/** @type {int} */ export let O_APPEND;
+/** @type {int} */ export let O_NONBLOCK;
+/** @type {int} */ export let O_NOCTTY;
+/** @type {int} */ export let O_SYNC;
+/** @type {int} */ export let O_CLOEXEC;
+/** @type {int} */ export let O_DIRECTORY;
+/** @type {int} */ export let O_NOFOLLOW;
+/** @type {int} */ export let SEEK_SET;
+/** @type {int} */ export let SEEK_CUR;
+/** @type {int} */ export let SEEK_END;
+/** @type {int} */ export let F_DUPFD;
+/** @type {int} */ export let F_DUPFD_CLOEXEC;
+/** @type {int} */ export let F_GETFD;
+/** @type {int} */ export let F_SETFD;
+/** @type {int} */ export let F_GETFL;
+/** @type {int} */ export let F_SETFL;
+/** @type {int} */ export let F_GETLK;
+/** @type {int} */ export let F_SETLK;
+/** @type {int} */ export let F_SETLKW;
+/** @type {int} */ export let F_GETOWN;
+/** @type {int} */ export let F_SETOWN;
+/** @type {int} */ export let FD_CLOEXEC;
+/** @type {int} */ export let TCSANOW;
+/** @type {int} */ export let TCSADRAIN;
+/** @type {int} */ export let TCSAFLUSH;
+/** @type {int} */ export let IOC_DIR_NONE;
+/** @type {int} */ export let IOC_DIR_READ;
+/** @type {int} */ export let IOC_DIR_WRITE;
+/** @type {int} */ export let IOC_DIR_RW;
 
 /**
  * Gets the name of the pseudo-terminal slave.

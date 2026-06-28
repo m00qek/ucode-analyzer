@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
-import { extractExports, extractImports, extractModuleDoc, resolveModule } from 'ucode_language_server.dag.indexer';
+import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'ucode_language_server.dag.indexer';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -270,5 +270,38 @@ describe('indexer.extractModuleDoc', () => {
 	it('returns null when the first comment is a line comment', () => {
 		let text = '// not a jsdoc\nexport function foo() {}';
 		assert.match(null, extractModuleDoc(text, parse(text)));
+	});
+});
+
+describe('indexer.extractVersions', () => {
+	it('parses a single version', () => {
+		let text = '// Source: https://github.com/jow-/ucode\n// Versions: 2026.01.16~85922056\n';
+		assert.match(['2026.01.16~85922056'], extractVersions(text));
+	});
+
+	it('parses multiple comma-separated versions', () => {
+		let text = '// Source: https://example.com\n// Versions: 2025.07.18~3f64c808, 2026.01.16~85922056\n';
+		assert.match(['2025.07.18~3f64c808', '2026.01.16~85922056'], extractVersions(text));
+	});
+
+	it('trims whitespace around each version token', () => {
+		let text = '// Versions:  v1 ,  v2 ,  v3 \n';
+		assert.match(['v1', 'v2', 'v3'], extractVersions(text));
+	});
+
+	it('returns null when no Versions comment is present', () => {
+		let text = '// Source: https://example.com\n/** @module foo */\nexport function bar() {};\n';
+		assert.match(null, extractVersions(text));
+	});
+
+	it('returns null for empty file', () => {
+		assert.match(null, extractVersions(''));
+	});
+
+	it('only looks in first 512 bytes', () => {
+		let padding = '';
+		for (let i = 0; i < 513; i++) padding += 'x';
+		let text = padding + '\n// Versions: 2026.01.16~85922056\n';
+		assert.match(null, extractVersions(text));
 	});
 });

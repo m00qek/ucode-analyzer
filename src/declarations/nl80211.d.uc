@@ -1,4 +1,5 @@
-// Source: https://github.com/jow-/ucode @ fecacb8188c6a4f38d97434160b979d73e898b24
+// Source: https://github.com/jow-/ucode
+// Versions: 2025.07.18~3f64c808, 2026.01.16~85922056
 /**
  * # Wireless Netlink
  *
@@ -298,6 +299,15 @@
  *     print(`failed to get station info: ${error()}\n`);
  */
 export function error() {};
+
+/**
+ * Object containing all nl80211 command IDs, Netlink message flags,
+ * interface type values, scan flags, BSS status values, and HWSIM command
+ * IDs as integer constants.
+ *
+ * @name module:nl80211.const
+ * @type {object}
+ */
 
 /**
  * Sends a Generic Netlink message to the kernel nl80211 subsystem and returns

@@ -1,3 +1,5 @@
+// Source: https://github.com/jow-/ucode
+// Versions: 2025.07.18~3f64c808, 2026.01.16~85922056
 /**
  * # Filesystem Access
  *
@@ -657,6 +659,7 @@ export function fdopen(fd, mode) {};
  * Returns `null` on error.
  *
  * @function module:fs#dup2
+ * @since 2026.01.16~85922056
  *
  * @param {int} oldfd
  * The file descriptor to duplicate.
@@ -842,34 +845,6 @@ export function stat(path) {};
  * const dirInfo = lstat('path/to/directory');
  */
 export function lstat(path) {};
-
-/**
- * Query filesystem statistics for a given pathname.
- *
- * The returned object mirrors the members of `struct statvfs`.
- * Convenience properties `freesize` and `totalsize` are added,
- * which are calculated as:
- * - `frsize * bfree` to provide the free space in bytes and
- * - `frsize * blocks` to provide the total size of the filesystem.
- *
- * On Linux an additional `type` field (magic number from `statfs`) is
- * provided if the call succeeds.
- *
- * Returns `null` on failure (and sets `fs.last_error`).
- *
- * @function module:fs#statvfs
- *
- * @param {string} path
- * The path to the directory or file with which to query the filesystem.
- *
- * @returns {?StatVFSResult}
- *
- * @example
- * // Get filesystem statistics for a path
- * const stats = statvfs('path/to/directory');
- * print(stats.bsize); // file system block size
- */
-export function statvfs(path) {};
 
 /**
  * Creates a new directory.
@@ -1225,6 +1200,7 @@ export function mkstemp(template) {};
  * inaccessible directory.
  *
  * @function module:fs#mkdtemp
+ * @since 2026.01.16~85922056
  *
  * @param {string} [template="/tmp/XXXXXX"]
  * The path template to use when forming the temporary directory name.
@@ -1394,4 +1370,60 @@ export function realpath(path) {};
  * print(pipeHandles[0].read("line"));
  */
 export function pipe() {};
+
+/**
+ * Pre-opened file handle for standard input (file descriptor 0).
+ *
+ * @name module:fs.stdin
+ * @returns {FsFile}
+ */
+export let stdin;
+
+/**
+ * Pre-opened file handle for standard output (file descriptor 1).
+ *
+ * @name module:fs.stdout
+ * @returns {FsFile}
+ */
+export let stdout;
+
+/**
+ * Pre-opened file handle for standard error (file descriptor 2).
+ *
+ * @name module:fs.stderr
+ * @returns {FsFile}
+ */
+export let stderr;
+
+/**
+ * Ioctl direction constant: no data is transferred between userspace and kernel.
+ *
+ * @name module:fs.IOC_DIR_NONE
+ * @returns {int}
+ */
+export let IOC_DIR_NONE = 0;
+
+/**
+ * Ioctl direction constant: kernel writes data into userspace buffer.
+ *
+ * @name module:fs.IOC_DIR_READ
+ * @returns {int}
+ */
+export let IOC_DIR_READ = 1;
+
+/**
+ * Ioctl direction constant: userspace writes data into kernel buffer.
+ *
+ * @name module:fs.IOC_DIR_WRITE
+ * @returns {int}
+ */
+export let IOC_DIR_WRITE = 2;
+
+/**
+ * Ioctl direction constant: bidirectional data transfer between userspace and kernel.
+ *
+ * @name module:fs.IOC_DIR_RW
+ * @returns {int}
+ */
+export let IOC_DIR_RW = 3;
 

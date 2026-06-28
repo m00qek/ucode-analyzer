@@ -6,6 +6,7 @@ import { typeToString } from 'ucode_language_server.types.doc_parser';
 import * as dag from 'ucode_language_server.dag.dag';
 import * as templates from 'ucode_language_server.templates';
 import { resolveDoc } from 'ucode_language_server.doc_resolver';
+import * as platform from 'ucode_language_server.platform';
 
 function nodeAtOffset(node, offset) {
 	let count = ts.namedChildCount(node);
@@ -52,8 +53,8 @@ function buildHoverCtx(label, type, doc) {
 				};
 			})
 			: [];
-		ctx.returns = type.returns ? {
-			typeStr: typeToString(type.returns),
+		ctx.returns = type['return'] ? {
+			typeStr: typeToString(type['return']),
 			description: cleanDesc(doc?.returns?.description),
 		} : null;
 		// Pre-built declaration-form signature for the code fence.
@@ -101,9 +102,14 @@ export function hover(doc, position, config) {
 
 	let label = ts.text(node, doc.text);
 
-	let expDoc = resolveDoc(doc.uri, node, doc.text, scope);
+	let resolved = resolveDoc(doc.uri, node, doc.text, scope);
+	let expDoc = resolved.doc;
+	let modUri = resolved.modUri;
 
 	let ctx = buildHoverCtx(label, type, expDoc);
+	ctx.since = expDoc?.since ?? null;
+	if (modUri && ctx.since)
+		ctx.unavailable = !platform.symbolAvailable(modUri, ctx.since);
 
 	let templateName = 'hover/' + (
 		type.kind === 'function' ? 'function' :
