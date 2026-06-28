@@ -145,3 +145,56 @@ describe('hover — via templates (selfSrcDir set)', () => {
 		assert.match(true, index(result.contents.value, 'int') >= 0);
 	});
 });
+
+describe('hover — parameter declaration site', () => {
+	it('shows type and description from @param JSDoc when cursor is on the parameter', () => {
+		// @param {int} x — the multiplier
+		// function double(x) {}  ← cursor on 'x' at col 16
+		let text = "/**\n * @param {int} x — the multiplier\n */\nfunction double(x) {}";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		let result = hover(doc, { line: 3, character: 16 }, _full_config);
+
+		assert.match('object', type(result));
+		assert.match(true, index(result.contents.value, 'x') >= 0);
+		assert.match(true, index(result.contents.value, 'int') >= 0);
+		assert.match(true, index(result.contents.value, 'multiplier') >= 0);
+	});
+
+	it('returns null when cursor is on a parameter with no JSDoc', () => {
+		let text = "function noop(x) {}";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		// cursor on 'x' at col 14
+		let result = hover(doc, { line: 0, character: 14 }, _full_config);
+
+		assert.match(null, result);
+	});
+
+	it('returns null when cursor is on a parameter not listed in @param tags', () => {
+		let text = "/** @param {int} a — first */\nfunction add(a, b) {}";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		// cursor on 'b' at line 1 col 16
+		let result = hover(doc, { line: 1, character: 16 }, _full_config);
+
+		assert.match(null, result);
+	});
+
+	it('shows type from @param for an exported function', () => {
+		let text = "/** @param {string} name — greeting target */\nexport function greet(name) {}";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		// cursor on 'name' at line 1 col 22
+		let result = hover(doc, { line: 1, character: 22 }, _full_config);
+
+		assert.match('object', type(result));
+		assert.match(true, index(result.contents.value, 'name') >= 0);
+		assert.match(true, index(result.contents.value, 'string') >= 0);
+		assert.match(true, index(result.contents.value, 'greeting') >= 0);
+	});
+});

@@ -1,8 +1,8 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, nodeAtOffset } from 'language_server.positions';
+import { positionToOffset, nodeAtOffset, docBefore } from 'language_server.positions';
 import { inferNode } from 'language_server.types.inferrer';
 import { buildScope } from 'language_server.types.scope_builder';
-import { typeToString } from 'language_server.types.doc_parser';
+import { typeToString, parseDoc } from 'language_server.types.doc_parser';
 import * as dag from 'language_server.dag.dag';
 import * as templates from 'language_server.templates';
 import { resolveDoc } from 'language_server.doc_resolver';
@@ -85,6 +85,40 @@ export function hover(doc, position, config) {
 	if (offset >= ts.endByte(root)) return null;
 
 	let node = nodeAtOffset(root, offset);
+
+	// Cursor on a parameter at its declaration site (not a reference inside the body).
+	// inferNode returns UNKNOWN here because the param is not yet in scope,
+	// so we handle it specially by looking up the @param in the function's JSDoc.
+	if (ts.nodeType(node) === 'identifier') {
+		let paramParent = ts.parent(node);
+		if (paramParent && ts.nodeType(paramParent) === 'formal_parameters') {
+			let paramName = ts.text(node, doc.text);
+			let funcNode = ts.parent(paramParent);
+			if (funcNode) {
+				let checkNode = funcNode;
+				let checkParent = ts.parent(funcNode) ?? root;
+				if (ts.nodeType(checkParent) === 'export_statement') {
+					checkNode = checkParent;
+					checkParent = ts.parent(checkNode) ?? root;
+				}
+				let docText = docBefore(checkNode, checkParent, doc.text);
+				if (docText) {
+					let funcDoc = parseDoc(docText);
+					for (let p in (funcDoc?.params ?? [])) {
+						if (p.name !== paramName) continue;
+						let paramType = p.type ?? { kind: 'unknown' };
+						let ctx = buildHoverCtx(paramName, paramType, { description: cleanDesc(p.description), examples: [] });
+						let md = templates.renderTemplate('hover/default', ctx, config ?? {});
+						if (md === null)
+							md = sprintf('```ucode\n%s: %s\n```', paramName, typeToString(paramType));
+						return { contents: { kind: 'markdown', value: md } };
+					}
+				}
+			}
+			return null;
+		}
+	}
+
 	let scope = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(node));
 	let type = inferNode(node, doc.text, doc.uri, scope, 0);
 
