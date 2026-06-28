@@ -326,8 +326,9 @@ function inferUnary(node, source, uri, scope, depth) {
 
 function inferBinary(node, source, uri, scope, depth) {
 	let op = ts.nodeType(ts.child(node, 1));
-	if (op === '<'  || op === '>'  || op === '<=' || op === '>=' ||
-	    op === '==' || op === '!=' || op === '&&' || op === '||')
+	if (op === '<'   || op === '>'   || op === '<=' || op === '>=' ||
+	    op === '=='  || op === '!='  || op === '===' || op === '!=='  ||
+	    op === '&&' || op === '||')
 		return BOOL;
 	let left  = ts.namedChild(node, 0);
 	let right = ts.namedChild(node, 1);

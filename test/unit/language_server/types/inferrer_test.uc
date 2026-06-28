@@ -88,6 +88,14 @@ describe('inferrer — binary expressions', () => {
 		assert.match(prim('boolean'), infer('let x = 1 == 2;'));
 	});
 
+	it('=== yields boolean', () => {
+		assert.match(prim('boolean'), infer('let x = 1 === 2;'));
+	});
+
+	it('!== yields boolean', () => {
+		assert.match(prim('boolean'), infer('let x = 1 !== 2;'));
+	});
+
 	it('< yields boolean', () => {
 		assert.match(prim('boolean'), infer('let x = 1 < 2;'));
 	});
