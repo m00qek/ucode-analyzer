@@ -653,24 +653,24 @@ function addParamScope(fn, source, uri, scope) {
 	}
 }
 
-// Build a scope for the given file at targetOffset.
+// Build a scope chain for the given file at targetOffset.
 //
-// Strategy (outermost first so inner names shadow outer ones):
-//   1. importScope   — named imports and namespace aliases
-//   2. processBlock for the root program node (top-level lets/fns)
-//   3. Walk enclosing statement_blocks outermost-first. For each block:
+// Each nesting level creates a child scope via makeScope(parent), so inner
+// names shadow outer ones structurally rather than by overwrite order:
+//   1. importScope   — named imports and namespace aliases (root of chain)
+//   2. makeScope     — top-level lets/fns (shadows imports)
+//   3. For each enclosing statement_block outermost-first, a new child scope:
 //        a. If the block is the body of the next enclosing function, run
-//           addParamScope for that function first (so params shadow block lets
-//           from outer scopes, and callback inference sees let bindings from
-//           non-function enclosing blocks like `if` bodies).
-//        b. addForInVar — loop variable when the block is a for-in body
+//           addParamScope first (params shadow block-level lets from outer scopes).
+//        b. addForInVar / addForVar / addCatchVar — implicit loop/catch bindings
 //        c. processBlock — declarations inside that block up to targetOffset
-//   4. Any remaining enclosing functions (arrow fns with expression bodies)
-//      get addParamScope at the end.
+//   4. Any remaining enclosing functions (arrow fns with expression bodies, which
+//      have no statement_block) each get their own child scope with addParamScope.
 export function buildScope(uri, source, tree, targetOffset) {
 	let scope = importScope(uri);
 	let root = ts.rootNode(tree);
 
+	scope = makeScope(scope);
 	processBlock(ts.namedChildren(root), source, uri, scope, targetOffset);
 
 	let fns    = enclosingFunctions(root, targetOffset);
@@ -679,6 +679,7 @@ export function buildScope(uri, source, tree, targetOffset) {
 
 	for (let bi = 0; bi < length(blocks); bi++) {
 		let block = blocks[bi];
+		scope = makeScope(scope);
 		// If this block is the body of the next enclosing function, add its
 		// parameters before processing the block's own declarations.
 		if (fi < length(fns)) {
@@ -696,8 +697,10 @@ export function buildScope(uri, source, tree, targetOffset) {
 
 	// Arrow functions with expression bodies have no statement_block, so their
 	// body never appears in enclosingBlocks — handle them here.
-	for (; fi < length(fns); fi++)
+	for (; fi < length(fns); fi++) {
+		scope = makeScope(scope);
 		addParamScope(fns[fi], source, uri, scope);
+	}
 
 	return scope;
 };

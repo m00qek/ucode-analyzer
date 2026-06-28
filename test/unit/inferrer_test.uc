@@ -343,7 +343,7 @@ describe('inferrer — buildScope: export function', () => {
 		dag.add(URI, text, tree);
 		let scope = buildScope(URI, text, tree, offset);
 
-		assert.match(true, scope.bindings['tag'] !== null);
+		assert.match(true, scopeGet(scope, 'tag') !== null);
 		assert.match(prim('string'), scope.bindings['r']);
 	});
 });
@@ -360,7 +360,7 @@ describe('inferrer — buildScope: namespace import alias', () => {
 		dag.add(URI, text, tree);
 		let scope = buildScope(URI, text, tree, offset);
 
-		let t = scope.bindings['ts'];
+		let t = scopeGet(scope, 'ts');
 		assert.match(true, t !== null);
 		assert.match('module', t.kind);
 		assert.match('tree_sitter', t.path);
@@ -1000,8 +1000,8 @@ describe('inferrer — importScope: renamed imports', () => {
 		dag.add(URI, text, tree);
 		let offset = length(text) - 1;  // at 'p'
 		let scope = buildScope(URI, text, tree, offset);
-		assert.match(true, 'p' in scope.bindings);
-		assert.match(null, scope.bindings['parse'] ?? null);
+		assert.match(true, scopeGet(scope, 'p') !== null);
+		assert.match(null, scopeGet(scope, 'parse'));
 	});
 
 	it('renamed import carries the resolved type from the source module', () => {
@@ -1011,7 +1011,7 @@ describe('inferrer — importScope: renamed imports', () => {
 		let offset = length(text) - 1;
 		let scope = buildScope(URI, text, tree, offset);
 		// 'parse' is a function export — the renamed binding should have function kind
-		assert.match('function', scope.bindings['p'].kind);
+		assert.match('function', scopeGet(scope, 'p').kind);
 	});
 
 	it('unrenamed import is still available under its original name', () => {
@@ -1020,8 +1020,8 @@ describe('inferrer — importScope: renamed imports', () => {
 		dag.add(URI, text, tree);
 		let offset = length(text) - 1;
 		let scope = buildScope(URI, text, tree, offset);
-		assert.match(true, 'parse' in scope.bindings);
-		assert.match('function', scope.bindings['parse'].kind);
+		assert.match(true, scopeGet(scope, 'parse') !== null);
+		assert.match('function', scopeGet(scope, 'parse').kind);
 	});
 });
 
@@ -1048,9 +1048,10 @@ describe('inferrer — importScope: object-literal export typed as record', () =
 		dag.add(URI, importText, tree);
 		let scope = buildScope(URI, importText, tree, length(importText) - 1);
 		mock.global.unpatch('fs');
-		assert.match('record', scope.bindings['ns'].kind);
-		assert.match('greet', scope.bindings['ns'].fields[0].name);
-		assert.match('function', scope.bindings['ns'].fields[0].type.kind);
+		let ns = scopeGet(scope, 'ns');
+		assert.match('record', ns.kind);
+		assert.match('greet', ns.fields[0].name);
+		assert.match('function', ns.fields[0].type.kind);
 	});
 });
 
@@ -1081,8 +1082,9 @@ describe('inferrer — member access on record-typed expression (nested object e
 		mock.global.unpatch('fs');
 
 		// api → record; api.sub → record; api.sub.go → function
-		assert.match('record', scope.bindings['api'].kind);
-		let subField = scope.bindings['api'].fields[0];
+		let api = scopeGet(scope, 'api');
+		assert.match('record', api.kind);
+		let subField = api.fields[0];
 		assert.match('sub', subField.name);
 		assert.match('record', subField.type.kind);
 		let goField = subField.type.fields[0];
@@ -1103,7 +1105,7 @@ describe('inferrer — member access on record-typed expression (nested object e
 		let scope = buildScope(URI, text, tree, length(text) - 1);
 		mock.global.unpatch('fs');
 
-		let field = scope.bindings['api'].fields[0];
+		let field = scopeGet(scope, 'api').fields[0];
 		assert.match('greet', field.name);
 		assert.match(true, field.doc !== null);
 		assert.match('s', field.doc.params[0].name);
