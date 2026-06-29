@@ -119,6 +119,61 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(1, notif.params.diagnostics[0].severity);
 	});
 
+	it('reports error when calling a string variable', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = 'hello';\nx();\nx;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		let diags = filter(notif.params.diagnostics, (d) => index(d.message, 'not a function') >= 0);
+		assert.match(true, length(diags) >= 1);
+		assert.match(1, diags[0].severity);
+	});
+
+	it('reports error for member access on a null variable', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = null;\nlet y = x.foo;\ny;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		let diags = filter(notif.params.diagnostics, (d) => index(d.message, 'may be null') >= 0);
+		assert.match(true, length(diags) >= 1);
+		assert.match(1, diags[0].severity);
+	});
+
+	it('suppresses null member access warning inside if (x) { } guard body', () => {
+		// x.foo is only reached when x is non-null; no warning expected.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = null;\nif (x) {\n  let y = x.foo;\n  y;\n}\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		let nullDiags = filter(notif.params.diagnostics, (d) => index(d.message, 'may be null') >= 0);
+		assert.match(0, length(nullDiags));
+	});
+
+	it('suppresses null warning after if (!x) return guard clause', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = null;\nif (!x) return;\nlet y = x.foo;\ny;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		let nullDiags = filter(notif.params.diagnostics, (d) => index(d.message, 'may be null') >= 0);
+		assert.match(0, length(nullDiags));
+	});
+
 	it('re-sends diagnostics on didChange', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
