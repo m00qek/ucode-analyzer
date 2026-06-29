@@ -185,6 +185,34 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(true, index(val, 'match') >= 0);
 	});
 
+	it('consecutive hover requests on the same position return consistent results without a file change', () => {
+		// Regression guard: scope-ID cache isolation must not break same-scope caching.
+		// Two requests hitting the same node with the same scope should both return
+		// the correct type (not UNKNOWN from a stale cache miss or a wrong hit).
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let n = 42;\nn;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+		let resp1 = lsp.receive(proc);
+
+		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+		let resp2 = lsp.receive(proc);
+
+		assert.match(1, resp1.id);
+		assert.match(2, resp2.id);
+		assert.match(true, resp1.result !== null);
+		assert.match(true, resp2.result !== null);
+		assert.match(true, index(resp1.result.contents.value, 'int') >= 0);
+		assert.match(true, index(resp2.result.contents.value, 'int') >= 0);
+	});
+
 	it('named import record member: hover shows function JSDoc description', () => {
 		// Cursor on 'match' in 'assert.match' — should show JSDoc for that specific method.
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {

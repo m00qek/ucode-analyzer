@@ -1400,3 +1400,46 @@ describe('inferrer — object with string-literal keys', () => {
 	});
 });
 
+describe('inferrer — scope-ID cache isolation', () => {
+	// The same AST node inferred under two different scope objects must produce
+	// independent results; the second inference must not return the first's
+	// cached value just because the node is at the same byte offset.
+
+	it('same identifier node with two different scope bindings returns scope-specific type', () => {
+		// 'let y = x;' — the 'x' node on the right is the subject.
+		let text = 'let y = x;';
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let stmt = ts.namedChild(root, 0);   // lexical_declaration
+		let decl = ts.namedChild(stmt, 0);   // variable_declarator
+		let xNode = ts.childByField(decl, 'value');  // 'x' identifier
+
+		let s1 = makeScope(null);
+		scopeSet(s1, 'x', prim('int'));
+
+		let s2 = makeScope(null);
+		scopeSet(s2, 'x', prim('string'));
+
+		// Infer with s1 first so the result is cached under s1.id.
+		assert.match(prim('int'), inferNode(xNode, text, URI, s1, 0));
+
+		// Infer with s2: must NOT return the s1 cached value.
+		assert.match(prim('string'), inferNode(xNode, text, URI, s2, 0));
+	});
+
+	it('same identifier node inferred twice with the same scope returns cached result', () => {
+		let text = 'let y = x;';
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let stmt = ts.namedChild(root, 0);
+		let decl = ts.namedChild(stmt, 0);
+		let xNode = ts.childByField(decl, 'value');
+
+		let s = makeScope(null);
+		scopeSet(s, 'x', prim('bool'));
+
+		assert.match(prim('bool'), inferNode(xNode, text, URI, s, 0));
+		assert.match(prim('bool'), inferNode(xNode, text, URI, s, 0));
+	});
+});
+

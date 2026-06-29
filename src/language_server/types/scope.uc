@@ -1,5 +1,7 @@
+let _nextId = 0;
+
 export function makeScope(parent) {
-	return { bindings: {}, parent: parent ?? null };
+	return { id: _nextId++, bindings: {}, parent: parent ?? null };
 };
 
 export function scopeSet(scope, name, type) {

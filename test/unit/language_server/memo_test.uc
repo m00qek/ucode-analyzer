@@ -13,47 +13,59 @@ beforeEach(() => {
 
 describe('memo', () => {
 	it('returns null on miss', () => {
-		assert.match(null, memoGet(URI_A, 0, 'identifier'));
+		assert.match(null, memoGet(URI_A, 0, 'identifier', 1));
 	});
 
 	it('returns cached value on hit', () => {
-		memoSet(URI_A, 10, 'identifier', INT);
-		assert.match(INT, memoGet(URI_A, 10, 'identifier'));
+		memoSet(URI_A, 10, 'identifier', 1, INT);
+		assert.match(INT, memoGet(URI_A, 10, 'identifier', 1));
 	});
 
 	it('different offsets are independent', () => {
-		memoSet(URI_A, 10, 'identifier', INT);
-		memoSet(URI_A, 20, 'identifier', STR);
-		assert.match(INT, memoGet(URI_A, 10, 'identifier'));
-		assert.match(STR, memoGet(URI_A, 20, 'identifier'));
+		memoSet(URI_A, 10, 'identifier', 1, INT);
+		memoSet(URI_A, 20, 'identifier', 1, STR);
+		assert.match(INT, memoGet(URI_A, 10, 'identifier', 1));
+		assert.match(STR, memoGet(URI_A, 20, 'identifier', 1));
 	});
 
 	it('same offset different nodeTypes are independent', () => {
-		memoSet(URI_A, 5, 'identifier', INT);
-		memoSet(URI_A, 5, 'call_expression', STR);
-		assert.match(INT, memoGet(URI_A, 5, 'identifier'));
-		assert.match(STR, memoGet(URI_A, 5, 'call_expression'));
+		memoSet(URI_A, 5, 'identifier', 1, INT);
+		memoSet(URI_A, 5, 'call_expression', 1, STR);
+		assert.match(INT, memoGet(URI_A, 5, 'identifier', 1));
+		assert.match(STR, memoGet(URI_A, 5, 'call_expression', 1));
 	});
 
 	it('different URIs are independent', () => {
-		memoSet(URI_A, 5, 'identifier', INT);
-		memoSet(URI_B, 5, 'identifier', STR);
-		assert.match(INT, memoGet(URI_A, 5, 'identifier'));
-		assert.match(STR, memoGet(URI_B, 5, 'identifier'));
+		memoSet(URI_A, 5, 'identifier', 1, INT);
+		memoSet(URI_B, 5, 'identifier', 1, STR);
+		assert.match(INT, memoGet(URI_A, 5, 'identifier', 1));
+		assert.match(STR, memoGet(URI_B, 5, 'identifier', 1));
 	});
 
 	it('invalidateUri clears all offsets for that URI', () => {
-		memoSet(URI_A, 10, 'identifier', INT);
-		memoSet(URI_A, 20, 'identifier', STR);
+		memoSet(URI_A, 10, 'identifier', 1, INT);
+		memoSet(URI_A, 20, 'identifier', 1, STR);
 		invalidateUri(URI_A);
-		assert.match(null, memoGet(URI_A, 10, 'identifier'));
-		assert.match(null, memoGet(URI_A, 20, 'identifier'));
+		assert.match(null, memoGet(URI_A, 10, 'identifier', 1));
+		assert.match(null, memoGet(URI_A, 20, 'identifier', 1));
 	});
 
 	it('invalidateUri does not affect other URIs', () => {
-		memoSet(URI_A, 5, 'identifier', INT);
-		memoSet(URI_B, 5, 'identifier', STR);
+		memoSet(URI_A, 5, 'identifier', 1, INT);
+		memoSet(URI_B, 5, 'identifier', 1, STR);
 		invalidateUri(URI_A);
-		assert.match(STR, memoGet(URI_B, 5, 'identifier'));
+		assert.match(STR, memoGet(URI_B, 5, 'identifier', 1));
+	});
+
+	it('same offset same nodeType different scopeId: independent cache entries', () => {
+		memoSet(URI_A, 5, 'identifier', 10, INT);
+		memoSet(URI_A, 5, 'identifier', 20, STR);
+		assert.match(INT, memoGet(URI_A, 5, 'identifier', 10));
+		assert.match(STR, memoGet(URI_A, 5, 'identifier', 20));
+	});
+
+	it('same offset same nodeType unknown scopeId: cache miss', () => {
+		memoSet(URI_A, 5, 'identifier', 10, INT);
+		assert.match(null, memoGet(URI_A, 5, 'identifier', 99));
 	});
 });
