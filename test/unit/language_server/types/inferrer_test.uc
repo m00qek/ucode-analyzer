@@ -1443,3 +1443,58 @@ describe('inferrer — scope-ID cache isolation', () => {
 	});
 });
 
+describe('inferrer — buildScope flow sensitivity', () => {
+	// buildScope narrows identifier types inside if-consequent/alternate blocks
+	// based on the condition pattern.  We use `42 || null` as the initializer
+	// because the inferrer produces union[int, null] for that expression.
+
+	function scopeAt(text, offset) {
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+		return buildScope(URI, text, tree, offset);
+	}
+
+	it('x !== null in consequent: removes null from union type', () => {
+		// let x = 42 || null;  → union[int, null]
+		// if (x !== null) { x; }  ← offset inside block
+		let text = "let x = 42 || null;\nif (x !== null) {\n  x;\n}\n";
+		let offset = index(text, '  x;');
+		let scope = scopeAt(text, offset);
+		let t = scopeGet(scope, 'x');
+		assert.match('int', t.name ?? t.kind);
+	});
+
+	it('x !== null in alternate: narrows to null', () => {
+		let text = "let x = 42 || null;\nif (x !== null) {\n  x;\n} else {\n  x;\n}\n";
+		let offset = index(text, '} else {\n  x;') + length('} else {\n  ');
+		let scope = scopeAt(text, offset);
+		let t = scopeGet(scope, 'x');
+		assert.match('null', t.name);
+	});
+
+	it('x === null in consequent: narrows to null', () => {
+		let text = "let x = 42 || null;\nif (x === null) {\n  x;\n}\n";
+		let offset = index(text, '  x;');
+		let scope = scopeAt(text, offset);
+		let t = scopeGet(scope, 'x');
+		assert.match('null', t.name);
+	});
+
+	it('if (x) truthy check in consequent: removes null from union type', () => {
+		let text = "let x = 42 || null;\nif (x) {\n  x;\n}\n";
+		let offset = index(text, '  x;');
+		let scope = scopeAt(text, offset);
+		let t = scopeGet(scope, 'x');
+		assert.match('int', t.name ?? t.kind);
+	});
+
+	it('no narrowing outside the if block', () => {
+		let text = "let x = 42 || null;\nif (x !== null) {\n  x;\n}\nx;\n";
+		let offset = length(text) - length('x;\n') + 0;
+		let scope = scopeAt(text, offset);
+		let t = scopeGet(scope, 'x');
+		// Outside the if block, type is still the original union
+		assert.match('union', t.kind);
+	});
+});
+
