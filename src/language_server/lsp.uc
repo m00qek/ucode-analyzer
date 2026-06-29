@@ -11,6 +11,7 @@ import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.sign
 import { references as referencesDoc } from 'language_server.handlers.references';
 import { documentSymbols as documentSymbolsDoc } from 'language_server.handlers.document_symbols';
 import { workspaceSymbol as workspaceSymbolDoc } from 'language_server.handlers.workspace_symbol';
+import { inlayHints as inlayHintsDoc } from 'language_server.handlers.inlay_hints';
 import { rename as renameDoc } from 'language_server.handlers.rename';
 import { documentHighlight as documentHighlightDoc } from 'language_server.handlers.document_highlight';
 import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prepare_rename';
@@ -37,6 +38,7 @@ export function run(config) {
 					renameProvider: { prepareProvider: true },
 					codeActionProvider: { codeActionKinds: ['quickfix'] },
 					workspaceSymbolProvider: true,
+					inlayHintProvider: true,
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -174,6 +176,12 @@ export function run(config) {
 
 		'workspace/symbol': function(msg) {
 			protocol.respond(msg.id, workspaceSymbolDoc(msg.params.query));
+		},
+
+		'textDocument/inlayHint': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc ? inlayHintsDoc(doc, msg.params.range) : null);
 		},
 
 		'workspace/didChangeWatchedFiles': function(msg) {
