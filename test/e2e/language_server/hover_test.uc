@@ -213,6 +213,68 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(true, index(resp2.result.contents.value, 'int') >= 0);
 	});
 
+	it('namespace import: hover shows module description from header comment', () => {
+		// Fixtures with a plain /** description */ header expose the module doc
+		// through the hover/module template. @description tags are not parsed.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import * as hr from 'fixtures.hover_record';\nhr;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+
+		let resp = lsp.receive(proc);
+		let val = resp.result.contents.value;
+
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(val, 'Hover fixture') >= 0);
+	});
+
+	it('nested record member: hover shows record type with inner fields', () => {
+		// utils is an exported record; utils.ops is a nested object literal.
+		// Hovering on 'ops' should show a record type listing its members.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { utils } from 'fixtures.hover_record';\nutils.ops;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 6 },  // 'o' of 'ops' in 'utils.ops'
+		}});
+
+		let resp = lsp.receive(proc);
+		let val = resp.result.contents.value;
+
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(val, 'Members') >= 0);
+		assert.match(true, index(val, 'upper') >= 0);
+	});
+
+	it('nested record member function: hover shows JSDoc description of inner method', () => {
+		// utils.ops.upper is a function inside a nested object literal.
+		// Hovering on 'upper' should show its JSDoc description.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { utils } from 'fixtures.hover_record';\nutils.ops.upper;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 10 },  // 'u' of 'upper' in 'utils.ops.upper'
+		}});
+
+		let resp = lsp.receive(proc);
+		let val = resp.result.contents.value;
+
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(val, 'Converts the input') >= 0);
+		assert.match(true, index(val, 'Parameters') >= 0);
+	});
+
 	it('named import record member: hover shows function JSDoc description', () => {
 		// Cursor on 'match' in 'assert.match' — should show JSDoc for that specific method.
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
