@@ -188,6 +188,34 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(0, length(nullDiags));
 	});
 
+	it('reports deprecated hint for use of @deprecated imported symbol', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { oldFn } from 'fixtures.deprecated';\noldFn();\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		let depDiags = filter(notif.params.diagnostics, (d) => d.message === 'Deprecated');
+		assert.match(true, length(depDiags) >= 1);
+		assert.match(4, depDiags[0].severity);  // HINT
+		assert.match(true, index(depDiags[0].tags, 2) >= 0);  // TAG_DEPRECATED
+	});
+
+	it('does not report deprecated hint for non-deprecated imported symbol', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { newFn } from 'fixtures.deprecated';\nnewFn();\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		let depDiags = filter(notif.params.diagnostics, (d) => d.message === 'Deprecated');
+		assert.match(0, length(depDiags));
+	});
+
 	it('re-sends diagnostics on didChange', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
