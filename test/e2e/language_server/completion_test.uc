@@ -134,4 +134,22 @@ describe('textDocument/completion', () => {
 				assert.match(14, item.kind);
 		}
 	});
+
+	it('union of records: member completion offers fields from all branches', () => {
+		let text = "let x = true ? { alpha: 1 } : { beta: 2 };\nx.\n";
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 2 },
+		}});
+
+		let resp = lsp.receive(proc);
+		let labels = map(resp.result, (i) => i.label);
+
+		assert.match(1, resp.id);
+		assert.match(true, index(labels, 'alpha') >= 0);
+		assert.match(true, index(labels, 'beta') >= 0);
+	});
 });

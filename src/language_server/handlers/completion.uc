@@ -154,10 +154,24 @@ function exportsOfModule(resolvedUri) {
 }
 
 // Return completion items for all members of type.
-// Dispatches on kind: module → DAG exports, record → fields, ref → registry.
+// Dispatches on kind: module → DAG exports, record → fields, ref → registry,
+// union → merged fields from all record members (first definition wins).
 function membersOfType(type) {
 	if (!type || type.kind === 'unknown') return [];
 	if (type.kind === 'nullable') return membersOfType(type.inner);
+	if (type.kind === 'union') {
+		let seen = {};
+		let items = [];
+		for (let i = 0; i < length(type.members); i++) {
+			for (let item in membersOfType(type.members[i])) {
+				if (!seen[item.label]) {
+					seen[item.label] = true;
+					push(items, item);
+				}
+			}
+		}
+		return items;
+	}
 	if (type.kind === 'module') {
 		let modUri = dag.resolveSpecifier(type.path);
 		if (!modUri) return [];

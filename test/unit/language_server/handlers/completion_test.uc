@@ -180,6 +180,48 @@ describe('completion — member (cursor on property)', () => {
 		assert.match(false, index(labels, 'x') >= 0);
 	});
 
+	it('union of records: offers fields from all branches', () => {
+		// x = cond ? { a: 1 } : { b: 2 }  →  union[record{a}, record{b}]
+		let text = "let x = true ? { alpha: 1 } : { beta: 2 };\nx.a";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 1, character: 2 });
+		let labels = map(items, (i) => i.label);
+
+		assert.match(true, index(labels, 'alpha') >= 0);
+		assert.match(true, index(labels, 'beta') >= 0);
+	});
+
+	it('union of records: deduplicates fields present in multiple branches', () => {
+		// Both branches have 'shared'; result should contain it exactly once.
+		let text = "let x = true ? { shared: 1, a: 2 } : { shared: 3, b: 4 };\nx.s";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 1, character: 2 });
+		let labels = map(items, (i) => i.label);
+
+		let count = 0;
+		for (let l in labels) if (l === 'shared') count++;
+		assert.match(1, count);
+		assert.match(true, index(labels, 'a') >= 0);
+		assert.match(true, index(labels, 'b') >= 0);
+	});
+
+	it('union containing non-record members: still offers record fields', () => {
+		// null || { a: 1 }  →  union[null, record{a}]  (or nullable)
+		// Use explicit ternary to produce a union type.
+		let text = "let x = true ? null : { omega: 99 };\nx.o";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 1, character: 2 });
+		let labels = map(items, (i) => i.label);
+
+		assert.match(true, index(labels, 'omega') >= 0);
+	});
+
 	it('non-member position still returns general items', () => {
 		let text = "import * as ts from 'tree_sitter';\nlet x = 5;\n";
 		documents.open(URI, text, 1);
