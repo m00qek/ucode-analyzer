@@ -162,4 +162,47 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(true, index(val, 'y') >= 0);
 		assert.match(true, index(val, 'Members') >= 0);
 	});
+
+	it('named import record: hover shows JSDoc description and member list', () => {
+		// assert is a named import from utest whose type is a record.
+		// Its JSDoc says "Assertion utilities." and its members include match and throws.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { assert } from 'utest';\nassert;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+
+		let resp = lsp.receive(proc);
+		let val = resp.result.contents.value;
+
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(val, 'Assertion utilities') >= 0);
+		assert.match(true, index(val, 'Members') >= 0);
+		assert.match(true, index(val, 'match') >= 0);
+	});
+
+	it('named import record member: hover shows function JSDoc description', () => {
+		// Cursor on 'match' in 'assert.match' — should show JSDoc for that specific method.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { assert } from 'utest';\nassert.match;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 7 },  // 'm' of 'match' in 'assert.match'
+		}});
+
+		let resp = lsp.receive(proc);
+		let val = resp.result.contents.value;
+
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(val, 'Asserts that a value') >= 0);
+		assert.match(true, index(val, 'Parameters') >= 0);
+		assert.match(true, index(val, 'expected') >= 0);
+	});
 });
