@@ -108,6 +108,46 @@ describe('signatureHelp', () => {
 		assert.match(null, result.activeParameter);
 	});
 
+	it('parameter label offsets point to the correct substrings in the label', () => {
+		// Each params[i].label = [s, e] must satisfy substr(label, s, e-s) == the param text.
+		let text = "let f = (x, y) => x;\nf(1, 2);\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let result = signatureHelp(URI, documents.get(URI), { line: 1, character: 3 });
+
+		assert.match(true, result !== null);
+		let sig = result.signatures[0];
+		assert.match(2, length(sig.parameters));
+		for (let i = 0; i < length(sig.parameters); i++) {
+			let s = sig.parameters[i].label[0];
+			let e = sig.parameters[i].label[1];
+			assert.match(true, s >= 0 && e > s && e <= length(sig.label));
+			// The slice of the label must contain the param name.
+			let slice = substr(sig.label, s, e - s);
+			assert.match(true, index(slice, ['x', 'y'][i]) >= 0);
+		}
+	});
+
+	it('parameter label offsets are correct for typed parameters', () => {
+		// JSDoc annotated: label will be "greet(name: string)" — "name: string" at [6,18]
+		let src = "/**\n * @param {string} name\n */\nfunction greet(name) {}\ngreet('x');\n";
+		documents.open(URI, src, 1);
+		dag.add(URI, src, documents.get(URI).tree);
+
+		let result = signatureHelp(URI, documents.get(URI), { line: 4, character: 7 });
+
+		assert.match(true, result !== null);
+		let label = result.signatures[0].label;
+		let params = result.signatures[0].parameters;
+		assert.match(1, length(params));
+		// "name: string" starts after "greet(" (6 chars)
+		assert.match(6, params[0].label[0]);
+		assert.match(18, params[0].label[1]);
+		// verify the substring actually matches
+		assert.match('name: string', substr(label, params[0].label[0], params[0].label[1] - params[0].label[0]));
+	});
+
 	it('resolves generic T to the concrete type inferred from the first argument', () => {
 		// arrow functions in let bindings do not pick up JSDoc; function declarations do.
 		let text = [

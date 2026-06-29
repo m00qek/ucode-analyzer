@@ -36,6 +36,24 @@ function activeParam(argsNode, offset) {
 	return count;
 }
 
+// Count UTF-16 code units in a UTF-8 string, as required by the LSP spec for
+// label offset fields.  ASCII strings (the common case for identifiers and
+// type names) have length == UTF-16 length, but 4-byte code points (U+10000+)
+// consume two UTF-16 code units so we count them as 2.
+function utf16Len(s) {
+	let n = 0;
+	let i = 0;
+	let len = length(s);
+	while (i < len) {
+		let b = ord(substr(s, i, 1));
+		if (b < 0x80)      { n += 1; i += 1; }
+		else if (b < 0xE0) { n += 1; i += 2; }
+		else if (b < 0xF0) { n += 1; i += 3; }
+		else               { n += 2; i += 4; }
+	}
+	return n;
+}
+
 // Build the signature label and parameter ranges from a function type.
 // Returns { label, parameters: [{label: [start, end]}, ...] }.
 function buildSignature(name, fnType) {
@@ -50,10 +68,10 @@ function buildSignature(name, fnType) {
 	let label = name + '(' + join(', ', parts) + ')' + retStr;
 
 	let paramLabels = [];
-	let base = length(name) + 1;  // after '('
+	let base = utf16Len(name) + 1;  // after '('
 	for (let i = 0; i < length(parts); i++) {
 		let s = base;
-		let e = base + length(parts[i]);
+		let e = base + utf16Len(parts[i]);
 		push(paramLabels, { label: [s, e] });
 		base = e + 2;  // ', '
 	}
