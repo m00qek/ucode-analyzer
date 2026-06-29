@@ -1,8 +1,17 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, beforeEach, mock } from 'utest';
+import * as ts from 'tree_sitter';
 import * as documents from 'language_server.documents';
+import * as dag from 'language_server.dag.dag';
 import { rename } from 'language_server.handlers.rename';
 
-let URI = 'file:///test.uc';
+let _parser = ts.newParser(ts.ucode());
+function parse(text) { return ts.parse(_parser, text); }
+
+let _dagCfg = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
+
+let URI   = 'file:///test.uc';
+let URI_A = 'file:///app/src/a.uc';
+let URI_B = 'file:///app/src/b.uc';
 
 afterEach(() => documents.close(URI));
 
@@ -99,5 +108,95 @@ describe('rename — scope awareness', () => {
 		assert.match(2, length(edits));
 		for (let e in edits)
 			assert.match(true, e.range.start.line >= 2);
+	});
+});
+
+describe('cross-file rename', () => {
+	let TEXT_A         = "export function foo() { foo(); }\n";
+	let TEXT_B_NAMED   = "import { foo } from 'a';\nfoo();\n";
+	let TEXT_B_ALIASED = "import { foo as bar } from 'a';\nbar();\n";
+	let TEXT_B_NS      = "import * as a from 'a';\na.foo();\n";
+
+	beforeEach(() => {
+		dag.init(_dagCfg);
+		dag.remove(URI_A);
+		dag.remove(URI_B);
+	});
+
+	afterEach(() => {
+		documents.close(URI_A);
+		documents.close(URI_B);
+		dag.remove(URI_A);
+		dag.remove(URI_B);
+	});
+
+	function setupFiles(textA, textB) {
+		dag.add(URI_A, textA, parse(textA));
+		mock.global.patch('fs', { data: { '/app/src/a.uc': textA } });
+		dag.add(URI_B, textB, parse(textB));
+		mock.global.unpatch('fs');
+		documents.open(URI_A, textA, 1);
+		documents.open(URI_B, textB, 1);
+	}
+
+	it('named import: renames export in declaring file and import binding in importer', () => {
+		setupFiles(TEXT_A, TEXT_B_NAMED);
+
+		// cursor on 'foo' export in URI_A (line 0, char 16)
+		let edit = rename(URI_A, documents.get(URI_A), { line: 0, character: 16 }, 'bar');
+
+		// declaring file gets edits (export declaration + internal call)
+		assert.match(true, length(edit.changes[URI_A]) >= 1);
+		// importing file gets edits (import binding + call)
+		assert.match(true, type(edit.changes[URI_B]) === 'array');
+		assert.match(true, length(edit.changes[URI_B]) >= 1);
+		for (let e in edit.changes[URI_B])
+			assert.match('bar', e.newText);
+	});
+
+	it('named import: renaming from importer side updates both files', () => {
+		setupFiles(TEXT_A, TEXT_B_NAMED);
+
+		// cursor on 'foo' in 'foo();' on line 1 of URI_B
+		let edit = rename(URI_B, documents.get(URI_B), { line: 1, character: 0 }, 'baz');
+
+		assert.match(true, type(edit.changes[URI_A]) === 'array');
+		assert.match(true, length(edit.changes[URI_A]) >= 1);
+	});
+
+	it('aliased import: renaming local alias stays within the importing file', () => {
+		setupFiles(TEXT_A, TEXT_B_ALIASED);
+
+		// cursor on 'bar' in 'bar();' on line 1 of URI_B (local alias, not remote name)
+		let edit = rename(URI_B, documents.get(URI_B), { line: 1, character: 0 }, 'baz');
+
+		// should NOT produce edits in URI_A
+		assert.match(true, edit.changes[URI_A] === null || edit.changes[URI_A] === undefined);
+	});
+
+	it('aliased import: renaming export changes only the remote name in import specifier', () => {
+		setupFiles(TEXT_A, TEXT_B_ALIASED);
+
+		// cursor on 'foo' export in URI_A (line 0, char 16)
+		let edit = rename(URI_A, documents.get(URI_A), { line: 0, character: 16 }, 'baz');
+
+		// URI_B should have exactly 1 edit: the 'foo' in '{ foo as bar }', not 'bar' uses
+		let editsB = edit.changes[URI_B];
+		assert.match(true, type(editsB) === 'array');
+		assert.match(1, length(editsB));
+		assert.match('baz', editsB[0].newText);
+	});
+
+	it('namespace import: renaming export updates property accesses in namespace importer', () => {
+		setupFiles(TEXT_A, TEXT_B_NS);
+
+		// cursor on 'foo' export in URI_A (line 0, char 16)
+		let edit = rename(URI_A, documents.get(URI_A), { line: 0, character: 16 }, 'qux');
+
+		// URI_B uses 'a.foo()' — should get an edit on the 'foo' property
+		let editsB = edit.changes[URI_B];
+		assert.match(true, type(editsB) === 'array');
+		assert.match(true, length(editsB) >= 1);
+		assert.match('qux', editsB[0].newText);
 	});
 });

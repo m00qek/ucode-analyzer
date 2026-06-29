@@ -272,6 +272,28 @@ function identifierAt(node, offset) {
 	return result;
 }
 
+// Return the anchor (declaration site) information for the identifier at
+// cursorOffset, or null if the offset does not land on an identifier.
+// { targetName, anchorByte, anchorNode }:
+//   anchorByte  — declaration byte-offset (-1 when the name is unresolved/global)
+//   anchorNode  — the identifier ts-node at anchorByte, or null
+export function anchorOf(root, source, cursorOffset) {
+	let cursorNode = identifierAt(root, cursorOffset);
+	if (!cursorNode) return null;
+	let targetName = ts.text(cursorNode, source);
+	let cursorStart = ts.startByte(cursorNode);
+	let all = [];
+	walk(root, makeScope(null), source, targetName, all);
+	for (let i = 0; i < length(all); i++) {
+		if (ts.startByte(all[i].node) === cursorStart) {
+			let anchorByte = all[i].declOffset;
+			let anchorNode = (anchorByte >= 0) ? identifierAt(root, anchorByte) : null;
+			return { targetName, anchorByte, anchorNode };
+		}
+	}
+	return null;
+};
+
 // Return all identifier nodes in the file that refer to the same binding as the
 // identifier at cursorOffset.  Identifiers in different scopes that happen to
 // share a name are excluded.

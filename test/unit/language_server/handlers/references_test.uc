@@ -1,8 +1,17 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, beforeEach, mock } from 'utest';
+import * as ts from 'tree_sitter';
 import * as documents from 'language_server.documents';
+import * as dag from 'language_server.dag.dag';
 import { references } from 'language_server.handlers.references';
 
-let URI = 'file:///test.uc';
+let _parser = ts.newParser(ts.ucode());
+function parse(text) { return ts.parse(_parser, text); }
+
+let _dagCfg = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
+
+let URI   = 'file:///test.uc';
+let URI_A = 'file:///app/src/a.uc';
+let URI_B = 'file:///app/src/b.uc';
 
 afterEach(() => documents.close(URI));
 
@@ -157,5 +166,78 @@ describe('references — scope awareness', () => {
 		// none of the ref-only locations should be on the declaration line
 		for (let l in refs)
 			assert.match(true, l.range.start.line > 0);
+	});
+});
+
+describe('cross-file references', () => {
+	let TEXT_A         = "export function foo() { foo(); }\n";
+	let TEXT_B_NAMED   = "import { foo } from 'a';\nfoo();\n";
+	let TEXT_B_ALIASED = "import { foo as bar } from 'a';\nbar();\n";
+	let TEXT_B_NS      = "import * as a from 'a';\na.foo();\n";
+
+	beforeEach(() => {
+		dag.init(_dagCfg);
+		dag.remove(URI_A);
+		dag.remove(URI_B);
+	});
+
+	afterEach(() => {
+		documents.close(URI_A);
+		documents.close(URI_B);
+		dag.remove(URI_A);
+		dag.remove(URI_B);
+	});
+
+	function setupFiles(textA, textB) {
+		dag.add(URI_A, textA, parse(textA));
+		mock.global.patch('fs', { data: { '/app/src/a.uc': textA } });
+		dag.add(URI_B, textB, parse(textB));
+		mock.global.unpatch('fs');
+		documents.open(URI_A, textA, 1);
+		documents.open(URI_B, textB, 1);
+	}
+
+	it('named import: cursor in importing file returns locations in both files', () => {
+		setupFiles(TEXT_A, TEXT_B_NAMED);
+
+		// cursor on 'foo' in 'foo();' on line 1 of URI_B
+		let locs = references(URI_B, documents.get(URI_B), { line: 1, character: 0 });
+
+		let inA = filter(locs, (l) => l.uri === URI_A);
+		let inB = filter(locs, (l) => l.uri === URI_B);
+		assert.match(true, length(inA) >= 1);
+		assert.match(true, length(inB) >= 1);
+	});
+
+	it('export declaration: cursor in declaring file returns locations in importing file', () => {
+		setupFiles(TEXT_A, TEXT_B_NAMED);
+
+		// cursor on 'foo' in 'export function foo()' in URI_A (line 0, char 16)
+		let locs = references(URI_A, documents.get(URI_A), { line: 0, character: 16 });
+
+		let inB = filter(locs, (l) => l.uri === URI_B);
+		assert.match(true, length(inB) >= 1);
+	});
+
+	it('aliased import: cursor on local alias returns only within-file locations', () => {
+		setupFiles(TEXT_A, TEXT_B_ALIASED);
+
+		// cursor on 'bar' in 'bar();' on line 1 of URI_B — local alias, no cross-file
+		let locs = references(URI_B, documents.get(URI_B), { line: 1, character: 0 });
+
+		let inA = filter(locs, (l) => l.uri === URI_A);
+		assert.match(0, length(inA));
+		assert.match(true, length(locs) >= 1);
+	});
+
+	it('namespace import: cursor in declaring file returns property accesses in importer', () => {
+		setupFiles(TEXT_A, TEXT_B_NS);
+
+		// cursor on 'foo' export in URI_A (line 0, char 16)
+		let locs = references(URI_A, documents.get(URI_A), { line: 0, character: 16 });
+
+		// URI_B uses 'a.foo()' — the 'foo' property should appear as a cross-file location
+		let inB = filter(locs, (l) => l.uri === URI_B);
+		assert.match(true, length(inB) >= 1);
 	});
 });

@@ -66,4 +66,32 @@ describe('textDocument/references', () => {
 		for (let loc in resp.result)
 			assert.match(0, loc.range.start.line);
 	});
+
+	it('cross-file: finds references in the declaring module when cursor is on import', () => {
+		// Open a file that imports `parse` from tree_sitter (which exists on disk).
+		let uri = 'file:///t_xref.uc';
+		let text = "import { parse } from 'tree_sitter';\nparse();\n";
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri, languageId: 'ucode', version: 1, text },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 3, method: 'textDocument/references', params: {
+			textDocument: { uri },
+			position: { line: 1, character: 0 },  // 'parse' in 'parse();'
+		}});
+
+		let resp = lsp.receive(proc);
+		let locs = resp.result;
+
+		assert.match(3, resp.id);
+		assert.match(true, type(locs) === 'array');
+
+		// Should include at least one location in tree_sitter.uc.
+		let tsUri = 'file:///app/src/tree_sitter.uc';
+		let inTs = filter(locs, (l) => l.uri === tsUri);
+		assert.match(true, length(inTs) >= 1);
+
+		// Should also include locations in the importing file itself.
+		let inLocal = filter(locs, (l) => l.uri === uri);
+		assert.match(true, length(inLocal) >= 1);
+	});
 });

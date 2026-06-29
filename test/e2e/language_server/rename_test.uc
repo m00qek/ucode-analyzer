@@ -50,6 +50,36 @@ describe('textDocument/rename', () => {
 		assert.match(null, resp.result);
 	});
 
+	it('cross-file: rename from importer propagates edits to declaring module', () => {
+		let uri = 'file:///t_xrename.uc';
+		let text = "import { parse } from 'tree_sitter';\nparse();\n";
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri, languageId: 'ucode', version: 1, text },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 10, method: 'textDocument/rename', params: {
+			textDocument: { uri },
+			position: { line: 1, character: 0 },  // 'parse' in 'parse();'
+			newName: 'parseDoc',
+		}});
+
+		let resp = lsp.receive(proc);
+
+		assert.match(10, resp.id);
+		assert.match(true, resp.result !== null);
+		let changes = resp.result.changes;
+
+		// Importing file must have edits (import specifier + call).
+		assert.match(true, type(changes[uri]) === 'array');
+		assert.match(true, length(changes[uri]) >= 1);
+
+		// tree_sitter.uc must also have edits (the export declaration and internal uses).
+		let tsUri = 'file:///app/src/tree_sitter.uc';
+		assert.match(true, type(changes[tsUri]) === 'array');
+		assert.match(true, length(changes[tsUri]) >= 1);
+		for (let e in (changes[tsUri] ?? []))
+			assert.match('parseDoc', e.newText);
+	});
+
 	it('renames only the binding in scope, not same-named identifiers in other scopes', () => {
 		// Two functions each declare a local `n`.  Renaming one must not affect the other.
 		let text = "function a(n) { return n; }\nfunction b(n) { return n; }\n";
