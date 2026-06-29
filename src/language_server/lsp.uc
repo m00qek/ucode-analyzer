@@ -10,6 +10,7 @@ import { diagnosticsFor } from 'language_server.handlers.diagnostics';
 import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.signature_help';
 import { references as referencesDoc } from 'language_server.handlers.references';
 import { documentSymbols as documentSymbolsDoc } from 'language_server.handlers.document_symbols';
+import { workspaceSymbol as workspaceSymbolDoc } from 'language_server.handlers.workspace_symbol';
 import { rename as renameDoc } from 'language_server.handlers.rename';
 import { documentHighlight as documentHighlightDoc } from 'language_server.handlers.document_highlight';
 import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prepare_rename';
@@ -35,6 +36,7 @@ export function run(config) {
 					documentHighlightProvider: true,
 					renameProvider: { prepareProvider: true },
 					codeActionProvider: { codeActionKinds: ['quickfix'] },
+					workspaceSymbolProvider: true,
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -168,6 +170,10 @@ export function run(config) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
 			protocol.respond(msg.id, doc ? documentSymbolsDoc(doc) : null);
+		},
+
+		'workspace/symbol': function(msg) {
+			protocol.respond(msg.id, workspaceSymbolDoc(msg.params.query));
 		},
 
 		'workspace/didChangeWatchedFiles': function(msg) {
