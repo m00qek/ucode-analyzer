@@ -126,6 +126,28 @@ describe('diagnostics — type errors: flow sensitivity (guard clause)', () => {
 	});
 });
 
+describe('diagnostics — type errors: JSDoc @param type checking', () => {
+	it('reports not-a-function when @param {string} param is called', () => {
+		let doc = open("/** @param {string} name */\nfunction greet(name) { name(); }\n");
+		let diags = typeErrors(URI, doc);
+		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0)[0];
+		assert.match(true, d !== null);
+		assert.match(1, d.severity);
+	});
+
+	it('does not report not-a-function for unannotated param (UNKNOWN stays callable)', () => {
+		let doc = open("function f(cb) { cb(); }\n");
+		assert.match(0, length(typeErrors(URI, doc)));
+	});
+
+	it('reports not-a-function when @param {string} function declaration is used via multiline JSDoc', () => {
+		let doc = open("/**\n * @param {string} name\n */\nfunction greet(name) { name(); }\n");
+		let diags = typeErrors(URI, doc);
+		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0)[0];
+		assert.match(true, d !== null);
+	});
+});
+
 describe('diagnostics — type errors: flow sensitivity (&& short-circuit)', () => {
 	it('suppresses null warning on RHS of x && x.foo', () => {
 		let doc = open("let x = null;\nlet y = x && x.foo;\n");

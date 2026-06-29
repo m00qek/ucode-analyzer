@@ -200,17 +200,15 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 	}
 
 	if (nt === 'function_declaration') {
+		let fnType = inferNode(node, source, uri, scope, 0);
 		let nameNode = ts.namedChild(node, 0);
 		if (nameNode && ts.nodeType(nameNode) === 'identifier')
-			scopeSet(scope, ts.text(nameNode, source), inferNode(node, source, uri, scope, 0));
-		// Walk the body with params as UNKNOWN.
+			scopeSet(scope, ts.text(nameNode, source), fnType);
 		let inner = makeScope(scope);
-		let formalParams = ts.childByField(node, 'parameters');
-		if (formalParams) {
-			for (let i = 0; i < ts.namedChildCount(formalParams); i++) {
-				let p = ts.namedChild(formalParams, i);
-				if (ts.nodeType(p) === 'identifier')
-					scopeSet(inner, ts.text(p, source), UNKNOWN);
+		if (fnType && fnType.kind === 'function') {
+			for (let i = 0; i < length(fnType.params); i++) {
+				let p = fnType.params[i];
+				scopeSet(inner, p.name, p.type ?? UNKNOWN);
 			}
 		}
 		let body = ts.childByField(node, 'body');
@@ -224,21 +222,14 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 		return;
 	}
 
-	// ── Function expressions and arrows: params as UNKNOWN ───────────────────
-
 	if (nt === 'arrow_function' || nt === 'function_expression') {
 		let inner = makeScope(scope);
-		let formalParams = ts.childByField(node, 'parameters');
-		if (formalParams) {
-			for (let i = 0; i < ts.namedChildCount(formalParams); i++) {
-				let p = ts.namedChild(formalParams, i);
-				if (ts.nodeType(p) === 'identifier')
-					scopeSet(inner, ts.text(p, source), UNKNOWN);
+		let fnType = inferNode(node, source, uri, scope, 0);
+		if (fnType && fnType.kind === 'function') {
+			for (let i = 0; i < length(fnType.params); i++) {
+				let p = fnType.params[i];
+				scopeSet(inner, p.name, p.type ?? UNKNOWN);
 			}
-		} else {
-			let param = ts.childByField(node, 'parameter');
-			if (param && ts.nodeType(param) === 'identifier')
-				scopeSet(inner, ts.text(param, source), UNKNOWN);
 		}
 		let body = ts.childByField(node, 'body');
 		if (body) {

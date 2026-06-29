@@ -119,6 +119,20 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(1, notif.params.diagnostics[0].severity);
 	});
 
+	it('reports not-a-function for @param {string} annotated param when called', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "/**\n * @param {string} name\n */\nfunction greet(name) { name(); }\ngreet('x');\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		assert.match('textDocument/publishDiagnostics', notif.method);
+		let diags = filter(notif.params.diagnostics, (d) => index(d.message, 'not a function') >= 0);
+		assert.match(true, length(diags) >= 1);
+		assert.match(1, diags[0].severity);
+	});
+
 	it('reports error when calling a string variable', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
