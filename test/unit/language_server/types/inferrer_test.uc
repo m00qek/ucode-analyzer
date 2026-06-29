@@ -119,6 +119,10 @@ describe('inferrer — binary expressions', () => {
 	it('arithmetic on float yields float', () => {
 		assert.match(prim('float'), infer('let x = 1.5 * 2;'));
 	});
+
+	it('arithmetic: int op float yields float (float on right)', () => {
+		assert.match(prim('float'), infer('let x = 2 * 1.5;'));
+	});
 });
 
 describe('inferrer — unary expressions', () => {

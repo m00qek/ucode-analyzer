@@ -261,6 +261,8 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 					push(diags, {
 						range:    rangeOf(source, lineTable, callee),
 						severity: SEVERITY_ERROR,
+						source:   'ucode-ls',
+						code:     'not-a-function',
 						message:  sprintf("'%s' is not a function (type: %s)", ts.text(callee, source), calleeType.kind),
 					});
 				}
@@ -287,6 +289,8 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 				push(diags, {
 					range:    rangeOf(source, lineTable, obj),
 					severity: SEVERITY_ERROR,
+					source:   'ucode-ls',
+					code:     'may-be-null',
 					message:  sprintf("'%s' may be null", ts.text(obj, source)),
 				});
 			} else if (prop && ts.nodeType(prop) === 'property_identifier') {
@@ -295,6 +299,8 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 					push(diags, {
 						range:    rangeOf(source, lineTable, prop),
 						severity: SEVERITY_WARNING,
+						source:   'ucode-ls',
+						code:     'unknown-property',
 						message:  sprintf("Property '%s' does not exist on this type", field),
 					});
 				}

@@ -11,6 +11,8 @@ function collectErrors(node, text, lineTable, out) {
 		push(out, {
 			range:    rangeOf(text, lineTable, node),
 			severity: SEVERITY_ERROR,
+			source:   'ucode-ls',
+			code:     'syntax-error',
 			message:  'Syntax error',
 		});
 		return;

@@ -85,6 +85,19 @@ describe('dag nodes', () => {
 		dag.remove(URI_B);
 		assert.match(false, index(dag.allUris(), URI_B) >= 0);
 	});
+
+	it('shorthand property { foo } in exported object is indexed as a property', () => {
+		let text = "function foo() {}\nexport const obj = { foo };\n";
+		dag.add(URI_B, text, parse(text));
+
+		let exps = dag.exportsOf(URI_B);
+		assert.match(1, length(exps));
+		assert.match('obj', exps[0].name);
+		assert.match(true, exps[0].properties !== null);
+		assert.match(1, length(exps[0].properties));
+		assert.match('foo', exps[0].properties[0].name);
+		assert.match('function', exps[0].properties[0].kind);
+	});
 });
 
 describe('dag edges', () => {

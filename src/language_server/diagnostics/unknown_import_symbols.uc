@@ -36,6 +36,8 @@ function checkNamedImports(clause, doc, lineTable, resolvedUri, diags) {
 			push(diags, {
 				range:    rangeOf(doc.text, lineTable, remoteNode),
 				severity: SEVERITY_ERROR,
+				source:   'ucode-ls',
+				code:     'unknown-import-symbol',
 				message:  sprintf("Module has no export named '%s'", remoteName),
 			});
 	}

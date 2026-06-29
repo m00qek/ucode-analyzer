@@ -4,6 +4,7 @@ export let UNKNOWN = { kind: 'unknown' };
 export let BOOL    = { kind: 'primitive', name: 'boolean' };
 export let STR     = { kind: 'primitive', name: 'string' };
 export let INT     = { kind: 'primitive', name: 'int' };
+export let FLOAT   = { kind: 'primitive', name: 'float' };
 export let NULL_T  = { kind: 'primitive', name: 'null' };
 
 // Reduce a list of Types to a single type: UNKNOWN for empty, the sole element

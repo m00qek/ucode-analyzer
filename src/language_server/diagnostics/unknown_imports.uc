@@ -31,9 +31,11 @@ export function unknownImports(uri, doc) {
 			if (unresolved[specifier] && !exists(reported, specifier)) {
 				reported[specifier] = true;
 				push(diags, {
-					range: rangeOf(doc.text, lineTable, c),
+					range:    rangeOf(doc.text, lineTable, c),
 					severity: SEVERITY_ERROR,
-					message: sprintf("Cannot find module '%s'", specifier),
+					source:   'ucode-ls',
+					code:     'unknown-import',
+					message:  sprintf("Cannot find module '%s'", specifier),
 				});
 			}
 		}

@@ -4,7 +4,7 @@ import { parseDoc } from 'language_server.types.doc_parser';
 import { unify, substitute } from 'language_server.types.unifier';
 import { memoGet, memoSet } from 'language_server.memo';
 import { makeScope, scopeGet, scopeSet } from 'language_server.types.scope';
-import { UNKNOWN, BOOL, STR, INT, NULL_T, unionOf, memberOfType } from 'language_server.types.type_utils';
+import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType } from 'language_server.types.type_utils';
 import { buildLineTable, offsetToPosition, docBefore } from 'language_server.positions';
 
 let _builtinScope = makeScope(null);
@@ -354,7 +354,12 @@ function inferBinary(node, source, uri, scope, depth) {
 		    (rt.kind === 'primitive' && rt.name === 'string'))
 			return STR;
 	}
-	return left ? _infer(left, source, uri, scope, depth + 1) : INT;
+	let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : INT;
+	let rt = right ? _infer(right, source, uri, scope, depth + 1) : INT;
+	if ((lt.kind === 'primitive' && lt.name === 'float') ||
+	    (rt.kind === 'primitive' && rt.name === 'float'))
+		return FLOAT;
+	return lt;
 }
 
 function inferTernary(node, source, uri, scope, depth) {

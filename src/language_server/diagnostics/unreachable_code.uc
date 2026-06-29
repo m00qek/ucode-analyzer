@@ -22,6 +22,8 @@ function walk(node, source, lineTable, out) {
 				push(out, {
 					range:    rangeOf(source, lineTable, stmt),
 					severity: SEVERITY_WARNING,
+					source:   'ucode-ls',
+					code:     'unreachable-code',
 					message:  'Unreachable code',
 				});
 				// Still recurse so we don't hide nested terminators, but skip

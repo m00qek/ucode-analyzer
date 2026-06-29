@@ -65,6 +65,13 @@ function extractObjectProperties(objectNode, root, text, pos) {
 	let props = [];
 	for (let i = 0; i < ts.namedChildCount(objectNode); i++) {
 		let pair = ts.namedChild(objectNode, i);
+		if (ts.nodeType(pair) === 'shorthand_property_identifier') {
+			let name = ts.text(pair, text);
+			let info = localDeclInfo(root, text, name);
+			push(props, { name, kind: info.kind, doc: info.doc, properties: null,
+			              position: pos ? pos(ts.startByte(pair)) : null });
+			continue;
+		}
 		if (ts.nodeType(pair) !== 'pair') continue;
 		let keyNode = ts.childByField(pair, 'key');
 		if (!keyNode) continue;

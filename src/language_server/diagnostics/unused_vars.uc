@@ -151,6 +151,8 @@ export function unusedVars(doc) {
 			push(diags, {
 				range:    rangeOf(source, lineTable, decl.nameNode),
 				severity: SEVERITY_WARNING,
+				source:   'ucode-ls',
+				code:     'unused-var',
 				message:  sprintf("'%s' is declared but never used", decl.name),
 			});
 	}

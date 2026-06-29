@@ -98,6 +98,8 @@ function walk(node, scope, source, globals, lineTable, out) {
 			push(out, {
 				range:    rangeOf(source, lineTable, node),
 				severity: SEVERITY_WARNING,
+				source:   'ucode-ls',
+				code:     'undefined-var',
 				message:  sprintf("'%s' is not defined", name),
 			});
 		return;
@@ -110,6 +112,8 @@ function walk(node, scope, source, globals, lineTable, out) {
 			push(out, {
 				range:    rangeOf(source, lineTable, node),
 				severity: SEVERITY_WARNING,
+				source:   'ucode-ls',
+				code:     'undefined-var',
 				message:  sprintf("'%s' is not defined", name),
 			});
 		return;

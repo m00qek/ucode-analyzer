@@ -12,6 +12,8 @@ function collect(node, source, lineTable, out) {
 			push(out, {
 				range:    rangeOf(source, lineTable, op),
 				severity: SEVERITY_HINT,
+				source:   'ucode-ls',
+				code:     'prefer-strict-equality',
 				message:  sprintf("Prefer '%s' over '%s'", strict, opType),
 			});
 		}
