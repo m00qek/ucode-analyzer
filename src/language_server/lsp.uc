@@ -17,6 +17,7 @@ import { rename as renameDoc } from 'language_server.handlers.rename';
 import { documentHighlight as documentHighlightDoc } from 'language_server.handlers.document_highlight';
 import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prepare_rename';
 import { codeAction as codeActionDoc } from 'language_server.handlers.code_action';
+import { selectionRanges as selectionRangesDoc } from 'language_server.handlers.selection_range';
 import { initBuiltinsFromDag } from 'language_server.types.inferrer';
 import * as platform from 'language_server.platform';
 
@@ -41,6 +42,7 @@ export function run(config) {
 					workspaceSymbolProvider: true,
 					inlayHintProvider: true,
 					foldingRangeProvider: true,
+					selectionRangeProvider: true,
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -190,6 +192,12 @@ export function run(config) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
 			protocol.respond(msg.id, doc ? foldingRangesDoc(doc) : null);
+		},
+
+		'textDocument/selectionRange': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc ? selectionRangesDoc(doc, msg.params.positions) : null);
 		},
 
 		'workspace/didChangeWatchedFiles': function(msg) {
