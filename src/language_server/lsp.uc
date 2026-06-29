@@ -13,6 +13,7 @@ import { documentSymbols as documentSymbolsDoc } from 'language_server.handlers.
 import { rename as renameDoc } from 'language_server.handlers.rename';
 import { documentHighlight as documentHighlightDoc } from 'language_server.handlers.document_highlight';
 import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prepare_rename';
+import { codeAction as codeActionDoc } from 'language_server.handlers.code_action';
 import { initBuiltinsFromDag } from 'language_server.types.inferrer';
 import * as platform from 'language_server.platform';
 
@@ -33,6 +34,7 @@ export function run(config) {
 					documentSymbolProvider: true,
 					documentHighlightProvider: true,
 					renameProvider: { prepareProvider: true },
+					codeActionProvider: { codeActionKinds: ['quickfix'] },
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -207,6 +209,14 @@ export function run(config) {
 			protocol.respond(msg.id, doc
 				? prepareRenameDoc(uri, doc, msg.params.position)
 				: null);
+		},
+
+		'textDocument/codeAction': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			let ctx = msg.params.context;
+			let diags = (ctx && ctx.diagnostics) ? ctx.diagnostics : [];
+			protocol.respond(msg.id, doc ? codeActionDoc(uri, doc, diags) : null);
 		},
 	};
 
