@@ -30,32 +30,8 @@ function collectDeclarations(root, source, out) {
 	function walk(node) {
 		let nt = ts.nodeType(node);
 
-		if (nt === 'import_statement') {
-			for (let i = 0; i < ts.namedChildCount(node); i++) {
-				let clause = ts.namedChild(node, i);
-				if (ts.nodeType(clause) !== 'import_clause') continue;
-				for (let j = 0; j < ts.namedChildCount(clause); j++) {
-					let part = ts.namedChild(clause, j);
-					let pnt = ts.nodeType(part);
-					if (pnt === 'namespace_import') {
-						let alias = ts.namedChild(part, 0);
-						if (alias && ts.nodeType(alias) === 'identifier')
-							push(out, { name: ts.text(alias, source), declByte: ts.startByte(alias), nameNode: alias });
-					} else if (pnt === 'named_imports') {
-						for (let k = 0; k < ts.namedChildCount(part); k++) {
-							let spec = ts.namedChild(part, k);
-							if (ts.nodeType(spec) !== 'import_specifier') continue;
-							let count = ts.namedChildCount(spec);
-							if (count === 0) continue;
-							let localNode = ts.namedChild(spec, count - 1);
-							if (localNode && ts.nodeType(localNode) === 'identifier')
-								push(out, { name: ts.text(localNode, source), declByte: ts.startByte(localNode), nameNode: localNode });
-						}
-					}
-				}
-			}
-			return;
-		}
+		// Import-introduced names are handled by unused_imports.uc — skip here.
+		if (nt === 'import_statement') return;
 
 		if (nt === 'lexical_declaration') {
 			for (let i = 0; i < ts.namedChildCount(node); i++) {

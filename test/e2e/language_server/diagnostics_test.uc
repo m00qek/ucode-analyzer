@@ -216,6 +216,60 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(0, length(depDiags));
 	});
 
+	it('reports unused-import hint for an import that is never used', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import * as ts from 'tree_sitter';\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		let d = filter(notif.params.diagnostics, (d) => d.code === 'unused-import');
+		assert.match(1, length(d));
+		assert.match(4, d[0].severity);   // HINT
+		assert.match(true, index(d[0].message, "'ts'") >= 0);
+	});
+
+	it('does not report unused-import for an import that is used', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import * as ts from 'tree_sitter';\nts.ucode;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		let d = filter(notif.params.diagnostics, (d) => d.code === 'unused-import');
+		assert.match(0, length(d));
+	});
+
+	it('reports redeclared-var error for duplicate let in same block', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let x = 1;\nlet x = 2;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		let d = filter(notif.params.diagnostics, (d) => d.code === 'redeclared-var');
+		assert.match(1, length(d));
+		assert.match(1, d[0].severity);   // ERROR
+		assert.match(true, index(d[0].message, "'x'") >= 0);
+	});
+
+	it('reports duplicate-key warning for duplicate object keys', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let o = { a: 1, a: 2 };\no;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		let d = filter(notif.params.diagnostics, (d) => d.code === 'duplicate-key');
+		assert.match(1, length(d));
+		assert.match(2, d[0].severity);   // WARNING
+		assert.match(true, index(d[0].message, "'a'") >= 0);
+	});
+
 	it('re-sends diagnostics on didChange', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
