@@ -6,55 +6,59 @@ let KIND_FUNCTION  = 12;
 let KIND_VARIABLE  = 13;
 let KIND_CONSTANT  = 14;
 
-// Recursively collect DocumentSymbol entries from node into result.
+// Recursively collect DocumentSymbol entries from node, returning an array.
+// Nested symbols appear as children of their enclosing symbol rather than
+// as a flat list — clients that support hierarchical document symbols render
+// an outline tree; clients that don't still see the top-level entries.
 //
 // Recognized binding sites:
 //   program / statement_block  → recurse into each named child
 //   export_statement           → unwrap the inner declaration
-//   function_declaration       → emit FUNCTION symbol, recurse into body
-//   lexical_declaration        → emit VARIABLE/CONSTANT/FUNCTION per declarator;
-//                                recurse into the initializer value for nested decls
-//   arrow_function /
-//   function_expression        → recurse into body (reached from lex_decl values)
-//   object                     → emit FUNCTION symbols for function-valued pairs
-//
-// Everything else is a leaf for symbol purposes.
-function walkSymbols(node, text, lineTable, result) {
+//   function_declaration       → FUNCTION symbol; body contents become children
+//   lexical_declaration        → VARIABLE/CONSTANT/FUNCTION per declarator;
+//                                function-body contents become children
+//   object                     → FUNCTION symbols for function-valued pairs;
+//                                their body contents become children
+function walkSymbols(node, text, lineTable) {
 	let nt = ts.nodeType(node);
 
-	// ── Containers: recurse into statements ────────────────────────────────
+	// ── Containers: flatten children into caller's result ──────────────────
 	if (nt === 'program' || nt === 'statement_block') {
-		for (let i = 0; i < ts.namedChildCount(node); i++)
-			walkSymbols(ts.namedChild(node, i), text, lineTable, result);
-		return;
+		let result = [];
+		for (let i = 0; i < ts.namedChildCount(node); i++) {
+			let children = walkSymbols(ts.namedChild(node, i), text, lineTable);
+			for (let j = 0; j < length(children); j++) push(result, children[j]);
+		}
+		return result;
 	}
 
 	// ── Export: unwrap and process the inner declaration ───────────────────
 	if (nt === 'export_statement') {
 		let inner = ts.namedChild(node, 0);
-		if (inner) walkSymbols(inner, text, lineTable, result);
-		return;
+		return inner ? walkSymbols(inner, text, lineTable) : [];
 	}
 
 	// ── Function declaration ────────────────────────────────────────────────
 	if (nt === 'function_declaration') {
 		let nameNode = ts.namedChild(node, 0);
-		if (!nameNode) return;
-		push(result, {
+		if (!nameNode) return [];
+		let body = ts.childByField(node, 'body');
+		let children = body ? walkSymbols(body, text, lineTable) : [];
+		let sym = {
 			name:           ts.text(nameNode, text),
 			kind:           KIND_FUNCTION,
 			range:          rangeOf(text, lineTable, node),
 			selectionRange: rangeOf(text, lineTable, nameNode),
-		});
-		let body = ts.childByField(node, 'body');
-		if (body) walkSymbols(body, text, lineTable, result);
-		return;
+		};
+		if (length(children) > 0) sym.children = children;
+		return [sym];
 	}
 
 	// ── Lexical declaration (let / const) ───────────────────────────────────
 	if (nt === 'lexical_declaration') {
 		let kw = ts.child(node, 0);
 		let isConst = kw && ts.text(kw, text) === 'const';
+		let result = [];
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let vd = ts.namedChild(node, i);
 			if (ts.nodeType(vd) !== 'variable_declarator') continue;
@@ -62,31 +66,33 @@ function walkSymbols(node, text, lineTable, result) {
 			if (!nameNode) continue;
 			let valNode = ts.childByField(vd, 'value');
 			let kind = isConst ? KIND_CONSTANT : KIND_VARIABLE;
+			let children = [];
 			if (valNode) {
 				let vt = ts.nodeType(valNode);
-				if (vt === 'arrow_function' || vt === 'function_expression')
+				if (vt === 'arrow_function' || vt === 'function_expression') {
 					kind = KIND_FUNCTION;
+					let body = ts.childByField(valNode, 'body');
+					if (body && ts.nodeType(body) === 'statement_block')
+						children = walkSymbols(body, text, lineTable);
+				} else {
+					children = walkSymbols(valNode, text, lineTable);
+				}
 			}
-			push(result, {
+			let sym = {
 				name:           ts.text(nameNode, text),
 				kind,
 				range:          rangeOf(text, lineTable, node),
 				selectionRange: rangeOf(text, lineTable, nameNode),
-			});
-			if (valNode) walkSymbols(valNode, text, lineTable, result);
+			};
+			if (length(children) > 0) sym.children = children;
+			push(result, sym);
 		}
-		return;
-	}
-
-	// ── Function values: recurse into body for nested declarations ──────────
-	if (nt === 'arrow_function' || nt === 'function_expression') {
-		let body = ts.childByField(node, 'body');
-		if (body) walkSymbols(body, text, lineTable, result);
-		return;
+		return result;
 	}
 
 	// ── Object literal: emit function-valued properties ─────────────────────
 	if (nt === 'object') {
+		let result = [];
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let pair = ts.namedChild(node, i);
 			if (ts.nodeType(pair) !== 'pair') continue;
@@ -95,23 +101,27 @@ function walkSymbols(node, text, lineTable, result) {
 			if (!keyNode || !valNode) continue;
 			let vt = ts.nodeType(valNode);
 			if (vt === 'arrow_function' || vt === 'function_expression') {
-				push(result, {
+				let body = ts.childByField(valNode, 'body');
+				let children = (body && ts.nodeType(body) === 'statement_block')
+					? walkSymbols(body, text, lineTable) : [];
+				let sym = {
 					name:           ts.text(keyNode, text),
 					kind:           KIND_FUNCTION,
 					range:          rangeOf(text, lineTable, pair),
 					selectionRange: rangeOf(text, lineTable, keyNode),
-				});
-				walkSymbols(valNode, text, lineTable, result);
+				};
+				if (length(children) > 0) sym.children = children;
+				push(result, sym);
 			}
 		}
-		return;
+		return result;
 	}
+
+	return [];
 }
 
 export function documentSymbols(doc) {
 	let text      = doc.text;
 	let lineTable = buildLineTable(text);
-	let result    = [];
-	walkSymbols(ts.rootNode(doc.tree), text, lineTable, result);
-	return result;
+	return walkSymbols(ts.rootNode(doc.tree), text, lineTable);
 };

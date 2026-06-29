@@ -84,55 +84,53 @@ describe('documentSymbols', () => {
 });
 
 describe('documentSymbols — nested declarations', () => {
-	it('finds a function declaration nested inside another function', () => {
+	it('finds a function declaration nested inside another function as a child', () => {
 		let text = "function outer() {\n  function inner() {}\n}\n";
 		documents.open(URI, text, 1);
 
 		let syms = documentSymbols(documents.get(URI));
-		let names = sort(map(syms, (s) => s.name));
-
-		assert.match(2, length(syms));
-		assert.match('inner', names[0]);
-		assert.match('outer', names[1]);
+		assert.match(1, length(syms));
+		assert.match('outer', syms[0].name);
+		assert.match(1, length(syms[0].children));
+		assert.match('inner', syms[0].children[0].name);
+		assert.match(12, syms[0].children[0].kind);
 	});
 
-	it('finds an arrow function nested inside a function body', () => {
+	it('finds an arrow function nested inside a function body as a child', () => {
 		let text = "function outer() {\n  let helper = x => x;\n}\n";
 		documents.open(URI, text, 1);
 
 		let syms = documentSymbols(documents.get(URI));
-		// outer (FUNCTION) + helper (FUNCTION)
-		assert.match(2, length(syms));
-		let names = sort(map(syms, (s) => s.name));
-		assert.match('helper', names[0]);
-		assert.match('outer', names[1]);
+		assert.match(1, length(syms));
+		assert.match('outer', syms[0].name);
+		assert.match(1, length(syms[0].children));
+		assert.match('helper', syms[0].children[0].name);
+		assert.match(12, syms[0].children[0].kind);
 	});
 
-	it('finds a let variable inside a function body', () => {
+	it('finds a let variable inside a function body as a child', () => {
 		let text = "function setup() {\n  let cfg = {};\n}\n";
 		documents.open(URI, text, 1);
 
 		let syms = documentSymbols(documents.get(URI));
-		assert.match(2, length(syms));
-		let names = sort(map(syms, (s) => s.name));
-		assert.match('cfg', names[0]);
-		assert.match('setup', names[1]);
+		assert.match(1, length(syms));
+		assert.match('setup', syms[0].name);
+		assert.match(1, length(syms[0].children));
+		assert.match('cfg', syms[0].children[0].name);
 	});
 
-	it('emits FUNCTION symbol for function-valued object property', () => {
+	it('emits FUNCTION symbol for function-valued object property as a child of the variable', () => {
 		let text = "const M = {\n  foo: x => x,\n  bar: 1,\n};\n";
 		documents.open(URI, text, 1);
 
 		let syms = documentSymbols(documents.get(URI));
-		// M (CONSTANT) + foo (FUNCTION); bar has a numeric value, not a function
-		let names = sort(map(syms, (s) => s.name));
-		assert.match(true, index(names, 'M') >= 0);
-		assert.match(true, index(names, 'foo') >= 0);
-		assert.match(false, index(names, 'bar') >= 0);
-
-		let fooSym = null;
-		for (let s in syms) if (s.name === 'foo') { fooSym = s; break; }
-		assert.match(12, fooSym.kind);
+		assert.match(1, length(syms));
+		assert.match('M', syms[0].name);
+		assert.match(14, syms[0].kind);  // CONSTANT
+		// foo (FUNCTION) is a child; bar is not a function so absent
+		assert.match(1, length(syms[0].children));
+		assert.match('foo', syms[0].children[0].name);
+		assert.match(12, syms[0].children[0].kind);
 	});
 
 	it('does not emit symbols for non-function object properties', () => {
@@ -140,9 +138,10 @@ describe('documentSymbols — nested declarations', () => {
 		documents.open(URI, text, 1);
 
 		let syms = documentSymbols(documents.get(URI));
-		// Only config itself; host/port are plain values
+		// Only config itself; host/port are plain values → no children
 		assert.match(1, length(syms));
 		assert.match('config', syms[0].name);
+		assert.match(true, syms[0].children === null || syms[0].children === undefined);
 	});
 
 	it('handles deep nesting: function inside function inside function', () => {
@@ -150,12 +149,12 @@ describe('documentSymbols — nested declarations', () => {
 		documents.open(URI, text, 1);
 
 		let syms = documentSymbols(documents.get(URI));
-		let names = sort(map(syms, (s) => s.name));
-		assert.match(3, length(syms));
-		assert.match('a', names[0]);
-		assert.match('b', names[1]);
-		assert.match('c', names[2]);
-		for (let s in syms)
-			assert.match(12, s.kind);
+		assert.match(1, length(syms));
+		assert.match('a', syms[0].name);
+		assert.match(12, syms[0].kind);
+		assert.match(1, length(syms[0].children));
+		assert.match('b', syms[0].children[0].name);
+		assert.match(1, length(syms[0].children[0].children));
+		assert.match('c', syms[0].children[0].children[0].name);
 	});
 });
