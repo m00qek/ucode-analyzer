@@ -259,7 +259,7 @@ export function resolveModule(specifier, libraryPaths, workspaceDir) {
 
 		for (let candidate in candidates) {
 			let s = fs.stat(candidate);
-			if (s && s.type === 'file')
+			if (s && (s.type === 'file' || s.type === 'regular'))
 				return 'file://' + candidate;
 		}
 	}

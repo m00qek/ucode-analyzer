@@ -60,6 +60,10 @@ export function notify(method, params) {
 	write_message({ jsonrpc: '2.0', method, params });
 };
 
+export function request(id, method, params) {
+	write_message({ jsonrpc: '2.0', id, method, params });
+};
+
 export function error(id, code, message) {
 	write_message({ jsonrpc: '2.0', id, error: { code, message } });
 };

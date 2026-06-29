@@ -302,6 +302,53 @@ describe('dag.resolveMember', () => {
 	});
 });
 
+describe('dag cascade pruning of deleted files', () => {
+	beforeEach(reset);
+
+	it('removes a cascade dep that no longer exists on disk', () => {
+		// URI_B imports tree_sitter. After TS is updated, the cascade tries to re-index B.
+		// If B's file has been deleted (readAndParse returns null), B must be pruned.
+		let text_b = "import * as ts from 'tree_sitter';\nexport function bFn() {};";
+		dag.addFromDisk(TS_URI);
+		dag.add(URI_B, text_b, parse(text_b));
+		assert.match(true, dag.exportsOf(URI_B) !== null);
+
+		// Mock fs so b.uc is "missing" (open returns null).
+		mock.global.patch('fs', { data: {} });
+		dag.update(TS_URI, "export const updated = true;", parse("export const updated = true;"));
+		mock.global.unpatch('fs');
+
+		assert.match(null, dag.exportsOf(URI_B));
+	});
+
+	it('cascades through a deleted dep to its own reverse deps', () => {
+		// Chain: TS_URI ← URI_B ← URI_A.
+		// When TS is updated, cascade visits B (deleted) then A (re-indexed).
+		let text_b = "import * as ts from 'tree_sitter';\nexport function bFn() {};";
+		let text_a_v1 = "import { bFn } from 'b';\nexport function aFn() {};";
+		let text_a_v2 = "import { bFn } from 'b';\nexport function aNewFn() {};";
+
+		dag.addFromDisk(TS_URI);
+		dag.add(URI_B, text_b, parse(text_b));
+		// URI_A imports 'b' — patch fs so resolveModule finds b.uc on disk and creates the edge.
+		mock.global.patch('fs', { data: { '/app/src/b.uc': text_b } });
+		dag.add(URI_A, text_a_v1, parse(text_a_v1));
+		mock.global.unpatch('fs');
+
+		// Cascade: B is now deleted, A has new content on disk.
+		mock.global.patch('fs', { data: { '/app/src/a.uc': text_a_v2 } });
+		dag.update(TS_URI, "export const updated = true;", parse("export const updated = true;"));
+		mock.global.unpatch('fs');
+
+		// B is gone.
+		assert.match(null, dag.exportsOf(URI_B));
+		// A was re-indexed from disk with v2 exports.
+		let exps = dag.exportsOf(URI_A);
+		let names = map(exps ?? [], (e) => e.name);
+		assert.match(true, index(names, 'aNewFn') >= 0);
+	});
+});
+
 describe('dag circular re-export guard', () => {
 	beforeEach(reset);
 

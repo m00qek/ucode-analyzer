@@ -70,6 +70,14 @@ export function receiveNotification(proc) {
 	}
 };
 
+// Skip responses and notifications; return the next server-to-client request (id + method both set).
+export function receiveServerRequest(proc) {
+	while (true) {
+		let msg = read_message(proc);
+		if (msg === null || (msg.id !== null && msg.method)) return msg;
+	}
+};
+
 export function connect() {
 	return spawn('ucode', [
 		'-L', '/app/src',
@@ -83,6 +91,9 @@ export function initialize(proc) {
 	send(proc, { jsonrpc: '2.0', id: 0, method: 'initialize', params: { capabilities: {} } });
 	let resp = receive(proc);
 	send(proc, { jsonrpc: '2.0', method: 'initialized', params: {} });
+	// Server sends client/registerCapability after processing initialized; consume it so
+	// subsequent receive() calls return the expected responses, not this server request.
+	receiveServerRequest(proc);
 	return resp;
 };
 

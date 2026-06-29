@@ -114,7 +114,20 @@ export function update(uri, text, tree) {
 		let next = queue[qi++];
 		if (!_openUris[next]) {
 			let parsed = readAndParse(uriToPath(next));
-			if (parsed) indexNode(next, parsed.text, parsed.tree);
+			if (parsed) {
+				indexNode(next, parsed.text, parsed.tree);
+			} else {
+				// File no longer on disk — cascade its reverse deps then remove it.
+				let revDeps = _inEdges[next] ?? [];
+				removeOutEdges(next);
+				delete _nodes[next];
+				delete _inEdges[next];
+				delete _openUris[next];
+				type_registry.removeUri(next);
+				for (let dep in revDeps)
+					if (!visited[dep]) { visited[dep] = true; push(queue, dep); }
+				continue;
+			}
 		}
 
 		for (let dep in (_inEdges[next] ?? []))

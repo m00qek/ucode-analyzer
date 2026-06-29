@@ -71,6 +71,15 @@ export function run(config) {
 				if (v) declVersions[uri] = v;
 			}
 			platform.init(declVersions);
+
+			// Ask the editor to notify us when .uc files change on disk.
+			protocol.request('cap-watch-uc', 'client/registerCapability', {
+				registrations: [{
+					id: 'cap-watch-uc',
+					method: 'workspace/didChangeWatchedFiles',
+					registerOptions: { watchers: [{ globPattern: '**/*.uc' }] },
+				}],
+			});
 		},
 
 		shutdown: function(msg) {
@@ -156,6 +165,23 @@ export function run(config) {
 			protocol.respond(msg.id, doc ? documentSymbolsDoc(doc) : null);
 		},
 
+		'workspace/didChangeWatchedFiles': function(msg) {
+			for (let change in (msg.params.changes ?? [])) {
+				let uri = change.uri;
+				if (change.type === 3) {  // deleted
+					let revDeps = dag.reverseDeps(uri);
+					dag.remove(uri);
+					invalidateUri(uri);
+					for (let dep in revDeps) invalidateUri(dep);
+				} else if (!documents.get(uri)) {  // created (1) or changed (2), not open in editor
+					let revDeps = dag.reverseDeps(uri);
+					dag.addFromDisk(uri);
+					invalidateUri(uri);
+					for (let dep in revDeps) invalidateUri(dep);
+				}
+			}
+		},
+
 		'textDocument/rename': function(msg) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
@@ -174,16 +200,18 @@ export function run(config) {
 		}
 
 		// After shutdown, reject all requests (notifications are silently ignored).
+		// Response messages (no method) are also silently ignored.
 		if (shutdown_requested && msg.method !== 'exit') {
-			if ('id' in msg)
+			if ('id' in msg && msg.method)
 				protocol.error(msg.id, -32600, 'server is shutting down');
 			continue;
 		}
 
 		// Before initialized, only allow initialize / initialized / exit / $/cancel.
+		// Response messages (no method) are silently ignored.
 		if (!initialized && msg.method !== 'initialize' && msg.method !== 'initialized' &&
 		    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
-			if ('id' in msg)
+			if ('id' in msg && msg.method)
 				protocol.error(msg.id, -32002, 'server not yet initialized');
 			continue;
 		}
@@ -197,7 +225,10 @@ export function run(config) {
 				if ('id' in msg)
 					protocol.error(msg.id, -32603, sprintf('internal error: %s', e));
 			}
-		} else if ('id' in msg) {
+		} else if ('id' in msg && msg.method) {
+			// Only unknown *requests* (have both id and method) get MethodNotFound.
+			// Response messages (client replies to our outbound requests) have id but
+			// no method — ignore them silently.
 			protocol.error(msg.id, -32601, sprintf('method not found: %s', msg.method));
 		}
 	}

@@ -58,6 +58,46 @@ describe('pre-initialized guard', () => {
 	});
 });
 
+describe('workspace file watcher', () => {
+	it('initialized sends client/registerCapability for *.uc watching', () => {
+		let proc = lsp.connect();
+
+		// Do the handshake manually so we can capture the server's registerCapability
+		// request before lsp.initialize() would consume it.
+		lsp.send(proc, { jsonrpc: '2.0', id: 0, method: 'initialize', params: { capabilities: {} } });
+		lsp.receive(proc);  // consume initialize response
+		lsp.send(proc, { jsonrpc: '2.0', method: 'initialized', params: {} });
+
+		let req = lsp.receiveServerRequest(proc);
+		assert.match('client/registerCapability', req.method);
+		let reg = req.params.registrations[0];
+		assert.match('workspace/didChangeWatchedFiles', reg.method);
+		assert.match('**/*.uc', reg.registerOptions.watchers[0].globPattern);
+
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'shutdown', params: null });
+		lsp.receive(proc);
+		lsp.send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });
+		assert.match(0, lsp.close(proc));
+	});
+
+	it('workspace/didChangeWatchedFiles delete event leaves server responsive', () => {
+		let proc = lsp.connect();
+		lsp.initialize(proc);
+
+		lsp.send(proc, { jsonrpc: '2.0', method: 'workspace/didChangeWatchedFiles', params: {
+			changes: [{ uri: 'file:///app/src/gone.uc', type: 3 }],
+		}});
+
+		// Server must still respond to a subsequent request.
+		lsp.send(proc, { jsonrpc: '2.0', id: 99, method: 'shutdown', params: null });
+		let resp = lsp.receive(proc);
+		assert.match(99, resp.id);
+		assert.match(null, resp.error);
+		lsp.send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });
+		assert.match(0, lsp.close(proc));
+	});
+});
+
 describe('post-shutdown guard', () => {
 	it('request after shutdown returns InvalidRequest (-32600)', () => {
 		let proc = lsp.connect();
