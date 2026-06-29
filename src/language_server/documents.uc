@@ -38,3 +38,7 @@ export function get(uri) {
 export function close(uri) {
 	delete _documents[uri];
 };
+
+export function all() {
+	return _documents;
+};

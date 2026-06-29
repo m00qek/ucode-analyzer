@@ -410,6 +410,23 @@ describe('dag markOpen / cascade skip', () => {
 		assert.match(false, index(names, 'diskVersion') >= 0);
 	});
 
+	it('cascade re-indexes open file from openDocs memory when provided', () => {
+		let TEXT_B_V2 = "import * as ts from 'tree_sitter';\nexport function memoryVersion() {};";
+		dag.markOpen(URI_B);
+
+		// Disk has a different version; openDocs has the in-memory content.
+		mock.global.patch('fs', { data: { '/app/src/b.uc': TEXT_B_IMPORTS_TS_DISK } });
+		dag.update(TS_URI, TEXT_TS_UPDATED, parse(TEXT_TS_UPDATED),
+		           { [URI_B]: { text: TEXT_B_V2, tree: parse(TEXT_B_V2) } });
+		mock.global.unpatch('fs');
+
+		let exps = dag.exportsOf(URI_B);
+		let names = map(exps ?? [], (e) => e.name);
+		assert.match(true, index(names, 'memoryVersion') >= 0);
+		assert.match(false, index(names, 'diskVersion') >= 0);
+		assert.match(false, index(names, 'openVersion') >= 0);
+	});
+
 	it('markClosed allows cascade to re-index from disk again', () => {
 		dag.markOpen(URI_B);
 		dag.markClosed(URI_B);

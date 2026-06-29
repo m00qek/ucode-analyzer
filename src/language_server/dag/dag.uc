@@ -98,8 +98,10 @@ export function addFromDisk(uri) {
 };
 
 // Re-index a file with the given content, then cascade through reverse deps.
+// openDocs is an optional map of uri -> {text, tree} for currently open files;
+// when provided, open dependents are re-indexed from memory instead of skipped.
 // Returns the list of dependent URIs that were re-indexed (excluding uri itself).
-export function update(uri, text, tree) {
+export function update(uri, text, tree, openDocs) {
 	indexNode(uri, text, tree);
 
 	let visited = {};
@@ -112,7 +114,10 @@ export function update(uri, text, tree) {
 
 	while (qi < length(queue)) {
 		let next = queue[qi++];
-		if (!_openUris[next]) {
+		if (_openUris[next]) {
+			let mem = openDocs ? openDocs[next] : null;
+			if (mem) indexNode(next, mem.text, mem.tree);
+		} else {
 			let parsed = readAndParse(uriToPath(next));
 			if (parsed) {
 				indexNode(next, parsed.text, parsed.tree);

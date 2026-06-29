@@ -108,7 +108,7 @@ export function run(config) {
 			dag.markOpen(td.uri);
 			let doc = documents.get(td.uri);
 			invalidateUri(td.uri);
-			let cascaded = dag.update(td.uri, doc.text, doc.tree);
+			let cascaded = dag.update(td.uri, doc.text, doc.tree, documents.all());
 			for (let dep in cascaded) invalidateUri(dep);
 			protocol.notify('textDocument/publishDiagnostics', {
 				uri: td.uri,
@@ -123,7 +123,7 @@ export function run(config) {
 			let doc = documents.get(uri);
 			if (!doc) return;
 			invalidateUri(uri);
-			let cascaded = dag.update(uri, doc.text, doc.tree);
+			let cascaded = dag.update(uri, doc.text, doc.tree, documents.all());
 			for (let dep in cascaded) invalidateUri(dep);
 			protocol.notify('textDocument/publishDiagnostics', {
 				uri,
