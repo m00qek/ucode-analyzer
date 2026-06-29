@@ -1492,6 +1492,22 @@ describe('inferrer — buildScope flow sensitivity', () => {
 		assert.match('int', t.name ?? t.kind);
 	});
 
+	it('!x in consequent: narrows to null (was unhandled before narrowing unification)', () => {
+		let text = "let x = 42 || null;\nif (!x) {\n  x;\n}\n";
+		let offset = index(text, '  x;');
+		let scope = scopeAt(text, offset);
+		let t = scopeGet(scope, 'x');
+		assert.match('null', t.name);
+	});
+
+	it('!x in alternate: removes null (guard-clause equivalent)', () => {
+		let text = "let x = 42 || null;\nif (!x) {\n  x;\n} else {\n  x;\n}\n";
+		let offset = index(text, '} else {\n  x;') + length('} else {\n  ');
+		let scope = scopeAt(text, offset);
+		let t = scopeGet(scope, 'x');
+		assert.match('int', t.name ?? t.kind);
+	});
+
 	it('no narrowing outside the if block', () => {
 		let text = "let x = 42 || null;\nif (x !== null) {\n  x;\n}\nx;\n";
 		let offset = length(text) - length('x;\n') + 0;

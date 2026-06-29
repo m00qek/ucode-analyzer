@@ -1,7 +1,8 @@
 import * as ts from 'tree_sitter';
 import { inferNode, processDecl, importScope } from 'language_server.types.inferrer';
 import { makeScope, scopeGet, scopeSet, scopeHas } from 'language_server.types.scope';
-import { UNKNOWN, STR, NULL_T } from 'language_server.types.type_utils';
+import { UNKNOWN, STR } from 'language_server.types.type_utils';
+import { parseGuard, applyGuard } from 'language_server.types.narrowing';
 
 // Return all function nodes (function_declaration / arrow_function /
 // function_expression) that contain offset, outermost first.
@@ -75,69 +76,6 @@ function addForVar(block, source, uri, scope) {
 
 // Strip null / nullable from a type so narrowed identifiers reflect the
 // non-null branch of an if-check.
-function removeNull(type) {
-	if (!type || type.kind === 'unknown') return type ?? UNKNOWN;
-	if (type.kind === 'nullable') return type.inner;
-	if (type.kind === 'union') {
-		let members = [];
-		for (let i = 0; i < length(type.members); i++) {
-			let m = type.members[i];
-			if (m.kind === 'primitive' && m.name === 'null') continue;
-			push(members, m);
-		}
-		if (length(members) === 0) return UNKNOWN;
-		if (length(members) === 1) return members[0];
-		return { kind: 'union', members };
-	}
-	return type;
-}
-
-// Apply scope narrowings implied by a condition expression.
-// inConsequent = true  → we're in the then-branch
-// inConsequent = false → we're in the else-branch
-function narrowCondition(cond, source, scope, inConsequent) {
-	if (!cond) return;
-	let nt = ts.nodeType(cond);
-
-	// x !== null / x != null / x === null / x == null (and reversed)
-	if (nt === 'binary_expression') {
-		let op      = ts.child(cond, 1);
-		let opText  = op ? ts.nodeType(op) : '';
-		let isNotEq = (opText === '!==' || opText === '!=');
-		let isEq    = (opText === '===' || opText === '==');
-		if (!isNotEq && !isEq) return;
-
-		let left  = ts.namedChild(cond, 0);
-		let right = ts.namedChild(cond, 1);
-
-		// Find which operand is an identifier and which is a null literal.
-		let varNode = null;
-		if (left && ts.nodeType(left) === 'identifier' && right && ts.nodeType(right) === 'null')
-			varNode = left;
-		else if (right && ts.nodeType(right) === 'identifier' && left && ts.nodeType(left) === 'null')
-			varNode = right;
-		if (!varNode) return;
-
-		let name = ts.text(varNode, source);
-		let cur  = scopeGet(scope, name);
-		if (!cur) return;
-
-		// x !== null: consequent → non-null; alternate → null
-		// x === null: consequent → null;     alternate → non-null
-		if (isNotEq && inConsequent)  scopeSet(scope, name, removeNull(cur));
-		if (isNotEq && !inConsequent) scopeSet(scope, name, NULL_T);
-		if (isEq    && inConsequent)  scopeSet(scope, name, NULL_T);
-		if (isEq    && !inConsequent) scopeSet(scope, name, removeNull(cur));
-		return;
-	}
-
-	// if (x) → x is truthy (treat as non-null) in the consequent
-	if (nt === 'identifier' && inConsequent) {
-		let name = ts.text(cond, source);
-		let cur  = scopeGet(scope, name);
-		if (cur) scopeSet(scope, name, removeNull(cur));
-	}
-}
 
 // If block is the consequent or alternate of an if_statement, narrow the
 // scope bindings implied by the condition.
@@ -172,7 +110,7 @@ function applyIfNarrowing(block, source, scope) {
 
 	// Unwrap parenthesized_expression → actual condition
 	let cond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
-	narrowCondition(cond, source, scope, inConsequent);
+	applyGuard(scope, parseGuard(cond, source), inConsequent);
 }
 
 // Process declarations visible at targetOffset within a flat list of statements.

@@ -110,9 +110,7 @@ describe('diagnostics — type errors: flow sensitivity (guard clause)', () => {
 		assert.match(0, length(diags));
 	});
 
-	it('suppresses null warning after if (x === null) return guard clause', () => {
-		// Note: parseGuard only handles !== and !=, not === and ==.
-		// This case is NOT narrowed — a warning IS expected here.
+	it('suppresses null warning after if (!x) return guard clause', () => {
 		let doc = open("let x = null;\nif (!x) return;\nx.foo;\n");
 		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
 		assert.match(0, length(diags));

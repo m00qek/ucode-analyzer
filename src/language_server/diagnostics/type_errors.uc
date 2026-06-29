@@ -1,8 +1,9 @@
 import * as ts from 'tree_sitter';
 import { buildLineTable, rangeOf } from 'language_server.positions';
 import { makeScope, scopeGet, scopeSet } from 'language_server.types.scope';
-import { UNKNOWN, NULL_T } from 'language_server.types.type_utils';
+import { UNKNOWN } from 'language_server.types.type_utils';
 import { importScope, inferNode, processDecl } from 'language_server.types.inferrer';
+import { parseGuard, applyGuard } from 'language_server.types.narrowing';
 
 let SEVERITY_ERROR   = 1;
 let SEVERITY_WARNING = 2;
@@ -43,82 +44,6 @@ function unknownFieldOf(type, propName) {
 	for (let i = 0; i < length(fields); i++)
 		if (fields[i].name === propName) return null;
 	return propName;
-}
-
-// ── Guard parsing and narrowing ───────────────────────────────────────────────
-
-// Parse an AST condition into { name, positive } where positive=true means
-// "name is non-null/truthy in the branch where this guard holds".
-//   x          → { name: 'x', positive: true }
-//   !x         → { name: 'x', positive: false }
-//   x !== null → { name: 'x', positive: true }   (also x != null, null !== x, etc.)
-function parseGuard(node, source) {
-	if (!node) return null;
-	let nt = ts.nodeType(node);
-
-	// The condition field of if_statement is wrapped in parentheses.
-	if (nt === 'parenthesized_expression')
-		return parseGuard(ts.namedChild(node, 0), source);
-
-	if (nt === 'identifier')
-		return { name: ts.text(node, source), positive: true };
-
-	if (nt === 'unary_expression') {
-		if (ts.nodeType(ts.child(node, 0)) === '!') {
-			let operand = ts.namedChild(node, 0);
-			if (operand && ts.nodeType(operand) === 'identifier')
-				return { name: ts.text(operand, source), positive: false };
-		}
-		return null;
-	}
-
-	if (nt === 'binary_expression') {
-		let op = ts.nodeType(ts.child(node, 1));
-		if (op !== '!==' && op !== '!=') return null;
-		let left  = ts.namedChild(node, 0);
-		let right = ts.namedChild(node, 1);
-		if (!left || !right) return null;
-		if (ts.nodeType(right) === 'null' && ts.nodeType(left) === 'identifier')
-			return { name: ts.text(left, source), positive: true };
-		if (ts.nodeType(left) === 'null' && ts.nodeType(right) === 'identifier')
-			return { name: ts.text(right, source), positive: true };
-	}
-
-	return null;
-}
-
-function narrowToNonNull(type) {
-	if (!type || type.kind === 'unknown') return UNKNOWN;
-	if (type.kind === 'nullable') return type.inner;
-	if (type.kind === 'primitive' && type.name === 'null') return UNKNOWN;
-	if (type.kind === 'union') {
-		let kept = [];
-		for (let i = 0; i < length(type.members); i++) {
-			let m = type.members[i];
-			if (!(m.kind === 'primitive' && m.name === 'null')) push(kept, m);
-		}
-		if (length(kept) === 0) return UNKNOWN;
-		if (length(kept) === 1) return kept[0];
-		return { kind: 'union', members: kept };
-	}
-	return type;
-}
-
-// Apply a guard narrowing to scope.
-//   positive=true  → entering the branch where the guard holds (e.g., if-body)
-//   positive=false → entering the branch where the guard does NOT hold (e.g., else,
-//                    or subsequent siblings after a guard-clause terminator)
-function applyGuard(scope, guard, positive) {
-	if (!guard) return;
-	let current = scopeGet(scope, guard.name);
-	let inTrueBranch = guard.positive ? positive : !positive;
-	let narrowed;
-	if (inTrueBranch) {
-		narrowed = narrowToNonNull(current ?? UNKNOWN);
-	} else {
-		narrowed = NULL_T;
-	}
-	scopeSet(scope, guard.name, narrowed);
 }
 
 // True when a node unconditionally transfers control away from the current
