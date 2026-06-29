@@ -50,6 +50,26 @@ function importContext(root, source, offset) {
 	return findImport(root);
 }
 
+// Build a snippet string for a function completion.
+// Uses type params when available, JSDoc params as fallback,
+// or a bare $1 placeholder when param count is unknown.
+function fnSnippet(label, fnType, docParams) {
+	let names = [];
+	if (fnType && fnType.kind === 'function' && length(fnType.params ?? []) > 0) {
+		names = map(fnType.params, (p) => p.name ?? 'arg');
+	} else if (docParams && length(docParams) > 0) {
+		names = map(docParams, (p) => p.name ?? 'arg');
+	}
+	if (length(names) === 0) {
+		// Known zero-param function → empty parens; unknown count → placeholder.
+		return (fnType && fnType.kind === 'function') ? label + '()' : label + '($1)';
+	}
+	let parts = [];
+	for (let i = 0; i < length(names); i++)
+		push(parts, sprintf('${%d:%s}', i + 1, names[i]));
+	return label + '(' + join(', ', parts) + ')';
+}
+
 // Format a type for a completion item's detail field.
 function detail(exp) {
 	if (!exp.doc) return null;
@@ -116,12 +136,19 @@ function exportsOfModule(resolvedUri) {
 		let exp = exps[i];
 		if (!platform.symbolAvailable(resolvedUri, exp.doc?.since)) continue;
 		let r = dag.resolveExport(resolvedUri, exp.name) ?? exp;
-		push(items, {
-			label: exp.name,
-			kind: (r.kind === 'function') ? KIND_FUNCTION : KIND_VARIABLE,
-			detail: detail(r),
+		let isFn = (r.kind === 'function');
+		let item = {
+			label:         exp.name,
+			kind:          isFn ? KIND_FUNCTION : KIND_VARIABLE,
+			detail:        detail(r),
 			documentation: (r.doc && r.doc.description) ? r.doc.description : null,
-		});
+		};
+		if (isFn) {
+			item.insertText       = fnSnippet(exp.name, null, r.doc?.params);
+			item.insertTextFormat = 2;
+		}
+		if (r.doc && r.doc.deprecated) item.tags = [1];
+		push(items, item);
 	}
 	return items;
 }
@@ -137,12 +164,24 @@ function membersOfType(type) {
 		return exportsOfModule(modUri);
 	}
 	if (type.kind === 'record') {
-		return map(type.fields, (f) => ({
-			label: f.name,
-			kind: (f.type && f.type.kind === 'function') ? KIND_FUNCTION : KIND_VARIABLE,
-			detail: f.type ? typeToString(f.type) : null,
-			documentation: (f.doc && f.doc.description) ? f.doc.description : null,
-		}));
+		let items = [];
+		for (let i = 0; i < length(type.fields); i++) {
+			let f = type.fields[i];
+			let isFn = (f.type && f.type.kind === 'function');
+			let item = {
+				label:         f.name,
+				kind:          isFn ? KIND_FUNCTION : KIND_VARIABLE,
+				detail:        f.type ? typeToString(f.type) : null,
+				documentation: (f.doc && f.doc.description) ? f.doc.description : null,
+			};
+			if (isFn) {
+				item.insertText       = fnSnippet(f.name, f.type, f.doc?.params);
+				item.insertTextFormat = 2;
+			}
+			if (f.doc && f.doc.deprecated) item.tags = [1];
+			push(items, item);
+		}
+		return items;
 	}
 	if (type.kind === 'ref') {
 		let def = type_registry.lookup(type.name);
@@ -181,11 +220,19 @@ function importedItems(uri) {
 				}
 				if (localName === null) continue;
 				let r = dag.resolveExport(imp.resolvedUri, exp.name) ?? exp;
-				push(items, {
-					label: localName,
-					kind: (r.kind === 'function') ? KIND_FUNCTION : KIND_VARIABLE,
-					detail: detail(r),
-				});
+				let isFn = (r.kind === 'function');
+				let item = {
+					label:         localName,
+					kind:          isFn ? KIND_FUNCTION : KIND_VARIABLE,
+					detail:        detail(r),
+					documentation: (r.doc && r.doc.description) ? r.doc.description : null,
+				};
+				if (isFn) {
+					item.insertText       = fnSnippet(localName, null, r.doc?.params);
+					item.insertTextFormat = 2;
+				}
+				if (r.doc && r.doc.deprecated) item.tags = [1];
+				push(items, item);
 			}
 		}
 	}
@@ -203,11 +250,17 @@ function scopeItems(uri, doc, offset) {
 			if (seen[name]) continue;
 			seen[name] = true;
 			let t = s.bindings[name];
-			push(items, {
-				label: name,
-				kind: (t && t.kind === 'function') ? KIND_FUNCTION : KIND_VARIABLE,
+			let isFn = (t && t.kind === 'function');
+			let item = {
+				label:  name,
+				kind:   isFn ? KIND_FUNCTION : KIND_VARIABLE,
 				detail: t ? typeToString(t) : null,
-			});
+			};
+			if (isFn) {
+				item.insertText       = fnSnippet(name, t, null);
+				item.insertTextFormat = 2;
+			}
+			push(items, item);
 		}
 		s = s.parent;
 	}

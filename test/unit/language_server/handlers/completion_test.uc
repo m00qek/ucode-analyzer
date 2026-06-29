@@ -255,3 +255,68 @@ describe('completion — keywords', () => {
 		assert.match(false, index(labels, 'if') >= 0);
 	});
 });
+
+describe('completion — snippets', () => {
+	beforeEach(() => dag.init(_config));
+
+	it('function items have insertTextFormat 2 (Snippet)', () => {
+		let text = "/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 5, character: 0 });
+		let item = filter(items, (i) => i.label === 'add')[0];
+		assert.match(true, item !== null);
+		assert.match(2, item.insertTextFormat);
+	});
+
+	it('snippet includes param names from JSDoc for scope items', () => {
+		let text = "/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 5, character: 0 });
+		let item = filter(items, (i) => i.label === 'add')[0];
+		assert.match(true, index(item.insertText, 'x') >= 0);
+		assert.match(true, index(item.insertText, 'y') >= 0);
+		assert.match('add(${1:x}, ${2:y})', item.insertText);
+	});
+
+	it('zero-param function gets empty parens snippet', () => {
+		let text = "function ping() { return true; }\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
+		let item = filter(items, (i) => i.label === 'ping')[0];
+		assert.match('ping()', item.insertText);
+	});
+
+	it('variable items do not get a snippet', () => {
+		let text = "let count = 0;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
+		let item = filter(items, (i) => i.label === 'count')[0];
+		assert.match(true, item.insertText === null || item.insertText === undefined);
+	});
+});
+
+describe('completion — @deprecated', () => {
+	beforeEach(() => dag.init(_config));
+
+	// Full @deprecated behaviour (tags: [1] on deprecated exports) is covered
+	// by e2e tests that have cross-file resolution.  Here we only verify that
+	// non-deprecated scope items never carry tags.
+	it('scope items for non-deprecated functions have no tags', () => {
+		let text = "function greet() {}\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
+		let item = filter(items, (i) => i.label === 'greet')[0];
+		assert.match(true, item !== null);
+		assert.match(true, item.tags === null || item.tags === undefined);
+	});
+});
