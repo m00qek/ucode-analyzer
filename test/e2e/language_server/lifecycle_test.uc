@@ -13,7 +13,7 @@ describe('initialize response', () => {
 		assert.match(true, caps.definitionProvider);
 		assert.match(true, caps.referencesProvider);
 		assert.match(true, caps.documentSymbolProvider);
-		assert.match(true, caps.renameProvider);
+		assert.match(true, caps.renameProvider !== null && caps.renameProvider !== false);
 		assert.match(true, type(caps.completionProvider)    === 'object');
 		assert.match(true, type(caps.signatureHelpProvider) === 'object');
 		assert.match('ucode-language-server', resp.result.serverInfo.name);

@@ -11,6 +11,8 @@ import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.sign
 import { references as referencesDoc } from 'language_server.handlers.references';
 import { documentSymbols as documentSymbolsDoc } from 'language_server.handlers.document_symbols';
 import { rename as renameDoc } from 'language_server.handlers.rename';
+import { documentHighlight as documentHighlightDoc } from 'language_server.handlers.document_highlight';
+import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prepare_rename';
 import { initBuiltinsFromDag } from 'language_server.types.inferrer';
 import * as platform from 'language_server.platform';
 
@@ -29,7 +31,8 @@ export function run(config) {
 					signatureHelpProvider: { triggerCharacters: ['(', ','] },
 					referencesProvider: true,
 					documentSymbolProvider: true,
-					renameProvider: true,
+					documentHighlightProvider: true,
+					renameProvider: { prepareProvider: true },
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -187,6 +190,22 @@ export function run(config) {
 			let doc = documents.get(uri);
 			protocol.respond(msg.id, doc
 				? renameDoc(uri, doc, msg.params.position, msg.params.newName)
+				: null);
+		},
+
+		'textDocument/documentHighlight': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc
+				? documentHighlightDoc(uri, doc, msg.params.position)
+				: null);
+		},
+
+		'textDocument/prepareRename': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc
+				? prepareRenameDoc(uri, doc, msg.params.position)
 				: null);
 		},
 	};
