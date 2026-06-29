@@ -98,6 +98,31 @@ describe('workspace file watcher', () => {
 	});
 });
 
+describe('malformed JSON resilience', () => {
+	it('server sends ParseError and stays alive after malformed JSON body', () => {
+		let proc = lsp.connect();
+		lsp.initialize(proc);
+
+		// Send a Content-Length frame whose body is not valid JSON.
+		let bad = 'not valid json!!!';
+		proc.write_raw(sprintf('Content-Length: %d\r\n\r\n%s', length(bad), bad));
+
+		// Server must respond with ParseError (-32700), not crash.
+		// The ParseError has id:null; receiveNotification captures null-id messages.
+		let resp = lsp.receiveNotification(proc);
+		assert.match(-32700, resp.error.code);
+
+		// Server must still respond to a valid subsequent request.
+		lsp.send(proc, { jsonrpc: '2.0', id: 42, method: 'shutdown', params: null });
+		let ok = lsp.receive(proc);
+		assert.match(42, ok.id);
+		assert.match(null, ok.error);
+
+		lsp.send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });
+		assert.match(0, lsp.close(proc));
+	});
+});
+
 describe('post-shutdown guard', () => {
 	it('request after shutdown returns InvalidRequest (-32600)', () => {
 		let proc = lsp.connect();

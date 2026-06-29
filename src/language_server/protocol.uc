@@ -43,7 +43,19 @@ export function read_message() {
 	if (!m)
 		die(sprintf('missing Content-Length in header: %s', header));
 
-	return json(read_exact(+m[1]));
+	let body = read_exact(+m[1]);
+	let msg;
+	try {
+		msg = json(body);
+	} catch (e) {
+		// Malformed JSON: respond with ParseError and signal the caller to skip.
+		// Inline the write to avoid a forward reference to write_message.
+		let errBody = sprintf('%J', { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
+		fs.stdout.write(sprintf('Content-Length: %d\r\n\r\n%s', length(errBody), errBody));
+		fs.stdout.flush();
+		return { _parseError: true };
+	}
+	return msg;
 };
 
 export function write_message(obj) {

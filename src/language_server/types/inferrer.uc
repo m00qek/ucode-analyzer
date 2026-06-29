@@ -177,6 +177,12 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 	if (formalParams) {
 		for (let i = 0; i < ts.namedChildCount(formalParams); i++) {
 			let pnode = ts.namedChild(formalParams, i);
+			if (ts.nodeType(pnode) === 'rest_element') {
+				let inner = ts.namedChild(pnode, 0);
+				if (inner && ts.nodeType(inner) === 'identifier')
+					push(params, { name: ts.text(inner, source), type: { kind: 'generic', base: 'list', params: [UNKNOWN] } });
+				continue;
+			}
 			if (ts.nodeType(pnode) !== 'identifier') continue;
 			let ptype = (i < length(expectedParams))
 				? (expectedParams[i].type ?? UNKNOWN) : UNKNOWN;
@@ -471,6 +477,12 @@ function inferFunctionDecl(node, source, uri, scope, depth) {
 			if (ts.nodeType(child) !== 'formal_parameters') continue;
 			for (let j = 0; j < ts.namedChildCount(child); j++) {
 				let p = ts.namedChild(child, j);
+				if (ts.nodeType(p) === 'rest_element') {
+					let inner = ts.namedChild(p, 0);
+					if (inner && ts.nodeType(inner) === 'identifier')
+						push(params, { name: ts.text(inner, source), type: { kind: 'generic', base: 'list', params: [UNKNOWN] } });
+					continue;
+				}
 				if (ts.nodeType(p) !== 'identifier') continue;
 				push(params, { name: ts.text(p, source), type: UNKNOWN });
 			}

@@ -1331,6 +1331,57 @@ describe('inferrer — unary delete', () => {
 	});
 });
 
+describe('inferrer — rest params', () => {
+	function inferFn(text) {
+		let tree = parse(text);
+		let root = ts.rootNode(tree);
+		let fn = ts.namedChild(root, 0);
+		return inferNode(fn, text, URI, makeScope(null), 0);
+	}
+
+	it('function_declaration: rest param appears in inferred type params', () => {
+		let t = inferFn("function f(...args) { return args; }");
+		assert.match('function', t.kind);
+		let names = map(t.params, (p) => p.name);
+		assert.match(true, index(names, 'args') >= 0);
+	});
+
+	it('function_declaration: rest param has list type', () => {
+		let t = inferFn("function f(...args) { return args; }");
+		let p = null;
+		for (let i in t.params) if (i.name === 'args') { p = i; break; }
+		assert.match(true, p !== null);
+		assert.match('generic', p.type.kind);
+		assert.match('list', p.type.base);
+	});
+
+	it('function_declaration: plain and rest params both present', () => {
+		let t = inferFn("function f(a, ...rest) { return rest; }");
+		assert.match('function', t.kind);
+		let names = map(t.params, (p) => p.name);
+		assert.match(true, index(names, 'a') >= 0);
+		assert.match(true, index(names, 'rest') >= 0);
+	});
+
+	it('arrow function: rest param appears in inferred type params', () => {
+		let t = infer("let f = (...args) => args;");
+		assert.match('function', t.kind);
+		let names = map(t.params, (p) => p.name);
+		assert.match(true, index(names, 'args') >= 0);
+	});
+
+	it('rest param is in scope inside function body', () => {
+		let text = "function f(...args) { return args; }";
+		// position inside the body (after the '{')
+		let bodyOffset = index(text, 'return');
+		let scope = buildScope(URI, text, parse(text), bodyOffset);
+		let t = scopeGet(scope, 'args');
+		assert.match(true, t !== null);
+		assert.match('generic', t.kind);
+		assert.match('list', t.base);
+	});
+});
+
 describe('inferrer — object with string-literal keys', () => {
 	it('"key": value is indexed as a record field', () => {
 		let t = infer('let x = { "host": "localhost", "port": 8080 };');

@@ -228,6 +228,8 @@ export function run(config) {
 			exit(shutdown_requested ? 0 : 1);
 		}
 
+		if (msg._parseError) continue;
+
 		// After shutdown, reject all requests (notifications are silently ignored).
 		// Response messages (no method) are also silently ignored.
 		if (shutdown_requested && msg.method !== 'exit') {
