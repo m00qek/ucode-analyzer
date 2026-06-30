@@ -3,6 +3,7 @@ import { positionToOffset, nodeAtOffset, docBefore } from 'language_server.posit
 import { inferNode } from 'language_server.types.inferrer';
 import { buildScope } from 'language_server.types.scope_builder';
 import { typeToString, parseDoc } from 'language_server.types.doc_parser';
+import { UNKNOWN, STR } from 'language_server.types.type_utils';
 import * as dag from 'language_server.dag.dag';
 import * as templates from 'language_server.templates';
 import { resolveDoc } from 'language_server.doc_resolver';
@@ -116,6 +117,34 @@ export function hover(doc, position, config) {
 				}
 			}
 			return null;
+		}
+
+		// Cursor on the loop variable in a for-in declaration: for (let item in xs).
+		// buildScope at ts.startByte(node) does not put 'item' in scope because the
+		// variable only exists inside the body block, not in the for header itself.
+		let forIn = ts.parent(node);
+		if (forIn && ts.nodeType(forIn) === 'for_in_statement') {
+			let left = ts.childByField(forIn, 'left');
+			if (left && ts.startByte(left) === ts.startByte(node)) {
+				let scope   = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(forIn));
+				let right   = ts.childByField(forIn, 'right');
+				let elemType = UNKNOWN;
+				if (right) {
+					let iterType = inferNode(right, doc.text, doc.uri, scope, 0);
+					if (iterType.kind === 'nullable') iterType = iterType.inner;
+					if (iterType.kind === 'generic' && iterType.base === 'list' && length(iterType.params) > 0)
+						elemType = iterType.params[0];
+					else if (iterType.kind === 'record' || (iterType.kind === 'generic' && iterType.base === 'dict'))
+						elemType = STR;
+				}
+				if (elemType.kind === 'unknown') return null;
+				let varName = ts.text(node, doc.text);
+				let ctx = buildHoverCtx(varName, elemType, null);
+				let md = templates.renderTemplate('hover/default', ctx, config ?? {});
+				if (md === null)
+					md = sprintf('```ucode\n%s: %s\n```', varName, typeToString(elemType));
+				return { contents: { kind: 'markdown', value: md } };
+			}
 		}
 	}
 

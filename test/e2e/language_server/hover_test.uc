@@ -296,4 +296,49 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(true, index(val, 'Parameters') >= 0);
 		assert.match(true, index(val, 'expected') >= 0);
 	});
+
+	it('for-in loop variable at declaration site shows element type', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let xs = [1, 2, 3];\nfor (let item in xs) { item; }\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 9 },  // 'item' in 'let item'
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(resp.result.contents.value, 'int') >= 0);
+	});
+
+	it('for-in over record: loop variable at declaration site shows string key type', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let obj = { a: 1, b: 2 };\nfor (let key in obj) { key; }\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 9 },  // 'key' in 'let key'
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+	});
+
+	it('catch variable hover shows string type', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "try { } catch(e) {\n    e;\n}\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 4 },  // 'e' inside catch body
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+	});
 });

@@ -61,7 +61,7 @@ function addCatchVar(block, source, uri, scope) {
 	if (!clause || ts.nodeType(clause) !== 'catch_clause') return;
 	let param = ts.childByField(clause, 'parameter');
 	if (param && ts.nodeType(param) === 'identifier')
-		scopeSet(scope, ts.text(param, source), UNKNOWN);
+		scopeSet(scope, ts.text(param, source), STR);
 }
 
 // If block is the body of a C-style for statement, add its initializer
