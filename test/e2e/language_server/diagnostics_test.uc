@@ -333,6 +333,16 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(0, length(typeErrs));
 	});
 
+	it('does not warn for m.prop inside if (m && ...) body', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///if_narrow.uc', languageId: 'ucode', version: 1,
+				text: "/**\n * @param {object|null} m\n */\nfunction f(m) { if (m && type(m.api) === 'array') { let x = m.api; x; } }\nf(null);\n" },
+		}});
+		let notif = lsp.receiveNotification(proc);
+		let typeErrs = filter(notif.params.diagnostics, (d) => d.code === 'may-be-null' || d.code === 'unknown-property');
+		assert.match(0, length(typeErrs));
+	});
+
 	it('re-sends diagnostics on didChange', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },

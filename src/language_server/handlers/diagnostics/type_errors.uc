@@ -237,6 +237,28 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 		return;
 	}
 
+	// ── if-statement: narrow body and else using the condition guard ─────────
+	//
+	// AST shape: namedChild(0) = parenthesized_expression (condition wrapper),
+	//            namedChild(1) = statement_block (consequent),
+	//            namedChild(2) = else_clause (optional alternate).
+
+	if (nt === 'if_statement') {
+		let condWrapper = ts.namedChild(node, 0);
+		let consequent  = ts.namedChild(node, 1);
+		let elseClause  = ts.namedChild(node, 2);
+		let cond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
+		if (cond) _walk(cond, scope, source, uri, lineTable, diags);
+		let guard = cond ? parseGuard(cond, source) : null;
+		let trueScope  = makeScope(scope);
+		let falseScope = makeScope(scope);
+		applyGuard(trueScope,  guard, true);
+		applyGuard(falseScope, guard, false);
+		if (consequent) _walk(consequent, trueScope,  source, uri, lineTable, diags);
+		if (elseClause) _walk(elseClause, falseScope, source, uri, lineTable, diags);
+		return;
+	}
+
 	// ── `&&` short-circuit: narrow RHS using the LHS guard ───────────────────
 
 	if (nt === 'binary_expression') {

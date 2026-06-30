@@ -67,6 +67,23 @@ export function parseGuard(node, source) {
 
 	if (nt === 'binary_expression') {
 		let op = ts.nodeType(ts.child(node, 1));
+
+		if (op === '&&') {
+			// In the consequent all sub-conditions hold; collect guards and apply
+			// each positively. In the alternate we can't tell which sub-condition
+			// failed, so we wrap in a compound guard that applyGuard skips when
+			// positive=false, giving safe/conservative behaviour.
+			let left  = ts.namedChild(node, 0);
+			let right = ts.namedChild(node, 1);
+			let leftGuard  = left  ? parseGuard(left,  source) : null;
+			let rightGuard = right ? parseGuard(right, source) : null;
+			if (!leftGuard && !rightGuard) return null;
+			let guards = [];
+			if (leftGuard)  push(guards, leftGuard);
+			if (rightGuard) push(guards, rightGuard);
+			return { compound: '&&', guards };
+		}
+
 		let isNotEq = (op === '!==' || op === '!=');
 		let isEq    = (op === '===' || op === '==');
 		if (!isNotEq && !isEq) return null;
@@ -116,6 +133,13 @@ export function parseGuard(node, source) {
 
 export function applyGuard(scope, guard, positive) {
 	if (!guard) return;
+	if (guard.compound === '&&') {
+		// All sub-guards hold in the true branch; false branch is ambiguous.
+		if (positive)
+			for (let i = 0; i < length(guard.guards); i++)
+				applyGuard(scope, guard.guards[i], true);
+		return;
+	}
 	let current = scopeGet(scope, guard.name);
 	let inTrueBranch = guard.positive ? positive : !positive;
 	if (guard.toType) {
