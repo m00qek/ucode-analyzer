@@ -2,7 +2,7 @@ import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
 import { narrowToNonNull, parseGuard, applyGuard } from 'language_server.types.narrowing';
 import { makeScope, scopeGet, scopeSet } from 'language_server.types.scope';
-import { UNKNOWN, NULL_T, STR, INT } from 'language_server.types.type_utils';
+import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL } from 'language_server.types.type_utils';
 
 let NULLABLE_STR = { kind: 'nullable', inner: STR };
 let UNION_STR_NULL = { kind: 'union', members: [STR, NULL_T] };
@@ -111,6 +111,95 @@ describe('parseGuard', () => {
 		let doc = parseSource('if (a + b) {}');
 		let cond = conditionNode(doc);
 		assert.match(null, parseGuard(cond, doc.source));
+	});
+
+	it('type(x) === "string" → positive guard with toType STR', () => {
+		let doc = parseSource('if (type(x) === "string") {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match('x', g.name);
+		assert.match(true, g.positive);
+		assert.match(STR, g.toType);
+	});
+
+	it('type(x) !== "string" → negative guard with toType STR', () => {
+		let doc = parseSource('if (type(x) !== "string") {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match('x', g.name);
+		assert.match(false, g.positive);
+		assert.match(STR, g.toType);
+	});
+
+	it('"int" === type(x) → positive guard (operands reversed)', () => {
+		let doc = parseSource('if ("int" === type(x)) {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match('x', g.name);
+		assert.match(true, g.positive);
+		assert.match(INT, g.toType);
+	});
+
+	it('type(x) === "bool" → toType BOOL', () => {
+		let doc = parseSource('if (type(x) === "bool") {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match(BOOL, g.toType);
+	});
+
+	it('type(x) === "double" → toType FLOAT', () => {
+		let doc = parseSource('if (type(x) === "double") {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match(FLOAT, g.toType);
+	});
+
+	it('type(x) === "array" → null (no singleton type for array)', () => {
+		let doc = parseSource('if (type(x) === "array") {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match(null, g);
+	});
+
+	it('type(x, extra) === "string" → null (only single-arg calls qualify)', () => {
+		let doc = parseSource('if (type(x, y) === "string") {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match(null, g);
+	});
+});
+
+// ── applyGuard (typeof) ───────────────────────────────────────────────────────
+
+describe('applyGuard type() narrowing', () => {
+	it('positive typeof guard narrows to toType', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'x', UNKNOWN);
+		applyGuard(scope, { name: 'x', positive: true, toType: STR }, true);
+		assert.match(STR, scopeGet(scope, 'x'));
+	});
+
+	it('positive typeof guard in alternate branch leaves union minus that type', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'x', { kind: 'union', members: [STR, INT, NULL_T] });
+		applyGuard(scope, { name: 'x', positive: true, toType: STR }, false);
+		let t = scopeGet(scope, 'x');
+		assert.match('union', t.kind);
+		assert.match(2, length(t.members));
+	});
+
+	it('negative typeof guard in true branch filters type from union', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'x', { kind: 'union', members: [STR, INT] });
+		applyGuard(scope, { name: 'x', positive: false, toType: STR }, true);
+		assert.match(INT, scopeGet(scope, 'x'));
+	});
+
+	it('negative typeof guard in false branch narrows to toType', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'x', { kind: 'union', members: [STR, INT] });
+		applyGuard(scope, { name: 'x', positive: false, toType: STR }, false);
+		assert.match(STR, scopeGet(scope, 'x'));
+	});
+
+	it('typeof guard on non-union in alternate branch leaves type unchanged', () => {
+		let scope = makeScope(null);
+		scopeSet(scope, 'x', UNKNOWN);
+		applyGuard(scope, { name: 'x', positive: true, toType: STR }, false);
+		assert.match(UNKNOWN, scopeGet(scope, 'x'));
 	});
 });
 

@@ -341,4 +341,35 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(true, resp.result !== null);
 		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
 	});
+
+	it('type() narrowing: variable shows narrowed type inside if-branch', () => {
+		// x is unknown initially; after type(x) === "string" check it should be string
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "function f(x) {\n    if (type(x) === \"string\") {\n        x;\n    }\n}\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 2, character: 8 },  // 'x' inside the if body
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+	});
+
+	it('type() narrowing: variable shows narrowed type in else branch after !== check', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "function f(x) {\n    if (type(x) !== \"string\") {\n    } else {\n        x;\n    }\n}\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 3, character: 8 },  // 'x' inside the else body
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);
+		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+	});
 });
