@@ -28,14 +28,14 @@ export const REQUIRE_SEARCH_PATH = [];
  * exported objects. Delete an entry to force a reload on next `require()`.
  * @type {object}
  */
-export const modules = {};
+export const modules = null;
 
 /**
  * Self-reference to the global scope object. Useful for dynamically reading
  * or writing global variables at runtime (`global.foo = 42`).
  * @type {object}
  */
-export const global = {};
+export const global = null;
 
 /**
  * Command-line arguments passed to the script (standalone mode only).
