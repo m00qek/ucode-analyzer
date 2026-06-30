@@ -73,6 +73,7 @@ test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 		test/unit/language_server/ \
 		test/unit/language_server/dag/ \
 		test/unit/language_server/handlers/ \
+		test/unit/language_server/handlers/code_actions/ \
 		test/unit/language_server/handlers/diagnostics/ \
 		test/unit/language_server/types/
 
