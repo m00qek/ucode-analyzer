@@ -18,6 +18,7 @@ import { documentHighlight as documentHighlightDoc } from 'language_server.handl
 import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prepare_rename';
 import { codeAction as codeActionDoc } from 'language_server.handlers.code_actions';
 import { selectionRanges as selectionRangesDoc } from 'language_server.handlers.selection_range';
+import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'language_server.handlers.call_hierarchy';
 import { initBuiltinsFromDag } from 'language_server.types.inferrer';
 import * as platform from 'language_server.platform';
 
@@ -43,6 +44,7 @@ export function run(config) {
 					inlayHintProvider: true,
 					foldingRangeProvider: true,
 					selectionRangeProvider: true,
+					callHierarchyProvider: true,
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -239,6 +241,22 @@ export function run(config) {
 			protocol.respond(msg.id, doc
 				? prepareRenameDoc(uri, doc, msg.params.position)
 				: null);
+		},
+
+		'textDocument/prepareCallHierarchy': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc
+				? prepareCallHierarchyDoc(uri, doc, msg.params.position)
+				: null);
+		},
+
+		'callHierarchy/incomingCalls': function(msg) {
+			protocol.respond(msg.id, incomingCallsDoc(msg.params.item));
+		},
+
+		'callHierarchy/outgoingCalls': function(msg) {
+			protocol.respond(msg.id, outgoingCallsDoc(msg.params.item));
 		},
 
 		'textDocument/codeAction': function(msg) {
