@@ -203,6 +203,22 @@ describe('textDocument/diagnostic', () => {
 		assert.match(1, length(errs));
 	});
 
+	it('narrows to non-null in the true branch of type(x) === "object"', () => {
+		// object/array have no singleton type, but type(x)==='object' still proves
+		// x is non-null (type(null) is 'null').
+		let diags = diagnose('file:///type_obj.uc',
+			"function f() { let r = null; if (type(r) === 'object') { return r.x; } return 0; }\nf();\n");
+		let errs = filter(diags, (d) => d.code === 'may-be-null');
+		assert.match(0, length(errs));
+	});
+
+	it('narrows inside a brace-less if body', () => {
+		let diags = diagnose('file:///braceless_if.uc',
+			"function f() { let r = null; if (r !== null) return r.x; return 0; }\nf();\n");
+		let errs = filter(diags, (d) => d.code === 'may-be-null');
+		assert.match(0, length(errs));
+	});
+
 	it('does not warn for m.prop on the RHS of (m === null || m.prop)', () => {
 		// RHS of || is only reached when m === null is false, so m is non-null there.
 		let diags = diagnose('file:///or_narrow.uc',

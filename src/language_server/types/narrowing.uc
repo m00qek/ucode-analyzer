@@ -122,11 +122,19 @@ export function parseGuard(node, source) {
 			    && args && ts.namedChildCount(args) === 1) {
 				let operand = ts.namedChild(args, 0);
 				if (operand && ts.nodeType(operand) === 'identifier') {
+					let name    = ts.text(operand, source);
 					let raw     = ts.text(stringSide, source);
 					let typeStr = replace(raw, /^['"]|['"]$/g, '');
 					let toType  = TYPE_FUNC_MAP[typeStr];
 					if (toType)
-						return { kind: 'type', name: ts.text(operand, source), positive: isEq, toType };
+						return { kind: 'type', name, positive: isEq, toType };
+					// object/array/function have no singleton type, but
+					// `type(x) === '<non-null kind>'` still proves x is non-null in
+					// the true branch (type(null) is 'null'). Narrow only that
+					// branch — wrapping in an 'and' guard makes applyGuard skip the
+					// false branch, where x could still be null.
+					if (isEq)
+						return { kind: 'and', guards: [ { kind: 'truthy', name, positive: true } ] };
 				}
 			}
 		}

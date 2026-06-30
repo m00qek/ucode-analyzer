@@ -153,10 +153,18 @@ function walkIfStmt(node, source, uri, scope, map) {
     let falseScope = makeScope(scope);
     applyGuard(trueScope,  guard, true);
     applyGuard(falseScope, guard, false);
-    if (consequent) walkNode(consequent, source, uri, trueScope,  map);
+    if (consequent) {
+        // Emit so a brace-less body (e.g. `if (x !== null) return x.foo;`) sees
+        // the narrowed scope; a block body re-emits per-statement inside walkBlock.
+        emit(map, ts.startByte(consequent), trueScope);
+        walkNode(consequent, source, uri, trueScope, map);
+    }
     if (alt) {
         let altBody = ts.namedChild(alt, 0);
-        if (altBody) walkNode(altBody, source, uri, falseScope, map);
+        if (altBody) {
+            emit(map, ts.startByte(altBody), falseScope);
+            walkNode(altBody, source, uri, falseScope, map);
+        }
     }
 }
 

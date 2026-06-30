@@ -149,8 +149,19 @@ describe('parseGuard', () => {
 		assert.match(FLOAT, g.toType);
 	});
 
-	it('type(x) === "array" → null (no singleton type for array)', () => {
+	it('type(x) === "array" → non-null guard for the true branch (no array singleton)', () => {
+		// No singleton type for array, but type(x)==='array' still proves x is
+		// non-null; an 'and'-wrapped truthy guard narrows only the true branch.
 		let doc = parseSource('if (type(x) === "array") {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match('and', g.kind);
+		assert.match('truthy', g.guards[0].kind);
+		assert.match('x', g.guards[0].name);
+		assert.match(true, g.guards[0].positive);
+	});
+
+	it('type(x) !== "array" → null (cannot narrow the unmapped negative case)', () => {
+		let doc = parseSource('if (type(x) !== "array") {}');
 		let g = parseGuard(conditionNode(doc), doc.source);
 		assert.match(null, g);
 	});
