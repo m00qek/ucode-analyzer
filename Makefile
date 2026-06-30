@@ -74,6 +74,7 @@ test: test-unit test-integration test-e2e
 test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) \
 		test/unit/ \
+		test/unit/linter/ \
 		test/unit/language_server/ \
 		test/unit/language_server/dag/ \
 		test/unit/language_server/handlers/ \
