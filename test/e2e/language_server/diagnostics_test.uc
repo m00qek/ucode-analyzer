@@ -188,6 +188,21 @@ describe('textDocument/diagnostic', () => {
 		assert.match(0, length(typeErrs));
 	});
 
+	it('does not warn unknown-property when assigning a new key to a dict', () => {
+		// ucode dicts are open: `obj.newKey = ...` legitimately adds a property.
+		let diags = diagnose('file:///assign_new_key.uc',
+			"let obj = { a: 1 };\nobj.b = 2;\nobj;\n");
+		let errs = filter(diags, (d) => d.code === 'unknown-property');
+		assert.match(0, length(errs));
+	});
+
+	it('still warns unknown-property when reading a missing key', () => {
+		let diags = diagnose('file:///read_missing_key.uc',
+			"let obj = { a: 1 };\nlet x = obj.b;\nx;\n");
+		let errs = filter(diags, (d) => d.code === 'unknown-property');
+		assert.match(1, length(errs));
+	});
+
 	it('does not warn for m.prop inside if (m && ...) body', () => {
 		let diags = diagnose('file:///if_narrow.uc',
 			"/**\n * @param {object|null} m\n */\nfunction f(m) { if (m && type(m.api) === 'array') { let x = m.api; x; } }\nf(null);\n");

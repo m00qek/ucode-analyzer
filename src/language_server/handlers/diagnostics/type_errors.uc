@@ -42,6 +42,20 @@ function isNullLike(type) {
 	return false;
 }
 
+// True when this member_expression is the left-hand side of an assignment, i.e.
+// a write target. ucode dicts are open, so `obj.newKey = ...` legitimately
+// creates a property and must not be reported as unknown-property.
+function isAssignmentTarget(node) {
+	let parent = ts.parent(node);
+	if (!parent) return false;
+	let pt = ts.nodeType(parent);
+	if (pt !== 'assignment_expression' && pt !== 'augmented_assignment_expression')
+		return false;
+	let left = ts.childByField(parent, 'left');
+	return left && ts.startByte(left) === ts.startByte(node)
+	            && ts.endByte(left) === ts.endByte(node);
+}
+
 // Returns the field name that is missing on a known record type, or null if
 // the field exists or the type is not a concrete record.
 function unknownFieldOf(type, propName) {
@@ -103,7 +117,7 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags) {
 					code:     'may-be-null',
 					message:  sprintf("'%s' may be null", ts.text(obj, source)),
 				});
-			} else if (prop && ts.nodeType(prop) === 'property_identifier') {
+			} else if (prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node)) {
 				let field = unknownFieldOf(objType, ts.text(prop, source));
 				if (field !== null) {
 					push(diags, {
