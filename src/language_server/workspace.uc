@@ -48,10 +48,29 @@ export function loadWorkspace(config) {
 	return declVersions;
 };
 
+// Directories under workspaceDir that carry their own .lsp/config.json. Each is
+// a self-contained nested workspace (e.g. the linter's test fixtures) and is
+// diagnosed on its own terms, not as part of the parent — so the parent scan
+// skips it. The parent's own config (at workspaceDir/.lsp/config.json) does not
+// count. Computed once per scan and passed to isWorkspaceUri.
+function nestedWorkspaceRoots(config) {
+	let workdir = config.workspaceDir ?? '/';
+	let suffix = '/.lsp/config.json';
+	let roots = [];
+	for (let cfg in glob.scan(workdir, ['**/.lsp/config.json'], [])) {
+		if (substr(cfg, length(cfg) - length(suffix)) !== suffix) continue;
+		let root = substr(cfg, 0, length(cfg) - length(suffix));
+		if (root !== workdir && root !== '')
+			push(roots, root + '/');
+	}
+	return roots;
+};
+
 // A URI is part of the user's workspace when its path is under workspaceDir and
-// is not one of the server's own bundled sources, a system library, or a
-// declaration stub (those are dependencies, not files we diagnose).
-function isWorkspaceUri(uri, config) {
+// is not one of the server's own bundled sources, a system library, a
+// declaration stub, or a nested workspace (those are dependencies or separate
+// projects, not files we diagnose here).
+function isWorkspaceUri(uri, config, nestedRoots) {
 	let path = substr(uri, 7);  // strip "file://"
 	let workdir = config.workspaceDir ?? '/';
 	if (substr(path, 0, length(workdir)) !== workdir) return false;
@@ -61,6 +80,9 @@ function isWorkspaceUri(uri, config) {
 	for (let sp in (config.systemLibPaths ?? []))
 		if (substr(path, 0, length(sp)) === sp) return false;
 
+	for (let root in (nestedRoots ?? []))
+		if (substr(path, 0, length(root)) === root) return false;
+
 	if (length(path) >= 5 && substr(path, length(path) - 5) === '.d.uc') return false;
 
 	return true;
@@ -68,9 +90,10 @@ function isWorkspaceUri(uri, config) {
 
 // Every workspace URI currently known to the DAG.
 export function workspaceUris(config) {
+	let nested = nestedWorkspaceRoots(config);
 	let uris = [];
 	for (let uri in dag.allUris())
-		if (isWorkspaceUri(uri, config))
+		if (isWorkspaceUri(uri, config, nested))
 			push(uris, uri);
 	return uris;
 };
@@ -131,9 +154,10 @@ export function loadWorkspaceDocs(config) {
 	let globalUri = dag.resolveSpecifier('global');
 	if (globalUri) initBuiltinsFromDag(globalUri);
 
+	let nested = nestedWorkspaceRoots(config);
 	let out = [];
 	for (let doc in docs)
-		if (isWorkspaceUri(doc.uri, config))
+		if (isWorkspaceUri(doc.uri, config, nested))
 			push(out, doc);
 	return out;
 };

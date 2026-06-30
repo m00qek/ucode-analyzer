@@ -59,6 +59,14 @@ describe('ucode-linter — workspace mode', () => {
 		assert.match(2, r.code);
 	});
 
+	it('excludes a nested workspace (sub-dir with its own .lsp/config.json)', () => {
+		// src/sub carries its own .lsp/config.json, making it a separate workspace.
+		// Its files (buggy.uc, a redeclared-var error) must not surface in the
+		// parent scan, even though buggy.uc lives under the scanned src/ tree.
+		let r = runLinter([ '--workspace', WS ]);
+		assert.match(true, index(r.out, 'buggy.uc') < 0);
+	});
+
 	it('serial and parallel modes produce identical output', () => {
 		let serial   = runLinter([ '--jobs', '1', '--workspace', WS ]);
 		let parallel = runLinter([ '--jobs', '4', '--workspace', WS ]);
