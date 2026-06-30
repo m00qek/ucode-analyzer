@@ -46,9 +46,15 @@ define Package/$(PKG_NAME)/install
 	$(CP) ./src/$(UCODE_MOD_NAME)/* $(1)/usr/share/ucode/$(UCODE_MOD_NAME)/
 	$(INSTALL_DATA) ./src/ucode-language-server.uc \
 		$(1)/usr/share/ucode/ucode-language-server.uc
+	$(INSTALL_DIR) $(1)/usr/share/ucode/linter
+	$(CP) ./src/linter/* $(1)/usr/share/ucode/linter/
+	$(INSTALL_DATA) ./src/ucode-linter.uc \
+		$(1)/usr/share/ucode/ucode-linter.uc
 	$(INSTALL_DIR) $(1)/usr/bin
 	ln -sf /usr/share/ucode/ucode-language-server.uc \
 		$(1)/usr/bin/ucode-language-server
+	ln -sf /usr/share/ucode/ucode-linter.uc \
+		$(1)/usr/bin/ucode-linter
 endef
 
 $(eval $(call BuildPackage,$(PKG_NAME)))
