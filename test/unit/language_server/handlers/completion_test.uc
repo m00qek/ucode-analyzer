@@ -119,6 +119,7 @@ describe('completion — member (cursor on property)', () => {
 		let text = "import * as ts from 'tree_sitter';\nlet x = 5;\nts.parse";
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
+		documents.refreshScopeMap(URI);
 
 		// line 2, character 3 — on 'p' of 'parse'
 		let items = completion(URI, documents.get(URI), { line: 2, character: 3 });
@@ -132,6 +133,7 @@ describe('completion — member (cursor on property)', () => {
 		let text = "import * as ts from 'tree_sitter';\nts.parse";
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
+		documents.refreshScopeMap(URI);
 
 		let items = completion(URI, documents.get(URI), { line: 1, character: 3 });
 		let item = null;
@@ -146,6 +148,7 @@ describe('completion — member (cursor on property)', () => {
 		let text = "import * as ts from 'tree_sitter';\nts.\n";
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
+		documents.refreshScopeMap(URI);
 
 		// line 1, character 3 — right after 'ts.'
 		let items = completion(URI, documents.get(URI), { line: 1, character: 3 });

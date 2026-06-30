@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition } from 'language_server.positions';
 import { inferNode } from 'language_server.types.inferrer';
-import { buildScope } from 'language_server.types.scope_builder';
+import { scopeAtOffset } from 'language_server.types.scope_walk';
 import { typeToString } from 'language_server.types.doc_parser';
 
 let LITERAL_TYPES = {
@@ -18,7 +18,7 @@ function typeLabel(type) {
 	return (s === '?') ? null : s;
 }
 
-function walk(node, source, uri, scope, lineTable, rangeStart, rangeEnd, hints) {
+function walk(node, source, uri, scopeMap, lineTable, rangeStart, rangeEnd, hints) {
 	if (!node) return;
 
 	let nodeStart = ts.startByte(node);
@@ -35,6 +35,7 @@ function walk(node, source, uri, scope, lineTable, rangeStart, rangeEnd, hints) 
 		if (nameNode && valueNode && !LITERAL_TYPES[ts.nodeType(valueNode)]) {
 			let nameEnd = ts.endByte(nameNode);
 			if (nameEnd > rangeStart && nameEnd <= rangeEnd) {
+				let scope = scopeAtOffset(scopeMap, nodeStart);
 				let type  = inferNode(valueNode, source, uri, scope, 0);
 				let label = typeLabel(type);
 				if (label) {
@@ -53,6 +54,7 @@ function walk(node, source, uri, scope, lineTable, rangeStart, rangeEnd, hints) 
 		let fnNode   = ts.childByField(node, 'function');
 		let argsNode = ts.childByField(node, 'arguments');
 		if (fnNode && argsNode) {
+			let scope  = scopeAtOffset(scopeMap, nodeStart);
 			let fnType = inferNode(fnNode, source, uri, scope, 0);
 			if (fnType && fnType.kind === 'function') {
 				let args = ts.namedChildren(argsNode);
@@ -78,7 +80,7 @@ function walk(node, source, uri, scope, lineTable, rangeStart, rangeEnd, hints) 
 	}
 
 	for (let i = 0; i < ts.namedChildCount(node); i++)
-		walk(ts.namedChild(node, i), source, uri, scope, lineTable, rangeStart, rangeEnd, hints);
+		walk(ts.namedChild(node, i), source, uri, scopeMap, lineTable, rangeStart, rangeEnd, hints);
 }
 
 export function inlayHints(doc, range) {
@@ -89,11 +91,7 @@ export function inlayHints(doc, range) {
 	let rangeStart = positionToOffset(source, lineTable, range.start);
 	let rangeEnd   = positionToOffset(source, lineTable, range.end);
 
-	// Build scope at the end of the range so all bindings visible within it
-	// are available for type inference (single buildScope call for the request).
-	let scope = buildScope(uri, source, doc.tree, rangeEnd);
-
 	let hints = [];
-	walk(ts.rootNode(doc.tree), source, uri, scope, lineTable, rangeStart, rangeEnd, hints);
+	walk(ts.rootNode(doc.tree), source, uri, doc.scopeMap, lineTable, rangeStart, rangeEnd, hints);
 	return hints;
 };

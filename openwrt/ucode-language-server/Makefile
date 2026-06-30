@@ -34,6 +34,9 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/lib/ucode/tree_sitter
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/tree_sitter/native.so \
 		$(1)/usr/lib/ucode/tree_sitter/native.so
+	$(INSTALL_DIR) $(1)/usr/lib/ucode/language_server
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/language_server/native.so \
+		$(1)/usr/lib/ucode/language_server/native.so
 	$(INSTALL_DIR) $(1)/usr/lib/ucode/rpc_client
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/rpc_client/native.so \
 		$(1)/usr/lib/ucode/rpc_client/native.so

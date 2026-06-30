@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset } from 'language_server.positions';
 import { inferNode } from 'language_server.types.inferrer';
-import { buildScope } from 'language_server.types.scope_builder';
+import { scopeAtOffset } from 'language_server.types.scope_walk';
 import { typeToString } from 'language_server.types.doc_parser';
 import { unify, substitute } from 'language_server.types.unifier';
 
@@ -90,7 +90,7 @@ export function signatureHelp(uri, doc, position) {
 	let argsNode = ts.childByField(callNode, 'arguments');
 	if (!fnNode || !argsNode) return null;
 
-	let scope   = buildScope(uri, doc.text, doc.tree, offset);
+	let scope   = scopeAtOffset(doc.scopeMap, offset);
 	let fnType  = inferNode(fnNode, doc.text, uri, scope);
 	if (!fnType || fnType.kind !== 'function') return null;
 

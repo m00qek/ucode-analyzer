@@ -111,7 +111,6 @@ describe('LSP document sync', () => {
 
 	it('didChange with empty contentChanges does not crash the server', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: DOC } });
-		lsp.receiveNotification(proc);  // consume publishDiagnostics
 
 		lsp.send(proc, {
 			jsonrpc: '2.0', method: 'textDocument/didChange',
@@ -123,33 +122,28 @@ describe('LSP document sync', () => {
 		assert.match(-32601, lsp.receive(proc).error.code);
 	});
 
-	it('publishDiagnostics includes document version', () => {
+	it('textDocument/diagnostic returns a full report for an open document', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: DOC.uri, languageId: 'ucode', version: 7, text: DOC.text },
 		}});
 
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		assert.match(7, notif.params.version);
+		let report = lsp.documentDiagnostics(proc, DOC.uri);
+		assert.match('full', report.kind);
 	});
 
-	it('didClose sends empty publishDiagnostics to clear editor diagnostics', () => {
-		// Open a file that produces a diagnostic (unused variable).
+	it('didClose is accepted and the server stays responsive (pull model)', () => {
+		// Open a file that produces a diagnostic (unused variable) and pull it.
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: DOC.uri, languageId: 'ucode', version: 1, text: 'let unused = 1;' },
 		}});
-		let openNotif = lsp.receiveNotification(proc);
-		assert.match(true, length(openNotif.params.diagnostics) > 0);
+		assert.match(true, length(lsp.documentDiagnostics(proc, DOC.uri).items) > 0);
 
-		// Close the file — server must clear diagnostics.
+		// Close the file — pull-model clients clear diagnostics themselves, so the
+		// server sends nothing; it must simply remain responsive.
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didClose',
 			params: { textDocument: { uri: DOC.uri } },
 		});
-		let closeNotif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', closeNotif.method);
-		assert.match(DOC.uri, closeNotif.params.uri);
-		assert.match(0, length(closeNotif.params.diagnostics));
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'unknown/method', params: null });
+		assert.match(1, lsp.receive(proc).id);
 	});
 });

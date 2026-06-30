@@ -12,6 +12,10 @@
 
 ### To do
 
+**`workspace/diagnostic`**
+- Pull-based workspace-wide diagnostics (LSP 3.17): client requests diagnostics for all project files at once, enabling Problems panels and CLI lint workflows without opening every file.
+- The protocol supports partial results and progress reporting, but a minimal implementation can skip those. Main work: scan all DAG-known URIs, run `diagnosticsFor` on each, return as a `WorkspaceDiagnosticReport`. Medium effort.
+
 **Assignment widening**
 - `let x = 1; if (cond) x = "hello";` — after the if block, `x` should be `int | string`.
 - Requires tracking assignments across branches and widening to a union at join points. Architectural change to scope_builder / inferrer.

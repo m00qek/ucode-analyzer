@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset } from 'language_server.positions';
 import { inferNode } from 'language_server.types.inferrer';
-import { buildScope } from 'language_server.types.scope_builder';
+import { scopeAtOffset } from 'language_server.types.scope_walk';
 import { typeToString } from 'language_server.types.doc_parser';
 import * as dag from 'language_server.dag.dag';
 import * as type_registry from 'language_server.types.registry';
@@ -255,7 +255,7 @@ function importedItems(uri) {
 
 // Completion items from the lexical scope at offset.
 function scopeItems(uri, doc, offset) {
-	let scope = buildScope(uri, doc.text, doc.tree, offset);
+	let scope = scopeAtOffset(doc.scopeMap, offset);
 	let items = [];
 	let seen = {};
 	let s = scope;
@@ -301,7 +301,7 @@ export function completion(uri, doc, position) {
 	// Cursor is after a '.' inside a member_expression — offer that type's members.
 	let objNode = memberContext(root, doc.text, offset);
 	if (objNode) {
-		let scope = buildScope(uri, doc.text, doc.tree, offset);
+		let scope = scopeAtOffset(doc.scopeMap, offset);
 		let objType = inferNode(objNode, doc.text, uri, scope, 0);
 		return membersOfType(objType);
 	}

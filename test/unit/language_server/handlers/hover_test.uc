@@ -86,6 +86,8 @@ describe('hover — property_identifier in member expression', () => {
 		let doc = documents.get(URI);
 		// Register the document in the DAG so importsOf resolves the namespace import.
 		dag.add(URI, doc.text, doc.tree);
+		// Rebuild scope map now that DAG knows the imports.
+		documents.refreshScopeMap(URI);
 		// line 1, character 3 → 'p' of 'parse'
 		let result = hover(doc, { line: 1, character: 3 });
 		assert.match('object', type(result));
@@ -105,6 +107,7 @@ describe('hover — via templates (selfSrcDir set)', () => {
 		documents.open(URI, text, 1);
 		let doc = documents.get(URI);
 		dag.add(URI, doc.text, doc.tree);
+		documents.refreshScopeMap(URI);
 
 		// line 1, character 3 → 'parse' property_identifier
 		let result = hover(doc, { line: 1, character: 3 }, _full_config);
@@ -123,6 +126,7 @@ describe('hover — via templates (selfSrcDir set)', () => {
 		documents.open(URI, text, 1);
 		let doc = documents.get(URI);
 		dag.add(URI, doc.text, doc.tree);
+		documents.refreshScopeMap(URI);
 
 		// line 1, character 0 → 'ts' namespace alias
 		let result = hover(doc, { line: 1, character: 0 }, _full_config);

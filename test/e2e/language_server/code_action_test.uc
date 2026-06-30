@@ -16,13 +16,13 @@ teardown(() => {
 describe('textDocument/codeAction', () => {
 
 	it('returns a quickfix for == that replaces it with ===', () => {
-		// Open a file with == so the server emits a hint diagnostic.
+		// Open a file with == so the server reports a hint diagnostic.
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
 				text: "let x = 1;\nlet y = x == 1;\ny;\n" },
 		}});
-		let notif = lsp.receiveNotification(proc);
-		let hint = filter(notif.params.diagnostics, (d) => d.severity === 4)[0];
+		let diags = lsp.documentDiagnostics(proc, 'file:///t.uc').items;
+		let hint = filter(diags, (d) => d.severity === 4)[0];
 		assert.match(true, hint !== null);
 
 		// Send the hint back as context for codeAction.
@@ -48,8 +48,8 @@ describe('textDocument/codeAction', () => {
 			textDocument: { uri: 'file:///t2.uc', languageId: 'ucode', version: 1,
 				text: "let x = 1;\nlet y = x != 1;\ny;\n" },
 		}});
-		let notif = lsp.receiveNotification(proc);
-		let hint = filter(notif.params.diagnostics, (d) => d.severity === 4)[0];
+		let diags = lsp.documentDiagnostics(proc, 'file:///t2.uc').items;
+		let hint = filter(diags, (d) => d.severity === 4)[0];
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/codeAction', params: {
 			textDocument: { uri: 'file:///t2.uc' },
@@ -66,7 +66,6 @@ describe('textDocument/codeAction', () => {
 			textDocument: { uri: 'file:///t3.uc', languageId: 'ucode', version: 1,
 				text: "let x = 1;\nx;\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 3, method: 'textDocument/codeAction', params: {
 			textDocument: { uri: 'file:///t3.uc' },
@@ -84,8 +83,8 @@ describe('textDocument/codeAction', () => {
 			textDocument: { uri, languageId: 'ucode', version: 1,
 				text: "import { unusedFn } from 'utest';\nlet x = 1;\nx;\n" },
 		}});
-		let notif = lsp.receiveNotification(proc);
-		let diag = filter(notif.params.diagnostics, (d) => d.code === 'unused-import')[0];
+		let diags = lsp.documentDiagnostics(proc, uri).items;
+		let diag = filter(diags, (d) => d.code === 'unused-import')[0];
 		assert.match(true, diag !== null);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 4, method: 'textDocument/codeAction', params: {
@@ -114,8 +113,8 @@ describe('textDocument/codeAction', () => {
 			textDocument: { uri, languageId: 'ucode', version: 1,
 				text: "import { describe, it } from 'utest';\nit;\n" },
 		}});
-		let notif = lsp.receiveNotification(proc);
-		let diag = filter(notif.params.diagnostics, (d) => d.code === 'unused-import')[0];
+		let diags = lsp.documentDiagnostics(proc, uri).items;
+		let diag = filter(diags, (d) => d.code === 'unused-import')[0];
 		assert.match(true, diag !== null);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 5, method: 'textDocument/codeAction', params: {
@@ -139,8 +138,8 @@ describe('textDocument/codeAction', () => {
 			textDocument: { uri, languageId: 'ucode', version: 1,
 				text: "let x = { a: 1, b: 2, a: 3 };\nx;\n" },
 		}});
-		let notif = lsp.receiveNotification(proc);
-		let diag = filter(notif.params.diagnostics, (d) => d.code === 'duplicate-key')[0];
+		let diags = lsp.documentDiagnostics(proc, uri).items;
+		let diag = filter(diags, (d) => d.code === 'duplicate-key')[0];
 		assert.match(true, diag !== null);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 6, method: 'textDocument/codeAction', params: {
@@ -166,8 +165,8 @@ describe('textDocument/codeAction', () => {
 			textDocument: { uri, languageId: 'ucode', version: 1,
 				text: "const x = 1;\nx = 2;\n" },
 		}});
-		let notif = lsp.receiveNotification(proc);
-		let diag = filter(notif.params.diagnostics, (d) => d.code === 'const-assignment')[0];
+		let diags = lsp.documentDiagnostics(proc, uri).items;
+		let diag = filter(diags, (d) => d.code === 'const-assignment')[0];
 		assert.match(true, diag !== null);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 7, method: 'textDocument/codeAction', params: {
@@ -194,8 +193,8 @@ describe('textDocument/codeAction', () => {
 			textDocument: { uri, languageId: 'ucode', version: 1,
 				text: "const x = 1;\nx = 2;\nx = 3;\n" },
 		}});
-		let notif = lsp.receiveNotification(proc);
-		let diags = filter(notif.params.diagnostics, (d) => d.code === 'const-assignment');
+		let all = lsp.documentDiagnostics(proc, uri).items;
+		let diags = filter(all, (d) => d.code === 'const-assignment');
 		assert.match(2, length(diags));
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 8, method: 'textDocument/codeAction', params: {

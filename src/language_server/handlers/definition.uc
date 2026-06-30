@@ -3,7 +3,7 @@ import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from
 import * as dag from 'language_server.dag.dag';
 import * as fs from 'fs';
 import { inferNode, globalUri } from 'language_server.types.inferrer';
-import { buildScope } from 'language_server.types.scope_builder';
+import { scopeAtOffset } from 'language_server.types.scope_walk';
 import * as type_registry from 'language_server.types.registry';
 
 let _parser = ts.newParser(ts.ucode());
@@ -180,7 +180,7 @@ function memberExprDef(uri, doc, memberExpr, propName, offset) {
 
 	// Scope-based: infer the type of the object.
 	// inferNode handles identifiers and chained member_expressions alike.
-	let scope = buildScope(uri, doc.text, doc.tree, offset);
+	let scope = scopeAtOffset(doc.scopeMap, offset);
 	let objType = inferNode(objNode, doc.text, uri, scope, 0);
 	if (objType && objType.kind === 'nullable') objType = objType.inner;
 

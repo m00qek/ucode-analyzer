@@ -1,4 +1,5 @@
 import * as protocol from 'language_server.protocol';
+import * as uloop from 'uloop';
 import * as documents from 'language_server.documents';
 import { hover as hoverDoc } from 'language_server.handlers.hover';
 import { definition as definitionDoc } from 'language_server.handlers.definition';
@@ -6,7 +7,7 @@ import { completion as completionDoc } from 'language_server.handlers.completion
 import * as glob from 'language_server.glob';
 import * as dag from 'language_server.dag.dag';
 import { invalidateUri } from 'language_server.memo';
-import { diagnosticsFor } from 'language_server.handlers.diagnostics';
+import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics } from 'language_server.handlers.diagnostic_reports';
 import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.signature_help';
 import { references as referencesDoc } from 'language_server.handlers.references';
 import { documentSymbols as documentSymbolsDoc } from 'language_server.handlers.document_symbols';
@@ -25,6 +26,17 @@ import * as platform from 'language_server.platform';
 export function run(config) {
 	let shutdown_requested = false;
 	let initialized = false;
+
+	let _refreshSeq = 0;
+
+	// Ask pull-model clients to re-request diagnostics. Sent when a change can
+	// affect files other than the one being edited (cross-file dependencies,
+	// on-disk changes); the edited document itself is re-pulled by the client
+	// automatically. Fire-and-forget: the client's empty response is ignored.
+	let requestDiagnosticRefresh = function() {
+		protocol.request(sprintf('diag-refresh-%d', ++_refreshSeq),
+			'workspace/diagnostic/refresh', null);
+	};
 
 	const handlers = {
 		initialize: function(msg) {
@@ -45,6 +57,10 @@ export function run(config) {
 					foldingRangeProvider: true,
 					selectionRangeProvider: true,
 					callHierarchyProvider: true,
+					diagnosticProvider: {
+						interFileDependencies: true,
+						workspaceDiagnostics: true,
+					},
 				},
 				serverInfo: { name: 'ucode-language-server', version: '0.1.0' },
 			});
@@ -103,7 +119,7 @@ export function run(config) {
 		},
 
 		exit: function(msg) {
-			exit(shutdown_requested ? 0 : 1);
+			uloop.end();
 		},
 
 		'textDocument/didOpen': function(msg) {
@@ -112,13 +128,12 @@ export function run(config) {
 			dag.markOpen(td.uri);
 			let doc = documents.get(td.uri);
 			invalidateUri(td.uri);
+			invalidateDiagnostics(td.uri);
 			let cascaded = dag.update(td.uri, doc.text, doc.tree, documents.all());
-			for (let dep in cascaded) invalidateUri(dep);
-			protocol.notify('textDocument/publishDiagnostics', {
-				uri: td.uri,
-				version: doc.version,
-				diagnostics: diagnosticsFor(td.uri, doc),
-			});
+			for (let dep in cascaded) { invalidateUri(dep); invalidateDiagnostics(dep); }
+			documents.refreshScopeMap(td.uri);
+			// Diagnostics are pulled: the client requests textDocument/diagnostic
+			// for the freshly opened file on its own.
 		},
 
 		'textDocument/didChange': function(msg) {
@@ -127,20 +142,35 @@ export function run(config) {
 			let doc = documents.get(uri);
 			if (!doc) return;
 			invalidateUri(uri);
+			invalidateDiagnostics(uri);
 			let cascaded = dag.update(uri, doc.text, doc.tree, documents.all());
-			for (let dep in cascaded) invalidateUri(dep);
-			protocol.notify('textDocument/publishDiagnostics', {
-				uri,
-				version: doc.version,
-				diagnostics: diagnosticsFor(uri, doc),
-			});
+			for (let dep in cascaded) { invalidateUri(dep); invalidateDiagnostics(dep); }
+			documents.refreshScopeMap(uri);
+			// Document state is updated synchronously so hover/completion see fresh
+			// state; the client re-pulls this document's diagnostics itself. If the
+			// edit affected dependents, prompt a re-pull of everything.
+			if (length(cascaded) > 0)
+				requestDiagnosticRefresh();
 		},
 
 		'textDocument/didClose': function(msg) {
 			let uri = msg.params.textDocument.uri;
 			documents.close(uri);
 			dag.markClosed(uri);
-			protocol.notify('textDocument/publishDiagnostics', { uri, diagnostics: [] });
+			// No publish: pull-model clients clear diagnostics for closed files.
+		},
+
+		'textDocument/diagnostic': function(msg) {
+			let uri = msg.params.textDocument.uri;
+			let doc = documents.get(uri);
+			protocol.respond(msg.id, doc
+				? documentDiagnostics(uri, doc, msg.params.previousResultId)
+				: { kind: 'full', items: [] });
+		},
+
+		'workspace/diagnostic': function(msg) {
+			// Responds asynchronously when the background scan finishes.
+			workspaceDiagnostics(msg.id, msg.params, config);
 		},
 
 		'textDocument/hover': function(msg) {
@@ -203,20 +233,28 @@ export function run(config) {
 		},
 
 		'workspace/didChangeWatchedFiles': function(msg) {
+			let changed = false;
 			for (let change in (msg.params.changes ?? [])) {
 				let uri = change.uri;
 				if (change.type === 3) {  // deleted
 					let revDeps = dag.reverseDeps(uri);
 					dag.remove(uri);
 					invalidateUri(uri);
-					for (let dep in revDeps) invalidateUri(dep);
+					invalidateDiagnostics(uri);
+					for (let dep in revDeps) { invalidateUri(dep); invalidateDiagnostics(dep); }
+					changed = true;
 				} else if (!documents.get(uri)) {  // created (1) or changed (2), not open in editor
 					let revDeps = dag.reverseDeps(uri);
 					dag.addFromDisk(uri);
 					invalidateUri(uri);
-					for (let dep in revDeps) invalidateUri(dep);
+					invalidateDiagnostics(uri);
+					for (let dep in revDeps) { invalidateUri(dep); invalidateDiagnostics(dep); }
+					changed = true;
 				}
 			}
+			// On-disk changes can affect any file's diagnostics; prompt re-pull.
+			if (changed)
+				requestDiagnosticRefresh();
 		},
 
 		'textDocument/rename': function(msg) {
@@ -268,47 +306,59 @@ export function run(config) {
 		},
 	};
 
-	while (true) {
-		let msg = protocol.read_message();
+	uloop.init();
 
-		if (msg === null) {
-			// EOF or unrecoverable read error — exit cleanly if shutdown was requested.
+	protocol.startListening(
+		function(body) {
+			let msg;
+			try {
+				msg = json(body);
+			} catch(e) {
+				protocol.error(null, -32700, 'Parse error');
+				return;
+			}
+
+			// After shutdown, reject all requests (notifications are silently ignored).
+			// Response messages (no method) are also silently ignored.
+			if (shutdown_requested && msg.method !== 'exit') {
+				if ('id' in msg && msg.method)
+					protocol.error(msg.id, -32600, 'server is shutting down');
+				return;
+			}
+
+			// Before initialized, only allow initialize / initialized / exit / $/cancel.
+			// Response messages (no method) are silently ignored.
+			if (!initialized && msg.method !== 'initialize' && msg.method !== 'initialized' &&
+			    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
+				if ('id' in msg && msg.method)
+					protocol.error(msg.id, -32002, 'server not yet initialized');
+				return;
+			}
+
+			let handler = handlers[msg.method];
+
+			if (handler) {
+				try {
+					handler(msg);
+				} catch(e) {
+					if ('id' in msg)
+						protocol.error(msg.id, -32603, sprintf('internal error: %s', e));
+				}
+			} else if ('id' in msg && msg.method) {
+				// Only unknown *requests* (have both id and method) get MethodNotFound.
+				// Response messages (client replies to our outbound requests) have id but
+				// no method — ignore them silently.
+				protocol.error(msg.id, -32601, sprintf('method not found: %s', msg.method));
+			}
+		},
+		function() {
+			// EOF on stdin — exit cleanly if shutdown was requested.
 			exit(shutdown_requested ? 0 : 1);
 		}
+	);
 
-		if (msg._parseError) continue;
+	uloop.signal('SIGTERM', function() { uloop.end(); });
 
-		// After shutdown, reject all requests (notifications are silently ignored).
-		// Response messages (no method) are also silently ignored.
-		if (shutdown_requested && msg.method !== 'exit') {
-			if ('id' in msg && msg.method)
-				protocol.error(msg.id, -32600, 'server is shutting down');
-			continue;
-		}
-
-		// Before initialized, only allow initialize / initialized / exit / $/cancel.
-		// Response messages (no method) are silently ignored.
-		if (!initialized && msg.method !== 'initialize' && msg.method !== 'initialized' &&
-		    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
-			if ('id' in msg && msg.method)
-				protocol.error(msg.id, -32002, 'server not yet initialized');
-			continue;
-		}
-
-		let handler = handlers[msg.method];
-
-		if (handler) {
-			try {
-				handler(msg);
-			} catch (e) {
-				if ('id' in msg)
-					protocol.error(msg.id, -32603, sprintf('internal error: %s', e));
-			}
-		} else if ('id' in msg && msg.method) {
-			// Only unknown *requests* (have both id and method) get MethodNotFound.
-			// Response messages (client replies to our outbound requests) have id but
-			// no method — ignore them silently.
-			protocol.error(msg.id, -32601, sprintf('method not found: %s', msg.method));
-		}
-	}
+	uloop.run();
+	exit(shutdown_requested ? 0 : 1);
 };

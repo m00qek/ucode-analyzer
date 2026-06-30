@@ -1,61 +1,29 @@
 import * as fs from 'fs';
+import * as io from 'language_server.io';
 
-function read_exact(n) {
-	let parts = [];
-	let got = 0;
+let _buf = '';
 
-	while (got < n) {
-		let chunk = fs.stdin.read(n - got);
+export function startListening(dispatch, onEof) {
+	// io.onReadable handles the uloop wiring and the raw, non-blocking reads
+	// (see language_server/io.uc and native.c). Here we only reassemble the
+	// Content-Length framed messages from the delivered byte chunks.
+	io.onReadable(fs.stdin, function(chunk) {
+		_buf += chunk;
 
-		if (length(chunk) === 0)
-			die('unexpected EOF reading message body');
-
-		push(parts, chunk);
-		got += length(chunk);
-	}
-
-	return join('', parts);
-};
-
-function read_header() {
-	let buf = '';
-
-	while (index(buf, '\r\n\r\n') < 0) {
-		let ch = fs.stdin.read(1);
-
-		if (length(ch) === 0)
-			return null;
-
-		buf += ch;
-	}
-
-	return buf;
-};
-
-export function read_message() {
-	let header = read_header();
-
-	if (header === null)
-		return null;
-
-	let m = match(header, /Content-Length: ([0-9]+)/);
-
-	if (!m)
-		die(sprintf('missing Content-Length in header: %s', header));
-
-	let body = read_exact(+m[1]);
-	let msg;
-	try {
-		msg = json(body);
-	} catch (e) {
-		// Malformed JSON: respond with ParseError and signal the caller to skip.
-		// Inline the write to avoid a forward reference to write_message.
-		let errBody = sprintf('%J', { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
-		fs.stdout.write(sprintf('Content-Length: %d\r\n\r\n%s', length(errBody), errBody));
-		fs.stdout.flush();
-		return { _parseError: true };
-	}
-	return msg;
+		while (true) {
+			let headerEnd = index(_buf, '\r\n\r\n');
+			if (headerEnd < 0) break;
+			let header = substr(_buf, 0, headerEnd);
+			let m = match(header, /Content-Length: ([0-9]+)/);
+			if (!m) die(sprintf('missing Content-Length in header: %s', header));
+			let bodyLen = +m[1];
+			let msgStart = headerEnd + 4;
+			if (length(_buf) < msgStart + bodyLen) break;
+			let body = substr(_buf, msgStart, bodyLen);
+			_buf = substr(_buf, msgStart + bodyLen);
+			dispatch(body);
+		}
+	}, onEof);
 };
 
 export function write_message(obj) {

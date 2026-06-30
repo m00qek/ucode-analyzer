@@ -54,11 +54,16 @@ export function close(proc) {
 	return proc.close();
 };
 
-// Skip server-to-client notifications (no id field) and return the next response.
+// Return the next response. Skips server-to-client notifications (no id) and the
+// server-initiated workspace/diagnostic/refresh request, which can arrive
+// between a request and its response in the pull model.
 export function receive(proc) {
 	while (true) {
 		let msg = read_message(proc);
-		if (msg === null || msg.id !== null) return msg;
+		if (msg === null) return msg;
+		if (msg.id === null) continue;                                // notification
+		if (msg.method === 'workspace/diagnostic/refresh') continue;  // server-initiated
+		return msg;
 	}
 };
 
@@ -85,6 +90,25 @@ export function connect() {
 		'--config', '/tmp',
 		'--workspace', '/app',
 	]);
+};
+
+let _diagId = 1000;
+
+// Pull diagnostics for a single document. Returns the DocumentDiagnosticReport
+// ({ kind: 'full', resultId, items } or { kind: 'unchanged', resultId }).
+export function documentDiagnostics(proc, uri, previousResultId) {
+	let params = { textDocument: { uri } };
+	if (previousResultId !== null)
+		params.previousResultId = previousResultId;
+	send(proc, { jsonrpc: '2.0', id: _diagId++, method: 'textDocument/diagnostic', params });
+	return receive(proc).result;
+};
+
+// Pull workspace diagnostics. Returns the WorkspaceDiagnosticReport ({ items }).
+export function workspaceDiagnostics(proc, previousResultIds) {
+	send(proc, { jsonrpc: '2.0', id: _diagId++, method: 'workspace/diagnostic',
+		params: { previousResultIds: previousResultIds ?? [] } });
+	return receive(proc).result;
 };
 
 export function initialize(proc) {

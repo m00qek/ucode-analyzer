@@ -13,47 +13,32 @@ teardown(() => {
 	assert.match(0, lsp.close(proc));
 });
 
-describe('textDocument/publishDiagnostics', () => {
+// Open a document and pull its diagnostics, returning the diagnostic array.
+let diagnose = function(uri, text) {
+	lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+		textDocument: { uri, languageId: 'ucode', version: 1, text },
+	}});
+	return lsp.documentDiagnostics(proc, uri).items;
+};
 
-	it('sends notification with error diagnostic for unresolvable import', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "import { foo } from 'no_such_module';" },
-		}});
+describe('textDocument/diagnostic', () => {
 
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		assert.match('file:///t.uc', notif.params.uri);
+	it('reports an error diagnostic for unresolvable import', () => {
+		let diags = diagnose('file:///t.uc', "import { foo } from 'no_such_module';");
 		// Expect at least one ERROR-severity diagnostic for the bad import.
-		// (An unused-import WARNING for 'foo' may also be present.)
-		let errDiags = filter(notif.params.diagnostics, (d) => d.severity === 1);
+		// (An unused-import HINT for 'foo' may also be present.)
+		let errDiags = filter(diags, (d) => d.severity === 1);
 		assert.match(true, length(errDiags) >= 1);
 	});
 
-	it('sends notification with empty diagnostics for a valid file', () => {
+	it('reports empty diagnostics for a valid file', () => {
 		// All declarations are used, no syntax errors, no bad imports.
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\nx;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		assert.match(0, length(notif.params.diagnostics));
+		let diags = diagnose('file:///t.uc', "let x = 1;\nx;\n");
+		assert.match(0, length(diags));
 	});
 
 	it('warns for an undefined identifier reference', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = ghost;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-		let diags = notif.params.diagnostics;
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
+		let diags = diagnose('file:///t.uc', "let x = ghost;\n");
 		// Should include at least a warning for 'ghost' (undefined) and one for 'x' (unused)
 		let ghostDiag = null;
 		for (let d in diags) if (index(d.message, 'ghost') >= 0) { ghostDiag = d; break; }
@@ -62,45 +47,22 @@ describe('textDocument/publishDiagnostics', () => {
 	});
 
 	it('warns for an unused variable with severity WARNING (2)', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let neverUsed = 42;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		assert.match(1, length(notif.params.diagnostics));
-		assert.match(2, notif.params.diagnostics[0].severity);  // WARNING
-		assert.match(true, index(notif.params.diagnostics[0].message, 'neverUsed') >= 0);
+		let diags = diagnose('file:///t.uc', "let neverUsed = 42;\n");
+		assert.match(1, length(diags));
+		assert.match(2, diags[0].severity);  // WARNING
+		assert.match(true, index(diags[0].message, 'neverUsed') >= 0);
 	});
 
 	it('reports error when a named import does not exist in the module', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "import { noSuchExport } from 'tree_sitter';\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
+		let diags = diagnose('file:///t.uc', "import { noSuchExport } from 'tree_sitter';\n");
 		// Expect at least one ERROR about the missing export.
-		// (An unused-import WARNING for 'noSuchExport' may also be present.)
-		let errDiags = filter(notif.params.diagnostics, (d) =>
+		let errDiags = filter(diags, (d) =>
 			d.severity === 1 && index(d.message, 'noSuchExport') >= 0);
 		assert.match(true, length(errDiags) >= 1);
 	});
 
 	it('hints for == with severity 4 (Hint)', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\nlet y = x == 1;\ny;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-		let diags = notif.params.diagnostics;
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
+		let diags = diagnose('file:///t.uc', "let x = 1;\nlet y = x == 1;\ny;\n");
 		let eqDiag = null;
 		for (let d in diags) if (index(d.message, '===') >= 0) { eqDiag = d; break; }
 		assert.match(true, eqDiag !== null);
@@ -108,256 +70,154 @@ describe('textDocument/publishDiagnostics', () => {
 	});
 
 	it('reports syntax error for malformed code', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = ;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		assert.match(true, length(notif.params.diagnostics) > 0);
-		assert.match(1, notif.params.diagnostics[0].severity);
+		let diags = diagnose('file:///t.uc', "let x = ;\n");
+		assert.match(true, length(diags) > 0);
+		assert.match(1, diags[0].severity);
 	});
 
 	it('reports not-a-function for @param {string} annotated param when called', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "/**\n * @param {string} name\n */\nfunction greet(name) { name(); }\ngreet('x');\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		let diags = filter(notif.params.diagnostics, (d) => index(d.message, 'not a function') >= 0);
-		assert.match(true, length(diags) >= 1);
-		assert.match(1, diags[0].severity);
+		let diags = diagnose('file:///t.uc',
+			"/**\n * @param {string} name\n */\nfunction greet(name) { name(); }\ngreet('x');\n");
+		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0);
+		assert.match(true, length(d) >= 1);
+		assert.match(1, d[0].severity);
 	});
 
 	it('reports error when calling a string variable', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 'hello';\nx();\nx;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		let diags = filter(notif.params.diagnostics, (d) => index(d.message, 'not a function') >= 0);
-		assert.match(true, length(diags) >= 1);
-		assert.match(1, diags[0].severity);
+		let diags = diagnose('file:///t.uc', "let x = 'hello';\nx();\nx;\n");
+		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0);
+		assert.match(true, length(d) >= 1);
+		assert.match(1, d[0].severity);
 	});
 
 	it('reports error for member access on a null variable', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = null;\nlet y = x.foo;\ny;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		let diags = filter(notif.params.diagnostics, (d) => index(d.message, 'may be null') >= 0);
-		assert.match(true, length(diags) >= 1);
-		assert.match(1, diags[0].severity);
+		let diags = diagnose('file:///t.uc', "let x = null;\nlet y = x.foo;\ny;\n");
+		let d = filter(diags, (d) => index(d.message, 'may be null') >= 0);
+		assert.match(true, length(d) >= 1);
+		assert.match(1, d[0].severity);
 	});
 
 	it('suppresses null member access warning inside if (x) { } guard body', () => {
-		// x.foo is only reached when x is non-null; no warning expected.
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = null;\nif (x) {\n  let y = x.foo;\n  y;\n}\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		let nullDiags = filter(notif.params.diagnostics, (d) => index(d.message, 'may be null') >= 0);
+		let diags = diagnose('file:///t.uc', "let x = null;\nif (x) {\n  let y = x.foo;\n  y;\n}\n");
+		let nullDiags = filter(diags, (d) => index(d.message, 'may be null') >= 0);
 		assert.match(0, length(nullDiags));
 	});
 
 	it('suppresses null warning after if (!x) return guard clause', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = null;\nif (!x) return;\nlet y = x.foo;\ny;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		let nullDiags = filter(notif.params.diagnostics, (d) => index(d.message, 'may be null') >= 0);
+		let diags = diagnose('file:///t.uc', "let x = null;\nif (!x) return;\nlet y = x.foo;\ny;\n");
+		let nullDiags = filter(diags, (d) => index(d.message, 'may be null') >= 0);
 		assert.match(0, length(nullDiags));
 	});
 
 	it('reports deprecated hint for use of @deprecated imported symbol', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "import { oldFn } from 'fixtures.deprecated';\noldFn();\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		let depDiags = filter(notif.params.diagnostics, (d) => d.message === 'Deprecated');
+		let diags = diagnose('file:///t.uc', "import { oldFn } from 'fixtures.deprecated';\noldFn();\n");
+		let depDiags = filter(diags, (d) => d.message === 'Deprecated');
 		assert.match(true, length(depDiags) >= 1);
 		assert.match(4, depDiags[0].severity);  // HINT
 		assert.match(true, index(depDiags[0].tags, 2) >= 0);  // TAG_DEPRECATED
 	});
 
 	it('does not report deprecated hint for non-deprecated imported symbol', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "import { newFn } from 'fixtures.deprecated';\nnewFn();\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		let depDiags = filter(notif.params.diagnostics, (d) => d.message === 'Deprecated');
+		let diags = diagnose('file:///t.uc', "import { newFn } from 'fixtures.deprecated';\nnewFn();\n");
+		let depDiags = filter(diags, (d) => d.message === 'Deprecated');
 		assert.match(0, length(depDiags));
 	});
 
 	it('reports unused-import hint for an import that is never used', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "import * as ts from 'tree_sitter';\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		let d = filter(notif.params.diagnostics, (d) => d.code === 'unused-import');
+		let diags = diagnose('file:///t.uc', "import * as ts from 'tree_sitter';\n");
+		let d = filter(diags, (d) => d.code === 'unused-import');
 		assert.match(1, length(d));
 		assert.match(4, d[0].severity);   // HINT
 		assert.match(true, index(d[0].message, "'ts'") >= 0);
 	});
 
 	it('does not report unused-import for an import that is used', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "import * as ts from 'tree_sitter';\nts.ucode;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		let d = filter(notif.params.diagnostics, (d) => d.code === 'unused-import');
+		let diags = diagnose('file:///t.uc', "import * as ts from 'tree_sitter';\nts.ucode;\n");
+		let d = filter(diags, (d) => d.code === 'unused-import');
 		assert.match(0, length(d));
 	});
 
 	it('reports redeclared-var error for duplicate let in same block', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\nlet x = 2;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		let d = filter(notif.params.diagnostics, (d) => d.code === 'redeclared-var');
+		let diags = diagnose('file:///t.uc', "let x = 1;\nlet x = 2;\n");
+		let d = filter(diags, (d) => d.code === 'redeclared-var');
 		assert.match(1, length(d));
 		assert.match(1, d[0].severity);   // ERROR
 		assert.match(true, index(d[0].message, "'x'") >= 0);
 	});
 
 	it('reports duplicate-key warning for duplicate object keys', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let o = { a: 1, a: 2 };\no;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		let d = filter(notif.params.diagnostics, (d) => d.code === 'duplicate-key');
+		let diags = diagnose('file:///t.uc', "let o = { a: 1, a: 2 };\no;\n");
+		let d = filter(diags, (d) => d.code === 'duplicate-key');
 		assert.match(1, length(d));
 		assert.match(2, d[0].severity);   // WARNING
 		assert.match(true, index(d[0].message, "'a'") >= 0);
 	});
 
 	it('reports const-assignment error for reassigning a const variable', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "const x = 1;\nx = 2;\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		let d = filter(notif.params.diagnostics, (d) => d.code === 'const-assignment');
+		let diags = diagnose('file:///t.uc', "const x = 1;\nx = 2;\n");
+		let d = filter(diags, (d) => d.code === 'const-assignment');
 		assert.match(1, length(d));
 		assert.match(1, d[0].severity);   // ERROR
 		assert.match(true, index(d[0].message, "'x'") >= 0);
 	});
 
 	it('reports missing-return warning for @returns function missing a path', () => {
-		let text = "/**\n * @returns {int}\n */\nfunction f() {\n  let x = 1;\n}\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		let d = filter(notif.params.diagnostics, (d) => d.code === 'missing-return');
+		let diags = diagnose('file:///t.uc', "/**\n * @returns {int}\n */\nfunction f() {\n  let x = 1;\n}\n");
+		let d = filter(diags, (d) => d.code === 'missing-return');
 		assert.match(1, length(d));
 		assert.match(2, d[0].severity);   // WARNING
 	});
 
 	it('reports for-in-non-iterable warning for iterating over an integer', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "for (let x in 42) { x; }\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		let d = filter(notif.params.diagnostics, (d) => d.code === 'for-in-non-iterable');
+		let diags = diagnose('file:///t.uc', "for (let x in 42) { x; }\n");
+		let d = filter(diags, (d) => d.code === 'for-in-non-iterable');
 		assert.match(1, length(d));
 		assert.match(2, d[0].severity);   // WARNING
 	});
 
 	it('no for-in-non-iterable warning when iterating over an array', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let arr = [1,2,3];\nfor (let x in arr) { x; }\n" },
-		}});
-
-		let notif = lsp.receiveNotification(proc);
-
-		let d = filter(notif.params.diagnostics, (d) => d.code === 'for-in-non-iterable');
+		let diags = diagnose('file:///t.uc', "let arr = [1,2,3];\nfor (let x in arr) { x; }\n");
+		let d = filter(diags, (d) => d.code === 'for-in-non-iterable');
 		assert.match(0, length(d));
 	});
 
 	it('does not warn for m.prop when m is guarded by ternary condition', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///ternary_narrow.uc', languageId: 'ucode', version: 1,
-				text: "/**\n * @param {object|null} m\n */\nfunction f(m) { let x = m ? m.create : null; x; }\nf(null);\n" },
-		}});
-		let notif = lsp.receiveNotification(proc);
-		let typeErrs = filter(notif.params.diagnostics, (d) => d.code === 'may-be-null' || d.code === 'unknown-property');
+		let diags = diagnose('file:///ternary_narrow.uc',
+			"/**\n * @param {object|null} m\n */\nfunction f(m) { let x = m ? m.create : null; x; }\nf(null);\n");
+		let typeErrs = filter(diags, (d) => d.code === 'may-be-null' || d.code === 'unknown-property');
 		assert.match(0, length(typeErrs));
 	});
 
 	it('does not warn for m.prop inside if (m && ...) body', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///if_narrow.uc', languageId: 'ucode', version: 1,
-				text: "/**\n * @param {object|null} m\n */\nfunction f(m) { if (m && type(m.api) === 'array') { let x = m.api; x; } }\nf(null);\n" },
-		}});
-		let notif = lsp.receiveNotification(proc);
-		let typeErrs = filter(notif.params.diagnostics, (d) => d.code === 'may-be-null' || d.code === 'unknown-property');
+		let diags = diagnose('file:///if_narrow.uc',
+			"/**\n * @param {object|null} m\n */\nfunction f(m) { if (m && type(m.api) === 'array') { let x = m.api; x; } }\nf(null);\n");
+		let typeErrs = filter(diags, (d) => d.code === 'may-be-null' || d.code === 'unknown-property');
 		assert.match(0, length(typeErrs));
 	});
 
-	it('re-sends diagnostics on didChange', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
-		}});
-		lsp.receiveNotification(proc);  // consume the didOpen notification
+	it('re-pulls reflect edits made by didChange', () => {
+		diagnose('file:///t.uc', "let x = 1;\nx;\n");  // open clean, pull once
 
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
 			textDocument: { uri: 'file:///t.uc', version: 2 },
 			contentChanges: [{ text: "import { foo } from 'bad_module';" }],
 		}});
 
-		let notif = lsp.receiveNotification(proc);
+		let diags = lsp.documentDiagnostics(proc, 'file:///t.uc').items;
+		// Expect at least one diagnostic (bad import error; unused-import hint may also appear).
+		assert.match(true, length(diags) >= 1);
+	});
 
-		assert.match('textDocument/publishDiagnostics', notif.method);
-		// Expect at least one diagnostic (bad import error; unused-import warning may also appear).
-		assert.match(true, length(notif.params.diagnostics) >= 1);
+	it('returns unchanged when the previous resultId is still current', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let neverUsed = 42;\n" },
+		}});
+
+		let first = lsp.documentDiagnostics(proc, 'file:///t.uc');
+		assert.match('full', first.kind);
+
+		// No edit in between -> a re-pull carrying the same resultId is 'unchanged'.
+		let second = lsp.documentDiagnostics(proc, 'file:///t.uc', first.resultId);
+		assert.match('unchanged', second.kind);
 	});
 });

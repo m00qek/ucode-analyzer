@@ -24,6 +24,7 @@ BUILD_IMAGE = docker run --rm \
 TEST_IMAGE = docker run --rm $(TEST_OPTS) \
 	-v $(CURDIR):/app \
 	$(if $(wildcard $(BUILD_DIR)/tree_sitter_native.so),-v $(CURDIR)/$(BUILD_DIR)/tree_sitter_native.so:/usr/lib/ucode/tree_sitter/native.so:ro) \
+	$(if $(wildcard $(BUILD_DIR)/language_server_native.so),-v $(CURDIR)/$(BUILD_DIR)/language_server_native.so:/usr/lib/ucode/language_server/native.so:ro) \
 	$(if $(wildcard $(BUILD_DIR)/rpc_client_native.so),-v $(CURDIR)/$(BUILD_DIR)/rpc_client_native.so:/usr/lib/ucode/rpc_client/native.so:ro) \
 	-w /app \
 	$(IMAGE)
@@ -52,9 +53,12 @@ $(BUILD_DIR)/tree_sitter_native.so: $(shell find mod third_party/tree-sitter-uco
 			make package/$(PKG_NAME)/compile V=s && \
 			find /builder/build_dir -path '*/tree_sitter/native.so' \
 				-exec cp {} /builder/bin/tree_sitter_native.so \; -quit && \
+			find /builder/build_dir -path '*/language_server/native.so' \
+				-exec cp {} /builder/bin/language_server_native.so \; -quit && \
 			find /builder/build_dir -path '*/rpc_client/native.so' \
 				-exec cp {} /builder/bin/rpc_client_native.so \; -quit && \
 			test -f /builder/bin/tree_sitter_native.so && \
+			test -f /builder/bin/language_server_native.so && \
 			test -f /builder/bin/rpc_client_native.so && \
 			cp -fpR /builder/staging_dir/target-*/usr/include/* /builder/out_include/ \
 		"; EC=$$?; rm -f $(BUILD_DIR)/$(PKG_NAME)-Makefile; exit $$EC
@@ -65,7 +69,7 @@ mod/compile_flags.txt: $(BUILD_DIR)/include
 		"$(CURDIR)/third_party/tree-sitter/lib/include" \
 		"$(CURDIR)/third_party/tree-sitter-ucode/src" > mod/compile_flags.txt
 
-test: test-unit test-e2e
+test: test-unit test-integration test-e2e
 
 test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) \

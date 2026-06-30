@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, nodeAtOffset, docBefore } from 'language_server.positions';
 import { inferNode } from 'language_server.types.inferrer';
-import { buildScope } from 'language_server.types.scope_builder';
+import { scopeAtOffset } from 'language_server.types.scope_walk';
 import { typeToString, parseDoc } from 'language_server.types.doc_parser';
 import { UNKNOWN, STR } from 'language_server.types.type_utils';
 import * as dag from 'language_server.dag.dag';
@@ -121,13 +121,13 @@ function hoverParam(node, formalParams, doc, config) {
 // ── Case 2: for-in loop variable at its declaration site ───────────────────
 //
 // The loop variable (the `left` field of for_in_statement) only enters scope
-// inside the body block.  buildScope at ts.startByte(node) therefore never
-// sees it.  Infer the iterable's element type directly from the `right` field.
+// inside the body block, so looking it up in the scope at startByte(forIn)
+// won't find it.  Infer the iterable's element type directly from the `right` field.
 function hoverForInVar(node, forIn, doc, config) {
 	let left = ts.childByField(forIn, 'left');
 	if (!left || ts.startByte(left) !== ts.startByte(node)) return null;
 
-	let scope    = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(forIn));
+	let scope    = scopeAtOffset(doc.scopeMap, ts.startByte(forIn));
 	let right    = ts.childByField(forIn, 'right');
 	let elemType = UNKNOWN;
 	if (right) {
@@ -150,8 +150,21 @@ function hoverForInVar(node, forIn, doc, config) {
 // declaration site (import, own-file export, or stdlib builtin), then render
 // via the template matching the type kind.
 function hoverGeneral(node, doc, config) {
-	let scope = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(node));
+	let scope = scopeAtOffset(doc.scopeMap, ts.startByte(node));
 	let type  = inferNode(node, doc.text, doc.uri, scope, 0);
+	// If scope lookup returned UNKNOWN and this is a declaration name, infer
+	// the type from the initializer instead (scope_walk emits before the stmt,
+	// so the name isn't visible at its own declaration offset).
+	if (type.kind === 'unknown' && ts.nodeType(node) === 'identifier') {
+		let parent = ts.parent(node);
+		if (parent && ts.nodeType(parent) === 'variable_declarator') {
+			let nameField = ts.childByField(parent, 'name');
+			if (nameField && ts.startByte(nameField) === ts.startByte(node)) {
+				let valNode = ts.childByField(parent, 'value');
+				if (valNode) type = inferNode(valNode, doc.text, doc.uri, scope, 0);
+			}
+		}
+	}
 	if (type && type.kind === 'nullable') type = type.inner;
 	if (type.kind === 'unknown') return null;
 

@@ -20,7 +20,6 @@ describe('textDocument/prepareCallHierarchy', () => {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
 				text: "function greet(name) { return name; }\ngreet('x');\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t.uc' },
@@ -42,7 +41,6 @@ describe('textDocument/prepareCallHierarchy', () => {
 			textDocument: { uri: 'file:///t2.uc', languageId: 'ucode', version: 1,
 				text: "let x = 1;\nx;\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t2.uc' },
@@ -57,7 +55,6 @@ describe('textDocument/prepareCallHierarchy', () => {
 			textDocument: { uri: 'file:///t3.uc', languageId: 'ucode', version: 1,
 				text: "function foo() {}\nfoo();\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 3, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t3.uc' },
@@ -76,7 +73,6 @@ describe('callHierarchy/incomingCalls', () => {
 			textDocument: { uri: 'file:///t4.uc', languageId: 'ucode', version: 1,
 				text: "function foo() {}\nfunction bar() { foo(); }\nbar;\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		// Prepare hierarchy for 'foo'
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
@@ -99,7 +95,6 @@ describe('callHierarchy/incomingCalls', () => {
 			textDocument: { uri: 'file:///t5.uc', languageId: 'ucode', version: 1,
 				text: "function unused() {}\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t5.uc' },
@@ -117,7 +112,6 @@ describe('callHierarchy/incomingCalls', () => {
 			textDocument: { uri: 'file:///t6.uc', languageId: 'ucode', version: 1,
 				text: "function foo() {}\nfunction bar() { foo(); foo(); }\nbar;\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t6.uc' },
@@ -140,7 +134,6 @@ describe('callHierarchy/outgoingCalls', () => {
 			textDocument: { uri: 'file:///t7.uc', languageId: 'ucode', version: 1,
 				text: "function foo() {}\nfunction bar() { foo(); }\nbar;\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t7.uc' },
@@ -162,7 +155,6 @@ describe('callHierarchy/outgoingCalls', () => {
 			textDocument: { uri: 'file:///t8.uc', languageId: 'ucode', version: 1,
 				text: "function leaf() { return 42; }\nleaf;\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t8.uc' },
@@ -180,7 +172,6 @@ describe('callHierarchy/outgoingCalls', () => {
 			textDocument: { uri: 'file:///t9.uc', languageId: 'ucode', version: 1,
 				text: "function foo() {}\nfunction bar() { foo(); foo(); }\nbar;\n" },
 		}});
-		lsp.receiveNotification(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t9.uc' },
