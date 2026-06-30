@@ -16,7 +16,7 @@ import { foldingRanges as foldingRangesDoc } from 'language_server.handlers.fold
 import { rename as renameDoc } from 'language_server.handlers.rename';
 import { documentHighlight as documentHighlightDoc } from 'language_server.handlers.document_highlight';
 import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prepare_rename';
-import { codeAction as codeActionDoc } from 'language_server.handlers.code_action';
+import { codeAction as codeActionDoc } from 'language_server.handlers.code_actions';
 import { selectionRanges as selectionRangesDoc } from 'language_server.handlers.selection_range';
 import { initBuiltinsFromDag } from 'language_server.types.inferrer';
 import * as platform from 'language_server.platform';

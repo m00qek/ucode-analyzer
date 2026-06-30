@@ -1,7 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset } from 'language_server.positions';
 
-// Find the deepest node (including anonymous tokens) whose span contains offset.
 function nodeAt(node, offset) {
 	if (ts.startByte(node) > offset || offset >= ts.endByte(node)) return null;
 	let result = node;
@@ -12,12 +11,12 @@ function nodeAt(node, offset) {
 	return result;
 }
 
-export function codeAction(uri, doc, diagnostics) {
+export function actionsFor(uri, doc, diagnostics) {
 	let root    = ts.rootNode(doc.tree);
 	let actions = [];
 
 	for (let diag in (diagnostics ?? [])) {
-		if (diag.severity !== 4) continue;
+		if (diag.code !== 'prefer-strict-equality') continue;
 
 		let offset = positionToOffset(doc.text, doc.lineTable, diag.range.start);
 		let op     = nodeAt(root, offset);
@@ -35,12 +34,10 @@ export function codeAction(uri, doc, diagnostics) {
 			diagnostics: [diag],
 			isPreferred: true,
 			edit: {
-				changes: {
-					[uri]: [{ range: diag.range, newText: replacement }],
-				},
+				changes: { [uri]: [{ range: diag.range, newText: replacement }] },
 			},
 		});
 	}
 
-	return length(actions) > 0 ? actions : null;
+	return actions;
 };
