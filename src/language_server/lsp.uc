@@ -4,8 +4,8 @@ import * as documents from 'language_server.documents';
 import { hover as hoverDoc } from 'language_server.handlers.hover';
 import { definition as definitionDoc } from 'language_server.handlers.definition';
 import { completion as completionDoc } from 'language_server.handlers.completion';
-import * as glob from 'language_server.glob';
 import * as dag from 'language_server.dag.dag';
+import * as workspace from 'language_server.workspace';
 import { invalidateUri } from 'language_server.memo';
 import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics } from 'language_server.handlers.diagnostic_reports';
 import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.signature_help';
@@ -20,7 +20,6 @@ import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prep
 import { codeAction as codeActionDoc } from 'language_server.handlers.code_actions';
 import { selectionRanges as selectionRangesDoc } from 'language_server.handlers.selection_range';
 import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'language_server.handlers.call_hierarchy';
-import { initBuiltinsFromDag } from 'language_server.types.inferrer';
 import * as platform from 'language_server.platform';
 
 export function run(config) {
@@ -68,39 +67,9 @@ export function run(config) {
 
 		initialized: function(msg) {
 			initialized = true;
-			let workspaceDir = config.workspaceDir ?? '/root/project';
-			let ws = config.workspace ?? {};
-			let libPaths = ws.libraryPaths ?? ['src'];
 
-			dag.init(config);
+			let declVersions = workspace.loadWorkspace(config);
 
-			for (let relPath in libPaths) {
-				let files = glob.scan(workspaceDir + '/' + relPath, ['**/*.uc'], []);
-				for (let path in files)
-					dag.addFromDisk('file://' + path);
-			}
-
-			if (config.selfSrcDir) {
-				let files = glob.scan(config.selfSrcDir + '/declarations', ['**/*.uc'], []);
-				for (let path in files)
-					dag.addFromDisk('file://' + path);
-			}
-
-			for (let sysPath in (config.systemLibPaths ?? [])) {
-				let files = glob.scan(sysPath, ['**/*.uc'], []);
-				for (let path in files)
-					dag.addFromDisk('file://' + path);
-			}
-
-			let globalUri = dag.resolveSpecifier('global');
-			if (globalUri) initBuiltinsFromDag(globalUri);
-
-			let declVersions = {};
-			for (let uri in dag.allUris()) {
-				if (index(uri, '.d.uc') < 0) continue;
-				let v = dag.versionsOf(uri);
-				if (v) declVersions[uri] = v;
-			}
 			// Package-manager queries are blocking subprocess calls; run them in a
 			// background task and refresh diagnostics once availability is known.
 			platform.initAsync(declVersions, requestDiagnosticRefresh);

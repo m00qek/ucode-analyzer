@@ -1,8 +1,7 @@
 import * as uloop from 'uloop';
 import * as protocol from 'language_server.protocol';
-import * as documents from 'language_server.documents';
-import * as dag from 'language_server.dag.dag';
 import { diagnosticsFor } from 'language_server.handlers.diagnostics';
+import { workspaceUris, diagnoseFile } from 'language_server.workspace';
 
 // Per-URI resultId generation. Bumped whenever a document's diagnostics may
 // have changed (edit, dependency cascade, watched-file change). A pull request
@@ -29,24 +28,6 @@ export function documentDiagnostics(uri, doc, previousResultId) {
 
 // --- workspace/diagnostic (all workspace files, background fork) ------------
 
-function isWorkspaceUri(uri, config) {
-	let path = substr(uri, 7);  // strip "file://"
-	let workdir = config.workspaceDir ?? '/';
-	if (substr(path, 0, length(workdir)) !== workdir) return false;
-
-	// Exclude the server's own bundled sources and any system library roots —
-	// those are dependencies, not the user's workspace.
-	let self = config.selfSrcDir;
-	if (self && substr(path, 0, length(self)) === self) return false;
-	for (let sp in (config.systemLibPaths ?? []))
-		if (substr(path, 0, length(sp)) === sp) return false;
-
-	// Declaration stubs are not diagnosed.
-	if (length(path) >= 5 && substr(path, length(path) - 5) === '.d.uc') return false;
-
-	return true;
-};
-
 let _activeTask = null;
 let _pendingReqId = null;
 let _report = [];
@@ -62,10 +43,7 @@ export function workspaceDiagnostics(requestId, params, config) {
 	for (let r in (params.previousResultIds ?? []))
 		prevIds[r.uri] = r.value;
 
-	let uris = [];
-	for (let uri in dag.allUris())
-		if (isWorkspaceUri(uri, config))
-			push(uris, uri);
+	let uris = workspaceUris(config);
 
 	_pendingReqId = requestId;
 	_report = [];
@@ -81,9 +59,7 @@ export function workspaceDiagnostics(requestId, params, config) {
 					pipe.send({ kind: 'unchanged', uri, version: null, resultId: id });
 					continue;
 				}
-				let doc = documents.getOrLoad(uri);
-				let diags = doc ? diagnosticsFor(uri, doc) : [];
-				pipe.send({ kind: 'full', uri, version: (doc ? doc.version : null), resultId: id, items: diags });
+				pipe.send({ kind: 'full', uri, version: null, resultId: id, items: diagnoseFile(uri) });
 			}
 		},
 		function(item) {
