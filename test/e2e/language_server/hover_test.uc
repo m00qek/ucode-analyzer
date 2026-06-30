@@ -34,6 +34,26 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(true, index(val, 'Parameters') >= 0);
 	});
 
+	it('named import: prefers the re-export own JSDoc over the underlying definition', () => {
+		// wrapper.uc does `export const thing = deep.thing` with its OWN JSDoc;
+		// hover must show the wrapper's doc, not deep.uc's drilled-through doc.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "import { thing } from 'fixtures.reexport.wrapper';\nthing;\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 0 },
+		}});
+
+		let resp = lsp.receive(proc);
+		let val = resp.result.contents.value;
+
+		assert.match(1, resp.id);
+		assert.match(true, index(val, 'Wrapper thing') >= 0);   // re-export's own doc
+		assert.match(true, index(val, 'Deep thing') < 0);       // not the drilled-through doc
+	});
+
 	it('named import: shows JSDoc description from source module', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
