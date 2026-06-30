@@ -68,7 +68,7 @@ describe('foldingRanges — import block', () => {
 		let doc = open("import * as a from 'a';\nlet x = 1;\n");
 		let ranges = foldingRanges(doc);
 		let imp = filter(ranges, (r) => r.kind === 'imports')[0];
-		assert.match(true, imp === null || imp === undefined);
+		assert.match(true, imp === null);
 	});
 
 	it('returns empty list for an empty file', () => {

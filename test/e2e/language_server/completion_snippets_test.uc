@@ -58,7 +58,7 @@ describe('completion — snippets and @deprecated', () => {
 		let resp = lsp.receive(proc);
 		let item = filter(resp.result, (i) => i.label === 'count')[0];
 		assert.match(true, item !== null);
-		assert.match(true, item.insertText === null || item.insertText === undefined);
+		assert.match(true, item.insertText === null);
 	});
 
 	it('@deprecated export gets tags: [1] in import-context completion', () => {
@@ -80,6 +80,6 @@ describe('completion — snippets and @deprecated', () => {
 		assert.match(true, oldItem !== null);
 		assert.match(true, type(oldItem.tags) === 'array' && oldItem.tags[0] === 1);
 		assert.match(true, newItem !== null);
-		assert.match(true, newItem.tags === null || newItem.tags === undefined);
+		assert.match(true, newItem.tags === null);
 	});
 });

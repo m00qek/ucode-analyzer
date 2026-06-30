@@ -171,7 +171,7 @@ describe('cross-file rename', () => {
 		let edit = rename(URI_B, documents.get(URI_B), { line: 1, character: 0 }, 'baz');
 
 		// should NOT produce edits in URI_A
-		assert.match(true, edit.changes[URI_A] === null || edit.changes[URI_A] === undefined);
+		assert.match(true, edit.changes[URI_A] === null);
 	});
 
 	it('aliased import: renaming export changes only the remote name in import specifier', () => {

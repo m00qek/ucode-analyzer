@@ -344,7 +344,7 @@ describe('completion — snippets', () => {
 
 		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
 		let item = filter(items, (i) => i.label === 'count')[0];
-		assert.match(true, item.insertText === null || item.insertText === undefined);
+		assert.match(true, item.insertText === null);
 	});
 });
 
@@ -362,6 +362,6 @@ describe('completion — @deprecated', () => {
 		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
 		let item = filter(items, (i) => i.label === 'greet')[0];
 		assert.match(true, item !== null);
-		assert.match(true, item.tags === null || item.tags === undefined);
+		assert.match(true, item.tags === null);
 	});
 });

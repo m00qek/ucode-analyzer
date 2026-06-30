@@ -141,7 +141,7 @@ describe('documentSymbols — nested declarations', () => {
 		// Only config itself; host/port are plain values → no children
 		assert.match(1, length(syms));
 		assert.match('config', syms[0].name);
-		assert.match(true, syms[0].children === null || syms[0].children === undefined);
+		assert.match(true, syms[0].children === null);
 	});
 
 	it('handles deep nesting: function inside function inside function', () => {
