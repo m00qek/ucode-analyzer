@@ -1,18 +1,19 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
 
+let proc;
+
+setup(() => {
+	proc = lsp.connect();
+	lsp.initialize(proc);
+});
+
+teardown(() => {
+	lsp.shutdown(proc);
+	assert.match(0, lsp.close(proc));
+});
+
 describe('textDocument/prepareRename', () => {
-	let proc;
-
-	beforeEach(() => {
-		proc = lsp.connect();
-		lsp.initialize(proc);
-	});
-
-	afterEach(() => {
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
-	});
 
 	it('returns range and placeholder for a renameable identifier', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {

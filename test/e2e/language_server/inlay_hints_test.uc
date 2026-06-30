@@ -1,20 +1,20 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
 
 let FULL_RANGE = { start: { line: 0, character: 0 }, end: { line: 9999, character: 0 } };
+let proc;
+
+setup(() => {
+	proc = lsp.connect();
+	lsp.initialize(proc);
+});
+
+teardown(() => {
+	lsp.shutdown(proc);
+	assert.match(0, lsp.close(proc));
+});
 
 describe('textDocument/inlayHint', () => {
-	let proc;
-
-	beforeEach(() => {
-		proc = lsp.connect();
-		lsp.initialize(proc);
-	});
-
-	afterEach(() => {
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
-	});
 
 	it('capability is advertised in initialize response', () => {
 		lsp.shutdown(proc);

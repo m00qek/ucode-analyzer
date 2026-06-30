@@ -1,18 +1,19 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
 
+let proc;
+
+setup(() => {
+	proc = lsp.connect();
+	lsp.initialize(proc);
+});
+
+teardown(() => {
+	lsp.shutdown(proc);
+	assert.match(0, lsp.close(proc));
+});
+
 describe('template type parameter propagation', () => {
-	let proc;
-
-	beforeEach(() => {
-		proc = lsp.connect();
-		lsp.initialize(proc);
-	});
-
-	afterEach(() => {
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
-	});
 
 	it('slice of int array yields ?list<int>', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
@@ -94,18 +95,6 @@ describe('template type parameter propagation', () => {
 });
 
 describe('export function visible to later code in same file', () => {
-	let proc;
-
-	beforeEach(() => {
-		proc = lsp.connect();
-		lsp.initialize(proc);
-	});
-
-	afterEach(() => {
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
-	});
-
 	it('calling a sibling export function resolves to its return type', () => {
 		let src = "/**\n * @returns {string}\n */\nexport function tag(x) { return '' + x; }\nexport function caller(v) {\n    let r = tag(v);\n    r;\n}\n";
 		let uri = 'file:///export_fn_scope.uc';
@@ -124,18 +113,6 @@ describe('export function visible to later code in same file', () => {
 });
 
 describe('nested block scope — let inside for-in body', () => {
-	let proc;
-
-	beforeEach(() => {
-		proc = lsp.connect();
-		lsp.initialize(proc);
-	});
-
-	afterEach(() => {
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
-	});
-
 	it('let declared inside a for-in body resolves to its initializer type', () => {
 		let src = "/**\n * @returns {string}\n */\nfunction tag(x) { return '' + x; }\nfor (let item in items) {\n    let k = tag(item);\n    k;\n}\n";
 		let uri = 'file:///nested_scope.uc';

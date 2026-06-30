@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
 
 const DOC = {
@@ -8,18 +8,19 @@ const DOC = {
 	text: 'let x = 5;',
 };
 
+let proc;
+
+setup(() => {
+	proc = lsp.connect();
+	lsp.initialize(proc);
+});
+
+teardown(() => {
+	lsp.shutdown(proc);
+	assert.match(0, lsp.close(proc));
+});
+
 describe('LSP document sync', () => {
-	let proc;
-
-	beforeEach(() => {
-		proc = lsp.connect();
-		lsp.initialize(proc);
-	});
-
-	afterEach(() => {
-		lsp.shutdown(proc);
-		assert.match(0, lsp.close(proc));
-	});
 
 	it('textDocument/hover returns inferred type for a variable', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: DOC } });
