@@ -8,6 +8,16 @@ import { parseGuard, applyGuard } from 'language_server.types.narrowing';
 let SEVERITY_ERROR   = 1;
 let SEVERITY_WARNING = 2;
 
+function isNonIterable(type) {
+	if (!type || type.kind === 'unknown') return false;
+	if (type.kind === 'nullable') return isNonIterable(type.inner);
+	if (type.kind === 'primitive')
+		return type.name === 'int' || type.name === 'float' ||
+		       type.name === 'boolean' || type.name === 'null';
+	if (type.kind === 'function') return true;
+	return false;
+}
+
 // ── Type predicates ───────────────────────────────────────────────────────────
 
 function isCallable(type) {
@@ -245,6 +255,29 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 			}
 			return;
 		}
+	}
+
+	// ── for-in over a non-iterable type ──────────────────────────────────────
+
+	if (nt === 'for_in_statement') {
+		let right = ts.childByField(node, 'right');
+		if (right) {
+			let iterType = inferNode(right, source, uri, scope, 0);
+			if (isNonIterable(iterType)) {
+				push(diags, {
+					range:    rangeOf(source, lineTable, right),
+					severity: SEVERITY_WARNING,
+					source:   'ucode-ls',
+					code:     'for-in-non-iterable',
+					message:  sprintf("Cannot iterate over type '%s'",
+					    iterType.kind === 'primitive' ? iterType.name : iterType.kind),
+				});
+			}
+			_walk(right, scope, source, uri, lineTable, diags);
+		}
+		let body = ts.childByField(node, 'body');
+		if (body) _walk(body, scope, source, uri, lineTable, diags);
+		return;
 	}
 
 	// ── Blocks: create child scope ────────────────────────────────────────────

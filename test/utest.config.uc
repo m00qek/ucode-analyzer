@@ -1,4 +1,5 @@
 return {
 	lib_paths: [ "../src", "helpers" ],
-	mocks: { fs: null }
+	mocks: { fs: null },
+	timeout: 90,
 };

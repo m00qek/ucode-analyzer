@@ -146,6 +146,51 @@ describe('diagnostics — type errors: JSDoc @param type checking', () => {
 	});
 });
 
+describe('diagnostics — type errors: for-in non-iterable', () => {
+	it('no warning for for-in over an array', () => {
+		let doc = open("let arr = [1,2,3];\nfor (let x in arr) { x; }\n");
+		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
+		assert.match(0, length(diags));
+	});
+
+	it('no warning for for-in over a record', () => {
+		let doc = open("let obj = { a: 1 };\nfor (let k in obj) { k; }\n");
+		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
+		assert.match(0, length(diags));
+	});
+
+	it('no warning for for-in over unknown type', () => {
+		let doc = open("for (let x in mystery) { x; }\n");
+		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
+		assert.match(0, length(diags));
+	});
+
+	it('warns for for-in over an integer literal', () => {
+		let doc = open("for (let x in 42) { x; }\n");
+		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
+		assert.match(1, length(diags));
+		assert.match(2, diags[0].severity);  // WARNING
+	});
+
+	it('warns for for-in over a boolean literal', () => {
+		let doc = open("for (let x in true) { x; }\n");
+		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
+		assert.match(1, length(diags));
+	});
+
+	it('warns for for-in over null', () => {
+		let doc = open("for (let x in null) { x; }\n");
+		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
+		assert.match(1, length(diags));
+	});
+
+	it('warns for for-in over a const int variable', () => {
+		let doc = open("const n = 42;\nfor (let x in n) { x; }\n");
+		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
+		assert.match(1, length(diags));
+	});
+});
+
 describe('diagnostics — type errors: flow sensitivity (&& short-circuit)', () => {
 	it('suppresses null warning on RHS of x && x.foo', () => {
 		let doc = open("let x = null;\nlet y = x && x.foo;\n");

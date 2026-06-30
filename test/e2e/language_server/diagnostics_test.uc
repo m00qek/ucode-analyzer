@@ -270,6 +270,58 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(true, index(d[0].message, "'a'") >= 0);
 	});
 
+	it('reports const-assignment error for reassigning a const variable', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "const x = 1;\nx = 2;\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		let d = filter(notif.params.diagnostics, (d) => d.code === 'const-assignment');
+		assert.match(1, length(d));
+		assert.match(1, d[0].severity);   // ERROR
+		assert.match(true, index(d[0].message, "'x'") >= 0);
+	});
+
+	it('reports missing-return warning for @returns function missing a path', () => {
+		let text = "/**\n * @returns {int}\n */\nfunction f() {\n  let x = 1;\n}\n";
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		let d = filter(notif.params.diagnostics, (d) => d.code === 'missing-return');
+		assert.match(1, length(d));
+		assert.match(2, d[0].severity);   // WARNING
+	});
+
+	it('reports for-in-non-iterable warning for iterating over an integer', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "for (let x in 42) { x; }\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		let d = filter(notif.params.diagnostics, (d) => d.code === 'for-in-non-iterable');
+		assert.match(1, length(d));
+		assert.match(2, d[0].severity);   // WARNING
+	});
+
+	it('no for-in-non-iterable warning when iterating over an array', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let arr = [1,2,3];\nfor (let x in arr) { x; }\n" },
+		}});
+
+		let notif = lsp.receiveNotification(proc);
+
+		let d = filter(notif.params.diagnostics, (d) => d.code === 'for-in-non-iterable');
+		assert.match(0, length(d));
+	});
+
 	it('re-sends diagnostics on didChange', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },

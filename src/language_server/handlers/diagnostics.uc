@@ -10,6 +10,8 @@ import { unreachableCode }        from 'language_server.diagnostics.unreachable_
 import { deprecatedUsage }        from 'language_server.diagnostics.deprecated_usage';
 import { redeclaredVars }         from 'language_server.diagnostics.redeclared_var';
 import { duplicateObjectKey }     from 'language_server.diagnostics.duplicate_object_key';
+import { assignmentToConst }      from 'language_server.diagnostics.assignment_const';
+import { missingReturn }          from 'language_server.diagnostics.missing_return';
 
 export function diagnosticsFor(uri, doc) {
 	let diags = [];
@@ -25,5 +27,7 @@ export function diagnosticsFor(uri, doc) {
 	for (let d in deprecatedUsage(uri, doc))      push(diags, d);
 	for (let d in redeclaredVars(doc))            push(diags, d);
 	for (let d in duplicateObjectKey(doc))        push(diags, d);
+	for (let d in assignmentToConst(doc))         push(diags, d);
+	for (let d in missingReturn(doc))             push(diags, d);
 	return diags;
 };
