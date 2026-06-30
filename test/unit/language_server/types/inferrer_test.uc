@@ -21,10 +21,10 @@ let _config = {
 
 // Bootstrap the builtin scope from stdlib.d.uc once for the whole test run.
 dag.init(_config);
-let _stdlibUri = dag.resolveSpecifier('stdlib');
-if (_stdlibUri) {
-	dag.addFromDisk(_stdlibUri);
-	initBuiltinsFromDag(_stdlibUri);
+let _globalUri = dag.resolveSpecifier('global');
+if (_globalUri) {
+	dag.addFromDisk(_globalUri);
+	initBuiltinsFromDag(_globalUri);
 }
 
 beforeEach(() => {
@@ -899,7 +899,7 @@ describe('inferrer — nullable type unwrapping', () => {
 		let tree2 = parse(text2);
 		let offset2 = length(text2) - length("x;\n}") - 1;
 		dag.add(URI, text2, tree2);
-		if (_stdlibUri) {
+		if (_globalUri) {
 			let scope3 = buildScope(URI, text2, tree2, offset2);
 			assert.match(prim('int'), scope3.bindings['x']);
 		}
@@ -997,7 +997,7 @@ describe('inferrer — buildScope: Object/dict for-in key type', () => {
 		let tree2 = parse(text2);
 		let offset2 = length(text2) - length("k;\n}") - 1;
 		dag.add(URI, text2, tree2);
-		if (_stdlibUri) {
+		if (_globalUri) {
 			let scope = buildScope(URI, text2, tree2, offset2);
 			assert.match(prim('string'), scope.bindings['k']);
 		}

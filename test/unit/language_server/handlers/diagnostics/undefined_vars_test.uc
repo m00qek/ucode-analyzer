@@ -14,10 +14,10 @@ let _config = {
 // Bootstrap stdlib once so undefinedVars can distinguish builtins from
 // truly undefined names.
 dag.init(_config);
-let _stdlibUri = dag.resolveSpecifier('stdlib');
-if (_stdlibUri) {
-	dag.addFromDisk(_stdlibUri);
-	initBuiltinsFromDag(_stdlibUri);
+let _globalUri = dag.resolveSpecifier('global');
+if (_globalUri) {
+	dag.addFromDisk(_globalUri);
+	initBuiltinsFromDag(_globalUri);
 }
 
 afterEach(() => documents.close(URI));

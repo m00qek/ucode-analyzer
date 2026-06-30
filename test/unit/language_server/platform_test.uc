@@ -4,7 +4,7 @@ import * as platform from 'language_server.platform';
 let URI_FS   = 'file:///app/src/declarations/fs.d.uc';
 let URI_IO   = 'file:///app/src/declarations/io.d.uc';
 let URI_MATH = 'file:///app/src/declarations/math.d.uc';
-let URI_STD  = 'file:///app/src/declarations/stdlib.d.uc';
+let URI_STD  = 'file:///app/src/declarations/global.d.uc';
 
 let V1 = '2025.07.18~3f64c808';
 let V2 = '2026.01.16~85922056';
@@ -52,7 +52,7 @@ describe('platform.init — module availability', () => {
 		assert.match(true, platform.moduleAvailable(URI_MATH));
 	});
 
-	it('stdlib is always at the latest version index', () => {
+	it('global is always at the latest version index', () => {
 		platform.init(
 			{ [URI_STD]: [V1, V2] },
 			(name) => null

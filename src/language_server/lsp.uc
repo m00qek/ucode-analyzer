@@ -76,8 +76,8 @@ export function run(config) {
 					dag.addFromDisk('file://' + path);
 			}
 
-			let stdlibUri = dag.resolveSpecifier('stdlib');
-			if (stdlibUri) initBuiltinsFromDag(stdlibUri);
+			let globalUri = dag.resolveSpecifier('global');
+			if (globalUri) initBuiltinsFromDag(globalUri);
 
 			let declVersions = {};
 			for (let uri in dag.allUris()) {

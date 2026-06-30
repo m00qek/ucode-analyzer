@@ -8,7 +8,7 @@ import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType } from 'l
 import { buildLineTable, offsetToPosition, docBefore } from 'language_server.positions';
 
 let _builtinScope = makeScope(null);
-let _stdlibUri    = null;
+let _globalUri    = null;
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
 
@@ -584,12 +584,12 @@ export function inferNode(node, source, uri, scope, depth) {
 	return _infer(node, source, uri, scope, depth ?? 0);
 };
 
-export function stdlibUri() { return _stdlibUri; };
+export function globalUri() { return _globalUri; };
 
 export function initBuiltinsFromDag(uri) {
 	let exps = dag.exportsOf(uri);
 	if (!exps || length(exps) === 0) return;
-	_stdlibUri = uri;
+	_globalUri = uri;
 	let s = makeScope(null);
 	for (let i = 0; i < length(exps); i++)
 		scopeSet(s, exps[i].name, exportType(exps[i], uri));

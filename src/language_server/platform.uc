@@ -74,7 +74,7 @@ export function init(declVersions, queryFn) {
 
 		let modName = modNameFromUri(uri);
 
-		if (modName === 'stdlib') {
+		if (modName === 'global') {
 			_index[uri] = length(versions) - 1;
 			continue;
 		}

@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { buildLineTable, rangeOf } from 'language_server.positions';
 import * as dag from 'language_server.dag.dag';
-import { stdlibUri } from 'language_server.types.inferrer';
+import { globalUri } from 'language_server.types.inferrer';
 import { makeScope, scopeHas, scopeSet } from 'language_server.types.scope';
 
 let SEVERITY_WARNING = 2;
@@ -260,7 +260,7 @@ export function undefinedVars(doc) {
 	// If the stdlib has not been initialized (tests, partial environments), skip
 	// this check entirely to avoid a flood of false positives.
 	let globals = {};
-	let sUri = stdlibUri();
+	let sUri = globalUri();
 	if (!sUri) return [];
 
 	if (!dag.exportsOf(sUri)) dag.addFromDisk(sUri);

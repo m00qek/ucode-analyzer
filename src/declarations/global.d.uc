@@ -1,13 +1,47 @@
 // Source: https://github.com/jow-/ucode
 // Versions: 2025.07.18~3f64c808, 2026.01.16~85922056
 /**
- * # Builtin functions
+ * # Global scope
  *
- * The core namespace is not an actual module but refers to the set of
- * builtin functions and properties available to `ucode` scripts.
+ * Everything in the global scope is available in every ucode script without
+ * any import. Builtin functions are injected by the VM alongside a small set
+ * of constants and special objects.
  *
- * @module core
+ * @module global
  */
+
+/** IEEE 754 Not-a-Number constant. @type {double} */
+export const NaN = 0.0;
+
+/** IEEE 754 positive infinity constant. @type {double} */
+export const Infinity = 0.0;
+
+/**
+ * Module search path used by `require()`. Each entry is a filesystem glob
+ * pattern; the `*` wildcard is replaced with the module name.
+ * @type {string[]}
+ */
+export const REQUIRE_SEARCH_PATH = [];
+
+/**
+ * Cache of loaded modules. Keys are module specifiers; values are the
+ * exported objects. Delete an entry to force a reload on next `require()`.
+ * @type {object}
+ */
+export const modules = {};
+
+/**
+ * Self-reference to the global scope object. Useful for dynamically reading
+ * or writing global variables at runtime (`global.foo = 42`).
+ * @type {object}
+ */
+export const global = {};
+
+/**
+ * Command-line arguments passed to the script (standalone mode only).
+ * @type {string[]}
+ */
+export const ARGV = [];
 
 /**
  * Broken-down date/time object returned by {@link module:core#localtime|localtime()}

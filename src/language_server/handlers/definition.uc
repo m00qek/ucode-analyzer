@@ -2,7 +2,7 @@ import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'language_server.positions';
 import * as dag from 'language_server.dag.dag';
 import * as fs from 'fs';
-import { inferNode, stdlibUri } from 'language_server.types.inferrer';
+import { inferNode, globalUri } from 'language_server.types.inferrer';
 import { buildScope } from 'language_server.types.scope_builder';
 import * as type_registry from 'language_server.types.registry';
 
@@ -246,7 +246,7 @@ export function definition(uri, doc, position) {
 	let local = localDefinition(uri, doc, name);
 	if (local) return local;
 
-	// Builtin: jump to its declaration in stdlib.d.uc.
-	let stdlib = stdlibUri();
-	return stdlib ? resolveExportDefinition(stdlib, name) : null;
+	// Builtin: jump to its declaration in global.d.uc.
+	let gUri = globalUri();
+	return gUri ? resolveExportDefinition(gUri, name) : null;
 };
