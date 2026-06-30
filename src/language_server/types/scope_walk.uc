@@ -251,11 +251,14 @@ function walkBinary(node, source, uri, scope, map) {
     let right = ts.childByField(node, 'right');
     if (left) walkNode(left, source, uri, scope, map);
     if (right) {
-        if (op === '&&') {
+        // The RHS of && is reached only when the LHS is truthy; the RHS of ||
+        // only when the LHS is falsy. Narrow the RHS scope accordingly so that,
+        // e.g., `x && x.foo` and `x === null || x.foo` both see x as non-null.
+        if (op === '&&' || op === '||') {
             let guard = left ? parseGuard(left, source) : null;
             if (guard) {
                 let rightScope = makeScope(scope);
-                applyGuard(rightScope, guard, true);
+                applyGuard(rightScope, guard, op === '&&');
                 emit(map, ts.startByte(right), rightScope);
                 walkNode(right, source, uri, rightScope, map);
             } else {

@@ -203,6 +203,14 @@ describe('textDocument/diagnostic', () => {
 		assert.match(1, length(errs));
 	});
 
+	it('does not warn for m.prop on the RHS of (m === null || m.prop)', () => {
+		// RHS of || is only reached when m === null is false, so m is non-null there.
+		let diags = diagnose('file:///or_narrow.uc',
+			"/**\n * @param {object|null} m\n */\nfunction f(m) { return m === null || m.api; }\nf(null);\n");
+		let typeErrs = filter(diags, (d) => d.code === 'may-be-null' || d.code === 'unknown-property');
+		assert.match(0, length(typeErrs));
+	});
+
 	it('does not warn for m.prop inside if (m && ...) body', () => {
 		let diags = diagnose('file:///if_narrow.uc',
 			"/**\n * @param {object|null} m\n */\nfunction f(m) { if (m && type(m.api) === 'array') { let x = m.api; x; } }\nf(null);\n");
