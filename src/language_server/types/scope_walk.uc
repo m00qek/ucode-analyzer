@@ -94,15 +94,27 @@ function elemTypeOf(iterType) {
     return UNKNOWN;
 }
 
+// Builtins that never return normally: die() raises, exit() ends the process.
+// A statement calling either terminates control just like return/throw.
+function isNoReturnCall(node, source) {
+    if (!node || ts.nodeType(node) !== 'call_expression') return false;
+    let callee = ts.childByField(node, 'function');
+    if (!callee || ts.nodeType(callee) !== 'identifier') return false;
+    let name = ts.text(callee, source);
+    return name === 'die' || name === 'exit';
+}
+
 // True when a node unconditionally transfers control out of the block.
-function endsInTerminator(node) {
+function endsInTerminator(node, source) {
     if (!node) return false;
     let nt = ts.nodeType(node);
     if (nt === 'return_statement' || nt === 'break_statement' ||
         nt === 'continue_statement' || nt === 'throw_statement') return true;
+    if (nt === 'expression_statement')
+        return isNoReturnCall(ts.namedChild(node, 0), source);
     if (nt === 'statement_block') {
         let n = ts.namedChildCount(node);
-        return n > 0 && endsInTerminator(ts.namedChild(node, n - 1));
+        return n > 0 && endsInTerminator(ts.namedChild(node, n - 1), source);
     }
     return false;
 }
@@ -113,7 +125,7 @@ function applyGuardClause(stmt, source, scope) {
     if (ts.nodeType(stmt) !== 'if_statement') return scope;
     let alt  = ts.childByField(stmt, 'alternative');
     let cons = ts.childByField(stmt, 'consequence');
-    if (alt || !cons || !endsInTerminator(cons)) return scope;
+    if (alt || !cons || !endsInTerminator(cons, source)) return scope;
     let condWrapper = ts.childByField(stmt, 'condition');
     let cond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
     let guard = cond ? parseGuard(cond, source) : null;

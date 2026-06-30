@@ -9,6 +9,7 @@ function runLinter(extra) {
 	let args = [ '-L', '/app/src', '/app/src/ucode-linter.uc' ];
 	for (let a in extra) push(args, a);
 	let proc = native.spawn('ucode', args);
+	if (proc === null) die('failed to spawn ucode');
 	let out = '';
 	while (true) {
 		let chunk = proc.read_raw(4096);

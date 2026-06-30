@@ -1358,7 +1358,7 @@ describe('inferrer — rest params', () => {
 		let t = inferFn("function f(...args) { return args; }");
 		let p = null;
 		for (let i in t.params) if (i.name === 'args') { p = i; break; }
-		assert.match(true, p !== null);
+		if (p === null) die('expected a rest param named args');
 		assert.match('generic', p.type.kind);
 		assert.match('list', p.type.base);
 	});

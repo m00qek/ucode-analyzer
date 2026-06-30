@@ -43,7 +43,7 @@ describe('completion — scope', () => {
 		let item = null;
 		for (let i in items) if (i.label === 'x') { item = i; break; }
 
-		assert.match(true, item !== null);
+		if (item === null) die('expected a completion item for x');
 		assert.match(6, item.kind);
 	});
 
@@ -56,7 +56,7 @@ describe('completion — scope', () => {
 		let item = null;
 		for (let i in items) if (i.label === 'fn') { item = i; break; }
 
-		assert.match(true, item !== null);
+		if (item === null) die('expected a completion item for fn');
 		assert.match(3, item.kind);
 	});
 
@@ -139,7 +139,7 @@ describe('completion — member (cursor on property)', () => {
 		let item = null;
 		for (let i in items) if (i.label === 'parse') { item = i; break; }
 
-		assert.match(true, item !== null);
+		if (item === null) die('expected a completion item for parse');
 		assert.match(3, item.kind);  // KIND_FUNCTION
 	});
 
@@ -270,7 +270,7 @@ describe('completion — keywords', () => {
 		let ifItem = null;
 		for (let i in items) if (i.label === 'if') { ifItem = i; break; }
 
-		assert.match(true, ifItem !== null);
+		if (ifItem === null) die('expected a completion item for if');
 		assert.match(14, ifItem.kind);
 	});
 

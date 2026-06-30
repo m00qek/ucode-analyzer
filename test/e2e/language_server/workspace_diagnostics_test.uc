@@ -28,8 +28,8 @@ describe('workspace/diagnostic', () => {
 
 		let report = lsp.workspaceDiagnostics(proc, []);
 		let mine = entryFor(report, 'file:///app/ws_a.uc');
+		if (mine === null) die('no diagnostic entry for ws_a.uc');
 
-		assert.match(true, mine !== null);
 		assert.match('full', mine.kind);
 		assert.match(true, length(mine.items) >= 1);
 	});
@@ -40,12 +40,14 @@ describe('workspace/diagnostic', () => {
 		}});
 
 		let first = entryFor(lsp.workspaceDiagnostics(proc, []), 'file:///app/ws_b.uc');
+		if (first === null) die('no diagnostic entry for ws_b.uc');
 		assert.match('full', first.kind);
 
 		// Re-pull carrying the previous resultId; nothing changed -> unchanged.
 		let second = entryFor(
 			lsp.workspaceDiagnostics(proc, [{ uri: 'file:///app/ws_b.uc', value: first.resultId }]),
 			'file:///app/ws_b.uc');
+		if (second === null) die('no re-pulled diagnostic entry for ws_b.uc');
 		assert.match('unchanged', second.kind);
 	});
 

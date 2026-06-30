@@ -42,7 +42,7 @@ describe('textDocument/diagnostic', () => {
 		// Should include at least a warning for 'ghost' (undefined) and one for 'x' (unused)
 		let ghostDiag = null;
 		for (let d in diags) if (index(d.message, 'ghost') >= 0) { ghostDiag = d; break; }
-		assert.match(true, ghostDiag !== null);
+		if (ghostDiag === null) die('expected a diagnostic mentioning ghost');
 		assert.match(2, ghostDiag.severity);  // WARNING
 	});
 
@@ -65,7 +65,7 @@ describe('textDocument/diagnostic', () => {
 		let diags = diagnose('file:///t.uc', "let x = 1;\nlet y = x == 1;\ny;\n");
 		let eqDiag = null;
 		for (let d in diags) if (index(d.message, '===') >= 0) { eqDiag = d; break; }
-		assert.match(true, eqDiag !== null);
+		if (eqDiag === null) die('expected a === hint diagnostic');
 		assert.match(4, eqDiag.severity);
 	});
 
@@ -208,6 +208,13 @@ describe('textDocument/diagnostic', () => {
 		// x is non-null (type(null) is 'null').
 		let diags = diagnose('file:///type_obj.uc',
 			"function f() { let r = null; if (type(r) === 'object') { return r.x; } return 0; }\nf();\n");
+		let errs = filter(diags, (d) => d.code === 'may-be-null');
+		assert.match(0, length(errs));
+	});
+
+	it('narrows after a die() guard clause (die never returns)', () => {
+		let diags = diagnose('file:///die_guard.uc',
+			"function f() { let r = null; if (r === null) die('x'); return r.k; }\nf();\n");
 		let errs = filter(diags, (d) => d.code === 'may-be-null');
 		assert.match(0, length(errs));
 	});

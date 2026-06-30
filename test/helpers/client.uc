@@ -101,14 +101,18 @@ export function documentDiagnostics(proc, uri, previousResultId) {
 	if (previousResultId !== null)
 		params.previousResultId = previousResultId;
 	send(proc, { jsonrpc: '2.0', id: _diagId++, method: 'textDocument/diagnostic', params });
-	return receive(proc).result;
+	let resp = receive(proc);
+	if (resp === null) die('documentDiagnostics: no response');
+	return resp.result;
 };
 
 // Pull workspace diagnostics. Returns the WorkspaceDiagnosticReport ({ items }).
 export function workspaceDiagnostics(proc, previousResultIds) {
 	send(proc, { jsonrpc: '2.0', id: _diagId++, method: 'workspace/diagnostic',
 		params: { previousResultIds: previousResultIds ?? [] } });
-	return receive(proc).result;
+	let resp = receive(proc);
+	if (resp === null) die('workspaceDiagnostics: no response');
+	return resp.result;
 };
 
 export function initialize(proc) {
@@ -124,6 +128,7 @@ export function initialize(proc) {
 export function shutdown(proc) {
 	send(proc, { jsonrpc: '2.0', id: 0, method: 'shutdown', params: null });
 	let resp = receive(proc);
+	if (resp === null) die('shutdown: no response');
 	if (resp.error !== null)
 		die(sprintf('shutdown failed: %J', resp.error));
 	send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });
