@@ -17,8 +17,6 @@ function toUri(path) {
 // Returns the process exit code: 0 clean / below threshold, 1 findings at or
 // above --fail-on, 2 usage or IO error.
 export function run(config, opts) {
-	// Build the cross-file graph + builtins. Even in file mode the imports in a
-	// target file resolve against the whole workspace DAG.
 	if (opts.files === null) {
 		let st = fs.stat(config.workspaceDir);
 		if (!st || st.type !== 'directory') {
@@ -27,10 +25,11 @@ export function run(config, opts) {
 		}
 	}
 
-	workspace.loadWorkspace(config);
-
 	let results;
 	if (opts.files !== null) {
+		// File mode: build the cross-file graph so the listed files' imports
+		// resolve against the whole workspace, then diagnose just those files.
+		workspace.loadWorkspace(config);
 		results = [];
 		for (let path in opts.files) {
 			let uri = toUri(path);
@@ -41,7 +40,8 @@ export function run(config, opts) {
 			push(results, { uri, diags: workspace.diagnoseFile(uri) });
 		}
 	} else {
-		results = workspace.collectWorkspaceDiagnostics(config);
+		// Workspace mode: single parse-once pass over the whole workspace.
+		results = workspace.diagnoseWorkspace(config);
 	}
 
 	if (opts.format === 'json') {

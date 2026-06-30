@@ -81,11 +81,62 @@ export function diagnoseFile(uri) {
 	return doc ? diagnosticsFor(uri, doc) : [];
 };
 
-// Diagnose every workspace file. Returns [{ uri, diags }]. Synchronous — used by
-// the linter directly and by the language server's background scan task.
-export function collectWorkspaceDiagnostics(config) {
-	let out = [];
-	for (let uri in workspaceUris(config))
-		push(out, { uri, diags: diagnoseFile(uri) });
-	return out;
+// Load the workspace and diagnose every workspace file in a single pass that
+// reads and parses each file exactly once: the parsed tree is reused for both
+// DAG indexing and diagnosis, instead of parsing once to index (loadWorkspace)
+// and again to diagnose (getOrLoad). Returns [{ uri, diags }]. Used by the
+// linter's workspace mode.
+export function diagnoseWorkspace(config) {
+	let workspaceDir = config.workspaceDir ?? '/root/project';
+	let ws = config.workspace ?? {};
+	let libPaths = ws.libraryPaths ?? ['src'];
+
+	dag.init(config);
+
+	// Phase 1: parse each workspace file once, index it from that parse, and keep
+	// the bare doc. The scopeMap is deliberately NOT built yet — it resolves
+	// imports, so it must wait until the whole DAG is populated.
+	let docs = [];
+	let seen = {};
+	for (let relPath in libPaths) {
+		for (let path in glob.scan(workspaceDir + '/' + relPath, ['**/*.uc'], [])) {
+			let uri = 'file://' + path;
+			if (seen[uri]) continue;
+			seen[uri] = true;
+			let doc = documents.readParsed(uri);
+			if (!doc) continue;
+			dag.add(uri, doc.text, doc.tree);
+			push(docs, doc);
+		}
+	}
+
+	// Index dependencies we resolve against but never diagnose (declaration
+	// stubs, system libraries): a single parse-and-discard is enough.
+	if (config.selfSrcDir)
+		for (let path in glob.scan(config.selfSrcDir + '/declarations', ['**/*.uc'], [])) {
+			let uri = 'file://' + path;
+			if (seen[uri]) continue;
+			seen[uri] = true;
+			dag.addFromDisk(uri);
+		}
+	for (let sysPath in (config.systemLibPaths ?? []))
+		for (let path in glob.scan(sysPath, ['**/*.uc'], [])) {
+			let uri = 'file://' + path;
+			if (seen[uri]) continue;
+			seen[uri] = true;
+			dag.addFromDisk(uri);
+		}
+
+	let globalUri = dag.resolveSpecifier('global');
+	if (globalUri) initBuiltinsFromDag(globalUri);
+
+	// Phase 2: the DAG is complete — build each workspace doc's scopeMap and
+	// diagnose it.
+	let results = [];
+	for (let doc in docs) {
+		if (!isWorkspaceUri(doc.uri, config)) continue;
+		documents.withScopeMap(doc);
+		push(results, { uri: doc.uri, diags: diagnosticsFor(doc.uri, doc) });
+	}
+	return results;
 };
