@@ -4,6 +4,7 @@ import { parseDoc } from 'language_server.types.doc_parser';
 import { unify, substitute } from 'language_server.types.unifier';
 import { memoGet, memoSet } from 'language_server.memo';
 import { makeScope, scopeGet, scopeSet } from 'language_server.types.scope';
+import { parseGuard, applyGuard } from 'language_server.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType } from 'language_server.types.type_utils';
 import { buildLineTable, offsetToPosition, docBefore } from 'language_server.positions';
 
@@ -363,10 +364,16 @@ function inferBinary(node, source, uri, scope, depth) {
 }
 
 function inferTernary(node, source, uri, scope, depth) {
-	let a = ts.namedChild(node, 1);
-	let b = ts.namedChild(node, 2);
-	let ta = a ? _infer(a, source, uri, scope, depth + 1) : UNKNOWN;
-	let tb = b ? _infer(b, source, uri, scope, depth + 1) : UNKNOWN;
+	let cond = ts.namedChild(node, 0);
+	let a    = ts.namedChild(node, 1);
+	let b    = ts.namedChild(node, 2);
+	let guard = parseGuard(cond, source);
+	let trueScope  = makeScope(scope);
+	let falseScope = makeScope(scope);
+	applyGuard(trueScope,  guard, true);
+	applyGuard(falseScope, guard, false);
+	let ta = a ? _infer(a, source, uri, trueScope,  depth + 1) : UNKNOWN;
+	let tb = b ? _infer(b, source, uri, falseScope, depth + 1) : UNKNOWN;
 	if (ta.kind === tb.kind && ta.kind === 'primitive' && ta.name === tb.name)
 		return ta;
 	return { kind: 'union', members: [ta, tb] };

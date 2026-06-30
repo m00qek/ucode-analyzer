@@ -323,6 +323,16 @@ describe('textDocument/publishDiagnostics', () => {
 		assert.match(0, length(d));
 	});
 
+	it('does not warn for m.prop when m is guarded by ternary condition', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///ternary_narrow.uc', languageId: 'ucode', version: 1,
+				text: "/**\n * @param {object|null} m\n */\nfunction f(m) { let x = m ? m.create : null; x; }\nf(null);\n" },
+		}});
+		let notif = lsp.receiveNotification(proc);
+		let typeErrs = filter(notif.params.diagnostics, (d) => d.code === 'may-be-null' || d.code === 'unknown-property');
+		assert.match(0, length(typeErrs));
+	});
+
 	it('re-sends diagnostics on didChange', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },

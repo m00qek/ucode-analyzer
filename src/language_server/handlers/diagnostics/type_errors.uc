@@ -257,6 +257,23 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 		}
 	}
 
+	// ── ternary: narrow consequent/alternate with the condition guard ─────────
+
+	if (nt === 'ternary_expression') {
+		let cond = ts.namedChild(node, 0);
+		let cons = ts.namedChild(node, 1);
+		let alt  = ts.namedChild(node, 2);
+		if (cond) _walk(cond, scope, source, uri, lineTable, diags);
+		let guard = cond ? parseGuard(cond, source) : null;
+		let trueScope  = makeScope(scope);
+		let falseScope = makeScope(scope);
+		applyGuard(trueScope,  guard, true);
+		applyGuard(falseScope, guard, false);
+		if (cons) _walk(cons, trueScope,  source, uri, lineTable, diags);
+		if (alt)  _walk(alt,  falseScope, source, uri, lineTable, diags);
+		return;
+	}
+
 	// ── for-in over a non-iterable type ──────────────────────────────────────
 
 	if (nt === 'for_in_statement') {
