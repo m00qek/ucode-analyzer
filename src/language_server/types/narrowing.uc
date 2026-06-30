@@ -46,6 +46,20 @@ function narrowExcluding(type, exclude) {
 	return { kind: 'union', members: kept };
 }
 
+// Guards are typed objects describing what a condition asserts about a variable:
+//
+//   { kind: 'truthy', name, positive }
+//       Truthy/falsy check or null equality: if(x), if(!x), x!==null, x===null.
+//       positive=true means the condition asserts x is truthy/non-null.
+//
+//   { kind: 'type', name, positive, toType }
+//       type(x) === 'string' (positive=true) or !== (positive=false).
+//
+//   { kind: 'and', guards }
+//       Compound &&: all sub-guards hold in the consequent; alternate is
+//       ambiguous (we can't tell which sub-condition failed), so applyGuard
+//       skips narrowing for positive=false.
+
 export function parseGuard(node, source) {
 	if (!node) return null;
 	let nt = ts.nodeType(node);
@@ -54,42 +68,42 @@ export function parseGuard(node, source) {
 		return parseGuard(ts.namedChild(node, 0), source);
 
 	if (nt === 'identifier')
-		return { name: ts.text(node, source), positive: true };
+		return { kind: 'truthy', name: ts.text(node, source), positive: true };
 
 	if (nt === 'unary_expression') {
-		if (ts.nodeType(ts.child(node, 0)) === '!') {
-			let operand = ts.namedChild(node, 0);
+		if (ts.nodeType(ts.childByField(node, 'operator')) === '!') {
+			let operand = ts.childByField(node, 'argument');
 			if (operand && ts.nodeType(operand) === 'identifier')
-				return { name: ts.text(operand, source), positive: false };
+				return { kind: 'truthy', name: ts.text(operand, source), positive: false };
 		}
 		return null;
 	}
 
 	if (nt === 'binary_expression') {
-		let op = ts.nodeType(ts.child(node, 1));
+		let op = ts.nodeType(ts.childByField(node, 'operator'));
 
 		if (op === '&&') {
 			// In the consequent all sub-conditions hold; collect guards and apply
 			// each positively. In the alternate we can't tell which sub-condition
 			// failed, so we wrap in a compound guard that applyGuard skips when
 			// positive=false, giving safe/conservative behaviour.
-			let left  = ts.namedChild(node, 0);
-			let right = ts.namedChild(node, 1);
+			let left  = ts.childByField(node, 'left');
+			let right = ts.childByField(node, 'right');
 			let leftGuard  = left  ? parseGuard(left,  source) : null;
 			let rightGuard = right ? parseGuard(right, source) : null;
 			if (!leftGuard && !rightGuard) return null;
 			let guards = [];
 			if (leftGuard)  push(guards, leftGuard);
 			if (rightGuard) push(guards, rightGuard);
-			return { compound: '&&', guards };
+			return { kind: 'and', guards };
 		}
 
 		let isNotEq = (op === '!==' || op === '!=');
 		let isEq    = (op === '===' || op === '==');
 		if (!isNotEq && !isEq) return null;
 
-		let left  = ts.namedChild(node, 0);
-		let right = ts.namedChild(node, 1);
+		let left  = ts.childByField(node, 'left');
+		let right = ts.childByField(node, 'right');
 		if (!left || !right) return null;
 
 		// type(x) === "string"  /  "string" === type(x)  (and !== variants)
@@ -112,7 +126,7 @@ export function parseGuard(node, source) {
 					let typeStr = replace(raw, /^['"]|['"]$/g, '');
 					let toType  = TYPE_FUNC_MAP[typeStr];
 					if (toType)
-						return { name: ts.text(operand, source), positive: isEq, toType };
+						return { kind: 'type', name: ts.text(operand, source), positive: isEq, toType };
 				}
 			}
 		}
@@ -125,7 +139,7 @@ export function parseGuard(node, source) {
 			varNode = right;
 		if (!varNode) return null;
 
-		return { name: ts.text(varNode, source), positive: isNotEq };
+		return { kind: 'truthy', name: ts.text(varNode, source), positive: isNotEq };
 	}
 
 	return null;
@@ -133,7 +147,7 @@ export function parseGuard(node, source) {
 
 export function applyGuard(scope, guard, positive) {
 	if (!guard) return;
-	if (guard.compound === '&&') {
+	if (guard.kind === 'and') {
 		// All sub-guards hold in the true branch; false branch is ambiguous.
 		if (positive)
 			for (let i = 0; i < length(guard.guards); i++)
@@ -142,11 +156,12 @@ export function applyGuard(scope, guard, positive) {
 	}
 	let current = scopeGet(scope, guard.name);
 	let inTrueBranch = guard.positive ? positive : !positive;
-	if (guard.toType) {
+	if (guard.kind === 'type') {
 		scopeSet(scope, guard.name, inTrueBranch
 			? guard.toType
 			: narrowExcluding(current ?? UNKNOWN, guard.toType));
 	} else {
+		// kind === 'truthy'
 		scopeSet(scope, guard.name, inTrueBranch ? narrowToNonNull(current ?? UNKNOWN) : NULL_T);
 	}
 };

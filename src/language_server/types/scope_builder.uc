@@ -80,12 +80,9 @@ function addForVar(block, source, uri, scope) {
 // If block is the consequent or alternate of an if_statement, narrow the
 // scope bindings implied by the condition.
 //
-// AST shape (tree-sitter-ucode, no named fields on if_statement):
-//   if_statement
-//     namedChild(0): parenthesized_expression  ← condition wrapper
-//     namedChild(1): statement_block           ← consequent
-//     namedChild(2): else_clause               ← optional
-//       namedChild(0): statement_block         ← alternate
+// AST shape: if_statement fields are 'condition' (parenthesized_expression),
+// 'consequence' (statement_block), 'alternative' (else_clause, optional).
+// parenthesized_expression has no named fields; unwrap with namedChild(0).
 function applyIfNarrowing(block, source, scope) {
 	let parent = ts.parent(block);
 	if (!parent) return;
@@ -95,20 +92,20 @@ function applyIfNarrowing(block, source, scope) {
 	let condWrapper  = null;
 
 	if (parentType === 'if_statement') {
-		let consequent = ts.namedChild(parent, 1);
+		let consequent = ts.childByField(parent, 'consequence');
 		if (!consequent || ts.startByte(consequent) !== ts.startByte(block)) return;
 		inConsequent = true;
-		condWrapper  = ts.namedChild(parent, 0);
+		condWrapper  = ts.childByField(parent, 'condition');
 	} else if (parentType === 'else_clause') {
 		let ifStmt = ts.parent(parent);
 		if (!ifStmt || ts.nodeType(ifStmt) !== 'if_statement') return;
 		inConsequent = false;
-		condWrapper  = ts.namedChild(ifStmt, 0);
+		condWrapper  = ts.childByField(ifStmt, 'condition');
 	} else {
 		return;
 	}
 
-	// Unwrap parenthesized_expression → actual condition
+	// Unwrap parenthesized_expression → actual condition (no named field)
 	let cond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
 	applyGuard(scope, parseGuard(cond, source), inConsequent);
 }

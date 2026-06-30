@@ -239,14 +239,13 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 
 	// ── if-statement: narrow body and else using the condition guard ─────────
 	//
-	// AST shape: namedChild(0) = parenthesized_expression (condition wrapper),
-	//            namedChild(1) = statement_block (consequent),
-	//            namedChild(2) = else_clause (optional alternate).
+	// 'condition' field is parenthesized_expression (no named sub-field);
+	// unwrap with namedChild(0) to reach the actual condition expression.
 
 	if (nt === 'if_statement') {
-		let condWrapper = ts.namedChild(node, 0);
-		let consequent  = ts.namedChild(node, 1);
-		let elseClause  = ts.namedChild(node, 2);
+		let condWrapper = ts.childByField(node, 'condition');
+		let consequent  = ts.childByField(node, 'consequence');
+		let elseClause  = ts.childByField(node, 'alternative');
 		let cond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
 		if (cond) _walk(cond, scope, source, uri, lineTable, diags);
 		let guard = cond ? parseGuard(cond, source) : null;
@@ -262,10 +261,10 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 	// ── `&&` short-circuit: narrow RHS using the LHS guard ───────────────────
 
 	if (nt === 'binary_expression') {
-		let op = ts.nodeType(ts.child(node, 1));
+		let op = ts.nodeType(ts.childByField(node, 'operator'));
 		if (op === '&&') {
-			let left  = ts.namedChild(node, 0);
-			let right = ts.namedChild(node, 1);
+			let left  = ts.childByField(node, 'left');
+			let right = ts.childByField(node, 'right');
 			_walk(left, scope, source, uri, lineTable, diags);
 			let guard = parseGuard(left, source);
 			if (guard) {
@@ -282,9 +281,9 @@ _walk = function(node, scope, source, uri, lineTable, diags) {
 	// ── ternary: narrow consequent/alternate with the condition guard ─────────
 
 	if (nt === 'ternary_expression') {
-		let cond = ts.namedChild(node, 0);
-		let cons = ts.namedChild(node, 1);
-		let alt  = ts.namedChild(node, 2);
+		let cond = ts.childByField(node, 'condition');
+		let cons = ts.childByField(node, 'consequence');
+		let alt  = ts.childByField(node, 'alternative');
 		if (cond) _walk(cond, scope, source, uri, lineTable, diags);
 		let guard = cond ? parseGuard(cond, source) : null;
 		let trueScope  = makeScope(scope);

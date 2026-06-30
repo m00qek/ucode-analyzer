@@ -168,14 +168,14 @@ describe('applyGuard type() narrowing', () => {
 	it('positive typeof guard narrows to toType', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', UNKNOWN);
-		applyGuard(scope, { name: 'x', positive: true, toType: STR }, true);
+		applyGuard(scope, { kind: 'type', name: 'x', positive: true, toType: STR }, true);
 		assert.match(STR, scopeGet(scope, 'x'));
 	});
 
 	it('positive typeof guard in alternate branch leaves union minus that type', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', { kind: 'union', members: [STR, INT, NULL_T] });
-		applyGuard(scope, { name: 'x', positive: true, toType: STR }, false);
+		applyGuard(scope, { kind: 'type', name: 'x', positive: true, toType: STR }, false);
 		let t = scopeGet(scope, 'x');
 		assert.match('union', t.kind);
 		assert.match(2, length(t.members));
@@ -184,21 +184,21 @@ describe('applyGuard type() narrowing', () => {
 	it('negative typeof guard in true branch filters type from union', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', { kind: 'union', members: [STR, INT] });
-		applyGuard(scope, { name: 'x', positive: false, toType: STR }, true);
+		applyGuard(scope, { kind: 'type', name: 'x', positive: false, toType: STR }, true);
 		assert.match(INT, scopeGet(scope, 'x'));
 	});
 
 	it('negative typeof guard in false branch narrows to toType', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', { kind: 'union', members: [STR, INT] });
-		applyGuard(scope, { name: 'x', positive: false, toType: STR }, false);
+		applyGuard(scope, { kind: 'type', name: 'x', positive: false, toType: STR }, false);
 		assert.match(STR, scopeGet(scope, 'x'));
 	});
 
 	it('typeof guard on non-union in alternate branch leaves type unchanged', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', UNKNOWN);
-		applyGuard(scope, { name: 'x', positive: true, toType: STR }, false);
+		applyGuard(scope, { kind: 'type', name: 'x', positive: true, toType: STR }, false);
 		assert.match(UNKNOWN, scopeGet(scope, 'x'));
 	});
 });
@@ -209,28 +209,28 @@ describe('applyGuard', () => {
 	it('positive=true narrows nullable to inner type', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', NULLABLE_STR);
-		applyGuard(scope, { name: 'x', positive: true }, true);
+		applyGuard(scope, { kind: 'truthy', name: 'x', positive: true }, true);
 		assert.match(STR, scopeGet(scope, 'x'));
 	});
 
 	it('positive=false sets to NULL_T for a positive guard', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', NULLABLE_STR);
-		applyGuard(scope, { name: 'x', positive: true }, false);
+		applyGuard(scope, { kind: 'truthy', name: 'x', positive: true }, false);
 		assert.match(NULL_T, scopeGet(scope, 'x'));
 	});
 
 	it('negative guard: positive=true sets to NULL_T', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', NULLABLE_STR);
-		applyGuard(scope, { name: 'x', positive: false }, true);
+		applyGuard(scope, { kind: 'truthy', name: 'x', positive: false }, true);
 		assert.match(NULL_T, scopeGet(scope, 'x'));
 	});
 
 	it('negative guard: positive=false narrows to non-null', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', NULLABLE_STR);
-		applyGuard(scope, { name: 'x', positive: false }, false);
+		applyGuard(scope, { kind: 'truthy', name: 'x', positive: false }, false);
 		assert.match(STR, scopeGet(scope, 'x'));
 	});
 

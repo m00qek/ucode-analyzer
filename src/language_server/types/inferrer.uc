@@ -330,19 +330,19 @@ function inferParenthesized(node, source, uri, scope, depth) {
 }
 
 function inferUnary(node, source, uri, scope, depth) {
-	let op = ts.nodeType(ts.child(node, 0));
+	let op = ts.nodeType(ts.childByField(node, 'operator'));
 	if (op === '!' || op === 'delete') return BOOL;
-	let operand = ts.namedChild(node, 0);
+	let operand = ts.childByField(node, 'argument');
 	return operand ? _infer(operand, source, uri, scope, depth + 1) : UNKNOWN;
 }
 
 function inferBinary(node, source, uri, scope, depth) {
-	let op = ts.nodeType(ts.child(node, 1));
+	let op = ts.nodeType(ts.childByField(node, 'operator'));
 	if (op === '<'  || op === '>'  || op === '<=' || op === '>=' ||
 	    op === '==' || op === '!=' || op === '===' || op === '!==')
 		return BOOL;
-	let left  = ts.namedChild(node, 0);
-	let right = ts.namedChild(node, 1);
+	let left  = ts.childByField(node, 'left');
+	let right = ts.childByField(node, 'right');
 	if (op === '&&' || op === '||') {
 		let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;
 		let rt = right ? _infer(right, source, uri, scope, depth + 1) : UNKNOWN;
@@ -364,9 +364,9 @@ function inferBinary(node, source, uri, scope, depth) {
 }
 
 function inferTernary(node, source, uri, scope, depth) {
-	let cond = ts.namedChild(node, 0);
-	let a    = ts.namedChild(node, 1);
-	let b    = ts.namedChild(node, 2);
+	let cond = ts.childByField(node, 'condition');
+	let a    = ts.childByField(node, 'consequence');
+	let b    = ts.childByField(node, 'alternative');
 	let guard = parseGuard(cond, source);
 	let trueScope  = makeScope(scope);
 	let falseScope = makeScope(scope);
