@@ -101,7 +101,9 @@ export function run(config) {
 				let v = dag.versionsOf(uri);
 				if (v) declVersions[uri] = v;
 			}
-			platform.init(declVersions);
+			// Package-manager queries are blocking subprocess calls; run them in a
+			// background task and refresh diagnostics once availability is known.
+			platform.initAsync(declVersions, requestDiagnosticRefresh);
 
 			// Ask the editor to notify us when .uc files change on disk.
 			protocol.request('cap-watch-uc', 'client/registerCapability', {

@@ -1,8 +1,10 @@
 import * as fs from 'fs';
+import * as uloop from 'uloop';
 
 let _index    = {};   // uri → version index (-1 = not installed)
 let _versions = {};   // uri → versions array
 let _pkgMgr   = null; // 'apk' | 'opkg' | '' (detected-none) | null (not yet checked)
+let _pkgTask  = null; // background uloop.task running the package-manager queries
 
 function modNameFromUri(uri) {
 	let i = length(uri) - 1;
@@ -59,35 +61,73 @@ function installedVersion(modName) {
 	return (mgr === 'apk') ? queryApk(modName) : queryOpkg(modName);
 }
 
-// Called once at startup. declVersions: { uri → versions[] }.
-// queryFn is optional; when provided it replaces the real package-manager query.
-// Signature: queryFn(modName) → installed-version-string | null.
-// This seam exists so tests can inject a known answer without a real package manager.
-export function init(declVersions, queryFn) {
-	_index    = {};
-	_versions = {};
-	let query = queryFn ?? installedVersion;
+// Compute the { uri → installed-version index } map (-1 = not installed) for
+// declVersions, using `query(modName) → version-string | null`. Pure and
+// synchronous so it can run inline (tests) or inside the background task.
+function computeIndex(declVersions, query) {
+	let idxMap = {};
 	for (let uri in declVersions) {
 		let versions = declVersions[uri];
 		if (!versions || length(versions) === 0) continue;
-		_versions[uri] = versions;
 
 		let modName = modNameFromUri(uri);
 
 		if (modName === 'global') {
-			_index[uri] = length(versions) - 1;
+			idxMap[uri] = length(versions) - 1;
 			continue;
 		}
 
 		let installed = query(modName);
 		if (!installed) {
-			_index[uri] = -1;
+			idxMap[uri] = -1;
 			continue;
 		}
 
 		let idx = index(versions, installed);
-		_index[uri] = (idx >= 0) ? idx : (length(versions) - 1);
+		idxMap[uri] = (idx >= 0) ? idx : (length(versions) - 1);
 	}
+	return idxMap;
+}
+
+function storeVersions(declVersions) {
+	_versions = {};
+	for (let uri in declVersions) {
+		let versions = declVersions[uri];
+		if (versions && length(versions) > 0)
+			_versions[uri] = versions;
+	}
+}
+
+// Synchronous init. declVersions: { uri → versions[] }.
+// queryFn is optional; when provided it replaces the real package-manager query
+// (Signature: queryFn(modName) → installed-version-string | null). This seam
+// lets tests inject a known answer without a real package manager.
+export function init(declVersions, queryFn) {
+	storeVersions(declVersions);
+	_index = computeIndex(declVersions, queryFn ?? installedVersion);
+};
+
+// Async init for production. The apk/opkg lookups are blocking subprocess calls
+// (one per declaration module), so they run in a forked uloop.task to keep the
+// event loop responsive during startup. Until the task finishes, _index is empty
+// and module/symbol checks default to "available" — no false unavailability.
+// onComplete fires once the index is populated, letting the caller refresh.
+export function initAsync(declVersions, onComplete) {
+	storeVersions(declVersions);
+	_index = {};
+	_pkgTask = uloop.task(
+		function(pipe) {
+			pipe.send(computeIndex(declVersions, installedVersion));
+		},
+		function(idxMap) {
+			if (idxMap === null) {   // uloop task-completion sentinel
+				_pkgTask = null;
+				return;
+			}
+			_index = idxMap;
+			if (onComplete) onComplete();
+		}
+	);
 };
 
 // Returns false only when we have version info AND the module is not installed.
