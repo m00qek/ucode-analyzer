@@ -51,7 +51,7 @@ root, and not a `.d.uc` declaration stub.
 
 ---
 
-## Part 2 — CLI linter (planned)
+## Part 2 — CLI linter (implemented)
 
 ### Goal
 
@@ -87,16 +87,26 @@ diagnostics). The `ucode-linter` binary therefore does **not** depend on
 
 ```
 Usage:
-  ucode-linter --workspace=<path> [--config=<path>]
-               [--format=<fmt>] [--fail-on=<severity>]
+  ucode-linter [options] <file>...            # lint specific files
+  ucode-linter [options] --workspace=<path>   # lint a whole workspace
   ucode-linter -h | --help
   ucode-linter --version
 
 Options:
+  --workspace=<path>    Lint every .uc file under <path>.
+  --config=<path>       Config directory (defaults to the workspace; the
+                        current directory in file mode).
   --format=<fmt>        Output format: text | json   [default: text]
   --fail-on=<severity>  Minimum severity that fails the run:
                         error | warning | info | hint | none   [default: error]
 ```
+
+Two modes. In **file mode** (`ucode-linter a.uc b.uc`) the current directory is
+the workspace root, so imports in the listed files resolve against the whole
+project DAG while only the listed files are diagnosed — this is what the
+`nvim-lint` on-save integration drives (per-file, exit code ignored). In
+**workspace mode** (`--workspace`) every workspace file is diagnosed — this is
+the CI-gating entry point.
 
 ### Flow (`src/ucode-linter.uc` -> `linter/run.uc`)
 
@@ -113,22 +123,27 @@ Options:
 The whole point is that the linter runs the *same* checks as the editor, so the
 shared pieces are extracted once and imported by both entrypoints:
 
-- `language_server/workspace.uc::loadWorkspace(config)` — the body currently
-  inside the `initialized` handler (`dag.init`, glob+`addFromDisk` over library
-  paths / declarations / system libs, `initBuiltinsFromDag`, `platform.init`).
-  Called by both `lsp.uc`'s `initialized` and `linter/run.uc`.
-- `handlers/diagnostic_reports.uc::collectWorkspaceDiagnostics(config)` — the
-  per-file scan loop (every `isWorkspaceUri` -> `getOrLoad` + `diagnosticsFor`),
-  extracted out of the `uloop.task` child. The task child becomes a thin wrapper
-  that streams the results of this function; the linter calls it directly and
-  synchronously (no fork needed for a one-shot run).
+- `language_server/workspace.uc` (imports only the analysis stack — no
+  protocol/io/uloop) holds:
+  - `loadWorkspace(config)` — the body lifted out of the `initialized` handler
+    (`dag.init`, glob+`addFromDisk` over library paths / declarations / system
+    libs, `initBuiltinsFromDag`); returns the `@version` map so the caller does
+    its own `platform.init`/`initAsync`. Called by both `lsp.uc`'s `initialized`
+    and `linter/run.uc`.
+  - `workspaceUris(config)` / `diagnoseFile(uri)` (and `isWorkspaceUri`).
+  - `collectWorkspaceDiagnostics(config)` — `[{ uri, diags }]` over every
+    workspace file; the linter calls it directly and synchronously.
+- `handlers/diagnostic_reports.uc`'s `uloop.task` child reuses
+  `workspaceUris` + `diagnoseFile` from `workspace.uc`, so the editor's
+  background scan and the linter share the exact same per-file analysis.
 
 ### Output formats
 
 - **text** (default, human/CI log friendly):
-  `path:LINE:COL: SEVERITY: message (code)` with **1-based** line/col (converted
-  from LSP 0-based), paths relative to `workspaceDir`. Trailing summary, e.g.
-  `3 errors, 5 warnings across 42 files`.
+  `path:LINE:COL: [severity] message (code)` with **1-based** line/col (converted
+  from LSP 0-based) and paths relative to `workspaceDir`. The bracketed lowercase
+  severity is what the `nvim-lint` parser consumes. The human tally
+  (`N error(s), …`) is written to **stderr**, keeping stdout pure diagnostics.
 - **json** (machine-readable): `[{ uri, diagnostics: [<LSP Diagnostic>] }]` for
   downstream tooling.
 - *(future)* **sarif**: for GitHub code scanning / other CI annotators.
@@ -143,9 +158,12 @@ ever needs to be faster, shard the file list across N `uloop.task` workers; the
 
 ### Testing
 
-- Integration test: run `ucode-linter` against a fixture directory with known
-  errors/warnings; assert stdout (both formats) and the exit code, including
-  `--fail-on` thresholds.
+- Unit (`test/unit/linter/reporters_test.uc`): the pure reporters — text/json
+  formatting, the human summary, and the `exitCode` threshold logic.
+- e2e (`test/e2e/language_server/linter_test.uc`): run the real `ucode-linter`
+  binary against `test/fixtures/linter` in both file and workspace mode; assert
+  the bracket text format with 1-based positions, JSON output, and the
+  `--fail-on` thresholds / exit codes (0 / 1 / 2).
 
 ### Packaging
 
