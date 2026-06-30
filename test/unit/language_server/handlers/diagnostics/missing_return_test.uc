@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
-import { missingReturn } from 'language_server.diagnostics.missing_return';
+import { missingReturn } from 'language_server.handlers.diagnostics.missing_return';
 
 let URI = 'file:///test.uc';
 

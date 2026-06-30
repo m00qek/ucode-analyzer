@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
-import { assignmentToConst } from 'language_server.diagnostics.assignment_const';
+import { assignmentToConst } from 'language_server.handlers.diagnostics.assignment_const';
 
 let URI = 'file:///test.uc';
 

@@ -1,6 +1,6 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
-import { unknownImports } from 'language_server.diagnostics.unknown_imports';
+import { unknownImports } from 'language_server.handlers.diagnostics.unknown_imports';
 import * as dag from 'language_server.dag.dag';
 
 let URI = 'file:///test.uc';

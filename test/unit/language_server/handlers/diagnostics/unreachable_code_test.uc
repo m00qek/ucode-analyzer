@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
-import { unreachableCode } from 'language_server.diagnostics.unreachable_code';
+import { unreachableCode } from 'language_server.handlers.diagnostics.unreachable_code';
 
 let URI = 'file:///test.uc';
 

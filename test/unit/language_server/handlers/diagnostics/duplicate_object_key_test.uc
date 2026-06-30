@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
-import { duplicateObjectKey } from 'language_server.diagnostics.duplicate_object_key';
+import { duplicateObjectKey } from 'language_server.handlers.diagnostics.duplicate_object_key';
 
 let URI = 'file:///test.uc';
 

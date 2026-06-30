@@ -1,7 +1,7 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
 import * as dag from 'language_server.dag.dag';
-import { deprecatedUsage } from 'language_server.diagnostics.deprecated_usage';
+import { deprecatedUsage } from 'language_server.handlers.diagnostics.deprecated_usage';
 
 let URI   = 'file:///test.uc';
 let URI_B = 'file:///dep.uc';

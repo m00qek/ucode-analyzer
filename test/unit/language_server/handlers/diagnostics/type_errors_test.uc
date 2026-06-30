@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
-import { typeErrors } from 'language_server.diagnostics.type_errors';
+import { typeErrors } from 'language_server.handlers.diagnostics.type_errors';
 
 let URI = 'file:///test.uc';
 

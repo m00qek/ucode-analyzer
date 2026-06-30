@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'language_server.documents';
-import { undefinedVars } from 'language_server.diagnostics.undefined_vars';
+import { undefinedVars } from 'language_server.handlers.diagnostics.undefined_vars';
 import * as dag from 'language_server.dag.dag';
 import { initBuiltinsFromDag } from 'language_server.types.inferrer';
 

@@ -1,17 +1,17 @@
-import { syntaxErrors }          from 'language_server.diagnostics.syntax_errors';
-import { unknownImports }         from 'language_server.diagnostics.unknown_imports';
-import { unknownImportSymbols }   from 'language_server.diagnostics.unknown_import_symbols';
-import { unusedImports }          from 'language_server.diagnostics.unused_imports';
-import { unusedVars }             from 'language_server.diagnostics.unused_vars';
-import { undefinedVars }          from 'language_server.diagnostics.undefined_vars';
-import { preferStrictEquality }   from 'language_server.diagnostics.prefer_strict_equality';
-import { typeErrors }             from 'language_server.diagnostics.type_errors';
-import { unreachableCode }        from 'language_server.diagnostics.unreachable_code';
-import { deprecatedUsage }        from 'language_server.diagnostics.deprecated_usage';
-import { redeclaredVars }         from 'language_server.diagnostics.redeclared_var';
-import { duplicateObjectKey }     from 'language_server.diagnostics.duplicate_object_key';
-import { assignmentToConst }      from 'language_server.diagnostics.assignment_const';
-import { missingReturn }          from 'language_server.diagnostics.missing_return';
+import { syntaxErrors }          from 'language_server.handlers.diagnostics.syntax_errors';
+import { unknownImports }         from 'language_server.handlers.diagnostics.unknown_imports';
+import { unknownImportSymbols }   from 'language_server.handlers.diagnostics.unknown_import_symbols';
+import { unusedImports }          from 'language_server.handlers.diagnostics.unused_imports';
+import { unusedVars }             from 'language_server.handlers.diagnostics.unused_vars';
+import { undefinedVars }          from 'language_server.handlers.diagnostics.undefined_vars';
+import { preferStrictEquality }   from 'language_server.handlers.diagnostics.prefer_strict_equality';
+import { typeErrors }             from 'language_server.handlers.diagnostics.type_errors';
+import { unreachableCode }        from 'language_server.handlers.diagnostics.unreachable_code';
+import { deprecatedUsage }        from 'language_server.handlers.diagnostics.deprecated_usage';
+import { redeclaredVars }         from 'language_server.handlers.diagnostics.redeclared_var';
+import { duplicateObjectKey }     from 'language_server.handlers.diagnostics.duplicate_object_key';
+import { assignmentToConst }      from 'language_server.handlers.diagnostics.assignment_const';
+import { missingReturn }          from 'language_server.handlers.diagnostics.missing_return';
 
 export function diagnosticsFor(uri, doc) {
 	let diags = [];
