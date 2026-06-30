@@ -80,85 +80,85 @@ function buildHoverCtx(label, type, doc) {
 	return ctx;
 }
 
-export function hover(doc, position, config) {
-	let offset = positionToOffset(doc.text, doc.lineTable, position);
-	let root = ts.rootNode(doc.tree);
-	if (offset >= ts.endByte(root)) return null;
+function renderCtx(ctx, templateName, config) {
+	let md = templates.renderTemplate(templateName, ctx, config ?? {});
+	if (md === null)
+		md = sprintf('```ucode\n%s: %s\n```', ctx.label, ctx.typeStr);
+	return { contents: { kind: 'markdown', value: md } };
+}
 
-	let node = nodeAtOffset(root, offset);
+// ── Case 1: function parameter at its declaration site ─────────────────────
+//
+// inferNode returns UNKNOWN for a param identifier because the param isn't in
+// scope at its own declaration position.  Instead, read the @param entry from
+// the function's JSDoc comment.
+function hoverParam(node, formalParams, doc, config) {
+	let paramName = ts.text(node, doc.text);
+	let funcNode  = ts.parent(formalParams);
+	if (!funcNode) return null;
 
-	// Cursor on a parameter at its declaration site (not a reference inside the body).
-	// inferNode returns UNKNOWN here because the param is not yet in scope,
-	// so we handle it specially by looking up the @param in the function's JSDoc.
-	if (ts.nodeType(node) === 'identifier') {
-		let paramParent = ts.parent(node);
-		if (paramParent && ts.nodeType(paramParent) === 'formal_parameters') {
-			let paramName = ts.text(node, doc.text);
-			let funcNode = ts.parent(paramParent);
-			if (funcNode) {
-				let checkNode = funcNode;
-				let checkParent = ts.parent(funcNode) ?? root;
-				if (ts.nodeType(checkParent) === 'export_statement') {
-					checkNode = checkParent;
-					checkParent = ts.parent(checkNode) ?? root;
-				}
-				let docText = docBefore(checkNode, checkParent, doc.text);
-				if (docText) {
-					let funcDoc = parseDoc(docText);
-					for (let p in (funcDoc?.params ?? [])) {
-						if (p.name !== paramName) continue;
-						let paramType = p.type ?? { kind: 'unknown' };
-						let ctx = buildHoverCtx(paramName, paramType, { description: cleanDesc(p.description), examples: [] });
-						let md = templates.renderTemplate('hover/default', ctx, config ?? {});
-						if (md === null)
-							md = sprintf('```ucode\n%s: %s\n```', paramName, typeToString(paramType));
-						return { contents: { kind: 'markdown', value: md } };
-					}
-				}
-			}
-			return null;
-		}
-
-		// Cursor on the loop variable in a for-in declaration: for (let item in xs).
-		// buildScope at ts.startByte(node) does not put 'item' in scope because the
-		// variable only exists inside the body block, not in the for header itself.
-		let forIn = ts.parent(node);
-		if (forIn && ts.nodeType(forIn) === 'for_in_statement') {
-			let left = ts.childByField(forIn, 'left');
-			if (left && ts.startByte(left) === ts.startByte(node)) {
-				let scope   = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(forIn));
-				let right   = ts.childByField(forIn, 'right');
-				let elemType = UNKNOWN;
-				if (right) {
-					let iterType = inferNode(right, doc.text, doc.uri, scope, 0);
-					if (iterType.kind === 'nullable') iterType = iterType.inner;
-					if (iterType.kind === 'generic' && iterType.base === 'list' && length(iterType.params) > 0)
-						elemType = iterType.params[0];
-					else if (iterType.kind === 'record' || (iterType.kind === 'generic' && iterType.base === 'dict'))
-						elemType = STR;
-				}
-				if (elemType.kind === 'unknown') return null;
-				let varName = ts.text(node, doc.text);
-				let ctx = buildHoverCtx(varName, elemType, null);
-				let md = templates.renderTemplate('hover/default', ctx, config ?? {});
-				if (md === null)
-					md = sprintf('```ucode\n%s: %s\n```', varName, typeToString(elemType));
-				return { contents: { kind: 'markdown', value: md } };
-			}
-		}
+	let checkNode   = funcNode;
+	let checkParent = ts.parent(funcNode) ?? ts.rootNode(doc.tree);
+	if (ts.nodeType(checkParent) === 'export_statement') {
+		checkNode   = checkParent;
+		checkParent = ts.parent(checkNode) ?? ts.rootNode(doc.tree);
 	}
 
-	let scope = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(node));
-	let type = inferNode(node, doc.text, doc.uri, scope, 0);
-	if (type && type.kind === 'nullable') type = type.inner;
+	let docText = docBefore(checkNode, checkParent, doc.text);
+	if (!docText) return null;
 
+	let funcDoc = parseDoc(docText);
+	for (let p in (funcDoc?.params ?? [])) {
+		if (p.name !== paramName) continue;
+		let paramType = p.type ?? { kind: 'unknown' };
+		let ctx = buildHoverCtx(paramName, paramType, { description: cleanDesc(p.description), examples: [] });
+		return renderCtx(ctx, 'hover/default', config);
+	}
+
+	return null;
+}
+
+// ── Case 2: for-in loop variable at its declaration site ───────────────────
+//
+// The loop variable (the `left` field of for_in_statement) only enters scope
+// inside the body block.  buildScope at ts.startByte(node) therefore never
+// sees it.  Infer the iterable's element type directly from the `right` field.
+function hoverForInVar(node, forIn, doc, config) {
+	let left = ts.childByField(forIn, 'left');
+	if (!left || ts.startByte(left) !== ts.startByte(node)) return null;
+
+	let scope    = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(forIn));
+	let right    = ts.childByField(forIn, 'right');
+	let elemType = UNKNOWN;
+	if (right) {
+		let iterType = inferNode(right, doc.text, doc.uri, scope, 0);
+		if (iterType.kind === 'nullable') iterType = iterType.inner;
+		if (iterType.kind === 'generic' && iterType.base === 'list' && length(iterType.params) > 0)
+			elemType = iterType.params[0];
+		else if (iterType.kind === 'record' || (iterType.kind === 'generic' && iterType.base === 'dict'))
+			elemType = STR;
+	}
+	if (elemType.kind === 'unknown') return null;
+
+	let ctx = buildHoverCtx(ts.text(node, doc.text), elemType, null);
+	return renderCtx(ctx, 'hover/default', config);
+}
+
+// ── Case 3: general path ───────────────────────────────────────────────────
+//
+// Build scope at the cursor, infer the node's type, resolve JSDoc from the
+// declaration site (import, own-file export, or stdlib builtin), then render
+// via the template matching the type kind.
+function hoverGeneral(node, doc, config) {
+	let scope = buildScope(doc.uri, doc.text, doc.tree, ts.startByte(node));
+	let type  = inferNode(node, doc.text, doc.uri, scope, 0);
+	if (type && type.kind === 'nullable') type = type.inner;
 	if (type.kind === 'unknown') return null;
 
-	let label = ts.text(node, doc.text);
-
+	let label    = ts.text(node, doc.text);
 	let resolved = resolveDoc(doc.uri, node, doc.text, scope);
-	let expDoc = resolved.doc;
-	let modUri = resolved.modUri;
+	let expDoc   = resolved.doc;
+	let modUri   = resolved.modUri;
 
 	let ctx = buildHoverCtx(label, type, expDoc);
 	ctx.since = expDoc?.since ?? null;
@@ -173,12 +173,32 @@ export function hover(doc, position, config) {
 	);
 
 	let md = templates.renderTemplate(templateName, ctx, config ?? {});
-
 	if (md === null) {
-		// Fallback when no template file is found (misconfigured selfSrcDir).
 		md = sprintf('```ucode\n%s: %s\n```', label, ctx.typeStr);
 		if (expDoc?.description) md += '\n\n' + expDoc.description;
 	}
 
 	return { contents: { kind: 'markdown', value: md } };
+}
+
+// ── Dispatcher ─────────────────────────────────────────────────────────────
+export function hover(doc, position, config) {
+	let offset = positionToOffset(doc.text, doc.lineTable, position);
+	let root   = ts.rootNode(doc.tree);
+	if (offset >= ts.endByte(root)) return null;
+
+	let node = nodeAtOffset(root, offset);
+
+	if (ts.nodeType(node) === 'identifier') {
+		let parent     = ts.parent(node);
+		let parentType = parent ? ts.nodeType(parent) : null;
+
+		if (parentType === 'formal_parameters')
+			return hoverParam(node, parent, doc, config);
+
+		if (parentType === 'for_in_statement')
+			return hoverForInVar(node, parent, doc, config);
+	}
+
+	return hoverGeneral(node, doc, config);
 };
