@@ -57,6 +57,13 @@ describe('ucode-linter — workspace mode', () => {
 		let r = runLinter([ '--workspace', '/app/test/fixtures/does-not-exist' ]);
 		assert.match(2, r.code);
 	});
+
+	it('serial and parallel modes produce identical output', () => {
+		let serial   = runLinter([ '--jobs', '1', '--workspace', WS ]);
+		let parallel = runLinter([ '--jobs', '4', '--workspace', WS ]);
+		assert.match(serial.code, parallel.code);
+		assert.match(serial.out, parallel.out);  // sorted, so byte-identical
+	});
 });
 
 describe('ucode-linter — file mode', () => {

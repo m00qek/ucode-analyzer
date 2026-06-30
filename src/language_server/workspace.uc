@@ -81,21 +81,22 @@ export function diagnoseFile(uri) {
 	return doc ? diagnosticsFor(uri, doc) : [];
 };
 
-// Load the workspace and diagnose every workspace file in a single pass that
-// reads and parses each file exactly once: the parsed tree is reused for both
-// DAG indexing and diagnosis, instead of parsing once to index (loadWorkspace)
-// and again to diagnose (getOrLoad). Returns [{ uri, diags }]. Used by the
-// linter's workspace mode.
-export function diagnoseWorkspace(config) {
+// Build the DAG + builtins and return the bare (un-scoped) workspace documents,
+// each read and parsed exactly once: the parsed tree is reused for both DAG
+// indexing and later diagnosis, instead of parsing once to index (loadWorkspace)
+// and again to diagnose (getOrLoad). Shared setup for the serial and parallel
+// workspace scans. The returned docs have no scopeMap yet — call diagnoseDoc()
+// (which attaches it) once this has returned and the DAG is therefore complete.
+export function loadWorkspaceDocs(config) {
 	let workspaceDir = config.workspaceDir ?? '/root/project';
 	let ws = config.workspace ?? {};
 	let libPaths = ws.libraryPaths ?? ['src'];
 
 	dag.init(config);
 
-	// Phase 1: parse each workspace file once, index it from that parse, and keep
-	// the bare doc. The scopeMap is deliberately NOT built yet — it resolves
-	// imports, so it must wait until the whole DAG is populated.
+	// Parse each workspace file once, index it from that parse, and keep the bare
+	// doc. The scopeMap is deliberately NOT built yet — it resolves imports, so it
+	// must wait until the whole DAG is populated.
 	let docs = [];
 	let seen = {};
 	for (let relPath in libPaths) {
@@ -130,13 +131,27 @@ export function diagnoseWorkspace(config) {
 	let globalUri = dag.resolveSpecifier('global');
 	if (globalUri) initBuiltinsFromDag(globalUri);
 
-	// Phase 2: the DAG is complete — build each workspace doc's scopeMap and
-	// diagnose it.
+	let out = [];
+	for (let doc in docs)
+		if (isWorkspaceUri(doc.uri, config))
+			push(out, doc);
+	return out;
+};
+
+// Build a bare doc's scopeMap and diagnose it. Must be called after the DAG is
+// complete (i.e. after loadWorkspaceDocs has returned), because the scopeMap
+// resolves imports. Returns { uri, diags }.
+export function diagnoseDoc(doc) {
+	documents.withScopeMap(doc);
+	return { uri: doc.uri, diags: diagnosticsFor(doc.uri, doc) };
+};
+
+// Serial workspace scan: load every workspace file and diagnose it in-process.
+// Returns [{ uri, diags }]. Used by the linter for --jobs=1; the parallel path
+// (linter/run.uc) reuses loadWorkspaceDocs + diagnoseDoc across forked workers.
+export function diagnoseWorkspace(config) {
 	let results = [];
-	for (let doc in docs) {
-		if (!isWorkspaceUri(doc.uri, config)) continue;
-		documents.withScopeMap(doc);
-		push(results, { uri: doc.uri, diags: diagnosticsFor(doc.uri, doc) });
-	}
+	for (let doc in loadWorkspaceDocs(config))
+		push(results, diagnoseDoc(doc));
 	return results;
 };
