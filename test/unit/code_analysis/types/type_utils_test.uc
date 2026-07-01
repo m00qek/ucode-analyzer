@@ -41,6 +41,28 @@ describe('type_utils.unionOf', () => {
 		assert.match('union', r.kind);
 		assert.match(2, length(r.members));
 	});
+
+	it('keeps records with different field-name sets distinct', () => {
+		let pass = { kind: 'record', fields: [{ name: 'kind', type: STR }] };
+		let fail = { kind: 'record', fields: [
+			{ name: 'kind', type: STR }, { name: 'value', type: INT },
+		]};
+		let r = unionOf([pass, fail]);
+		assert.match('union', r.kind);
+		assert.match(2, length(r.members));
+	});
+
+	it('collapses records with the same field-name set', () => {
+		let a = { kind: 'record', fields: [{ name: 'kind', type: STR }] };
+		let b = { kind: 'record', fields: [{ name: 'kind', type: INT }] };
+		assert.match('record', unionOf([a, b]).kind);
+	});
+
+	it('is order-insensitive when comparing field names', () => {
+		let a = { kind: 'record', fields: [{ name: 'x', type: INT }, { name: 'y', type: STR }] };
+		let b = { kind: 'record', fields: [{ name: 'y', type: STR }, { name: 'x', type: INT }] };
+		assert.match('record', unionOf([a, b]).kind);
+	});
 });
 
 describe('type_utils.memberOfType', () => {

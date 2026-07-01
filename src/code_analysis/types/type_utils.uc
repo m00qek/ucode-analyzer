@@ -8,6 +8,20 @@ export let INT     = { kind: 'primitive', name: 'int' };
 export let FLOAT   = { kind: 'primitive', name: 'float' };
 export let NULL_T  = { kind: 'primitive', name: 'null' };
 
+// Two records are the "same" for union-dedup purposes when they carry the same
+// set of field names — enough to keep tagged variants ({kind:'fail', value,
+// error} vs {kind:'pass'}) distinct while still collapsing repeated shapes.
+function sameFieldNames(a, b) {
+	let af = a.fields ?? [];
+	let bf = b.fields ?? [];
+	if (length(af) !== length(bf)) return false;
+	let an = sort(map(af, (f) => f.name));
+	let bn = sort(map(bf, (f) => f.name));
+	for (let i = 0; i < length(an); i++)
+		if (an[i] !== bn[i]) return false;
+	return true;
+}
+
 // Reduce a list of Types to a single type: UNKNOWN for empty, the sole element
 // for a singleton, or a union of distinct types otherwise.
 export function unionOf(types) {
@@ -20,6 +34,8 @@ export function unionOf(types) {
 			if (m.kind !== t.kind) continue;
 			if (t.kind === 'primitive' && m.name !== t.name) continue;
 			if (t.kind === 'ref'       && m.name !== t.name) continue;
+			// Distinct record shapes are kept apart so tagged unions survive.
+			if (t.kind === 'record'    && !sameFieldNames(m, t)) continue;
 			seen = true; break;
 		}
 		if (!seen) push(members, t);
