@@ -4,8 +4,7 @@ import * as dag from 'code_analysis.dag.dag';
 import * as documents from 'code_analysis.documents';
 import { positionToOffset, offsetToPosition, buildLineTable } from 'code_analysis.positions';
 import { referencesOf, anchorOf } from 'language_server.scope_references';
-
-let _parser = ts.newParser(ts.ucode());
+import * as mode from 'code_analysis.mode';
 
 // Walk up parent chain looking for a node of the given type.
 function findAncestor(node, type) {
@@ -34,8 +33,7 @@ function importStmtSpecifier(stmt, text) {
 // For `import { foo } from 'spec'`: returns the `foo` node (local = remote).
 // For `import { foo as bar } from 'spec'`: returns the `bar` node (local alias).
 function importLocalNode(root, text, specifier, remoteName) {
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let stmt = ts.namedChild(root, i);
+	for (let stmt in mode.topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
 		if (importStmtSpecifier(stmt, text) !== specifier) continue;
 		for (let j = 0; j < ts.childCount(stmt); j++) {
@@ -59,8 +57,7 @@ function importLocalNode(root, text, specifier, remoteName) {
 // Find the remote-name node in an aliased import: `import { remoteName as local }`.
 // Returns null when the import has no alias (remote = local).
 function importRemoteNode(root, text, specifier, remoteName) {
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let stmt = ts.namedChild(root, i);
+	for (let stmt in mode.topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
 		if (importStmtSpecifier(stmt, text) !== specifier) continue;
 		for (let j = 0; j < ts.childCount(stmt); j++) {
@@ -114,7 +111,7 @@ function loadDoc(uri) {
 	let text = f.read('all');
 	f.close();
 	let lineTable = buildLineTable(text);
-	return { text, tree: ts.parse(_parser, text), lineTable };
+	return { text, tree: mode.parse(text), lineTable };
 }
 
 // Convert tree-sitter nodes to `[{ start, end }]` LSP ranges.

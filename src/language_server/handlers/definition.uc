@@ -6,8 +6,7 @@ import { inferNode } from 'code_analysis.types.inferrer';
 import { globalUri } from 'code_analysis.types.dag_bridge';
 import { scopeAtOffset } from 'code_analysis.types.scope_walk';
 import * as type_registry from 'code_analysis.types.registry';
-
-let _parser = ts.newParser(ts.ucode());
+import * as mode from 'code_analysis.mode';
 
 // Return an LSP Location object for byte offset inside uri.
 function location(uri, text, byteOffset) {
@@ -37,8 +36,7 @@ function findExportName(decl, name, text) {
 // Find the first let/const/function declaration of name in the current file.
 function localDefinition(uri, doc, name) {
 	let root = ts.rootNode(doc.tree);
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let stmt = ts.namedChild(root, i);
+	for (let stmt in mode.topLevelStatements(root)) {
 		let nt = ts.nodeType(stmt);
 
 		if (nt === 'lexical_declaration') {
@@ -140,10 +138,9 @@ function resolveExportDefinition(resolvedUri, name) {
 	let path = substr(resolvedUri, length('file://'));
 	let text = fs.readfile(path);
 	if (!text) return null;
-	let tree = ts.parse(_parser, text);
+	let tree = mode.parse(text);
 	let root = ts.rootNode(tree);
-	for (let k = 0; k < ts.namedChildCount(root); k++) {
-		let stmt = ts.namedChild(root, k);
+	for (let stmt in mode.topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'export_statement') continue;
 		let decl = ts.namedChild(stmt, 0);
 		if (!decl) continue;

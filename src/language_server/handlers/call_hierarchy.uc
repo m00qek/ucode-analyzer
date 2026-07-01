@@ -5,8 +5,7 @@ import * as dag from 'code_analysis.dag.dag';
 import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'language_server.cross_file_refs';
-
-let _parser = ts.newParser(ts.ucode());
+import * as mode from 'code_analysis.mode';
 
 let KIND_FUNCTION = 12;
 let KIND_MODULE   = 2;  // used for module-level call sites (no enclosing function)
@@ -19,7 +18,7 @@ function loadDoc(uri) {
 	let path = substr(uri, 7);
 	let text = fs.readfile(path);
 	if (!text) return null;
-	return { uri, text, tree: ts.parse(_parser, text), lineTable: buildLineTable(text) };
+	return { uri, text, tree: mode.parse(text), lineTable: buildLineTable(text) };
 }
 
 function rangeOf(text, lineTable, startByte, endByte) {

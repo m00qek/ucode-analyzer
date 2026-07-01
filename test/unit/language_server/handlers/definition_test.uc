@@ -7,6 +7,7 @@ import { invalidateUri } from 'code_analysis.memo';
 let URI       = 'file:///test.uc';
 let TS_URI    = 'file:///app/src/tree_sitter.uc';
 let GREET_URI = 'file:///app/test/fixtures/greet.uc';
+let TPL_URI   = 'file:///app/test/fixtures/template_lib.uc';
 
 let _config = {
 	workspaceDir: '/app',
@@ -18,6 +19,7 @@ afterEach(() => {
 	dag.remove(URI);
 	dag.remove(TS_URI);
 	dag.remove(GREET_URI);
+	dag.remove(TPL_URI);
 	invalidateUri(URI);
 });
 
@@ -159,6 +161,28 @@ describe('definition — named imports (export clause)', () => {
 		assert.match(1, length(exps));
 		assert.match('greet', exps[0].name);
 		assert.match('function', exps[0].kind);
+	});
+});
+
+describe('definition — cross-file into a template module', () => {
+	beforeEach(() => {
+		dag.init(_config);
+		dag.addFromDisk(TPL_URI);
+	});
+
+	it('jumps to an export declared inside a {% %} tag in a template file', () => {
+		// fixtures/template_lib.uc: {% export function render(name) {...} %}
+		let text = "import { render } from 'fixtures.template_lib';\nrender;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (1, 0) is the 'render' reference
+		let result = definition(URI, doc, { line: 1, character: 0 });
+
+		assert.match(TPL_URI, result.uri);
+		assert.match(0, result.range.start.line);        // export is on line 0 of the template
+		assert.match(19, result.range.start.character);  // 'render' after '{% export function '
 	});
 });
 
