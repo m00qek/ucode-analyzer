@@ -10,8 +10,7 @@ import * as type_registry from 'code_analysis.types.registry';
 import * as mode from 'code_analysis.mode';
 
 // Return an LSP Location object for byte offset inside uri.
-function location(uri, text, byteOffset) {
-	let lineTable = buildLineTable(text);
+function location(uri, text, lineTable, byteOffset) {
 	let pos = offsetToPosition(text, lineTable, byteOffset);
 	return { uri, range: { start: pos, end: pos } };
 }
@@ -46,18 +45,18 @@ function localDefinition(uri, doc, name) {
 				if (ts.nodeType(vd) !== 'variable_declarator') continue;
 				let nameNode = ts.childByField(vd, 'name');
 				if (nameNode && ts.text(nameNode, doc.text) === name)
-					return location(uri, doc.text, ts.startByte(nameNode));
+					return location(uri, doc.text, doc.lineTable, ts.startByte(nameNode));
 			}
 		} else if (nt === 'function_declaration') {
 			let nameNode = ts.namedChild(stmt, 0);
 			if (nameNode && ts.text(nameNode, doc.text) === name)
-				return location(uri, doc.text, ts.startByte(nameNode));
+				return location(uri, doc.text, doc.lineTable, ts.startByte(nameNode));
 		} else if (nt === 'export_statement') {
 			let decl = ts.namedChild(stmt, 0);
 			if (!decl) continue;
 			let nameNode = findExportName(decl, name, doc.text);
 			if (nameNode)
-				return location(uri, doc.text, ts.startByte(nameNode));
+				return location(uri, doc.text, doc.lineTable, ts.startByte(nameNode));
 		}
 	}
 	return null;
@@ -174,7 +173,7 @@ function localScopeDef(root, uri, doc, name, offset) {
 	}
 	for (let k = length(chain) - 1; k >= 0; k--) {
 		let hit = binderIn(chain[k], name, doc.text);
-		if (hit) return location(uri, doc.text, ts.startByte(hit));
+		if (hit) return location(uri, doc.text, doc.lineTable, ts.startByte(hit));
 	}
 	return null;
 }
@@ -228,15 +227,16 @@ function resolveExportDefinition(resolvedUri, name) {
 	if (!text) return null;
 	let tree = mode.parse(text);
 	let root = ts.rootNode(tree);
+	let lineTable = buildLineTable(text);
 	for (let stmt in mode.topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'export_statement') continue;
 		let decl = ts.namedChild(stmt, 0);
 		if (!decl) continue;
 		let nameNode = findExportName(decl, name, text);
 		if (nameNode)
-			return location(resolvedUri, text, ts.startByte(nameNode));
+			return location(resolvedUri, text, lineTable, ts.startByte(nameNode));
 	}
-	let doc = { uri: resolvedUri, text, tree, lineTable: buildLineTable(text) };
+	let doc = { uri: resolvedUri, text, tree, lineTable };
 	return localDefinition(resolvedUri, doc, name);
 }
 

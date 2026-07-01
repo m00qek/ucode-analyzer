@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition, buildLineTable } from 'code_analysis.positions';
+import { positionToOffset, offsetToPosition } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'language_server.cross_file_refs';
 
@@ -11,10 +11,9 @@ export function references(uri, doc, position, includeDeclaration) {
 	let nodes = referencesOf(root, doc.text, offset, includeDeclaration);
 	if (!nodes) return null;
 
-	let lineTable = buildLineTable(doc.text);
 	let result = map(nodes, (n) => {
-		let start = offsetToPosition(doc.text, lineTable, ts.startByte(n));
-		let end   = offsetToPosition(doc.text, lineTable, ts.endByte(n));
+		let start = offsetToPosition(doc.text, doc.lineTable, ts.startByte(n));
+		let end   = offsetToPosition(doc.text, doc.lineTable, ts.endByte(n));
 		return { uri, range: { start, end } };
 	});
 

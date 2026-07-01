@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition, buildLineTable } from 'code_analysis.positions';
+import { positionToOffset, offsetToPosition } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 
 export function prepareRename(uri, doc, position) {
@@ -10,7 +10,6 @@ export function prepareRename(uri, doc, position) {
 	let nodes = referencesOf(root, doc.text, offset);
 	if (!nodes) return null;
 
-	let lineTable = buildLineTable(doc.text);
 	// Find the specific identifier node the cursor is on.
 	let cursorNode = null;
 	for (let i = 0; i < length(nodes); i++) {
@@ -24,8 +23,8 @@ export function prepareRename(uri, doc, position) {
 
 	return {
 		range: {
-			start: offsetToPosition(doc.text, lineTable, ts.startByte(cursorNode)),
-			end:   offsetToPosition(doc.text, lineTable, ts.endByte(cursorNode)),
+			start: offsetToPosition(doc.text, doc.lineTable, ts.startByte(cursorNode)),
+			end:   offsetToPosition(doc.text, doc.lineTable, ts.endByte(cursorNode)),
 		},
 		placeholder: ts.text(cursorNode, doc.text),
 	};
