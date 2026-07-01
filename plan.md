@@ -2,19 +2,20 @@
 
 ---
 
-### Open (small)
+### Done
 
-**Inlay hints: clarifying comment on single-scope approach**
-- File: `src/language_server/handlers/inlay_hints.uc:94`
-- `buildScope` is called once at `rangeEnd` rather than per-node. A reader might flag this as a bug. Add a comment explaining the deliberate trade-off: per-node `buildScope` would be O(n × AST depth) per keypress on a single-core 512 MB device.
+**uloop I/O backbone**
+- Non-blocking stdin: `protocol.startListening(dispatch, onEof)` over `uloop.handle(fs.stdin, …, ULOOP_READ)`; `lsp.uc` runs `uloop.init()` / `uloop.signal('SIGTERM')` / `uloop.run()` instead of a blocking `while(true)`. Timers and `uloop.task` callbacks fire between messages.
+
+**`workspace/diagnostic` (pull model)**
+- Pull-based workspace-wide diagnostics (LSP 3.17): `handlers/diagnostic_reports.uc` computes per-document reports inline and forks a background `uloop.task` for the whole-project scan, so the server stays responsive on the Pi Zero floor. Per-URI resultId generation + `invalidate` cascade; `workspace/diagnostic/refresh` on cross-file / on-disk changes. `didChange` keeps document-state work synchronous and never pushes — clients re-pull. (This replaced the earlier push + 300 ms debounce idea, which is now moot: there is no push path left to debounce.)
+
+**CLI linter**
+- `ucode-linter` runs the exact same analysis headlessly (file and workspace modes) for CI gating and on-save `nvim-lint`. Entry `src/ucode-linter.uc` → `src/linter/run.uc` + `src/linter/reporters.uc` (text/json), over the shared `code_analysis.workspace` engine (`loadWorkspace` / `collectWorkspaceDiagnostics`). No native module of its own — reuses `tree_sitter.native`.
 
 ---
 
 ### To do
-
-**`workspace/diagnostic`**
-- Pull-based workspace-wide diagnostics (LSP 3.17): client requests diagnostics for all project files at once, enabling Problems panels and CLI lint workflows without opening every file.
-- The protocol supports partial results and progress reporting, but a minimal implementation can skip those. Main work: scan all DAG-known URIs, run `diagnosticsFor` on each, return as a `WorkspaceDiagnosticReport`. Medium effort.
 
 **Assignment widening**
 - `let x = 1; if (cond) x = "hello";` — after the if block, `x` should be `int | string`.
