@@ -594,11 +594,11 @@ _infer = function(node, source, uri, scope, depth) {
 	let ntype = ts.nodeType(node);
 	let offset = ts.startByte(node);
 	let sid = scope ? scope.id : 0;
-	let cached = memoGet(uri, offset, ntype, sid);
+	let cached = memoGet(uri, offset, ntype, sid, depth);
 	if (cached) return cached;
 	let h = INFER[ntype];
 	let type = h ? h(node, source, uri, scope, depth) : UNKNOWN;
-	memoSet(uri, offset, ntype, sid, type);
+	memoSet(uri, offset, ntype, sid, type, depth);
 	return type;
 };
 

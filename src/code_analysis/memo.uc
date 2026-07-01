@@ -4,15 +4,29 @@ let _cache = {};       // uri → { 'startByte|nodeType|scopeId' → Type }
 let _docMaps = {};     // uri → { parentKey → { childStartByte → docText|null } }
 let _lineTables = {};  // uri → { src, table }
 
-export function memoGet(uri, offset, nodeType, scopeId) {
+// The inference recursion caps at a fixed depth; a node first computed near the
+// cap may have a truncated (unknown) subtree. Each entry records the depth it was
+// computed at (smaller depth = more remaining budget). A cached value is only
+// reused for a query with equal-or-less budget (equal-or-greater depth), and
+// memoSet keeps whichever entry was computed with the most budget — so a deep,
+// possibly-truncated result can't poison a later shallow query. `depth` is
+// optional: get defaults to max budget and set to 0, keeping the plain cache
+// semantics for non-inference callers.
+export function memoGet(uri, offset, nodeType, scopeId, depth) {
 	let bucket = _cache[uri];
 	let key = offset + '|' + nodeType + '|' + scopeId;
-	return (bucket && exists(bucket, key)) ? bucket[key] : null;
+	let e = (bucket && exists(bucket, key)) ? bucket[key] : null;
+	if (!e) return null;
+	return (e.depth <= (depth ?? 999)) ? e.type : null;
 };
 
-export function memoSet(uri, offset, nodeType, scopeId, type) {
+export function memoSet(uri, offset, nodeType, scopeId, type, depth) {
 	if (!_cache[uri]) _cache[uri] = {};
-	_cache[uri][offset + '|' + nodeType + '|' + scopeId] = type;
+	let key = offset + '|' + nodeType + '|' + scopeId;
+	let d = depth ?? 0;
+	let existing = _cache[uri][key];
+	if (!existing || d < existing.depth)
+		_cache[uri][key] = { depth: d, type };
 };
 
 // Per-parent docBeforeMap cache. precedingDoc resolves the /** */ before a
