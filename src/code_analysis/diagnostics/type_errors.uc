@@ -61,6 +61,16 @@ function isAssignmentTarget(node) {
 	            && ts.endByte(left) === ts.endByte(node);
 }
 
+// True when this member_expression is the operand of `delete`. Deleting a key
+// that may not exist is a legal no-op in ucode, so it must not be reported as
+// unknown-property (mirrors the assignment-target exemption above).
+function isDeleteTarget(node) {
+	let parent = ts.parent(node);
+	if (!parent || ts.nodeType(parent) !== 'unary_expression') return false;
+	let op = ts.childByField(parent, 'operator');
+	return op && ts.nodeType(op) === 'delete';
+}
+
 // Returns the field name that is missing on a known record type, or null if
 // the field exists or the type is not a concrete record.
 function unknownFieldOf(type, propName) {
@@ -68,7 +78,12 @@ function unknownFieldOf(type, propName) {
 	type = resolveRef(type);
 	if (type.kind === 'nullable') return unknownFieldOf(type.inner, propName);
 	if (type.kind !== 'record') return null;
+	// Open records (built from a spread of a non-record) have unknowable extra
+	// keys; an empty record carries no field info at all. In both cases we can't
+	// prove a property is missing, so treat them as dynamic dicts.
+	if (type.open) return null;
 	let fields = type.fields ?? [];
+	if (length(fields) === 0) return null;
 	for (let i = 0; i < length(fields); i++)
 		if (fields[i].name === propName) return null;
 	return propName;
@@ -123,7 +138,7 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags) {
 					code:     'may-be-null',
 					message:  sprintf("'%s' may be null", ts.text(obj, source)),
 				});
-			} else if (prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node)) {
+			} else if (prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node) && !isDeleteTarget(node)) {
 				let field = unknownFieldOf(objType, ts.text(prop, source));
 				if (field !== null) {
 					push(diags, {

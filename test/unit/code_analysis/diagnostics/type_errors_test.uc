@@ -204,3 +204,29 @@ describe('diagnostics — type errors: flow sensitivity (&& short-circuit)', () 
 		assert.match(0, length(diags));
 	});
 });
+
+describe('diagnostics — type errors: unknown-property', () => {
+	function unknownProps(text) {
+		return filter(typeErrors(URI, open(text)), (d) => d.code === 'unknown-property');
+	}
+
+	it('warns for a missing field on a closed record literal', () => {
+		assert.match(1, length(unknownProps("let o = { a: 1, b: 2 };\no.c;\n")));
+	});
+
+	it('no warning for delete of a possibly-absent property', () => {
+		assert.match(0, length(unknownProps("let o = { a: 1 };\ndelete o.b;\n")));
+	});
+
+	it('no warning reading a field off an empty record', () => {
+		assert.match(0, length(unknownProps("let e = {};\ne.foo;\n")));
+	});
+
+	it('no warning reading a field off a record spread from an untyped value', () => {
+		assert.match(0, length(unknownProps("function f(x) {\n  let n = { ...x };\n  n.foo;\n}\n")));
+	});
+
+	it('still warns on a record spread only from a known record', () => {
+		assert.match(1, length(unknownProps("let base = { a: 1 };\nlet m = { ...base };\nm.b;\n")));
+	});
+});

@@ -79,7 +79,9 @@ export function substitute(type, bindings) {
 
 	if (k === 'record') {
 		let fields = map(type.fields, (f) => ({ name: f.name, type: substitute(f.type, bindings) }));
-		return { kind: 'record', fields };
+		let r = { kind: 'record', fields };
+		if (type.open) r.open = true;
+		return r;
 	}
 
 	if (k === 'function') {

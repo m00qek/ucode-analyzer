@@ -401,18 +401,23 @@ function inferArray(node, source, uri, scope, depth) {
 function inferObject(node, source, uri, scope, depth) {
 	let lineTable = buildLineTable(source);
 	let fields = [];
+	// A record is "open" when its full field set can't be known statically —
+	// spreading a non-record (e.g. an untyped value) contributes unknown extra
+	// keys. Callers must not report unknown-property against an open record.
+	let open = false;
 	for (let i = 0; i < ts.namedChildCount(node); i++) {
 		let child = ts.namedChild(node, i);
 		let ct = ts.nodeType(child);
 		if (ct === 'spread_element') {
 			// { ...obj } — merge fields from the spread type into this record.
 			let inner = ts.namedChild(child, 0);
-			if (inner) {
-				let t = _infer(inner, source, uri, scope, depth + 1);
-				if (t && t.kind === 'record') {
-					for (let j = 0; j < length(t.fields); j++)
-						push(fields, t.fields[j]);
-				}
+			let t = inner ? _infer(inner, source, uri, scope, depth + 1) : null;
+			if (t && t.kind === 'record') {
+				for (let j = 0; j < length(t.fields); j++)
+					push(fields, t.fields[j]);
+				if (t.open) open = true;   // openness propagates through spreads
+			} else {
+				open = true;               // spread of a non-record: keys unknowable
 			}
 			continue;
 		}
@@ -441,7 +446,9 @@ function inferObject(node, source, uri, scope, depth) {
 		let position = offsetToPosition(source, lineTable, ts.startByte(keyNode));
 		push(fields, { name: keyName, type: valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN, position });
 	}
-	return { kind: 'record', fields, sourceUri: uri };
+	let result = { kind: 'record', fields, sourceUri: uri };
+	if (open) result.open = true;
+	return result;
 }
 
 function inferFunctionExpr(node, source, uri, scope, depth) {
