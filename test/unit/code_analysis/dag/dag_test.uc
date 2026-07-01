@@ -363,6 +363,52 @@ describe('dag cascade pruning of deleted files', () => {
 	});
 });
 
+describe('dag cascade skips unchanged on-disk dependents', () => {
+	beforeEach(reset);
+
+	let B_TEXT   = "export function foo() {};";
+	let B_TEXT_2 = "export const foo = 1;";
+	// A imports 'b', so an update to b.uc cascades to a.uc. v1/v2 are the same
+	// byte length (export name aa/bb) so the mock's stat reports an identical
+	// (mtime:0, size) stamp — the cascade must skip re-reading a.uc.
+	let A_V1 = "import { foo } from 'b';\nexport function aa() {};";
+	let A_V2 = "import { foo } from 'b';\nexport function bb() {};";
+	// Longer name → different size → stamp mismatch → cascade must re-read.
+	let A_V2_LONGER = "import { foo } from 'b';\nexport function aaLong() {};";
+
+	it('does not re-index a dependent whose disk stamp is unchanged', () => {
+		mock.global.patch('fs', { data: { '/app/src/a.uc': A_V1, '/app/src/b.uc': B_TEXT } });
+		dag.addFromDisk(URI_B);
+		dag.addFromDisk(URI_A);          // stamps A at size(A_V1)
+		mock.global.unpatch('fs');
+
+		// a.uc's on-disk content changed to A_V2 but with the SAME size (and mtime 0),
+		// so the stamp still matches. The cascade must skip it and keep A_V1's export.
+		mock.global.patch('fs', { data: { '/app/src/a.uc': A_V2, '/app/src/b.uc': B_TEXT } });
+		dag.update(URI_B, B_TEXT_2, parse(B_TEXT_2));
+		mock.global.unpatch('fs');
+
+		let exps = dag.exportsOf(URI_A);
+		assert.match(1, length(exps));
+		assert.match('aa', exps[0].name);   // stale-but-skipped, not re-read to 'bb'
+	});
+
+	it('re-indexes a dependent whose disk stamp changed (different size)', () => {
+		mock.global.patch('fs', { data: { '/app/src/a.uc': A_V1, '/app/src/b.uc': B_TEXT } });
+		dag.addFromDisk(URI_B);
+		dag.addFromDisk(URI_A);          // stamps A at size(A_V1)
+		mock.global.unpatch('fs');
+
+		mock.global.patch('fs', { data: { '/app/src/a.uc': A_V2_LONGER, '/app/src/b.uc': B_TEXT } });
+		dag.update(URI_B, B_TEXT_2, parse(B_TEXT_2));
+		mock.global.unpatch('fs');
+
+		let exps = dag.exportsOf(URI_A);
+		assert.match(1, length(exps));
+		assert.match('aaLong', exps[0].name);   // stamp mismatch → re-read
+	});
+});
+
 describe('dag circular re-export guard', () => {
 	beforeEach(reset);
 

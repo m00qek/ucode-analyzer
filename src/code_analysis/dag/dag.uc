@@ -8,6 +8,11 @@ let _nodes = {};
 let _outEdges = {};
 let _inEdges = {};
 let _openUris = {};
+// uri -> { mtime, size } captured the last time we indexed the file from disk.
+// Lets the update cascade skip re-reading an on-disk dependent whose content is
+// unchanged (the common case: editing one file cascades through dependents whose
+// own text hasn't moved). Same per-uri lifecycle as _nodes.
+let _diskStamp = {};
 
 function uriToPath(uri) {
 	return substr(uri, 7);
@@ -92,8 +97,13 @@ export function add(uri, text, tree) {
 
 // Index a file from disk (no cascade — used for initial workspace scan).
 export function addFromDisk(uri) {
-	let parsed = readAndParse(uriToPath(uri));
-	if (parsed) indexNode(uri, parsed.text, parsed.tree);
+	let path = uriToPath(uri);
+	let parsed = readAndParse(path);
+	if (parsed) {
+		indexNode(uri, parsed.text, parsed.tree);
+		let st = fs.stat(path);
+		if (st) _diskStamp[uri] = { mtime: st.mtime, size: st.size };
+	}
 };
 
 // Re-index a file with the given content, then cascade through reverse deps.
@@ -117,20 +127,34 @@ export function update(uri, text, tree, openDocs) {
 			let mem = openDocs ? openDocs[next] : null;
 			if (mem) indexNode(next, mem.text, mem.tree);
 		} else {
-			let parsed = readAndParse(uriToPath(next));
-			if (parsed) {
-				indexNode(next, parsed.text, parsed.tree);
+			let path = uriToPath(next);
+			let stamp = _diskStamp[next];
+			let st = stamp ? fs.stat(path) : null;
+			if (stamp && st && st.mtime === stamp.mtime && st.size === stamp.size) {
+				// Unchanged on disk since we last indexed it. Re-indexing derives
+				// the node purely from this file's own (unmoved) text, so it would
+				// be a no-op — skip the read+parse. Genuine on-disk edits arrive
+				// via watched-files/didChange and bump mtime/size; open edits take
+				// the _openUris branch. Still traverse its reverse deps below.
 			} else {
-				// File no longer on disk — cascade its reverse deps then remove it.
-				let revDeps = _inEdges[next] ?? [];
-				removeOutEdges(next);
-				delete _nodes[next];
-				delete _inEdges[next];
-				delete _openUris[next];
-				type_registry.removeUri(next);
-				for (let dep in revDeps)
-					if (!visited[dep]) { visited[dep] = true; push(queue, dep); }
-				continue;
+				let parsed = readAndParse(path);
+				if (parsed) {
+					indexNode(next, parsed.text, parsed.tree);
+					let s2 = st ?? fs.stat(path);
+					if (s2) _diskStamp[next] = { mtime: s2.mtime, size: s2.size };
+				} else {
+					// File no longer on disk — cascade its reverse deps then remove it.
+					let revDeps = _inEdges[next] ?? [];
+					removeOutEdges(next);
+					delete _nodes[next];
+					delete _inEdges[next];
+					delete _openUris[next];
+					delete _diskStamp[next];
+					type_registry.removeUri(next);
+					for (let dep in revDeps)
+						if (!visited[dep]) { visited[dep] = true; push(queue, dep); }
+					continue;
+				}
 			}
 		}
 
@@ -146,6 +170,7 @@ export function remove(uri) {
 	delete _nodes[uri];
 	delete _inEdges[uri];
 	delete _openUris[uri];
+	delete _diskStamp[uri];
 	type_registry.removeUri(uri);
 };
 
