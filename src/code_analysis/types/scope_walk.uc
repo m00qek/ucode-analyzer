@@ -239,6 +239,80 @@ function walkForStmt(node, source, uri, scope, map) {
     if (body) walkNode(body, source, uri, forScope, map);
 }
 
+// ── template spanning control-flow forms ({% for %}…{% endfor %}, etc.) ─────
+// These mirror the brace-form walkers, but their body is a *repeat* of markup
+// nodes (raw_text, expression tags, nested tags) rather than a single
+// statement_block, so the body is threaded child-by-child through stepStatement.
+
+// Byte offsets of an alt statement's header field nodes — the parts that are not
+// body content and must be skipped when threading the body.
+function altHeaderBytes(node) {
+    let hdr = {};
+    for (let f in ['left', 'right', 'value', 'condition', 'initializer', 'increment']) {
+        let n = ts.childByField(node, f);
+        if (n) hdr[ts.startByte(n)] = true;
+    }
+    return hdr;
+}
+
+// Thread every non-header child of an alt statement under the given scope, so a
+// `{% let %}` inside the body flows to later body nodes and nested spanning
+// forms recurse correctly.
+function walkAltBody(node, source, uri, scope, map, hdr) {
+    for (let i = 0; i < ts.namedChildCount(node); i++) {
+        let child = ts.namedChild(node, i);
+        if (hdr[ts.startByte(child)]) continue;
+        scope = stepStatement(child, source, uri, scope, map);
+    }
+}
+
+// {% for (x in xs): %} … {% endfor %} — mirror walkForIn's loop-var binding.
+function walkForInAlt(node, source, uri, scope, map) {
+    let right = ts.childByField(node, 'right');
+    let left  = ts.childByField(node, 'left');
+    if (right) walkNode(right, source, uri, scope, map);
+    let loopScope = makeScope(scope);
+    if (left && ts.nodeType(left) === 'identifier') {
+        let iterType = right ? inferNode(right, source, uri, scope, 0) : UNKNOWN;
+        scopeSet(loopScope, ts.text(left, source), elemTypeOf(iterType));
+    }
+    walkAltBody(node, source, uri, loopScope, map, altHeaderBytes(node));
+}
+
+// {% for (init; cond; incr): %} … {% endfor %} — mirror walkForStmt.
+function walkForAlt(node, source, uri, scope, map) {
+    let init = ts.childByField(node, 'initializer');
+    let cond = ts.childByField(node, 'condition');
+    let incr = ts.childByField(node, 'increment');
+    let forScope = makeScope(scope);
+    if (init && ts.nodeType(init) === 'lexical_declaration') {
+        for (let i = 0; i < ts.namedChildCount(init); i++) {
+            let decl = ts.namedChild(init, i);
+            if (ts.nodeType(decl) !== 'variable_declarator') continue;
+            let nameNode = ts.childByField(decl, 'name');
+            let valNode  = ts.childByField(decl, 'value');
+            if (nameNode && ts.nodeType(nameNode) === 'identifier') {
+                let t = valNode ? inferNode(valNode, source, uri, forScope, 0) : UNKNOWN;
+                scopeSet(forScope, ts.text(nameNode, source), t);
+            }
+        }
+    }
+    if (cond) walkNode(cond, source, uri, forScope, map);
+    if (incr) walkNode(incr, source, uri, forScope, map);
+    walkAltBody(node, source, uri, forScope, map, altHeaderBytes(node));
+}
+
+// {% while (cond): %} … {% endwhile %} and {% if (cond): %} … {% endif %}.
+// The condition is walked; the body is threaded under the current scope. Guard
+// narrowing across the flat elif/else markup structure is deferred, so the body
+// sees the un-narrowed scope (safe — never narrows incorrectly).
+function walkCondAlt(node, source, uri, scope, map) {
+    let condWrapper = ts.childByField(node, 'condition');
+    if (condWrapper)
+        walkNode(ts.namedChild(condWrapper, 0) ?? condWrapper, source, uri, scope, map);
+    walkAltBody(node, source, uri, scope, map, altHeaderBytes(node));
+}
+
 function walkTry(node, source, uri, scope, map) {
     let body    = ts.childByField(node, 'body');
     let handler = ts.childByField(node, 'handler');
@@ -323,6 +397,12 @@ walkNode = function(node, source, uri, scope, map) {
         walkForIn(node, source, uri, scope, map);
     } else if (nt === 'for_statement') {
         walkForStmt(node, source, uri, scope, map);
+    } else if (nt === 'for_in_alt_statement') {
+        walkForInAlt(node, source, uri, scope, map);
+    } else if (nt === 'for_alt_statement') {
+        walkForAlt(node, source, uri, scope, map);
+    } else if (nt === 'while_alt_statement' || nt === 'if_alt_statement') {
+        walkCondAlt(node, source, uri, scope, map);
     } else if (nt === 'while_statement') {
         let cond = ts.childByField(node, 'condition');
         let body = ts.childByField(node, 'body');

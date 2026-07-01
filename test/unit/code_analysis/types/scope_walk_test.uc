@@ -264,3 +264,50 @@ describe('buildScopeMap template mode', () => {
 		assert.match('function', scopeGet(scope, 'render')?.kind);
 	});
 });
+
+// ── template mode: spanning control-flow forms (b2) ─────────────────────────────
+
+describe('buildScopeMap template spanning forms', () => {
+	it('for-in loop variable is typed from the iterable inside the body', () => {
+		let src = "{% for (item in ['a', 'b']): %}\n<li>{{ item }}</li>\n{% endfor %}\n";
+		let scope = scopeAtTpl(src, '{{ item');
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'item'));
+	});
+
+	it('for-in over a list of ints types the loop variable as int', () => {
+		let src = "{% for (n in [1, 2, 3]): %}\n{{ n }}\n{% endfor %}\n";
+		let scope = scopeAtTpl(src, '{{ n');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
+	});
+
+	it('an outer tag declaration is visible inside the loop body', () => {
+		let src = "{% let base = 10; %}\n{% for (n in [1]): %}\n{{ base }}\n{% endfor %}\n";
+		let scope = scopeAtTpl(src, '{{ base');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'base'));
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
+	});
+
+	it('a C-style for initializer variable is visible in the body', () => {
+		let src = "{% for (let i = 0; i < 3; i++): %}\n{{ i }}\n{% endfor %}\n";
+		let scope = scopeAtTpl(src, '{{ i');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'i'));
+	});
+
+	it('a let declared inside the loop body threads to later body nodes', () => {
+		let src = "{% for (n in [1]): %}\n{% let sq = n; %}\n{{ sq }}\n{% endfor %}\n";
+		let scope = scopeAtTpl(src, '{{ sq');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'sq'));
+	});
+
+	it('an if-block body resolves outer declarations', () => {
+		let src = "{% let flag = 1; %}\n{% if (flag): %}\n{{ flag }}\n{% endif %}\n";
+		let scope = scopeAtTpl(src, '{{ flag');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'flag'));
+	});
+
+	it('the loop variable is not visible after the loop', () => {
+		let src = "{% for (item in ['a']): %}\n{{ item }}\n{% endfor %}\n{% let after = 1; %}\n";
+		let scope = scopeAtTpl(src, 'let after');
+		assert.match(null, scopeGet(scope, 'item'));
+	});
+});
