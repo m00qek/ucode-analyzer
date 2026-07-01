@@ -129,6 +129,12 @@ describe('parseDoc — type forms', () => {
 		assert.match({ kind: 'any' }, doc.returns.type);
 	});
 
+	it('parses a bare {function} as an opaque callable function type', () => {
+		let doc = parseDoc("/** @returns {function} */");
+		assert.match('function', doc.returns.type.kind);
+		assert.match([], doc.returns.type.params);
+	});
+
 	it('parses list<T>', () => {
 		let doc = parseDoc("/** @returns {list<string>} */");
 		assert.match(list_(prim('string')), doc.returns.type);

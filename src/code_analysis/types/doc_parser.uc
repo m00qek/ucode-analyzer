@@ -37,8 +37,15 @@ function flattenUnion(node, source, tparams, out) {
 parseTypeNode = function(node, source, tparams) {
 	let kind = ts.nodeType(node);
 
-	if (kind === 'primitive_type')
-		return { kind: 'primitive', name: ts.text(node, source) };
+	if (kind === 'primitive_type') {
+		let name = ts.text(node, source);
+		// A bare `{function}` annotation means "some callable" — model it as an
+		// opaque function type so call sites don't flag it as not-a-function.
+		// (`{function(): T}` with a signature is handled by function_type below.)
+		if (name === 'function')
+			return { kind: 'function', params: [], return: { kind: 'unknown' } };
+		return { kind: 'primitive', name };
+	}
 
 	if (kind === 'any_type')
 		return { kind: 'any' };
