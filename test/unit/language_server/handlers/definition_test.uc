@@ -248,6 +248,61 @@ describe('definition — member expression (namespace import)', () => {
 	});
 });
 
+describe('definition — require() module loader', () => {
+	beforeEach(() => {
+		dag.init(_config);
+		dag.addFromDisk(GREET_URI);
+	});
+
+	// fixtures/greet.uc: function greet() {}  export { greet };
+	it('jumps to the module file when cursor is on the require() string', () => {
+		let text = "let mod = require(\"fixtures.greet\");\nmod.greet;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (0, 20) is inside the "fixtures.greet" specifier
+		let result = definition(URI, doc, { line: 0, character: 20 });
+		assert.match(GREET_URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(0, result.range.start.character);
+	});
+
+	it('jumps to the module file from a use of the require-bound variable', () => {
+		let text = "let mod = require(\"fixtures.greet\");\nmod.greet;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (1, 0) is 'mod' — the module-typed variable reference
+		let result = definition(URI, doc, { line: 1, character: 0 });
+		assert.match(GREET_URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(0, result.range.start.character);
+	});
+
+	it('jumps into the module on member access of a require-bound variable', () => {
+		let text = "let mod = require(\"fixtures.greet\");\nmod.greet;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (1, 4) is 'greet' in mod.greet
+		let result = definition(URI, doc, { line: 1, character: 4 });
+		assert.match(GREET_URI, result.uri);
+	});
+
+	it('does not treat a non-require string literal as a module jump', () => {
+		let text = "let s = \"fixtures.greet\";\ns;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		let result = definition(URI, doc, { line: 0, character: 12 });
+		assert.match(null, result);
+	});
+});
+
 describe('definition — function parameters', () => {
 	it('jumps to parameter declaration in the enclosing function', () => {
 		let text = "function parse(ts, opts) {\nts;\n}";

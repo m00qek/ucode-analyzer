@@ -208,6 +208,31 @@ function importedDefinition(uri, name) {
 	return null;
 }
 
+// A Location pointing at the top of the file that `spec` resolves to, or null.
+// Used for jumps to a whole module (namespace-style: require / module variable).
+function moduleFileLocation(spec) {
+	let modUri = dag.resolveSpecifier(spec);
+	if (!modUri) return null;
+	return { uri: modUri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } };
+}
+
+// If strNode is the string specifier of a `require("...")` call, return the
+// Location of the module it names. `require` is ucode's runtime module loader,
+// so its literal argument behaves like an import specifier for navigation.
+function requireStringTarget(doc, strNode) {
+	let argsNode = ts.parent(strNode);
+	if (!argsNode || ts.nodeType(argsNode) !== 'arguments') return null;
+	let call = ts.parent(argsNode);
+	if (!call || ts.nodeType(call) !== 'call_expression') return null;
+	let fnNode = ts.childByField(call, 'function');
+	if (!fnNode || ts.nodeType(fnNode) !== 'identifier' ||
+	    ts.text(fnNode, doc.text) !== 'require') return null;
+	for (let k = 0; k < ts.childCount(strNode); k++)
+		if (ts.nodeType(ts.child(strNode, k)) === 'string_fragment')
+			return moduleFileLocation(ts.text(ts.child(strNode, k), doc.text));
+	return null;
+}
+
 export function definition(uri, doc, position) {
 	let offset = positionToOffset(doc.text, doc.lineTable, position);
 	let root = ts.rootNode(doc.tree);
@@ -224,6 +249,12 @@ export function definition(uri, doc, position) {
 		return null;
 	}
 
+	// The string specifier of require("...") → jump to the module file.
+	if (nt === 'string' || nt === 'string_fragment') {
+		let strNode = (nt === 'string_fragment') ? ts.parent(node) : node;
+		return strNode ? requireStringTarget(doc, strNode) : null;
+	}
+
 	if (nt !== 'identifier') return null;
 
 	let name = ts.text(node, doc.text);
@@ -235,6 +266,17 @@ export function definition(uri, doc, position) {
 	// Namespace import alias → jump to the module file.
 	let ns = namespaceDef(uri, name);
 	if (ns) return ns;
+
+	// A variable bound to a module value (e.g. `let fw4 = require("fw4")`) →
+	// jump to the module file, mirroring a namespace import alias. At the
+	// declaration site itself the name is not yet in scope, so this applies to
+	// use sites; the string case above covers the declaration.
+	let scope = scopeAtOffset(doc.scopeMap, offset);
+	let vt = inferNode(node, doc.text, uri, scope, 0);
+	if (vt && vt.kind === 'module') {
+		let modLoc = moduleFileLocation(vt.path);
+		if (modLoc) return modLoc;
+	}
 
 	// Function parameter in the innermost enclosing scope.
 	let param = walkForParam(root, uri, doc, name, offset);

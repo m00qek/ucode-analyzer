@@ -162,7 +162,44 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 	return { kind: 'function', params, return: ret };
 }
 
+// require("spec") is ucode's runtime module loader — the dynamic counterpart of
+// a static import. Model its result as the module named by the (literal)
+// specifier so hover, completion and member typing on the returned value behave
+// exactly like a namespace import (`fw4.zones()` resolves via dag.resolveMember).
+// Returns null for a shadowed `require`, a non-`require` callee, or a specifier
+// that is not a plain string literal (nothing to resolve statically).
+// True if `name` is bound in a non-root scope — a genuine local shadow, as
+// opposed to a builtin sitting in the root scope (parent === null). The builtin
+// scope is the only scope with a null parent, so we stop before it.
+function locallyShadowed(scope, name) {
+	let s = scope;
+	while (s && s.parent) {
+		if (exists(s.bindings, name)) return true;
+		s = s.parent;
+	}
+	return false;
+}
+
+function requireModuleType(node, source, scope) {
+	let fnNode = ts.childByField(node, 'function');
+	if (!fnNode || ts.nodeType(fnNode) !== 'identifier') return null;
+	if (ts.text(fnNode, source) !== 'require') return null;
+	if (locallyShadowed(scope, 'require')) return null;   // a user binding is not the builtin
+
+	let argsNode = ts.childByField(node, 'arguments');
+	let args = argsNode ? ts.namedChildren(argsNode) : [];
+	if (length(args) < 1 || ts.nodeType(args[0]) !== 'string') return null;
+
+	for (let k = 0; k < ts.childCount(args[0]); k++)
+		if (ts.nodeType(ts.child(args[0], k)) === 'string_fragment')
+			return { kind: 'module', path: ts.text(ts.child(args[0], k), source) };
+	return null;   // empty string literal — nothing to resolve
+}
+
 function inferCall(node, source, uri, scope, depth) {
+	let mod = requireModuleType(node, source, scope);
+	if (mod) return mod;
+
 	let fnNode   = ts.childByField(node, 'function');
 	let argsNode = ts.childByField(node, 'arguments');
 	if (!fnNode) return UNKNOWN;

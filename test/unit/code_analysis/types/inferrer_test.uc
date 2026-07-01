@@ -1070,6 +1070,40 @@ describe('inferrer — importScope: renamed imports', () => {
 	});
 });
 
+describe('inferrer — require() module loader', () => {
+	beforeEach(() => {
+		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src', 'test'] } });
+		dag.remove(URI);
+		invalidateUri(URI);
+	});
+
+	it('require("spec") is typed as the module named by the specifier', () => {
+		let t = infer('let m = require("fixtures.greet");');
+		assert.match('module', t.kind);
+		assert.match('fixtures.greet', t.path);
+	});
+
+	it('member access on a required module resolves to the export type', () => {
+		// fixtures/greet.uc exports the function `greet`.
+		let t = infer('let g = require("fixtures.greet").greet;');
+		assert.match('function', t.kind);
+	});
+
+	it('a locally shadowed require is not treated as the module loader', () => {
+		let text = 'let m = require("fixtures.greet");';
+		// A real shadow lives in a non-root scope; the builtin sits in the root.
+		let scope = makeScope(makeScope(null));
+		scopeSet(scope, 'require', prim('string'));   // shadow the builtin
+		let t = inferNode(exprNode(text), text, URI, scope, 0);
+		assert.match(true, t.kind !== 'module');
+	});
+
+	it('require with a non-literal specifier is not a module type', () => {
+		let t = infer('let m = require(dynamicName);');
+		assert.match(true, t.kind !== 'module');
+	});
+});
+
 describe('inferrer — importScope: object-literal export typed as record', () => {
 	let MY_URI = 'file:///app/src/mymod.uc';
 	// Uses explicit pair syntax (greet: greet) to avoid shorthand property nodes.
