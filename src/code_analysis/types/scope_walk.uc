@@ -139,6 +139,32 @@ function applyGuardClause(stmt, source, scope) {
 // Forward declaration so handler functions can call walkNode.
 let walkNode;
 
+// Process one statement in a sequential run: emit its checkpoint, walk into it,
+// then advance the scope past its own declarations and any guard clause, and
+// return the new scope for the following siblings.
+//
+// A template statement tag ({% stmt; ... %}) is transparent: its inner
+// statements are threaded as if written inline at this level, so a `let`
+// declared in one tag is visible to later tags and to expression tags. The
+// tag delimiters carry no declarations and are skipped. For a plain script no
+// node is a statement_tag, so this is exactly the previous per-statement body.
+function stepStatement(stmt, source, uri, scope, map) {
+    if (ts.nodeType(stmt) === 'statement_tag') {
+        for (let i = 0; i < ts.namedChildCount(stmt); i++) {
+            let inner = ts.namedChild(stmt, i);
+            let it = ts.nodeType(inner);
+            if (it === 'statement_tag_open' || it === 'statement_tag_close') continue;
+            scope = stepStatement(inner, source, uri, scope, map);
+        }
+        return scope;
+    }
+    emit(map, ts.startByte(stmt), scope);
+    walkNode(stmt, source, uri, scope, map);
+    scope = advanceScope(stmt, source, uri, scope);
+    scope = applyGuardClause(stmt, source, scope);
+    return scope;
+}
+
 // Walk a statement_block with the given scope as its initial scope.
 // The caller is responsible for setting up scope (params, narrowing, etc.)
 // before calling; walkBlock handles per-statement checkpointing, declaration
@@ -146,13 +172,8 @@ let walkNode;
 function walkBlock(block, source, uri, scope, map) {
     emit(map, ts.startByte(block), scope);
     let n = ts.namedChildCount(block);
-    for (let i = 0; i < n; i++) {
-        let stmt = ts.namedChild(block, i);
-        emit(map, ts.startByte(stmt), scope);
-        walkNode(stmt, source, uri, scope, map);
-        scope = advanceScope(stmt, source, uri, scope);
-        scope = applyGuardClause(stmt, source, scope);
-    }
+    for (let i = 0; i < n; i++)
+        scope = stepStatement(ts.namedChild(block, i), source, uri, scope, map);
 }
 
 function walkIfStmt(node, source, uri, scope, map) {
@@ -330,13 +351,8 @@ export function buildScopeMap(uri, source, tree) {
     let map   = [];
     emit(map, 0, scope);
     let n = ts.namedChildCount(root);
-    for (let i = 0; i < n; i++) {
-        let stmt = ts.namedChild(root, i);
-        emit(map, ts.startByte(stmt), scope);
-        walkNode(stmt, source, uri, scope, map);
-        scope = advanceScope(stmt, source, uri, scope);
-        scope = applyGuardClause(stmt, source, scope);
-    }
+    for (let i = 0; i < n; i++)
+        scope = stepStatement(ts.namedChild(root, i), source, uri, scope, map);
     // Emit a final checkpoint so lookups past the last statement see its declarations.
     emit(map, ts.endByte(root), scope);
     return map;

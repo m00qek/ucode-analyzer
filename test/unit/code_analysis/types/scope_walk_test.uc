@@ -1,6 +1,7 @@
 import { describe, it, assert, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
+import * as mode from 'code_analysis.mode';
 import { initBuiltinsFromDag } from 'code_analysis.types.dag_bridge';
 import { buildScopeMap, scopeAtOffset } from 'code_analysis.types.scope_walk';
 import { scopeGet } from 'code_analysis.types.scope';
@@ -33,6 +34,14 @@ beforeEach(() => { invalidateUri(URI); });
 // so this gives the scope that `marker`'s statement sees on entry.
 function scopeAt(src, marker) {
 	let tree = parse(src);
+	let map  = buildScopeMap(URI, src, tree);
+	return scopeAtOffset(map, index(src, marker));
+}
+
+// Template variant: parse via mode (markup grammar) and look up the scope at the
+// start of `marker`.
+function scopeAtTpl(src, marker) {
+	let tree = mode.parse(src);
 	let map  = buildScopeMap(URI, src, tree);
 	return scopeAtOffset(map, index(src, marker));
 }
@@ -224,5 +233,34 @@ describe('scopeAtOffset', () => {
 		let scope = scopeAtOffset(map, length(src) + 100);
 		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'x'));
 		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'y'));
+	});
+});
+
+// ── template mode: declarations inside {% %} tags (b1) ──────────────────────────
+
+describe('buildScopeMap template mode', () => {
+	it('a let declared in a statement tag is visible at a later expression tag', () => {
+		let src = "{% let title = 'Home'; %}\n<h1>{{ title }}</h1>\n";
+		let scope = scopeAtTpl(src, '{{ title');
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'title'));
+	});
+
+	it('a declaration in one tag is visible in a later tag', () => {
+		let src = "{% let count = 3; %}\n{% let next = count; %}\n";
+		let scope = scopeAtTpl(src, 'let next');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'count'));
+	});
+
+	it('surfaces every declaration of a multi-statement tag', () => {
+		let src = "{% let a = 1; let b = 2; %}\n{{ b }}\n";
+		let scope = scopeAtTpl(src, '{{ b');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'a'));
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'b'));
+	});
+
+	it('an exported function in a tag is visible to a later tag', () => {
+		let src = "{% export function render(x) { return x; } %}\n{% let r = render; %}\n";
+		let scope = scopeAtTpl(src, 'let r');
+		assert.match('function', scopeGet(scope, 'render')?.kind);
 	});
 });
