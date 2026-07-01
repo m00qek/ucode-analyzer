@@ -20,6 +20,7 @@
 
 const TSLanguage *tree_sitter_ucode(void);
 const TSLanguage *tree_sitter_ucdocs(void);
+const TSLanguage *tree_sitter_ucode_markup(void);
 
 /*
  * A ucode node value must keep the owning tree alive: TSNode is a value
@@ -71,6 +72,10 @@ static uc_value_t *uc_ts_language_ucode(uc_vm_t *vm, size_t nargs) {
 
 static uc_value_t *uc_ts_language_ucdocs(uc_vm_t *vm, size_t nargs) {
   return uc_resource_new(language_type, (void *)tree_sitter_ucdocs());
+}
+
+static uc_value_t *uc_ts_language_ucode_markup(uc_vm_t *vm, size_t nargs) {
+  return uc_resource_new(language_type, (void *)tree_sitter_ucode_markup());
 }
 
 static uc_value_t *uc_ts_new_parser(uc_vm_t *vm, size_t nargs) {
@@ -471,6 +476,7 @@ static uc_value_t *uc_ts_query_matches(uc_vm_t *vm, size_t nargs) {
 static const uc_function_list_t global_fns[] = {
     {"ts_language_ucode", uc_ts_language_ucode},
     {"ts_language_ucdocs", uc_ts_language_ucdocs},
+    {"ts_language_ucode_markup", uc_ts_language_ucode_markup},
     {"ts_new_parser", uc_ts_new_parser},
     {"ts_parse", uc_ts_parse},
     {"ts_reparse", uc_ts_reparse},

@@ -30,9 +30,19 @@ add_library(ucdocs_grammar STATIC
 target_include_directories(ucdocs_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucdocs/src)
 set_target_properties(ucdocs_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# Template-mode grammar ('ucode_markup'): base grammar wrapped in {% %}/{{ }}/{# #}
+# tag handling. Same inner code node names as ucode_grammar, so the analysis
+# layer treats the code inside tags identically.
+add_library(ucode_markup_grammar STATIC
+  ${TREE_SITTER_UCODE_DIR}/markup/src/parser.c
+  ${TREE_SITTER_UCODE_DIR}/markup/src/scanner.c
+)
+target_include_directories(ucode_markup_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/markup/src)
+set_target_properties(ucode_markup_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 add_library(tree_sitter_native SHARED tree_sitter/native.c)
 set_target_properties(tree_sitter_native PROPERTIES PREFIX "")
-target_link_libraries(tree_sitter_native ${UCODE_LIB} ucode_grammar ucdocs_grammar tree_sitter_core)
+target_link_libraries(tree_sitter_native ${UCODE_LIB} ucode_grammar ucdocs_grammar ucode_markup_grammar tree_sitter_core)
 
 # Raw stdin I/O primitives for the server's uloop-driven read loop.
 add_library(language_server_native SHARED language_server/native.c)

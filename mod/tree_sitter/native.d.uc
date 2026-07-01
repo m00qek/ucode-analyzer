@@ -25,6 +25,9 @@ export function ts_language_ucode() {};
 /** Return the language handle for the ucdocs grammar. @returns {Language} */
 export function ts_language_ucdocs() {};
 
+/** Return the language handle for the ucode template-mode ('ucode_markup') grammar. @returns {Language} */
+export function ts_language_ucode_markup() {};
+
 // ── Parser lifecycle ────────────────────────────────────────────────────────
 
 /**

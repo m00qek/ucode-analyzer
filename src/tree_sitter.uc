@@ -32,7 +32,7 @@ function pointAt(source, byteOffset) {
 
 // ── Opaque handle types ───────────────────────────────────────────────────
 
-/** @typedef {any} Language — Opaque tree-sitter language handle returned by ts.ucode() or ts.ucdocs(). */
+/** @typedef {any} Language — Opaque tree-sitter language handle returned by ts.ucode(), ts.ucdocs() or ts.markup(). */
 /** @typedef {any} Parser — Opaque parser instance created by ts.newParser(). */
 /** @typedef {any} Tree — Parsed syntax tree. All node handles become stale after ts.reparse(). */
 /** @typedef {any} Node — Immutable handle to a single syntax node within a Tree. */
@@ -55,15 +55,23 @@ export const ucode = native.ts_language_ucode;
  */
 export const ucdocs = native.ts_language_ucdocs;
 
+/**
+ * Return the tree-sitter language handle for the ucode template-mode
+ * ('ucode_markup') grammar — files written as text with embedded {% %} / {{ }}
+ * / {# #} tags. The code inside tags uses the same node types as ts.ucode().
+ * @returns {Language}
+ */
+export const markup = native.ts_language_ucode_markup;
+
 // ── Parser lifecycle ──────────────────────────────────────────────────────
 
 /**
  * Create a new parser configured for the given language.
- * @param {Language} language — result of ts.ucode() or ts.ucdocs()
+ * @param {Language} language — result of ts.ucode(), ts.ucdocs() or ts.markup()
  * @returns {Parser}
  */
 export function newParser(language) {
-	expect(language !== null, 'newParser() expects a language handle (ts.ucode() or ts.ucdocs())');
+	expect(language !== null, 'newParser() expects a language handle (ts.ucode(), ts.ucdocs() or ts.markup())');
 	return native.ts_new_parser(language);
 };
 
