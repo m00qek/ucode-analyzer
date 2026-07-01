@@ -33,6 +33,28 @@ describe('mode — isTemplate detection', () => {
 	it('detects a tag after leading whitespace', () => {
 		assert.match(true, isTemplate("  \t{{ x }}\n"));
 	});
+
+	it('detects a tag with a trim marker ({%+ / {%- / {{-)', () => {
+		assert.match(true, isTemplate("{%+ if (x): -%}\n{%- endif %}\n"));
+	});
+
+	// ── shebang-driven mode (matches how ucode is actually invoked) ──────────
+	it('treats a utpl shebang as template', () => {
+		assert.match(true, isTemplate("#!/usr/bin/utpl\nplain text no tags\n"));
+	});
+
+	it('treats a `ucode -T` shebang as template', () => {
+		assert.match(true, isTemplate("#!/usr/bin/ucode -T\nplain text\n"));
+	});
+
+	it('a `-R` shebang forces raw script even if a tag is present', () => {
+		assert.match(false, isTemplate("#!/usr/bin/ucode -R\n{{ notATag }}\n"));
+	});
+
+	it('a plain ucode shebang with no flag falls through to content', () => {
+		assert.match(false, isTemplate("#!/usr/bin/ucode\nlet x = 1;\n"));
+		assert.match(true,  isTemplate("#!/usr/bin/ucode\n{% x %}\n"));
+	});
 });
 
 describe('mode — parse dispatch', () => {

@@ -176,12 +176,16 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 	if (nt === 'member_expression') {
 		let obj  = ts.childByField(node, 'object');
 		let prop = ts.childByField(node, 'property');
+		// Optional-chaining (obj?.prop) is the null-safe access form: the runtime
+		// short-circuits to null when obj is null, so a null/nullable object is
+		// expected here and must not be flagged. Property checks still apply.
+		let optChain = ts.childByField(node, 'optional_chain') !== null;
 		if (obj) {
 			let scope = scopeAtOffset(scopeMap, ts.startByte(obj));
 			let objType = ts.nodeType(obj) === 'identifier'
 				? (scopeGet(scope, ts.text(obj, source)) ?? UNKNOWN)
 				: inferNode(obj, source, uri, scope, 0);
-			if (isDefinitelyNull(objType)) {
+			if (!optChain && isDefinitelyNull(objType)) {
 				// The value can only ever be null — dereferencing it always fails.
 				push(diags, {
 					range:    rangeOf(source, lineTable, obj),
@@ -190,7 +194,7 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 					code:     'null-access',
 					message:  sprintf("'%s' is null", ts.text(obj, source)),
 				});
-			} else if (isNullLike(objType)) {
+			} else if (!optChain && isNullLike(objType)) {
 				// `T | null`: null is only one possibility, so this is a warning by
 				// default. Under `'use strict';` it is escalated to an error.
 				push(diags, {

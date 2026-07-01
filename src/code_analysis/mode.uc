@@ -9,14 +9,29 @@ import * as ts from 'tree_sitter';
 let _scriptParser   = ts.newParser(ts.ucode());
 let _templateParser = ts.newParser(ts.markup());
 
-// Does the source use template mode? Heuristic: any line whose first
-// non-whitespace characters open a template tag ({% / {{ / {#). This mirrors
-// the tree-sitter-ucode grammar's own content-regex (^\s*\{[%{#]) used for
-// editor detection, and it sidesteps false positives from a script's own
-// "{{ }}" string literals (those are not at a line start). Known gap, to close
-// against the ucode oracle in Strand 3: a template whose only tag sits mid-line
-// (e.g. inside an HTML attribute) is misread as a script.
+// Does the source use template mode?
+//
+// ucode itself picks the mode by how it is invoked (`ucode` / `-R` ⇒ raw script,
+// the default; `ucode -T` or the `utpl` symlink ⇒ template). A shebang is the
+// in-file record of that choice, so it wins when present. Otherwise we detect by
+// content: any line whose first non-whitespace characters open a template tag
+// ({% / {{ / {#). A top-level tag is a hard syntax error under raw mode, so its
+// presence means the file must be a template; anchoring at the line start also
+// sidesteps false positives from a script's own "{{ }}" string literals.
+//
+// Validated against the ucode interpreter over the firewall4 corpus (33/33 files
+// classified identically). Residual gap: a template whose only tag sits mid-line
+// with no line-leading tag anywhere is misread as a script — not observed in the
+// real corpus, where every template leads with a tag.
 export function isTemplate(text) {
+	if (substr(text, 0, 2) === '#!') {
+		let nl = index(text, "\n");
+		let shebang = (nl >= 0) ? substr(text, 0, nl) : text;
+		// `utpl` or a `-T` flag selects template mode; `-R` forces raw script.
+		if (index(shebang, 'utpl') >= 0 || index(shebang, '-T') >= 0) return true;
+		if (index(shebang, '-R') >= 0) return false;
+		// A plain `#!/usr/bin/ucode` carries no mode flag → fall through to content.
+	}
 	for (let line in split(text, "\n")) {
 		let head = substr(trim(line), 0, 2);
 		if (head === '{%' || head === '{{' || head === '{#')

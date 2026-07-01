@@ -319,4 +319,15 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 		assert.match(true, d !== null);
 		assert.match(2, d.severity);   // still WARNING
 	});
+
+	it('optional chaining on a provably-null value is not flagged', () => {
+		// `x?.foo` short-circuits to null safely — no null-access.
+		assert.match(0, length(nullDiags("let x = null;\nx?.foo;\n")));
+	});
+
+	it('optional chaining on a possibly-null value is not flagged', () => {
+		// `s?.foo` is the null-safe form — no may-be-null warning.
+		assert.match(0, length(nullDiags(
+			"/** @param {?string} s */\nfunction f(s) { return s?.foo; }\n")));
+	});
 });
