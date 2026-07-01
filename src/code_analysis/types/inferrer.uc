@@ -234,19 +234,24 @@ function inferMember(node, source, uri, scope, depth) {
 	if (!objNode || !propNode) return UNKNOWN;
 	let propName = ts.text(propNode, source);
 	let result = UNKNOWN;
-	// Namespace import lookup only applies when the object is a direct identifier alias.
-	if (ts.nodeType(objNode) === 'identifier') {
+
+	// Resolve the object through the local scope first — matching inferIdentifier's
+	// precedence so a local binding shadows a same-named namespace import
+	// (`let cfg = {…}` wins over `import * as cfg`). A namespace alias that isn't
+	// shadowed is itself in scope as a module type and resolves here too.
+	let objType = _infer(objNode, source, uri, scope, (depth ?? 0) + 1);
+	if (objType && objType.kind === 'module') {
+		let r = dag.resolveMember(objType.path, propName);
+		if (r) result = exportType(r.exp, r.uri);
+	} else if (objType && objType.kind !== 'unknown') {
+		result = memberOfType(objType, propName);
+	}
+
+	// Fall back to the DAG namespace lookup only when the scope couldn't type the
+	// object — e.g. a bare alias identifier absent from the scope map.
+	if (result.kind === 'unknown' && ts.nodeType(objNode) === 'identifier') {
 		let dagResult = dagMemberLookup(uri, ts.text(objNode, source), propName);
 		if (dagResult) result = dagResult;
-	}
-	if (result.kind === 'unknown') {
-		let objType = _infer(objNode, source, uri, scope, (depth ?? 0) + 1);
-		if (objType && objType.kind === 'module') {
-			let r = dag.resolveMember(objType.path, propName);
-			if (r) result = exportType(r.exp, r.uri);
-		} else if (objType && objType.kind !== 'unknown') {
-			result = memberOfType(objType, propName);
-		}
 	}
 	if (ts.childByField(node, 'optional_chain'))
 		return { kind: 'nullable', inner: result };
@@ -292,8 +297,13 @@ function inferSpread(node, source, uri, scope, depth) {
 // ── Node-type handlers ─────────────────────────────────────────────────────
 
 function inferNumber(node, source) {
-	return match(ts.text(node, source), /\./)
-		? { kind: 'primitive', name: 'float' } : INT;
+	let text = ts.text(node, source);
+	// Hex / binary / octal literals are always integers, even though hex digits
+	// include 'e'/'E' (0x1e is int). Only a decimal literal with a fraction (.)
+	// or an exponent (e/E) is a float — e.g. 1e5 and 5.0 are doubles, 0x1e is not.
+	if (!match(text, /^0[xXbBoO]/) && match(text, /[.eE]/))
+		return { kind: 'primitive', name: 'float' };
+	return INT;
 }
 
 function inferIdentifier(node, source, uri, scope) {
@@ -317,8 +327,19 @@ function inferParenthesized(node, source, uri, scope, depth) {
 function inferUnary(node, source, uri, scope, depth) {
 	let op = ts.nodeType(ts.childByField(node, 'operator'));
 	if (op === '!' || op === 'delete') return BOOL;
+	if (op === '~') return INT;   // bitwise complement is always int
 	let operand = ts.childByField(node, 'argument');
-	return operand ? _infer(operand, source, uri, scope, depth + 1) : UNKNOWN;
+	let t = operand ? _infer(operand, source, uri, scope, depth + 1) : UNKNOWN;
+	// Unary +/- coerce to a number: float when the operand is float, int when it
+	// is int; for a string/unknown operand it's numeric but int-vs-float is
+	// undetermined (+"5" is int, +"5.0" is float), so don't claim the operand's
+	// own type (a string result would be wrong).
+	if (op === '+' || op === '-') {
+		if (t.kind === 'primitive' && t.name === 'float') return FLOAT;
+		if (t.kind === 'primitive' && t.name === 'int')   return INT;
+		return UNKNOWN;
+	}
+	return t;
 }
 
 function inferBinary(node, source, uri, scope, depth) {
@@ -332,6 +353,15 @@ function inferBinary(node, source, uri, scope, depth) {
 		let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;
 		let rt = right ? _infer(right, source, uri, scope, depth + 1) : UNKNOWN;
 		return unionOf([lt, rt]);
+	}
+	if (op === '??') {
+		// a ?? b evaluates to a when non-null, else b. Strip null/nullable from
+		// the left and union with the right.
+		let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;
+		let rt = right ? _infer(right, source, uri, scope, depth + 1) : UNKNOWN;
+		let nonNullLeft = (lt.kind === 'nullable') ? lt.inner :
+		                  (lt.kind === 'primitive' && lt.name === 'null') ? null : lt;
+		return nonNullLeft ? unionOf([nonNullLeft, rt]) : rt;
 	}
 	if (op === '+') {
 		let lt = left  ? _infer(left,  source, uri, scope, depth + 1) : UNKNOWN;

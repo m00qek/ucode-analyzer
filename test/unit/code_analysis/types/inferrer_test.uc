@@ -86,6 +86,18 @@ describe('inferrer — literals', () => {
 	it('infers null', () => {
 		assert.match(prim('null'), infer('let x = null;'));
 	});
+
+	it('infers exponent literal as float', () => {
+		assert.match(prim('float'), infer('let x = 1e5;'));
+	});
+
+	it('infers uppercase-exponent literal as float', () => {
+		assert.match(prim('float'), infer('let x = 1E5;'));
+	});
+
+	it('infers hex literal with an e digit as int (not float)', () => {
+		assert.match(prim('int'), infer('let x = 0x1e;'));
+	});
 });
 
 describe('inferrer — binary expressions', () => {
@@ -128,6 +140,16 @@ describe('inferrer — binary expressions', () => {
 	it('arithmetic: int op float yields float (float on right)', () => {
 		assert.match(prim('float'), infer('let x = 2 * 1.5;'));
 	});
+
+	it('?? unions the non-null left with the right', () => {
+		// `1 ?? 'a'` → int | string (left is never null here, but the type union
+		// is what a nullable left would collapse to).
+		assert.match(union_(prim('int'), prim('string')), infer("let x = 1 ?? 'a';"));
+	});
+
+	it('?? with same-typed branches yields that type', () => {
+		assert.match(prim('int'), infer('let x = 1 ?? 2;'));
+	});
 });
 
 describe('inferrer — unary expressions', () => {
@@ -137,6 +159,20 @@ describe('inferrer — unary expressions', () => {
 
 	it('unary minus on int yields int', () => {
 		assert.match(prim('int'), infer('let x = -1;'));
+	});
+
+	it('unary minus on float yields float', () => {
+		assert.match(prim('float'), infer('let x = -1.5;'));
+	});
+
+	it('bitwise complement yields int', () => {
+		assert.match(prim('int'), infer('let x = ~5;'));
+	});
+
+	it('unary plus on a string operand is numeric, not string', () => {
+		// +"5" is an int at runtime; the inferrer must not report the operand's
+		// string type. int-vs-float is undetermined, so it stays unknown.
+		assert.match(unknown(), infer("let x = +'5';"));
 	});
 });
 
@@ -382,6 +418,29 @@ describe('inferrer — buildScope: namespace import alias', () => {
 		assert.match(true, t !== null);
 		assert.match('module', t.kind);
 		assert.match('tree_sitter', t.path);
+	});
+
+	it('a local binding shadows a same-named namespace import in member access', () => {
+		dag.addFromDisk(TS_URI);
+		// `parser` is both a namespace import and a block-local record with a `parse`
+		// field. Inside the block, `parser.parse` must resolve to the local record's
+		// int field, not tree_sitter's parse() function.
+		let text = "import * as parser from 'tree_sitter';\n{\nlet parser = { parse: 42 };\nlet r = parser.parse;\n}\n";
+		let tree = parse(text);
+		dag.add(URI, text, tree);
+
+		let root  = ts.rootNode(tree);
+		let block = ts.namedChild(root, 1);        // statement_block
+		let rDecl = ts.namedChild(block, 1);       // `let r = parser.parse;`
+		let declr = ts.namedChild(rDecl, 0);       // variable_declarator
+		let member = ts.childByField(declr, 'value');  // parser.parse
+
+		let scope = scopeFor(text, tree, ts.startByte(member));
+		let t = inferNode(member, text, URI, scope, 0);
+		// The local record's `parse` field is a literal int (carries value:42),
+		// not tree_sitter's parse() function.
+		assert.match('primitive', t.kind);
+		assert.match('int', t.name);
 	});
 });
 
