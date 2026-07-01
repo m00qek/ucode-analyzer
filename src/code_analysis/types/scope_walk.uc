@@ -302,15 +302,54 @@ function walkForAlt(node, source, uri, scope, map) {
     walkAltBody(node, source, uri, forScope, map, altHeaderBytes(node));
 }
 
-// {% while (cond): %} … {% endwhile %} and {% if (cond): %} … {% endif %}.
-// The condition is walked; the body is threaded under the current scope. Guard
-// narrowing across the flat elif/else markup structure is deferred, so the body
-// sees the un-narrowed scope (safe — never narrows incorrectly).
-function walkCondAlt(node, source, uri, scope, map) {
+// {% while (cond): %} … {% endwhile %}. Walk the condition, then thread the body
+// under the current scope (a loop condition implies no lasting narrowing).
+function walkWhileAlt(node, source, uri, scope, map) {
     let condWrapper = ts.childByField(node, 'condition');
     if (condWrapper)
         walkNode(ts.namedChild(condWrapper, 0) ?? condWrapper, source, uri, scope, map);
     walkAltBody(node, source, uri, scope, map, altHeaderBytes(node));
+}
+
+// {% if (cond): %} … {% elif (c2): %} … {% else %} … {% endif %}. The alt form is
+// flat: the true-branch body, then `elif_clause_tag` / `else_alt_clause_tag`
+// marker nodes each followed by their own body, all as siblings. Walk each body
+// under the scope narrowed by that branch's guard: the if/elif bodies see their
+// condition as true; the else body sees the if condition as false. We omit the
+// cumulative negation of earlier conditions in elif/else branches — that only
+// ever narrows *less*, never incorrectly. Declarations thread within a branch and
+// reset at each boundary (branches are independent control flow).
+function walkIfAlt(node, source, uri, scope, map) {
+    let condWrapper = ts.childByField(node, 'condition');
+    let ifCond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
+    if (ifCond) walkNode(ifCond, source, uri, scope, map);
+    let ifGuard = ifCond ? parseGuard(ifCond, source) : null;
+    let hdr = altHeaderBytes(node);   // skips the if's own condition
+
+    let branch = makeScope(scope);
+    applyGuard(branch, ifGuard, true);
+
+    for (let i = 0; i < ts.namedChildCount(node); i++) {
+        let child = ts.namedChild(node, i);
+        if (hdr[ts.startByte(child)]) continue;
+        let ct = ts.nodeType(child);
+        if (ct === 'elif_clause_tag') {
+            let ec = ts.childByField(child, 'condition');
+            let ecInner = ec ? ts.namedChild(ec, 0) : null;
+            if (ecInner) walkNode(ecInner, source, uri, scope, map);
+            branch = makeScope(scope);
+            applyGuard(branch, ecInner ? parseGuard(ecInner, source) : null, true);
+        } else if (ct === 'else_alt_clause_tag') {
+            branch = makeScope(scope);
+            applyGuard(branch, ifGuard, false);
+        } else if (ct === 'elif_clause' || ct === 'else_alt_clause') {
+            // Inline (non-markup) form with a nested body: walk it under the
+            // parent scope so no prior branch's narrowing leaks in.
+            walkNode(child, source, uri, scope, map);
+        } else {
+            branch = stepStatement(child, source, uri, branch, map);
+        }
+    }
 }
 
 function walkTry(node, source, uri, scope, map) {
@@ -401,8 +440,10 @@ walkNode = function(node, source, uri, scope, map) {
         walkForInAlt(node, source, uri, scope, map);
     } else if (nt === 'for_alt_statement') {
         walkForAlt(node, source, uri, scope, map);
-    } else if (nt === 'while_alt_statement' || nt === 'if_alt_statement') {
-        walkCondAlt(node, source, uri, scope, map);
+    } else if (nt === 'while_alt_statement') {
+        walkWhileAlt(node, source, uri, scope, map);
+    } else if (nt === 'if_alt_statement') {
+        walkIfAlt(node, source, uri, scope, map);
     } else if (nt === 'while_statement') {
         let cond = ts.childByField(node, 'condition');
         let body = ts.childByField(node, 'body');

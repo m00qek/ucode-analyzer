@@ -311,3 +311,45 @@ describe('buildScopeMap template spanning forms', () => {
 		assert.match(null, scopeGet(scope, 'item'));
 	});
 });
+
+// ── template mode: if/elif/else branch narrowing (flat alt form) ────────────────
+
+describe('buildScopeMap template if/elif/else narrowing', () => {
+	// The ternary gives `m` the union type string|null so the guards have
+	// something to narrow; a plain literal would already be non-null.
+	const nullable = "{% let m = (1 > 0) ? 'str' : null; %}\n";
+
+	it('the true branch narrows a nullable to non-null', () => {
+		let src = nullable + "{% if (m): %}\n{{ m }}\n{% endif %}\n";
+		let scope = scopeAtTpl(src, '{{ m');
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'm'));
+	});
+
+	it('the else branch sees the if condition as false', () => {
+		let src = nullable + "{% if (m): %}\nt\n{% else %}\n{{ m }}\n{% endif %}\n";
+		let scope = scopeAtTpl(src, '{{ m');
+		assert.match({ kind: 'primitive', name: 'null' }, scopeGet(scope, 'm'));
+	});
+
+	it('an elif branch narrows on its own condition', () => {
+		let src = "{% let a = (1 > 0) ? 'x' : null; %}\n" +
+		          "{% let b = (1 > 0) ? 'y' : null; %}\n" +
+		          "{% if (a): %}\nt\n{% elif (b): %}\n{{ b }}\n{% else %}\nf\n{% endif %}\n";
+		let scope = scopeAtTpl(src, '{{ b');
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'b'));
+	});
+
+	it('narrowing does not leak past endif', () => {
+		let src = nullable + "{% if (m): %}\nt\n{% endif %}\n{% let after = m; %}\n";
+		let scope = scopeAtTpl(src, 'let after');
+		// After the if, m is back to its declared union (string|null), not the
+		// non-null narrowing the true branch saw.
+		assert.match('union', scopeGet(scope, 'm')?.kind);
+	});
+
+	it('an outer declaration is visible inside a narrowed branch', () => {
+		let src = nullable + "{% let n = 5; %}\n{% if (m): %}\n{{ n }}\n{% endif %}\n";
+		let scope = scopeAtTpl(src, '{{ n');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
+	});
+});
