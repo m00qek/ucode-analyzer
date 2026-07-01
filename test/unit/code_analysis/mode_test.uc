@@ -38,6 +38,27 @@ describe('mode — isTemplate detection', () => {
 		assert.match(true, isTemplate("{%+ if (x): -%}\n{%- endif %}\n"));
 	});
 
+	// ── mid-line tags (code position), without regressing precision ──────────
+	it('detects a mid-line expression tag not at the line start', () => {
+		assert.match(true, isTemplate("prefix text {{ value }} suffix\n"));
+	});
+
+	it('detects a mid-line statement tag', () => {
+		assert.match(true, isTemplate("some text {% x = 1 %}\n"));
+	});
+
+	it('does not flag a tag opener inside a line comment', () => {
+		assert.match(false, isTemplate("// see {{ x }} for details\nlet y = 1;\n"));
+	});
+
+	it('does not flag a tag opener inside a block comment', () => {
+		assert.match(false, isTemplate("/* template uses {% x %} */\nlet y = 1;\n"));
+	});
+
+	it('does not flag a tag opener inside a backtick string', () => {
+		assert.match(false, isTemplate("let s = `a {{ b }} c`;\n"));
+	});
+
 	// ── shebang-driven mode (matches how ucode is actually invoked) ──────────
 	it('treats a utpl shebang as template', () => {
 		assert.match(true, isTemplate("#!/usr/bin/utpl\nplain text no tags\n"));
