@@ -1,4 +1,5 @@
 import * as type_registry from 'code_analysis.types.registry';
+import { substitute } from 'code_analysis.types.unifier';
 
 export let UNKNOWN = { kind: 'unknown' };
 export let BOOL    = { kind: 'primitive', name: 'boolean' };
@@ -28,9 +29,36 @@ export function unionOf(types) {
 	return { kind: 'union', members };
 };
 
+// Expand a ref type to its underlying @typedef target, substituting the ref's
+// type arguments for the typedef's @template params. Chains of refs are followed
+// with a cycle/depth guard; non-ref types and unresolved/cyclic refs are returned
+// unchanged, so callers can treat "still a ref" as "give up / assume OK".
+export function resolveRef(type) {
+	let seen  = {};
+	let depth = 0;
+	while (type && type.kind === 'ref') {
+		if (++depth > 32 || seen[type.name]) break;
+		seen[type.name] = true;
+		let def = type_registry.lookup(type.name);
+		if (!def) break;
+		let target  = def.type;
+		let tparams = def.params ?? [];
+		if (length(type.params) && length(tparams)) {
+			let bindings = {};
+			let n = min(length(tparams), length(type.params));
+			for (let i = 0; i < n; i++)
+				bindings[tparams[i]] = type.params[i];
+			target = substitute(target, bindings);
+		}
+		type = target;
+	}
+	return type ?? UNKNOWN;
+};
+
 // Look up a member name in a resolved type. Expands ref types via the registry.
 export function memberOfType(type, propName) {
 	if (!type) return UNKNOWN;
+	type = resolveRef(type);
 	if (type.kind === 'nullable')
 		return memberOfType(type.inner, propName);
 	if (type.kind === 'union') {
@@ -45,10 +73,6 @@ export function memberOfType(type, propName) {
 		for (let i = 0; i < length(type.fields); i++)
 			if (type.fields[i].name === propName) return type.fields[i].type;
 		return UNKNOWN;
-	}
-	if (type.kind === 'ref') {
-		let def = type_registry.lookup(type.name);
-		if (def) return memberOfType(def.type, propName);
 	}
 	return UNKNOWN;
 };

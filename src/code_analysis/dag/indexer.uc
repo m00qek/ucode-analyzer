@@ -318,6 +318,6 @@ export function extractTypedefs(uri, text, tree) {
 		if (substr(txt, 0, 3) !== '/**') continue;
 		let doc = parseDoc(txt);
 		if (doc.typedef && doc.typedef.name && doc.typedef.type)
-			type_registry.register(doc.typedef.name, doc.typedef.type, uri);
+			type_registry.register(doc.typedef.name, doc.typedef.type, uri, doc.template);
 	}
 };

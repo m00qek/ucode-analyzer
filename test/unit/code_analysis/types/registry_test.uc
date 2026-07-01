@@ -52,4 +52,11 @@ describe('type_registry', () => {
 		reg.register('MyId', T_INT, 'file:///b.uc');
 		assert.match(T_INT, reg.lookup('MyId').type);
 	});
+
+	it('stores @template param names, defaulting to none', () => {
+		reg.register('Box', T_STRING, 'file:///a.uc', ['T']);
+		reg.register('Plain', T_INT, 'file:///a.uc');
+		assert.match(['T'], reg.lookup('Box').params);
+		assert.match([], reg.lookup('Plain').params);
+	});
 });

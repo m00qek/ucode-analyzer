@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { scopeGet, scopeSet } from 'code_analysis.types.scope';
-import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL } from 'code_analysis.types.type_utils';
+import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL, resolveRef } from 'code_analysis.types.type_utils';
 
 // Maps the strings returned by ucode's type() built-in to our type objects.
 // Covers the primitive/scalar types we can represent as singletons; array,
@@ -15,6 +15,7 @@ let TYPE_FUNC_MAP = {
 
 export function narrowToNonNull(type) {
 	if (!type || type.kind === 'unknown') return UNKNOWN;
+	type = resolveRef(type);
 	if (type.kind === 'nullable') return type.inner;
 	if (type.kind === 'primitive' && type.name === 'null') return UNKNOWN;
 	if (type.kind === 'union') {
@@ -34,6 +35,7 @@ export function narrowToNonNull(type) {
 // typeof guard: if (typeof x !== 'string') → in the else, x is not string.
 // For non-union types we leave the type unchanged (can't compute complement).
 function narrowExcluding(type, exclude) {
+	type = resolveRef(type);
 	if (type.kind !== 'union') return type;
 	let kept = [];
 	for (let i = 0; i < length(type.members); i++) {

@@ -1,5 +1,5 @@
 import { describe, it, assert, beforeEach } from 'utest';
-import { UNKNOWN, STR, INT, unionOf, memberOfType } from 'code_analysis.types.type_utils';
+import { UNKNOWN, STR, INT, unionOf, memberOfType, resolveRef } from 'code_analysis.types.type_utils';
 import * as registry from 'code_analysis.types.registry';
 
 beforeEach(() => {
@@ -91,5 +91,44 @@ describe('type_utils.memberOfType', () => {
 	it('returns UNKNOWN for an unregistered ref', () => {
 		let ref = { kind: 'ref', name: 'NoSuchType' };
 		assert.match({ kind: 'unknown' }, memberOfType(ref, 'x'));
+	});
+});
+
+describe('type_utils.resolveRef', () => {
+	let FN = { kind: 'function', params: [], return: UNKNOWN };
+
+	it('returns a non-ref type unchanged', () => {
+		assert.match(INT, resolveRef(INT));
+	});
+
+	it('resolves a ref to its registered target', () => {
+		registry.register('Callback', FN, 'file:///a.uc');
+		assert.match('function', resolveRef({ kind: 'ref', name: 'Callback' }).kind);
+	});
+
+	it('follows a chain of refs to the concrete type', () => {
+		registry.register('A', { kind: 'ref', name: 'B' }, 'file:///a.uc');
+		registry.register('B', INT, 'file:///a.uc');
+		assert.match(INT, resolveRef({ kind: 'ref', name: 'A' }));
+	});
+
+	it('substitutes @template params into the target', () => {
+		// @template T ; @typedef {{ v: T }} Box<T>
+		let box = { kind: 'record', fields: [{ name: 'v', type: { kind: 'param', name: 'T' } }] };
+		registry.register('Box', box, 'file:///a.uc', ['T']);
+		let resolved = resolveRef({ kind: 'ref', name: 'Box', params: [STR] });
+		assert.match('record', resolved.kind);
+		assert.match(STR, resolved.fields[0].type);
+	});
+
+	it('returns the ref unchanged when unregistered', () => {
+		let ref = { kind: 'ref', name: 'Missing' };
+		assert.match('ref', resolveRef(ref).kind);
+		assert.match('Missing', resolveRef(ref).name);
+	});
+
+	it('terminates on a self-referential cycle', () => {
+		registry.register('Loop', { kind: 'ref', name: 'Loop' }, 'file:///a.uc');
+		assert.match('ref', resolveRef({ kind: 'ref', name: 'Loop' }).kind);
 	});
 });

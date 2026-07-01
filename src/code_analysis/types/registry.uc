@@ -1,7 +1,10 @@
-let _registry = {};  // name → { type, sourceUri }
+let _registry = {};  // name → { type, sourceUri, params }
 
-export function register(name, type, sourceUri) {
-	_registry[name] = { type, sourceUri };
+// params is the ordered list of @template parameter names declared alongside the
+// typedef (e.g. ['T'] for `@template T` on a `@typedef ... Foo`); it lets ref
+// resolution substitute the ref's type arguments. Defaults to none.
+export function register(name, type, sourceUri, params) {
+	_registry[name] = { type, sourceUri, params: params ?? [] };
 };
 
 export function lookup(name) {

@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { rangeOf } from 'code_analysis.positions';
 import { scopeGet } from 'code_analysis.types.scope';
-import { UNKNOWN } from 'code_analysis.types.type_utils';
+import { UNKNOWN, resolveRef } from 'code_analysis.types.type_utils';
 import { inferNode } from 'code_analysis.types.inferrer';
 import { scopeAtOffset } from 'code_analysis.types.scope_walk';
 
@@ -20,6 +20,10 @@ function isNonIterable(type) {
 
 function isCallable(type) {
 	if (!type || type.kind === 'unknown') return true;
+	type = resolveRef(type);
+	// An unresolved (or cyclic) typedef ref is treated as "assume OK" rather
+	// than flagged, matching how unknown types are handled.
+	if (type.kind === 'unknown' || type.kind === 'ref') return true;
 	if (type.kind === 'function') return true;
 	if (type.kind === 'nullable') return isCallable(type.inner);
 	if (type.kind === 'union') {
@@ -32,6 +36,7 @@ function isCallable(type) {
 
 function isNullLike(type) {
 	if (!type) return false;
+	type = resolveRef(type);
 	if (type.kind === 'primitive' && type.name === 'null') return true;
 	if (type.kind === 'nullable') return true;
 	if (type.kind === 'union') {
@@ -60,6 +65,7 @@ function isAssignmentTarget(node) {
 // the field exists or the type is not a concrete record.
 function unknownFieldOf(type, propName) {
 	if (!type || type.kind === 'unknown') return null;
+	type = resolveRef(type);
 	if (type.kind === 'nullable') return unknownFieldOf(type.inner, propName);
 	if (type.kind !== 'record') return null;
 	let fields = type.fields ?? [];
