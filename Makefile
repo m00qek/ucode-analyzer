@@ -15,6 +15,7 @@ REPORTER        := $(if $(CI),,-r compact)
 BUILD_IMAGE = docker run --rm \
 	-v $(CURDIR)/src:/builder/package/$(PKG_NAME)/src:ro \
 	-v $(CURDIR)/mod:/builder/package/$(PKG_NAME)/mod:ro \
+	-v $(CURDIR)/test/mod:/builder/package/$(PKG_NAME)/test/mod:ro \
 	-v $(CURDIR)/third_party:/builder/package/$(PKG_NAME)/third_party:ro \
 	-v $(CURDIR)/$(BUILD_DIR)/$(PKG_NAME)-Makefile:/builder/package/$(PKG_NAME)/Makefile:ro \
 	-v $(CURDIR)/$(BUILD_DIR):/builder/bin \
@@ -38,9 +39,9 @@ TEST_IMAGE = docker run --rm $(TEST_OPTS) \
 		-t $(IMAGE) .
 	@touch .docker-image
 
-compile: $(BUILD_DIR)/tree_sitter_native.so mod/compile_flags.txt
+compile: $(BUILD_DIR)/tree_sitter_native.so mod/compile_flags.txt test/mod/compile_flags.txt
 
-$(BUILD_DIR)/tree_sitter_native.so: $(shell find mod third_party/tree-sitter-ucode/src third_party/tree-sitter-ucode/ucdocs/src third_party/tree-sitter/lib/src -name '*.c' -o -name '*.h') openwrt/$(PKG_NAME)/Makefile
+$(BUILD_DIR)/tree_sitter_native.so: $(shell find mod test/mod third_party/tree-sitter-ucode/src third_party/tree-sitter-ucode/ucdocs/src third_party/tree-sitter/lib/src -name '*.c' -o -name '*.h') openwrt/$(PKG_NAME)/Makefile
 	@mkdir -p $(BUILD_DIR)/include
 	@chmod 777 $(BUILD_DIR) $(BUILD_DIR)/include
 	@sed 's/PKG_VERSION:=.*/PKG_VERSION:=$(PKG_VERSION)/' \
@@ -49,6 +50,8 @@ $(BUILD_DIR)/tree_sitter_native.so: $(shell find mod third_party/tree-sitter-uco
 		sh -c " \
 			./scripts/feeds update base && \
 			./scripts/feeds install ucode && \
+			make defconfig && \
+			echo 'CONFIG_PACKAGE_$(PKG_NAME)-testmod=y' >> .config && \
 			make defconfig && \
 			make package/$(PKG_NAME)/compile V=s && \
 			find /builder/build_dir -path '*/tree_sitter/native.so' \
@@ -63,11 +66,21 @@ $(BUILD_DIR)/tree_sitter_native.so: $(shell find mod third_party/tree-sitter-uco
 			cp -fpR /builder/staging_dir/target-*/usr/include/* /builder/out_include/ \
 		"; EC=$$?; rm -f $(BUILD_DIR)/$(PKG_NAME)-Makefile; exit $$EC
 
-mod/compile_flags.txt: $(BUILD_DIR)/include
+# clangd compile flags for the native C sources (mod/ ships modules, test/mod/
+# holds the test-only rpc_client). Same include set; the extra tree-sitter paths
+# are harmless for rpc_client.
+define gen_compile_flags
 	@printf -- '-I%s\n-I%s\n-I%s\n-Wall\n-Wextra\n-Werror\n-std=gnu99\n' \
 		"$(CURDIR)/$(BUILD_DIR)/include" \
 		"$(CURDIR)/third_party/tree-sitter/lib/include" \
-		"$(CURDIR)/third_party/tree-sitter-ucode/src" > mod/compile_flags.txt
+		"$(CURDIR)/third_party/tree-sitter-ucode/src" > $@
+endef
+
+mod/compile_flags.txt: $(BUILD_DIR)/include
+	$(gen_compile_flags)
+
+test/mod/compile_flags.txt: $(BUILD_DIR)/include
+	$(gen_compile_flags)
 
 test: test-unit test-integration test-e2e
 

@@ -39,10 +39,12 @@ add_library(language_server_native SHARED language_server/native.c)
 set_target_properties(language_server_native PROPERTIES PREFIX "")
 target_link_libraries(language_server_native ${UCODE_LIB})
 
-# Test-only (JSON-RPC client primitives for the e2e harness). CMake-installed
-# so it survives OpenWrt's build-dir autoremove cleanup (which wipes everything
-# not under .pkgdir/), but shipped in the .apk only so the test image can run
-# e2e tests on-device.
+# Test-only (JSON-RPC client primitives for the e2e harness). Its source lives
+# under test/mod/rpc_client/ and is flattened into the build dir by Build/Prepare
+# so it resolves here at rpc_client/native.c. CMake-installed into the staging
+# tree so the separate ucode-language-server-testmod package can pick it up (and
+# so it survives OpenWrt's build-dir autoremove, which keeps only .pkgdir/). It
+# is deliberately kept out of the production ucode-language-server package.
 add_library(rpc_client_native SHARED rpc_client/native.c)
 set_target_properties(rpc_client_native PROPERTIES PREFIX "")
 target_link_libraries(rpc_client_native ${UCODE_LIB})
