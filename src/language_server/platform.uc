@@ -130,6 +130,16 @@ export function initAsync(declVersions, onComplete) {
 	);
 };
 
+// Kill the background package-query task if one is still running (server
+// teardown). Without this the forked child is orphaned/reparented to init and
+// keeps running its apk/opkg probes after the server exits.
+export function cancel() {
+	if (_pkgTask) {
+		_pkgTask.kill();
+		_pkgTask = null;
+	}
+};
+
 // Returns false only when we have version info AND the module is not installed.
 export function moduleAvailable(modUri) {
 	if (!exists(_index, modUri)) return true;

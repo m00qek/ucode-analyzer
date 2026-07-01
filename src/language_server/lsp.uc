@@ -7,7 +7,7 @@ import { completion as completionDoc } from 'language_server.handlers.completion
 import * as dag from 'code_analysis.dag.dag';
 import * as workspace from 'code_analysis.workspace';
 import { invalidateUri } from 'code_analysis.memo';
-import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics } from 'language_server.handlers.diagnostic_reports';
+import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics, cancel as cancelWorkspaceDiagnostics } from 'language_server.handlers.diagnostic_reports';
 import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.signature_help';
 import { references as referencesDoc } from 'language_server.handlers.references';
 import { documentSymbols as documentSymbolsDoc } from 'language_server.handlers.document_symbols';
@@ -25,6 +25,13 @@ import * as platform from 'language_server.platform';
 export function run(config) {
 	let shutdown_requested = false;
 	let initialized = false;
+
+	// Kill any in-flight background tasks before the process exits so their forked
+	// children are not orphaned (reparented to init) and left burning CPU/memory.
+	function teardown() {
+		platform.cancel();
+		cancelWorkspaceDiagnostics();
+	}
 
 	let _refreshSeq = 0;
 
@@ -324,6 +331,7 @@ export function run(config) {
 		},
 		function() {
 			// EOF on stdin — exit cleanly if shutdown was requested.
+			teardown();
 			exit(shutdown_requested ? 0 : 1);
 		}
 	);
@@ -331,5 +339,6 @@ export function run(config) {
 	uloop.signal('SIGTERM', function() { uloop.end(); });
 
 	uloop.run();
+	teardown();
 	exit(shutdown_requested ? 0 : 1);
 };

@@ -99,3 +99,17 @@ export function workspaceDiagnostics(requestId, params, config) {
 		}
 	);
 };
+
+// Kill an in-flight background scan on server teardown so the forked child is not
+// orphaned. The scan generation is bumped so any late callback from the killed
+// task is ignored. We are exiting, so the pending request is left unanswered
+// (the client is going away too).
+export function cancel() {
+	if (_activeTask) {
+		_activeTask.kill();
+		_activeTask = null;
+	}
+	_scanGen += 1;
+	_pendingReqId = null;
+	_report = [];
+};
