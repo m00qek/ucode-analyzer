@@ -66,22 +66,35 @@ function nestedWorkspaceRoots(config) {
 	return roots;
 };
 
+// True when `path` is `dir` itself or lies beneath it, respecting the path
+// separator so `/app-lib` is not considered under `/app`. A plain substr-prefix
+// check (no boundary) would misclassify a sibling directory sharing a name
+// prefix. A trailing slash on `dir` is tolerated (nested-root entries carry one).
+function isUnder(path, dir) {
+	if (dir === '') return false;
+	if (length(dir) > 1 && substr(dir, length(dir) - 1) === '/')
+		dir = substr(dir, 0, length(dir) - 1);
+	if (dir === '/') return substr(path, 0, 1) === '/';
+	if (path === dir) return true;
+	return substr(path, 0, length(dir) + 1) === (dir + '/');
+};
+
 // A URI is part of the user's workspace when its path is under workspaceDir and
 // is not one of the server's own bundled sources, a system library, a
 // declaration stub, or a nested workspace (those are dependencies or separate
 // projects, not files we diagnose here).
-function isWorkspaceUri(uri, config, nestedRoots) {
+export function isWorkspaceUri(uri, config, nestedRoots) {
 	let path = substr(uri, 7);  // strip "file://"
 	let workdir = config.workspaceDir ?? '/';
-	if (substr(path, 0, length(workdir)) !== workdir) return false;
+	if (!isUnder(path, workdir)) return false;
 
 	let self = config.selfSrcDir;
-	if (self && substr(path, 0, length(self)) === self) return false;
+	if (self && isUnder(path, self)) return false;
 	for (let sp in (config.systemLibPaths ?? []))
-		if (substr(path, 0, length(sp)) === sp) return false;
+		if (isUnder(path, sp)) return false;
 
 	for (let root in (nestedRoots ?? []))
-		if (substr(path, 0, length(root)) === root) return false;
+		if (isUnder(path, root)) return false;
 
 	if (length(path) >= 5 && substr(path, length(path) - 5) === '.d.uc') return false;
 
