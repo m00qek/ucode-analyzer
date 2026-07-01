@@ -17,6 +17,10 @@
 
 ### To do
 
+**Discriminated-union narrowing** — see `discriminated-unions.plan.md`
+- `unionOf` collapses record variants, so a function returning tagged records infers to one variant and `if (r.kind === 'fail') r.value` is misdiagnosed.
+- Phased: fix `unionOf` (clears the false positives on its own), then literal types + discriminant guards for real narrowing. Full design in the dedicated plan.
+
 **Assignment widening**
 - `let x = 1; if (cond) x = "hello";` — after the if block, `x` should be `int | string`.
 - Requires tracking assignments across branches and widening to a union at join points. Architectural change to scope_builder / inferrer.
