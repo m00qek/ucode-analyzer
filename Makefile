@@ -30,7 +30,7 @@ TEST_IMAGE = docker run --rm $(TEST_OPTS) \
 	-w /app \
 	$(IMAGE)
 
-.PHONY: compile test test-unit test-e2e test-integration shell package
+.PHONY: compile test test-unit test-e2e test-integration lint shell package
 
 .docker-image: Dockerfile
 	@docker build \
@@ -102,6 +102,12 @@ test-e2e: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 test-integration: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/integration/language_server/utest.config.uc $(REPORTER) test/integration/language_server/
 	@$(TEST_IMAGE) utest -c test/integration/tree_sitter/utest.config.uc $(REPORTER) test/integration/tree_sitter/
+
+# Self-lint the repo with its own ucode-linter, using the committed shared
+# config at .lsp/config.json. Fails on any error or warning, enforcing the
+# zero-diagnostics invariant. Only needs the tree-sitter native module.
+lint: .docker-image $(BUILD_DIR)/tree_sitter_native.so
+	@$(TEST_IMAGE) ucode -L /app/src /app/src/ucode-linter.uc --workspace /app --fail-on=warning
 
 shell: TEST_OPTS := -it
 shell: .docker-image
