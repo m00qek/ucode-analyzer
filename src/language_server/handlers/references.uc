@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import * as dag from 'code_analysis.dag.dag';
 import { positionToOffset, offsetToPosition } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'language_server.cross_file_refs';
@@ -19,9 +20,23 @@ export function references(uri, doc, position, includeDeclaration) {
 
 	let identity = resolveExportIdentity(uri, doc, offset);
 	if (identity) {
+		// crossFileRefsOf includes the export's own declaration (in the declaring
+		// module) when the cursor is in an importing file. Honor
+		// includeDeclaration:false by dropping that one range.
+		let declPos = null;
+		if (includeDeclaration === false) {
+			let loc = dag.resolveExportLocation(identity.declaringUri, identity.exportName);
+			let exp = dag.resolveExport(loc.uri, loc.name);
+			if (exp && exp.position) declPos = { uri: loc.uri, position: exp.position };
+		}
 		for (let cr in crossFileRefsOf(identity.declaringUri, identity.exportName, uri)) {
-			for (let range in cr.refRanges)
+			for (let range in cr.refRanges) {
+				if (declPos && cr.uri === declPos.uri &&
+				    range.start.line === declPos.position.line &&
+				    range.start.character === declPos.position.character)
+					continue;
 				push(result, { uri: cr.uri, range });
+			}
 		}
 	}
 

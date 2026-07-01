@@ -95,4 +95,39 @@ describe('textDocument/references', () => {
 		let inLocal = filter(locs, (l) => l.uri === uri);
 		assert.match(true, length(inLocal) >= 1);
 	});
+
+	it('cross-file: includeDeclaration:false excludes the export declaration', () => {
+		let fixUri = 'file:///app/test/fixtures/greet.uc';
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: fixUri, languageId: 'ucode', version: 1,
+				text: "function greet() {}\nexport { greet };\n" },
+		}});
+		let uri = 'file:///app/ref_caller.uc';
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri, languageId: 'ucode', version: 1,
+				text: "import { greet } from 'fixtures.greet';\ngreet();\n" },
+		}});
+
+		// The declaration is `function greet` on line 0 of the fixture.
+		let onDecl = (locs) => filter(locs,
+			(l) => l.uri === fixUri && l.range.start.line === 0);
+
+		// includeDeclaration:true → the declaration is present.
+		lsp.send(proc, { jsonrpc: '2.0', id: 4, method: 'textDocument/references', params: {
+			textDocument: { uri }, position: { line: 1, character: 0 },
+			context: { includeDeclaration: true },
+		}});
+		let withDecl = lsp.receive(proc);
+		assert.match(4, withDecl.id);
+		assert.match(true, length(onDecl(withDecl.result)) >= 1);
+
+		// includeDeclaration:false → the declaration is dropped.
+		lsp.send(proc, { jsonrpc: '2.0', id: 5, method: 'textDocument/references', params: {
+			textDocument: { uri }, position: { line: 1, character: 0 },
+			context: { includeDeclaration: false },
+		}});
+		let noDecl = lsp.receive(proc);
+		assert.match(5, noDecl.id);
+		assert.match(0, length(onDecl(noDecl.result)));
+	});
 });

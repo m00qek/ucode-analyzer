@@ -64,6 +64,28 @@ describe('textDocument/prepareCallHierarchy', () => {
 		assert.match('foo', resp.result[0].name);
 	});
 
+	it('cross-file: cursor on a use of an imported function resolves to its declaration', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///app/test/fixtures/greet.uc', languageId: 'ucode', version: 1,
+				text: "function greet() {}\nexport { greet };\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///app/pc_caller.uc', languageId: 'ucode', version: 1,
+				text: "import { greet } from 'fixtures.greet';\ngreet();\n" },
+		}});
+
+		// Cursor on the `greet` call in the importer — it has no local declaration.
+		lsp.send(proc, { jsonrpc: '2.0', id: 5, method: 'textDocument/prepareCallHierarchy', params: {
+			textDocument: { uri: 'file:///app/pc_caller.uc' },
+			position: { line: 1, character: 1 },
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(5, resp.id);
+		assert.match(true, type(resp.result) === 'array');
+		assert.match('greet', resp.result[0].name);
+		assert.match('file:///app/test/fixtures/greet.uc', resp.result[0].uri);  // the declaring file
+	});
+
 });
 
 describe('callHierarchy/incomingCalls', () => {

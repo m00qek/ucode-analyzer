@@ -262,6 +262,29 @@ export function prepareCallHierarchy(uri, doc, position) {
 			}
 		}
 	}
+
+	// Cross-file: the cursor is on an imported name (its use or its import binding),
+	// which has no local declaration. Resolve the export to its declaring module
+	// and build the item there so the hierarchy anchors on the real function.
+	let identity = resolveExportIdentity(uri, doc, offset);
+	if (identity) {
+		let loc = dag.resolveExportLocation(identity.declaringUri, identity.exportName);
+		let exp = dag.resolveExport(loc.uri, loc.name);
+		if (exp && exp.position) {
+			let declDoc = loadDoc(loc.uri);
+			if (declDoc) {
+				let declRoot = ts.rootNode(declDoc.tree);
+				let byteOff  = positionToOffset(declDoc.text, declDoc.lineTable, exp.position);
+				let found    = findFnAt(declRoot, declDoc.text, byteOff);
+				if (found) {
+					let fnt = ts.nodeType(found.fnNode);
+					if (fnt === 'function_declaration' || fnt === 'function_expression' || fnt === 'arrow_function')
+						return [makeItem(loc.name, found.fnNode, found.nameNode,
+						                 loc.uri, declDoc.text, declDoc.lineTable)];
+				}
+			}
+		}
+	}
 	return null;
 };
 
