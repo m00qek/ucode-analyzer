@@ -253,8 +253,21 @@ describe('diagnostics — type errors: discriminated unions', () => {
 			VARIANT_FN + "let r = f(1);\nif (r.kind === 'fail') { r.nope; }\n")));
 	});
 
-	it('stays silent on the un-narrowed union', () => {
+	it('allows a field present on some variant of the un-narrowed union', () => {
 		assert.match(0, length(unknownProps(
 			VARIANT_FN + "let r = f(1);\nr.value;\n")));
+	});
+
+	it('flags a field absent from every variant of the un-narrowed union', () => {
+		assert.match(1, length(unknownProps(
+			VARIANT_FN + "let r = f(1);\nr.nope;\n")));
+	});
+
+	it('stays silent when any variant of the union is open', () => {
+		let g = "function g(c, x) {\n" +
+		        "  if (c) return { kind: 'a', a: 1 };\n" +
+		        "  return { ...x };\n" +
+		        "}\n";
+		assert.match(0, length(unknownProps(g + "let u = g(1, {});\nu.zzz;\n")));
 	});
 });

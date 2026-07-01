@@ -77,6 +77,15 @@ function unknownFieldOf(type, propName) {
 	if (!type || type.kind === 'unknown') return null;
 	type = resolveRef(type);
 	if (type.kind === 'nullable') return unknownFieldOf(type.inner, propName);
+	// For a union (e.g. an un-narrowed tagged union), report a field only when it
+	// is definitely missing from every member: if any member could carry it —
+	// present, open, empty, or non-record — the access stays silent. This mirrors
+	// how a single record is checked, so unions aren't silently exempt.
+	if (type.kind === 'union') {
+		for (let i = 0; i < length(type.members); i++)
+			if (unknownFieldOf(type.members[i], propName) === null) return null;
+		return propName;
+	}
 	if (type.kind !== 'record') return null;
 	// Open records (built from a spread of a non-record) have unknowable extra
 	// keys; an empty record carries no field info at all. In both cases we can't
