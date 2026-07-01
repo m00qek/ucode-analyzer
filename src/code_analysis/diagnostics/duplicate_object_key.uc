@@ -20,14 +20,22 @@ function walk(node, source, lineTable, diags) {
 		let seen = {};
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let child = ts.namedChild(node, i);
-			if (ts.nodeType(child) !== 'pair') continue;
-			let keyNode = ts.childByField(child, 'key');
-			if (!keyNode) continue;
-			let key = keyText(keyNode, source);
+			let ct    = ts.nodeType(child);
+			// A field key is either an explicit `key: value` pair or a `{ foo }`
+			// shorthand whose identifier is the key. Both collide with each other
+			// (`{ foo, foo: 3 }` is a real duplicate).
+			let key      = null;
+			let rangeNode = child;
+			if (ct === 'pair') {
+				rangeNode = ts.childByField(child, 'key');
+				if (rangeNode) key = keyText(rangeNode, source);
+			} else if (ct === 'shorthand_property_identifier') {
+				key = ts.text(child, source);
+			}
 			if (key === null) continue;
 			if (exists(seen, key)) {
 				push(diags, {
-					range:    rangeOf(source, lineTable, keyNode),
+					range:    rangeOf(source, lineTable, rangeNode),
 					severity: SEVERITY_WARNING,
 					source:   'ucode-ls',
 					code:     'duplicate-key',

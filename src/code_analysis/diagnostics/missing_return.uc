@@ -37,13 +37,60 @@ function isNoReturnCall(node, source) {
 	return name === 'die' || name === 'exit';
 }
 
+// Forward declaration: switchAlwaysReturns and alwaysReturns are mutually
+// recursive and ucode does not hoist function declarations, so the name must
+// exist before switchAlwaysReturns closes over it.
+let alwaysReturns;
+
+// A `switch` guarantees a return only if it has a `default` (otherwise an
+// unmatched value falls out) and every clause, once entered, returns. ucode
+// switches fall through C-style, so a clause with no terminating return inherits
+// the next clause's fate; a `break` exits the switch (does not return). Scanning
+// clauses back-to-front resolves the fall-through: nextReturns seeds false (past
+// the last clause control leaves the switch).
+//   switch_body
+//     switch_case      namedChild(0)=value, rest=body statements
+//     switch_default   all namedChildren are body statements
+function switchAlwaysReturns(node, source) {
+	let body = null;
+	for (let i = 0; i < ts.namedChildCount(node); i++)
+		if (ts.nodeType(ts.namedChild(node, i)) === 'switch_body') { body = ts.namedChild(node, i); break; }
+	if (!body) return false;
+
+	let clauses = [];
+	let hasDefault = false;
+	for (let i = 0; i < ts.namedChildCount(body); i++) {
+		let c  = ts.namedChild(body, i);
+		let ct = ts.nodeType(c);
+		if (ct !== 'switch_case' && ct !== 'switch_default') continue;
+		if (ct === 'switch_default') hasDefault = true;
+		let first = (ct === 'switch_case') ? 1 : 0;   // skip the case value expression
+		let last  = ts.namedChildCount(c) - 1;
+		push(clauses, last >= first ? ts.namedChild(c, last) : null);
+	}
+	if (!hasDefault) return false;
+
+	let nextReturns = false;
+	for (let i = length(clauses) - 1; i >= 0; i--) {
+		let lastStmt = clauses[i];
+		let returns;
+		if (!lastStmt)                                    returns = nextReturns;   // empty clause falls through
+		else if (alwaysReturns(lastStmt, source))         returns = true;
+		else if (ts.nodeType(lastStmt) === 'break_statement') returns = false;     // break exits the switch
+		else                                              returns = nextReturns;   // falls through to next clause
+		if (!returns) return false;
+		nextReturns = returns;
+	}
+	return true;
+}
+
 // AST shape (tree-sitter-ucode):
 //   if_statement
 //     namedChild(0): parenthesized_expression  ← condition
 //     namedChild(1): statement_block            ← consequent
 //     namedChild(2): else_clause                ← optional
 //       namedChild(0): statement_block | if_statement
-function alwaysReturns(node, source) {
+alwaysReturns = function(node, source) {
 	if (!node) return false;
 	let nt = ts.nodeType(node);
 	if (nt === 'return_statement') return true;
@@ -60,8 +107,19 @@ function alwaysReturns(node, source) {
 		let alt  = ts.namedChild(node, 2);
 		return alwaysReturns(cons, source) && alwaysReturns(alt, source);
 	}
+	// try/catch returns only if the normal path AND the catch path both return.
+	// (ucode has no `finally`; a try must have a catch.)
+	if (nt === 'try_statement') {
+		let body    = ts.childByField(node, 'body');
+		let handler = ts.childByField(node, 'handler');
+		if (!body || !handler) return false;
+		let catchBody = ts.childByField(handler, 'body');
+		return alwaysReturns(body, source) && alwaysReturns(catchBody, source);
+	}
+	if (nt === 'switch_statement')
+		return switchAlwaysReturns(node, source);
 	return false;
-}
+};
 
 function checkFunction(node, source, lineTable, diags) {
 	let docTxt = precedingDoc(node, source);

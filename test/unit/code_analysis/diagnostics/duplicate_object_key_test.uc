@@ -58,4 +58,28 @@ describe('diagnostics — duplicate object keys', () => {
 		assert.match(1, length(diags));
 		assert.match(true, index(diags[0].message, "'x'") >= 0);
 	});
+
+	it('detects a shorthand key duplicated', () => {
+		let text = "let foo = 1;\nlet o = { foo, foo };\n";
+		let diags = duplicateObjectKey(open(text));
+		assert.match(1, length(diags));
+		assert.match(true, index(diags[0].message, "'foo'") >= 0);
+	});
+
+	it('detects a shorthand colliding with an explicit pair', () => {
+		let text = "let foo = 1;\nlet o = { foo, foo: 3 };\n";
+		let diags = duplicateObjectKey(open(text));
+		assert.match(1, length(diags));
+		assert.match(true, index(diags[0].message, "'foo'") >= 0);
+	});
+
+	it('detects a shorthand colliding with a string key of the same name', () => {
+		let text = "let a = 1;\nlet o = { a, 'a': 2 };\n";
+		assert.match(1, length(duplicateObjectKey(open(text))));
+	});
+
+	it('no warning for distinct shorthand keys', () => {
+		let text = "let foo = 1, bar = 2;\nlet o = { foo, bar };\n";
+		assert.match(0, length(duplicateObjectKey(open(text))));
+	});
 });

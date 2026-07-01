@@ -74,4 +74,45 @@ describe('diagnostics — missing return', () => {
 		let text = "/**\n * @returns {int}\n */\nfunction f(x) {\n  if (x) { return 1; } else { exit(1); }\n}\n";
 		assert.match(0, length(missingReturn(open(text))));
 	});
+
+	// try/catch — ucode has no `finally` and a try must have a catch. The function
+	// returns only if both the normal path and the catch path return.
+	let DOC = "/** @returns {int} */\n";
+
+	it('no warning when try and catch both return', () => {
+		let text = DOC + "function f(s) { try { return +s; } catch (e) { return 0; } }\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('warns when the catch clause does not return', () => {
+		let text = DOC + "function f(s) { try { return +s; } catch (e) { print(e); } }\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
+
+	it('warns when the try body does not return', () => {
+		let text = DOC + "function f(s) { try { print(s); } catch (e) { return 0; } }\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
+
+	// switch — ucode falls through C-style; a switch returns only with a default
+	// and every clause (resolving fall-through) returning.
+	it('no warning when a switch with default returns from every clause', () => {
+		let text = DOC + "function f(x) { switch (x) { case 1: return 1; default: return 0; } }\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('no warning for a fall-through case into a returning case', () => {
+		let text = DOC + "function f(x) { switch (x) { case 1: case 2: return 9; default: return 0; } }\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('warns for a switch with no default', () => {
+		let text = DOC + "function f(x) { switch (x) { case 1: return 1; } }\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
+
+	it('warns when a switch clause breaks without returning', () => {
+		let text = DOC + "function f(x) { switch (x) { case 1: break; default: return 0; } }\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
 });
