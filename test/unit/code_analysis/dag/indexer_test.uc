@@ -181,6 +181,43 @@ describe('indexer.extractExports', () => {
 		// local 'greet' starts at col 9 on line 0 (after 'function ')
 		assert.match({ line: 0, character: 9 }, exps[0].position);
 	});
+
+	// ── legacy module pattern: top-level `return { ... }` (ucode require shape) ──
+	it('surfaces top-level return-object fields as exports', () => {
+		let text = "return {\n\tread_state: function() { return 1; },\n\tversion: 2\n};\n";
+		let exps = extractExports(text, parse(text));
+		let names = map(exps, (e) => e.name);
+		assert.match(true, index(names, 'read_state') >= 0);
+		assert.match(true, index(names, 'version') >= 0);
+	});
+
+	it('types a return-object function field as a function export', () => {
+		let text = "return {\n\tread_state: function() { return 1; }\n};\n";
+		let exps = extractExports(text, parse(text));
+		assert.match('read_state', exps[0].name);
+		assert.match('function', exps[0].kind);
+	});
+
+	it('records the field key position for a return-object export', () => {
+		// `read_state` key starts at col 1 on line 1 (after the leading tab)
+		let text = "return {\n\tread_state: function() {}\n};\n";
+		let exps = extractExports(text, parse(text));
+		assert.match({ line: 1, character: 1 }, exps[0].position);
+	});
+
+	it('lets an ES export take precedence over a same-named return field', () => {
+		let text = "export function foo() {}\nreturn { foo: 1 };\n";
+		let exps = extractExports(text, parse(text));
+		// the ES export is pushed first, so it is the first match by name
+		assert.match('foo', exps[0].name);
+		assert.match('function', exps[0].kind);
+	});
+
+	it('ignores a non-object top-level return', () => {
+		let text = "let x = 1;\nreturn x;\n";
+		let exps = extractExports(text, parse(text));
+		assert.match(0, length(exps));
+	});
 });
 
 describe('indexer.extractImports', () => {

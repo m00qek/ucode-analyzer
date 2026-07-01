@@ -184,6 +184,22 @@ export function extractExports(text, tree) {
 		}
 	}
 
+	// Legacy module pattern: a top-level `return { ... }` is the module's export
+	// object — ucode's classic require() shape, used throughout OpenWrt (fw4,
+	// luci) instead of ES `export`. Surface each field as an export so a
+	// require()'d member (`fw4.read_state`) resolves for hover, definition and
+	// type inference exactly like a namespace member. ES `export`s take
+	// precedence: they are pushed above and resolveExport returns the first match
+	// by name. Only the first top-level return is the module value.
+	for (let stmt in topLevelStatements(root)) {
+		if (ts.nodeType(stmt) !== 'return_statement') continue;
+		let val = ts.namedChild(stmt, 0);
+		if (val && ts.nodeType(val) === 'object')
+			for (let prop in extractObjectProperties(val, root, text, pos))
+				push(result, prop);
+		break;
+	}
+
 	return result;
 };
 

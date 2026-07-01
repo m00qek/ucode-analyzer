@@ -1089,6 +1089,12 @@ describe('inferrer — require() module loader', () => {
 		assert.match('function', t.kind);
 	});
 
+	it('member of a require-bound legacy (return-object) module resolves', () => {
+		// fixtures/legacy_mod.uc exports via a top-level `return { greet, ... }`.
+		let t = infer('let g = require("fixtures.legacy_mod").greet;');
+		assert.match('function', t.kind);
+	});
+
 	it('a locally shadowed require is not treated as the module loader', () => {
 		let text = 'let m = require("fixtures.greet");';
 		// A real shadow lives in a non-root scope; the builtin sits in the root.

@@ -301,6 +301,21 @@ describe('definition — require() module loader', () => {
 		let result = definition(URI, doc, { line: 0, character: 12 });
 		assert.match(null, result);
 	});
+
+	// fixtures/legacy_mod.uc exports via a top-level `return { greet, version }`.
+	it('jumps into a legacy (return-object) module on member access', () => {
+		let LEGACY_URI = 'file:///app/test/fixtures/legacy_mod.uc';
+		dag.addFromDisk(LEGACY_URI);
+		let text = "let m = require(\"fixtures.legacy_mod\");\nm.greet;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (1, 2) is 'greet' in m.greet
+		let result = definition(URI, doc, { line: 1, character: 2 });
+		assert.match(LEGACY_URI, result.uri);
+		dag.remove(LEGACY_URI);
+	});
 });
 
 describe('definition — function parameters', () => {
