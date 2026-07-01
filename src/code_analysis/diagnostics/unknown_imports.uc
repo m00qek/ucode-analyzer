@@ -1,5 +1,6 @@
 import * as ts from 'tree_sitter';
 import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { stringLiteralText } from 'code_analysis.ast_text';
 import * as dag from 'code_analysis.dag.dag';
 
 let SEVERITY_ERROR = 1;
@@ -23,11 +24,7 @@ export function unknownImports(uri, doc) {
 		for (let j = 0; j < ts.childCount(stmt); j++) {
 			let c = ts.child(stmt, j);
 			if (ts.nodeType(c) !== 'string') continue;
-			let specifier = '';
-			for (let k = 0; k < ts.childCount(c); k++) {
-				let f = ts.child(c, k);
-				if (ts.nodeType(f) === 'string_fragment') specifier = ts.text(f, doc.text);
-			}
+			let specifier = stringLiteralText(c, doc.text);
 			if (unresolved[specifier] && !exists(reported, specifier)) {
 				reported[specifier] = true;
 				push(diags, {

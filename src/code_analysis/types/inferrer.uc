@@ -7,6 +7,7 @@ import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal } from 'code_analysis.types.type_utils';
 import { buildLineTable, offsetToPosition, docBefore } from 'code_analysis.positions';
+import { stringLiteralText } from 'code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'code_analysis.types.dag_bridge';
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
@@ -162,12 +163,6 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 	return { kind: 'function', params, return: ret };
 }
 
-// require("spec") is ucode's runtime module loader — the dynamic counterpart of
-// a static import. Model its result as the module named by the (literal)
-// specifier so hover, completion and member typing on the returned value behave
-// exactly like a namespace import (`fw4.zones()` resolves via dag.resolveMember).
-// Returns null for a shadowed `require`, a non-`require` callee, or a specifier
-// that is not a plain string literal (nothing to resolve statically).
 // True if `name` is bound in a non-root scope — a genuine local shadow, as
 // opposed to a builtin sitting in the root scope (parent === null). The builtin
 // scope is the only scope with a null parent, so we stop before it.
@@ -180,6 +175,12 @@ function locallyShadowed(scope, name) {
 	return false;
 }
 
+// require("spec") is ucode's runtime module loader — the dynamic counterpart of
+// a static import. Model its result as the module named by the (literal)
+// specifier so hover, completion and member typing on the returned value behave
+// exactly like a namespace import (`fw4.zones()` resolves via dag.resolveMember).
+// Returns null for a shadowed `require`, a non-`require` callee, or a specifier
+// that is not a plain string literal (nothing to resolve statically).
 function requireModuleType(node, source, scope) {
 	let fnNode = ts.childByField(node, 'function');
 	if (!fnNode || ts.nodeType(fnNode) !== 'identifier') return null;
@@ -190,10 +191,8 @@ function requireModuleType(node, source, scope) {
 	let args = argsNode ? ts.namedChildren(argsNode) : [];
 	if (length(args) < 1 || ts.nodeType(args[0]) !== 'string') return null;
 
-	for (let k = 0; k < ts.childCount(args[0]); k++)
-		if (ts.nodeType(ts.child(args[0], k)) === 'string_fragment')
-			return { kind: 'module', path: ts.text(ts.child(args[0], k), source) };
-	return null;   // empty string literal — nothing to resolve
+	let path = stringLiteralText(args[0], source);
+	return length(path) ? { kind: 'module', path } : null;   // "" → nothing to resolve
 }
 
 function inferCall(node, source, uri, scope, depth) {
@@ -260,13 +259,7 @@ function inferSubscript(node, source, uri, scope, depth) {
 		elem = baseType.params[0] ?? UNKNOWN;
 	} else if (baseType && baseType.kind === 'record' && idxNode &&
 	           ts.nodeType(idxNode) === 'string') {
-		for (let i = 0; i < ts.childCount(idxNode); i++) {
-			let c = ts.child(idxNode, i);
-			if (ts.nodeType(c) === 'string_fragment') {
-				elem = memberOfType(baseType, ts.text(c, source));
-				break;
-			}
-		}
+		elem = memberOfType(baseType, stringLiteralText(idxNode, source));
 	}
 
 	return ts.childByField(node, 'optional_chain')
@@ -387,12 +380,8 @@ function inferArray(node, source, uri, scope, depth) {
 function literalValueOf(valNode, source) {
 	if (!valNode) return null;
 	let nt = ts.nodeType(valNode);
-	if (nt === 'string') {
-		for (let k = 0; k < ts.childCount(valNode); k++)
-			if (ts.nodeType(ts.child(valNode, k)) === 'string_fragment')
-				return ts.text(ts.child(valNode, k), source);
-		return '';   // "" — an empty string literal has no string_fragment child
-	}
+	if (nt === 'string')
+		return stringLiteralText(valNode, source);
 	if (nt === 'number') {
 		let v = +ts.text(valNode, source);
 		if (type(v) === 'int' || type(v) === 'double') return v;
@@ -439,10 +428,8 @@ function inferObject(node, source, uri, scope, depth) {
 		if (kt === 'property_identifier' || kt === 'identifier') {
 			keyName = ts.text(keyNode, source);
 		} else if (kt === 'string') {
-			for (let k = 0; k < ts.childCount(keyNode); k++) {
-				let f = ts.child(keyNode, k);
-				if (ts.nodeType(f) === 'string_fragment') { keyName = ts.text(f, source); break; }
-			}
+			let s = stringLiteralText(keyNode, source);
+			keyName = length(s) ? s : null;
 		}
 		if (!keyName) continue;
 		let position = offsetToPosition(source, lineTable, ts.startByte(keyNode));

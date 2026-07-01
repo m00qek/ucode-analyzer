@@ -1,5 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset } from 'code_analysis.positions';
+import { stringLiteralText } from 'code_analysis.ast_text';
 import { inferNode } from 'code_analysis.types.inferrer';
 import { scopeAtOffset } from 'code_analysis.types.scope_walk';
 import { typeToString } from 'code_analysis.types.doc_parser';
@@ -33,12 +34,7 @@ function importContext(root, source, offset) {
 			if (ts.nodeType(child) === 'import_statement') {
 				for (let j = 0; j < ts.childCount(child); j++) {
 					let c = ts.child(child, j);
-					if (ts.nodeType(c) !== 'string') continue;
-					for (let k = 0; k < ts.childCount(c); k++) {
-						let f = ts.child(c, k);
-						if (ts.nodeType(f) === 'string_fragment')
-							return ts.text(f, source);
-					}
+					if (ts.nodeType(c) === 'string') return stringLiteralText(c, source);
 				}
 				return '';
 			}

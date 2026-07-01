@@ -1,6 +1,7 @@
 import * as ts from 'tree_sitter';
 import { scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL, resolveRef } from 'code_analysis.types.type_utils';
+import { stringLiteralText } from 'code_analysis.ast_text';
 
 // Maps the strings returned by ucode's type() built-in to our type objects.
 // Covers the primitive/scalar types we can represent as singletons; array,
@@ -53,12 +54,8 @@ function narrowExcluding(type, exclude) {
 function literalNodeValue(node, source) {
 	if (!node) return null;
 	let nt = ts.nodeType(node);
-	if (nt === 'string') {
-		for (let k = 0; k < ts.childCount(node); k++)
-			if (ts.nodeType(ts.child(node, k)) === 'string_fragment')
-				return ts.text(ts.child(node, k), source);
-		return '';
-	}
+	if (nt === 'string')
+		return stringLiteralText(node, source);
 	if (nt === 'number') {
 		let v = +ts.text(node, source);
 		if (type(v) === 'int' || type(v) === 'double') return v;

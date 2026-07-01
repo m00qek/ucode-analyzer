@@ -1,5 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'code_analysis.positions';
+import { stringLiteralText } from 'code_analysis.ast_text';
 import * as dag from 'code_analysis.dag.dag';
 import * as fs from 'fs';
 import { inferNode } from 'code_analysis.types.inferrer';
@@ -317,10 +318,8 @@ function requireStringTarget(uri, doc, strNode, offset) {
 	if (!fnNode || ts.nodeType(fnNode) !== 'identifier' ||
 	    ts.text(fnNode, doc.text) !== 'require') return null;
 	if (localScopeDef(ts.rootNode(doc.tree), uri, doc, 'require', offset)) return null;
-	for (let k = 0; k < ts.childCount(strNode); k++)
-		if (ts.nodeType(ts.child(strNode, k)) === 'string_fragment')
-			return moduleFileLocation(ts.text(ts.child(strNode, k), doc.text));
-	return null;
+	let spec = stringLiteralText(strNode, doc.text);
+	return length(spec) ? moduleFileLocation(spec) : null;
 }
 
 export function definition(uri, doc, position) {

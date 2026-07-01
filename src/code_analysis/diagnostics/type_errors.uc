@@ -4,6 +4,7 @@ import { scopeGet } from 'code_analysis.types.scope';
 import { UNKNOWN, resolveRef } from 'code_analysis.types.type_utils';
 import { inferNode } from 'code_analysis.types.inferrer';
 import { scopeAtOffset } from 'code_analysis.types.scope_walk';
+import { stringLiteralText } from 'code_analysis.ast_text';
 
 let SEVERITY_ERROR   = 1;
 let SEVERITY_WARNING = 2;
@@ -64,16 +65,6 @@ function isDefinitelyNull(type) {
 	return false;
 }
 
-// The concatenated text of a string literal's fragments (excludes the quotes).
-function stringText(node, source) {
-	let out = '';
-	for (let k = 0; k < ts.childCount(node); k++) {
-		let ch = ts.child(node, k);
-		if (ts.nodeType(ch) === 'string_fragment') out += ts.text(ch, source);
-	}
-	return out;
-}
-
 // A leading `'use strict';` directive puts the whole file in strict mode, where
 // a *possibly*-null dereference is escalated from a warning to an error. Scan
 // the directive prologue: the run of leading bare-string expression statements.
@@ -83,7 +74,7 @@ function isStrict(root, source) {
 		if (ts.nodeType(stmt) !== 'expression_statement') return false;
 		let inner = ts.namedChild(stmt, 0);
 		if (!inner || ts.nodeType(inner) !== 'string') return false;
-		if (stringText(inner, source) === 'use strict') return true;
+		if (stringLiteralText(inner, source) === 'use strict') return true;
 		// another leading string directive — keep scanning the prologue
 	}
 	return false;

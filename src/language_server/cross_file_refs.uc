@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as dag from 'code_analysis.dag.dag';
 import * as documents from 'code_analysis.documents';
 import { positionToOffset, offsetToPosition, buildLineTable } from 'code_analysis.positions';
+import { stringLiteralText } from 'code_analysis.ast_text';
 import { referencesOf, anchorOf } from 'language_server.scope_references';
 import * as mode from 'code_analysis.mode';
 
@@ -21,10 +22,8 @@ function importStmtSpecifier(stmt, text) {
 	for (let i = 0; i < ts.childCount(stmt); i++) {
 		let child = ts.child(stmt, i);
 		if (ts.nodeType(child) !== 'string') continue;
-		for (let j = 0; j < ts.childCount(child); j++) {
-			let frag = ts.child(child, j);
-			if (ts.nodeType(frag) === 'string_fragment') return ts.text(frag, text);
-		}
+		let spec = stringLiteralText(child, text);
+		return length(spec) ? spec : null;
 	}
 	return null;
 }

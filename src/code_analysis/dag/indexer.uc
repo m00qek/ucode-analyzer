@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import * as type_registry from 'code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBefore, docBeforeMap } from 'code_analysis.positions';
+import { stringLiteralText } from 'code_analysis.ast_text';
 import { topLevelStatements } from 'code_analysis.mode';
 
 
@@ -63,11 +64,8 @@ function importSpecifier(stmt, text) {
 	for (let i = 0; i < ts.childCount(stmt); i++) {
 		let child = ts.child(stmt, i);
 		if (ts.nodeType(child) !== 'string') continue;
-		for (let j = 0; j < ts.childCount(child); j++) {
-			let frag = ts.child(child, j);
-			if (ts.nodeType(frag) === 'string_fragment')
-				return ts.text(frag, text);
-		}
+		let spec = stringLiteralText(child, text);
+		return length(spec) ? spec : null;
 	}
 	return null;
 }

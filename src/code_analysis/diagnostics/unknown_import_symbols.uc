@@ -1,5 +1,6 @@
 import * as ts from 'tree_sitter';
 import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { stringLiteralText } from 'code_analysis.ast_text';
 import * as dag from 'code_analysis.dag.dag';
 
 let SEVERITY_ERROR = 1;
@@ -61,10 +62,8 @@ export function unknownImportSymbols(uri, doc) {
 		for (let j = 0; j < ts.childCount(stmt); j++) {
 			let c = ts.child(stmt, j);
 			if (ts.nodeType(c) !== 'string') continue;
-			for (let k = 0; k < ts.childCount(c); k++) {
-				let f = ts.child(c, k);
-				if (ts.nodeType(f) === 'string_fragment') { specifier = ts.text(f, doc.text); break; }
-			}
+			let s = stringLiteralText(c, doc.text);
+			specifier = length(s) ? s : null;
 			break;
 		}
 		if (!specifier) continue;
