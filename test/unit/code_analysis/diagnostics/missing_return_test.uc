@@ -64,4 +64,14 @@ describe('diagnostics — missing return', () => {
 		assert.match(1, length(diags));
 		assert.match(3, diags[0].range.start.line);  // function declaration line
 	});
+
+	it('no warning when a path ends in die()', () => {
+		let text = "/**\n * @returns {int}\n */\nfunction f(x) {\n  if (x) { return 1; }\n  die('nope');\n}\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('no warning when both branches terminate via return or exit()', () => {
+		let text = "/**\n * @returns {int}\n */\nfunction f(x) {\n  if (x) { return 1; } else { exit(1); }\n}\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
 });

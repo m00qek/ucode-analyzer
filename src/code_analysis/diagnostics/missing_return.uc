@@ -27,26 +27,38 @@ function hasConcreteReturn(doc) {
 	return true;
 }
 
+// A bare call to die()/exit() never returns, so a path ending in one is as
+// terminating as a `return`. Mirrors isNoReturnCall in types/scope_walk.uc.
+function isNoReturnCall(node, source) {
+	if (!node || ts.nodeType(node) !== 'call_expression') return false;
+	let callee = ts.childByField(node, 'function');
+	if (!callee || ts.nodeType(callee) !== 'identifier') return false;
+	let name = ts.text(callee, source);
+	return name === 'die' || name === 'exit';
+}
+
 // AST shape (tree-sitter-ucode):
 //   if_statement
 //     namedChild(0): parenthesized_expression  ← condition
 //     namedChild(1): statement_block            ← consequent
 //     namedChild(2): else_clause                ← optional
 //       namedChild(0): statement_block | if_statement
-function alwaysReturns(node) {
+function alwaysReturns(node, source) {
 	if (!node) return false;
 	let nt = ts.nodeType(node);
 	if (nt === 'return_statement') return true;
-	if (nt === 'else_clause') return alwaysReturns(ts.namedChild(node, 0));
+	if (nt === 'expression_statement')
+		return isNoReturnCall(ts.namedChild(node, 0), source);
+	if (nt === 'else_clause') return alwaysReturns(ts.namedChild(node, 0), source);
 	if (nt === 'statement_block') {
 		let n = ts.namedChildCount(node);
-		return n > 0 && alwaysReturns(ts.namedChild(node, n - 1));
+		return n > 0 && alwaysReturns(ts.namedChild(node, n - 1), source);
 	}
 	if (nt === 'if_statement') {
 		if (ts.namedChildCount(node) < 3) return false;
 		let cons = ts.namedChild(node, 1);
 		let alt  = ts.namedChild(node, 2);
-		return alwaysReturns(cons) && alwaysReturns(alt);
+		return alwaysReturns(cons, source) && alwaysReturns(alt, source);
 	}
 	return false;
 }
@@ -58,7 +70,7 @@ function checkFunction(node, source, lineTable, diags) {
 	if (!hasConcreteReturn(doc)) return;
 
 	let body = ts.childByField(node, 'body');
-	if (!body || alwaysReturns(body)) return;
+	if (!body || alwaysReturns(body, source)) return;
 
 	// Point the diagnostic at the function name (function_declaration) or the
 	// opening keyword token (function_expression / arrow_function).
