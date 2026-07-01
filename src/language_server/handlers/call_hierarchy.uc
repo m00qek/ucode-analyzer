@@ -300,12 +300,14 @@ export function incomingCalls(item) {
 			let refDoc = loadDoc(cr.uri);
 			if (!refDoc) continue;
 			let refRoot = ts.rootNode(refDoc.tree);
-			// refRanges are LSP ranges; convert to byte offset and use referencesOf.
+			// cr.refRanges already enumerates every reference in this file. Map each
+			// straight to its node and add it once — re-running referencesOf per range
+			// re-derived the whole set each time (O(refs²)) and pushed every call site
+			// once per range (duplicated fromRanges).
 			for (let rng in cr.refRanges) {
 				let byteOff = positionToOffset(refDoc.text, refDoc.lineTable, rng.start);
-				let nodes   = referencesOf(refRoot, refDoc.text, byteOff, true);
-				for (let ref in (nodes ?? []))
-					addCallSite(ref, cr.uri, refDoc);
+				let node    = nodeAtOffset(refRoot, byteOff);
+				if (node) addCallSite(node, cr.uri, refDoc);
 			}
 		}
 	}

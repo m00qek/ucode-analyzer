@@ -90,6 +90,32 @@ describe('callHierarchy/incomingCalls', () => {
 		assert.match(1, length(resp.result[0].fromRanges));
 	});
 
+	it('cross-file: groups an importer\'s multiple call sites without duplicating ranges', () => {
+		// fixtures/greet.uc exports greet(); open it plus an importer that calls it 3×.
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///app/test/fixtures/greet.uc', languageId: 'ucode', version: 1,
+				text: "function greet() {}\nexport { greet };\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///app/caller.uc', languageId: 'ucode', version: 1,
+				text: "import { greet } from 'fixtures.greet';\ngreet(); greet(); greet();\n" },
+		}});
+
+		// Prepare the hierarchy on greet's declaration in the fixture.
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
+			textDocument: { uri: 'file:///app/test/fixtures/greet.uc' },
+			position: { line: 0, character: 9 },
+		}});
+		let item = lsp.receive(proc).result[0];
+
+		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'callHierarchy/incomingCalls', params: { item } });
+		let resp = lsp.receive(proc);
+		assert.match(2, resp.id);
+		assert.match(1, length(resp.result));                     // one caller file
+		assert.match('file:///app/caller.uc', resp.result[0].from.uri);
+		assert.match(3, length(resp.result[0].fromRanges));       // 3 calls, not 3×3
+	});
+
 	it('returns null when there are no callers', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t5.uc', languageId: 'ucode', version: 1,
