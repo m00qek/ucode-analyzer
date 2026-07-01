@@ -62,31 +62,98 @@ function localDefinition(uri, doc, name) {
 	return null;
 }
 
-// Recursively search node (which must contain offset) for a function scope
-// whose formal_parameters contain name. Returns the Location of the parameter
-// identifier in the innermost matching scope, or null.
-function walkForParam(node, uri, doc, name, offset) {
-	if (ts.startByte(node) > offset || offset >= ts.endByte(node)) return null;
+// The variable_declarator name node for `name` inside a lexical_declaration
+// (or a `for (let x …)` binding), or null.
+function declaratorName(declNode, name, text) {
+	for (let j = 0; j < ts.namedChildCount(declNode); j++) {
+		let vd = ts.namedChild(declNode, j);
+		if (ts.nodeType(vd) !== 'variable_declarator') continue;
+		let nn = ts.childByField(vd, 'name');
+		if (nn && ts.text(nn, text) === name) return nn;
+	}
+	return null;
+}
 
-	// Recurse first so the innermost scope wins.
-	for (let i = 0; i < ts.namedChildCount(node); i++) {
-		let res = walkForParam(ts.namedChild(node, i), uri, doc, name, offset);
-		if (res) return res;
+// If `scopeNode` binds `name`, return the binding identifier node. Covers every
+// local binder: block-level let/const and nested function declarations, function
+// parameters, for-in / C-for loop variables, and catch parameters.
+function binderIn(scopeNode, name, text) {
+	let nt = ts.nodeType(scopeNode);
+
+	if (nt === 'statement_block' || nt === 'program' || nt === 'statement_tag') {
+		for (let i = 0; i < ts.namedChildCount(scopeNode); i++) {
+			let stmt = ts.namedChild(scopeNode, i);
+			let st = ts.nodeType(stmt);
+			if (st === 'lexical_declaration') {
+				let nn = declaratorName(stmt, name, text);
+				if (nn) return nn;
+			} else if (st === 'function_declaration') {
+				let nn = ts.namedChild(stmt, 0);
+				if (nn && ts.text(nn, text) === name) return nn;
+			}
+		}
+		return null;
 	}
 
-	let nt = ts.nodeType(node);
-	if (nt !== 'function_declaration' && nt !== 'arrow_function' && nt !== 'function_expression')
+	if (nt === 'function_declaration' || nt === 'function_expression' || nt === 'arrow_function') {
+		let params = ts.childByField(scopeNode, 'parameters');
+		if (params)
+			for (let j = 0; j < ts.namedChildCount(params); j++) {
+				let p = ts.namedChild(params, j);
+				if (ts.nodeType(p) === 'identifier' && ts.text(p, text) === name) return p;
+			}
+		// arrow with a single bare parameter: `x => …`
+		let bare = ts.childByField(scopeNode, 'parameter');
+		if (bare && ts.nodeType(bare) === 'identifier' && ts.text(bare, text) === name) return bare;
 		return null;
+	}
 
-	for (let i = 0; i < ts.namedChildCount(node); i++) {
-		let child = ts.namedChild(node, i);
-		if (ts.nodeType(child) !== 'formal_parameters') continue;
-		for (let j = 0; j < ts.namedChildCount(child); j++) {
-			let param = ts.namedChild(child, j);
-			if (ts.nodeType(param) === 'identifier' && ts.text(param, doc.text) === name)
-				return location(uri, doc.text, ts.startByte(param));
+	if (nt === 'for_in_statement' || nt === 'for_in_alt_statement') {
+		let left = ts.childByField(scopeNode, 'left');
+		if (left) {
+			if (ts.nodeType(left) === 'identifier' && ts.text(left, text) === name) return left;
+			let nn = declaratorName(left, name, text);
+			if (nn) return nn;
 		}
-		break;
+		return null;
+	}
+
+	if (nt === 'for_statement' || nt === 'for_alt_statement') {
+		let init = ts.childByField(scopeNode, 'initializer');
+		if (init && ts.nodeType(init) === 'lexical_declaration')
+			return declaratorName(init, name, text);
+		return null;
+	}
+
+	if (nt === 'catch_clause') {
+		let param = ts.childByField(scopeNode, 'parameter');
+		if (param && ts.nodeType(param) === 'identifier' && ts.text(param, text) === name)
+			return param;
+		return null;
+	}
+
+	return null;
+}
+
+// Resolve `name` to its declaration in the enclosing lexical scope at `offset`.
+// Descends the tree by offset (so it transparently enters template statement
+// tags), then walks the resulting ancestor chain innermost-first so the nearest
+// binding wins (closures capture outer-function locals, so outer scopes count).
+function localScopeDef(root, uri, doc, name, offset) {
+	let chain = [];
+	let node  = root;
+	while (node) {
+		push(chain, node);
+		let next = null;
+		for (let i = 0; i < ts.namedChildCount(node); i++) {
+			let c = ts.namedChild(node, i);
+			if (ts.startByte(c) <= offset && offset < ts.endByte(c)) { next = c; break; }
+		}
+		node = next;
+	}
+	for (let k = length(chain) - 1; k >= 0; k--) {
+		let hit = binderIn(chain[k], name, doc.text);
+		if (hit) return location(uri, doc.text, ts.startByte(hit));
 	}
 	return null;
 }
@@ -278,9 +345,10 @@ export function definition(uri, doc, position) {
 		if (modLoc) return modLoc;
 	}
 
-	// Function parameter in the innermost enclosing scope.
-	let param = walkForParam(root, uri, doc, name, offset);
-	if (param) return param;
+	// Local binding in the innermost enclosing scope: parameters, block-local
+	// let/const, nested function declarations, loop and catch variables.
+	let scoped = localScopeDef(root, uri, doc, name, offset);
+	if (scoped) return scoped;
 
 	// Top-level declaration.
 	let local = localDefinition(uri, doc, name);

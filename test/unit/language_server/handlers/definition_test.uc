@@ -358,6 +358,64 @@ describe('definition — function parameters', () => {
 	});
 });
 
+describe('definition — local (block/loop/catch) declarations', () => {
+	it('jumps to a function-local let declaration', () => {
+		let text = "function f() {\n\tlet x = 1;\n\treturn x;\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		// (2, 8) is 'x' in `return x`
+		let result = definition(URI, doc, { line: 2, character: 8 });
+		assert.match(URI, result.uri);
+		assert.match(1, result.range.start.line);        // `let x` on line 1
+		assert.match(5, result.range.start.character);   // 'x' after '\tlet '
+	});
+
+	it('resolves to the innermost let when a nested block shadows the name', () => {
+		//  0: function f() {
+		//  1: \tlet x = 1;
+		//  2: \t{
+		//  3: \t\tlet x = 2;      <- inner 'x' at col 6 (two tabs + 'let ')
+		//  4: \t\treturn x;
+		let text = "function f() {\n\tlet x = 1;\n\t{\n\t\tlet x = 2;\n\t\treturn x;\n\t}\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		// (4, 9) is 'x' in the inner block's `return x` (two tabs + 'return ')
+		let result = definition(URI, doc, { line: 4, character: 9 });
+		assert.match(URI, result.uri);
+		assert.match(3, result.range.start.line);        // inner `let x` on line 3
+		assert.match(6, result.range.start.character);
+	});
+
+	it('jumps to a for-in loop variable', () => {
+		let text = "for (let k in obj) {\n\tprint(k);\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		// (1, 7) is 'k' in print(k)
+		let result = definition(URI, doc, { line: 1, character: 7 });
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(9, result.range.start.character);   // 'k' after 'for (let '
+	});
+
+	it('jumps to a C-style for loop variable', () => {
+		let text = "for (let i = 0; i < 3; i++) {\n\tprint(i);\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		let result = definition(URI, doc, { line: 1, character: 7 });
+		assert.match(0, result.range.start.line);
+		assert.match(9, result.range.start.character);   // 'i' after 'for (let '
+	});
+
+	it('jumps to a catch parameter', () => {
+		let text = "try {} catch (e) {\n\tprint(e);\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		let result = definition(URI, doc, { line: 1, character: 7 });
+		assert.match(0, result.range.start.line);
+		assert.match(14, result.range.start.character);  // 'e' after 'try {} catch ('
+	});
+});
+
 describe('definition — member expression (record type, named import)', () => {
 	beforeEach(() => {
 		dag.init(_config);
