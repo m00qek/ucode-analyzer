@@ -10,6 +10,19 @@ function toUri(path) {
 	return abs ? ('file://' + abs) : null;
 }
 
+// Distribute `items` round-robin into `jobs` shards: shard s holds items
+// s, s+jobs, s+2*jobs, … This spreads work evenly (sizes differ by at most one)
+// and assigns every item to exactly one shard — a sharding bug would silently
+// drop or double-lint files. Exported so the shard math can be tested apart from
+// the fork machinery.
+export function shardRoundRobin(items, jobs) {
+	let shards = [];
+	for (let i = 0; i < jobs; i++) push(shards, []);
+	for (let i = 0; i < length(items); i++)
+		push(shards[i % jobs], items[i]);
+	return shards;
+};
+
 // Diagnose the whole workspace across `jobs` worker processes.
 //
 // The parent builds the entire DAG + builtins and parses every file once
@@ -27,10 +40,7 @@ function diagnoseWorkspaceParallel(config, jobs) {
 		return results;
 	}
 
-	// Round-robin the files into `jobs` shards (even spread of work).
-	let shards = [];
-	for (let i = 0; i < jobs; i++) push(shards, []);
-	for (let i = 0; i < length(docs); i++) push(shards[i % jobs], docs[i]);
+	let shards = shardRoundRobin(docs, jobs);
 
 	let results = [];
 	let done = 0;
