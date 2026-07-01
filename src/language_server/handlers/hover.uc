@@ -209,8 +209,15 @@ export function hover(doc, position, config) {
 		if (parentType === 'formal_parameters')
 			return hoverParam(node, parent, doc, config);
 
-		if (parentType === 'for_in_statement')
-			return hoverForInVar(node, parent, doc, config);
+		// Only the loop variable(s) need the dedicated element-type path; the
+		// iterable (`right`) and anything else in the header get a normal hover.
+		if (parentType === 'for_in_statement') {
+			let left  = ts.childByField(parent, 'left');
+			let value = ts.childByField(parent, 'value');
+			let ns    = ts.startByte(node);
+			if ((left && ts.startByte(left) === ns) || (value && ts.startByte(value) === ns))
+				return hoverForInVar(node, parent, doc, config);
+		}
 	}
 
 	return hoverGeneral(node, doc, config);

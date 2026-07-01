@@ -347,6 +347,21 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
 	});
 
+	it('for-in iterable (the collection) shows its own type, not empty', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
+				text: "let xs = [1, 2, 3];\nfor (let item in xs) { item; }\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+			textDocument: { uri: 'file:///t.uc' },
+			position: { line: 1, character: 17 },  // 'xs' (the iterable), not the loop var
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(1, resp.id);
+		assert.match(true, resp.result !== null);   // used to be null (routed to the loop-var path)
+		assert.match(true, index(resp.result.contents.value, 'int') >= 0);
+	});
+
 	it('catch variable hover shows string type', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
