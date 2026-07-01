@@ -51,6 +51,29 @@ describe('workspace/diagnostic', () => {
 		assert.match('unchanged', second.kind);
 	});
 
+	it('answers a superseded in-flight request instead of leaking it', () => {
+		// Two workspace/diagnostic requests back-to-back: the second supersedes the
+		// first's still-running background scan. The first id must still get a
+		// response (ContentModified) — otherwise its client-side promise leaks.
+		lsp.send(proc, { jsonrpc: '2.0', id: 7001, method: 'workspace/diagnostic', params: { previousResultIds: [] } });
+		lsp.send(proc, { jsonrpc: '2.0', id: 7002, method: 'workspace/diagnostic', params: { previousResultIds: [] } });
+
+		let byId = {};
+		for (let i = 0; i < 2; i++) {
+			let r = lsp.receive(proc);
+			if (r === null) die('missing a workspace/diagnostic response (leaked request)');
+			byId[sprintf('%d', r.id)] = r;
+		}
+
+		// Neither request is left unanswered — this is the regression the fix closes.
+		assert.match(true, exists(byId, '7001') && exists(byId, '7002'));
+		// When the first was still in flight (the usual case) it is aborted with
+		// ContentModified (-32801); the later one carries the report.
+		let first = byId['7001'];
+		if (first.error !== null)
+			assert.match(-32801, first.error.code);
+	});
+
 	it("excludes the server's own bundled sources (selfSrcDir) from the report", () => {
 		// Nothing user-facing is open; /app/src is selfSrcDir and must be excluded.
 		let report = lsp.workspaceDiagnostics(proc, []);
