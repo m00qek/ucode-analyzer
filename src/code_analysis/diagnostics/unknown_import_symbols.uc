@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
+import * as mode from 'code_analysis.mode';
 import { rangeOf } from 'code_analysis.positions';
-import { stringLiteralText } from 'code_analysis.ast_text';
 import * as dag from 'code_analysis.dag.dag';
 
 let SEVERITY_ERROR = 1;
@@ -17,33 +17,6 @@ function exportNames(resolvedUri) {
 	return names;
 }
 
-// Walk the import_specifier nodes inside a named_imports clause and report
-// any remote name that is not in the module's export set.
-function checkNamedImports(clause, doc, lineTable, resolvedUri, diags) {
-	let exported = exportNames(resolvedUri);
-	if (!exported) return;
-
-	for (let i = 0; i < ts.namedChildCount(clause); i++) {
-		let spec = ts.namedChild(clause, i);
-		if (ts.nodeType(spec) !== 'import_specifier') continue;
-
-		// For `{ remote as local }` the first child is the remote name.
-		// For `{ name }` the single child is both remote and local.
-		let remoteNode = ts.namedChild(spec, 0);
-		if (!remoteNode) continue;
-		let remoteName = ts.text(remoteNode, doc.text);
-
-		if (!exists(exported, remoteName))
-			push(diags, {
-				range:    rangeOf(doc.text, lineTable, remoteNode),
-				severity: SEVERITY_ERROR,
-				source:   'ucode-ls',
-				code:     'unknown-import-symbol',
-				message:  sprintf("Module has no export named '%s'", remoteName),
-			});
-	}
-}
-
 export function unknownImportSymbols(uri, doc) {
 	let imps = dag.importsOf(uri);
 	if (!imps) return [];
@@ -56,16 +29,7 @@ export function unknownImportSymbols(uri, doc) {
 		let stmt = ts.namedChild(root, i);
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
 
-		// Find which import record this statement corresponds to.
-		// Match by extracting the specifier string from the AST.
-		let specifier = null;
-		for (let j = 0; j < ts.childCount(stmt); j++) {
-			let c = ts.child(stmt, j);
-			if (ts.nodeType(c) !== 'string') continue;
-			let s = stringLiteralText(c, doc.text);
-			specifier = length(s) ? s : null;
-			break;
-		}
+		let specifier = mode.importStmtSpecifier(stmt, doc.text);
 		if (!specifier) continue;
 
 		// Find the matching import record and its resolved URI.
@@ -75,15 +39,24 @@ export function unknownImportSymbols(uri, doc) {
 		}
 		if (!resolvedUri) continue;  // unresolvable module — already reported by unknownImports
 
-		// Only named imports can have wrong symbol names; namespace imports take everything.
-		for (let j = 0; j < ts.namedChildCount(stmt); j++) {
-			let clause = ts.namedChild(stmt, j);
-			if (ts.nodeType(clause) !== 'import_clause') continue;
-			for (let k = 0; k < ts.namedChildCount(clause); k++) {
-				let part = ts.namedChild(clause, k);
-				if (ts.nodeType(part) === 'named_imports')
-					checkNamedImports(part, doc, lineTable, resolvedUri, diags);
-			}
+		// Only named imports can name a symbol that doesn't exist; a namespace
+		// import takes everything.
+		let specs = mode.importBindings(stmt).specifiers;
+		if (length(specs) === 0) continue;
+		let exported = exportNames(resolvedUri);
+		if (!exported) continue;
+
+		for (let s in specs) {
+			if (!s.remoteNode) continue;
+			let remoteName = ts.text(s.remoteNode, doc.text);
+			if (!exists(exported, remoteName))
+				push(diags, {
+					range:    rangeOf(doc.text, lineTable, s.remoteNode),
+					severity: SEVERITY_ERROR,
+					source:   'ucode-ls',
+					code:     'unknown-import-symbol',
+					message:  sprintf("Module has no export named '%s'", remoteName),
+				});
 		}
 	}
 

@@ -3,8 +3,7 @@ import * as fs from 'fs';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import * as type_registry from 'code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBefore, docBeforeMap } from 'code_analysis.positions';
-import { stringLiteralText } from 'code_analysis.ast_text';
-import { topLevelStatements } from 'code_analysis.mode';
+import { topLevelStatements, importStmtSpecifier, importBindings } from 'code_analysis.mode';
 
 
 function dotToSlash(s) {
@@ -57,17 +56,6 @@ function buildDeclIndex(root, text) {
 // or null if the name has no top-level declaration.
 function localDeclInfo(index, name) {
 	return exists(index, name) ? index[name] : { kind: 'let', doc: null, startByte: null };
-}
-
-// Extracts the module specifier string from an import_statement node.
-function importSpecifier(stmt, text) {
-	for (let i = 0; i < ts.childCount(stmt); i++) {
-		let child = ts.child(stmt, i);
-		if (ts.nodeType(child) !== 'string') continue;
-		let spec = stringLiteralText(child, text);
-		return length(spec) ? spec : null;
-	}
-	return null;
 }
 
 // Walk an object literal and return property descriptors { name, kind, doc, properties }.
@@ -247,51 +235,26 @@ export function extractImports(text, tree) {
 	for (let stmt in topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
 
-		let specifier = importSpecifier(stmt, text);
+		let specifier = importStmtSpecifier(stmt, text);
 		if (!specifier) continue;
 
-		let clause = null;
-		for (let j = 0; j < ts.childCount(stmt); j++) {
-			let child = ts.child(stmt, j);
-			if (ts.nodeType(child) === 'import_clause') { clause = child; break; }
-		}
-		if (!clause) continue;
+		let b = importBindings(stmt);
 
-		let clauseChild = ts.namedChild(clause, 0);
-		if (!clauseChild) continue;
+		if (b.namespaceAlias) {
+			let alias = (ts.nodeType(b.namespaceAlias) === 'identifier')
+				? ts.text(b.namespaceAlias, text) : null;
+			push(result, { specifier, symbols: ['*'], alias, resolvedUri: null });
 
-		let clauseType = ts.nodeType(clauseChild);
-
-		if (clauseType === 'named_imports') {
+		} else if (length(b.specifiers) > 0) {
 			let symbols = [];
 			let renames = {};
-			for (let j = 0; j < ts.namedChildCount(clauseChild); j++) {
-				let spec = ts.namedChild(clauseChild, j);
-				if (ts.nodeType(spec) !== 'import_specifier') continue;
-				let count = ts.namedChildCount(spec);
-				let remoteNode = ts.namedChild(spec, 0);
-				if (!remoteNode) continue;
-				let remoteName = ts.text(remoteNode, text);
-				// For `{ remote as local }`, the alias (local binding) is the last named child.
-				let localName = remoteName;
-				if (count > 1) {
-					let localNode = ts.namedChild(spec, count - 1);
-					if (localNode) localName = ts.text(localNode, text);
-				}
+			for (let s in b.specifiers) {
+				let remoteName = ts.text(s.remoteNode, text);
+				let localName  = ts.text(s.localNode, text);
 				push(symbols, localName);
 				if (localName !== remoteName) renames[localName] = remoteName;
 			}
 			push(result, { specifier, symbols, renames, alias: null, resolvedUri: null });
-
-		} else if (clauseType === 'namespace_import') {
-			let alias = null;
-			let count = ts.namedChildCount(clauseChild);
-			if (count > 0) {
-				let last = ts.namedChild(clauseChild, count - 1);
-				if (ts.nodeType(last) === 'identifier')
-					alias = ts.text(last, text);
-			}
-			push(result, { specifier, symbols: ['*'], alias, resolvedUri: null });
 		}
 	}
 

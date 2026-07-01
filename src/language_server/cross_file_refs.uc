@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as dag from 'code_analysis.dag.dag';
 import * as documents from 'code_analysis.documents';
 import { positionToOffset, offsetToPosition, buildLineTable } from 'code_analysis.positions';
-import { stringLiteralText } from 'code_analysis.ast_text';
 import { referencesOf, anchorOf } from 'language_server.scope_references';
 import * as mode from 'code_analysis.mode';
 
@@ -18,15 +17,6 @@ function findAncestor(node, type) {
 }
 
 // Extract the module specifier string (without quotes) from an import_statement.
-function importStmtSpecifier(stmt, text) {
-	for (let i = 0; i < ts.childCount(stmt); i++) {
-		let child = ts.child(stmt, i);
-		if (ts.nodeType(child) !== 'string') continue;
-		let spec = stringLiteralText(child, text);
-		return length(spec) ? spec : null;
-	}
-	return null;
-}
 
 // Locate the import_specifier for `remoteName` imported from `specifier` and
 // return both of its nodes in a single statement scan:
@@ -40,23 +30,12 @@ function importStmtSpecifier(stmt, text) {
 function importSpecNodes(root, text, specifier, remoteName) {
 	for (let stmt in mode.topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
-		if (importStmtSpecifier(stmt, text) !== specifier) continue;
-		for (let j = 0; j < ts.childCount(stmt); j++) {
-			let clause = ts.child(stmt, j);
-			if (ts.nodeType(clause) !== 'import_clause') continue;
-			let inner = ts.namedChild(clause, 0);
-			if (!inner || ts.nodeType(inner) !== 'named_imports') continue;
-			for (let k = 0; k < ts.namedChildCount(inner); k++) {
-				let spec = ts.namedChild(inner, k);
-				if (ts.nodeType(spec) !== 'import_specifier') continue;
-				let remoteNode = ts.namedChild(spec, 0);
-				if (!remoteNode || ts.text(remoteNode, text) !== remoteName) continue;
-				let count = ts.namedChildCount(spec);
-				return {
-					localNode:  ts.namedChild(spec, count - 1),
-					remoteNode: (count >= 2) ? remoteNode : null,
-				};
-			}
+		if (mode.importStmtSpecifier(stmt, text) !== specifier) continue;
+		for (let s in mode.importBindings(stmt).specifiers) {
+			if (!s.remoteNode || ts.text(s.remoteNode, text) !== remoteName) continue;
+			// Aliased when the local binding is a different node than the remote name.
+			let aliased = s.localNode && ts.startByte(s.localNode) !== ts.startByte(s.remoteNode);
+			return { localNode: s.localNode, remoteNode: aliased ? s.remoteNode : null };
 		}
 	}
 	return { localNode: null, remoteNode: null };

@@ -1,6 +1,14 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
-import { isTemplate, parse, topLevelStatements } from 'code_analysis.mode';
+import { isTemplate, parse, topLevelStatements,
+         importStmtSpecifier, importBindings, importBindingNodes } from 'code_analysis.mode';
+
+// The first top-level import_statement in `text`.
+function firstImport(text) {
+	for (let s in topLevelStatements(ts.rootNode(parse(text))))
+		if (ts.nodeType(s) === 'import_statement') return s;
+	return null;
+}
 
 function stmtTypes(text) {
 	let out = [];
@@ -114,5 +122,40 @@ describe('mode — topLevelStatements', () => {
 	it('passes a spanning form through as-is', () => {
 		let types = stmtTypes("{% for (x in xs): %}\n{{ x }}\n{% endfor %}\n");
 		assert.match(true, index(types, 'for_in_alt_statement') >= 0);
+	});
+});
+
+describe('mode — import structure', () => {
+	let T = "import { a, b as c } from 'fs';\n";
+	let N = "import * as fs from 'fs';\n";
+
+	it('importStmtSpecifier returns the module string', () => {
+		assert.match('fs', importStmtSpecifier(firstImport(T), T));
+		assert.match('fs', importStmtSpecifier(firstImport(N), N));
+	});
+
+	it('importBindings decomposes named specifiers (remote/local nodes)', () => {
+		let b = importBindings(firstImport(T));
+		assert.match(null, b.namespaceAlias);
+		assert.match(2, length(b.specifiers));
+		// { a } — local === remote (same node).
+		assert.match('a', ts.text(b.specifiers[0].remoteNode, T));
+		assert.match('a', ts.text(b.specifiers[0].localNode, T));
+		// { b as c } — remote b, local c.
+		assert.match('b', ts.text(b.specifiers[1].remoteNode, T));
+		assert.match('c', ts.text(b.specifiers[1].localNode, T));
+	});
+
+	it('importBindings exposes the namespace alias node', () => {
+		let b = importBindings(firstImport(N));
+		assert.match(0, length(b.specifiers));
+		assert.match('fs', ts.text(b.namespaceAlias, N));
+	});
+
+	it('importBindingNodes yields the local binding names', () => {
+		let names = map(importBindingNodes(firstImport(T)), (n) => ts.text(n, T));
+		assert.match('a', names[0]);
+		assert.match('c', names[1]);   // the local alias, not the remote `b`
+		assert.match('fs', map(importBindingNodes(firstImport(N)), (n) => ts.text(n, N))[0]);
 	});
 });

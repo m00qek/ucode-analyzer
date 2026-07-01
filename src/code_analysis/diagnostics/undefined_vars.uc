@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import * as mode from 'code_analysis.mode';
 import { rangeOf } from 'code_analysis.positions';
 import * as dag from 'code_analysis.dag.dag';
 import { globalUri } from 'code_analysis.types.dag_bridge';
@@ -65,27 +66,8 @@ function bindCatchVar(block, scope, source) {
 
 
 function bindImports(node, scope, source) {
-	for (let i = 0; i < ts.namedChildCount(node); i++) {
-		let clause = ts.namedChild(node, i);
-		if (ts.nodeType(clause) !== 'import_clause') continue;
-		for (let j = 0; j < ts.namedChildCount(clause); j++) {
-			let part = ts.namedChild(clause, j);
-			let pnt = ts.nodeType(part);
-			if (pnt === 'namespace_import') {
-				let alias = ts.namedChild(part, 0);
-				if (alias) bind(scope, ts.text(alias, source));
-			} else if (pnt === 'named_imports') {
-				for (let k = 0; k < ts.namedChildCount(part); k++) {
-					let spec = ts.namedChild(part, k);
-					if (ts.nodeType(spec) !== 'import_specifier') continue;
-					let count = ts.namedChildCount(spec);
-					if (count === 0) continue;
-					let localNode = ts.namedChild(spec, count - 1);
-					if (localNode) bind(scope, ts.text(localNode, source));
-				}
-			}
-		}
-	}
+	for (let n in mode.importBindingNodes(node))
+		bind(scope, ts.text(n, source));
 }
 
 

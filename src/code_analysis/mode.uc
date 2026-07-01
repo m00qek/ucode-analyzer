@@ -5,6 +5,7 @@
 // on a file's mode (the DAG and the open-document store must never disagree).
 
 import * as ts from 'tree_sitter';
+import { stringLiteralText } from 'code_analysis.ast_text';
 
 let _scriptParser   = ts.newParser(ts.ucode());
 let _templateParser = ts.newParser(ts.markup());
@@ -108,5 +109,63 @@ export function topLevelStatements(root) {
 			push(out, inner);
 		}
 	}
+	return out;
+};
+
+// ── Import-statement structure ──────────────────────────────────────────────
+// The import-clause grammar shape lives here so a grammar change is fixed once
+// rather than in every feature that reads imports.
+
+// The module specifier string of an import_statement (the '…' part), or null.
+export function importStmtSpecifier(stmt, text) {
+	for (let i = 0; i < ts.childCount(stmt); i++) {
+		let child = ts.child(stmt, i);
+		if (ts.nodeType(child) !== 'string') continue;
+		let spec = stringLiteralText(child, text);
+		return length(spec) ? spec : null;
+	}
+	return null;
+};
+
+// Decompose an import_statement's binding structure:
+//   { namespaceAlias: node|null,                // the `x` of `import * as x`
+//     specifiers: [{ remoteNode, localNode }] }  // one per `{ a }` / `{ a as b }`
+// localNode === remoteNode for a plain `{ a }`; they differ for `{ a as b }`
+// (the local binding is the specifier's last named child).
+export function importBindings(stmt) {
+	let namespaceAlias = null;
+	let specifiers = [];
+	for (let i = 0; i < ts.namedChildCount(stmt); i++) {
+		let clause = ts.namedChild(stmt, i);
+		if (ts.nodeType(clause) !== 'import_clause') continue;
+		for (let j = 0; j < ts.namedChildCount(clause); j++) {
+			let part = ts.namedChild(clause, j);
+			let pnt = ts.nodeType(part);
+			if (pnt === 'namespace_import') {
+				namespaceAlias = ts.namedChild(part, 0);
+			} else if (pnt === 'named_imports') {
+				for (let k = 0; k < ts.namedChildCount(part); k++) {
+					let spec = ts.namedChild(part, k);
+					if (ts.nodeType(spec) !== 'import_specifier') continue;
+					let count = ts.namedChildCount(spec);
+					if (count === 0) continue;
+					push(specifiers, {
+						remoteNode: ts.namedChild(spec, 0),
+						localNode:  ts.namedChild(spec, count - 1),
+					});
+				}
+			}
+		}
+	}
+	return { namespaceAlias, specifiers };
+};
+
+// The local binding identifier nodes an import introduces into scope: the
+// namespace alias plus each specifier's local name.
+export function importBindingNodes(stmt) {
+	let b = importBindings(stmt);
+	let out = b.namespaceAlias ? [b.namespaceAlias] : [];
+	for (let s in b.specifiers)
+		if (s.localNode) push(out, s.localNode);
 	return out;
 };

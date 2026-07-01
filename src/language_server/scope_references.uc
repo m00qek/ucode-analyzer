@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import * as mode from 'code_analysis.mode';
 
 // Lightweight scope used only for tracking declaration byte-offsets.
 // Separate from the type-inference scope so this module has no dependency on
@@ -100,31 +101,8 @@ function bindCatchVar(block, scope, source, targetName, out) {
 // Register local bindings from an import_declaration into scope.
 // Never recurses into the declaration (import specifiers are not reference sites).
 function bindImports(node, scope, source, targetName, out) {
-	for (let i = 0; i < ts.namedChildCount(node); i++) {
-		let clause = ts.namedChild(node, i);
-		if (ts.nodeType(clause) !== 'import_clause') continue;
-		for (let j = 0; j < ts.namedChildCount(clause); j++) {
-			let part = ts.namedChild(clause, j);
-			let pnt = ts.nodeType(part);
-			if (pnt === 'namespace_import') {
-				// import * as alias from '...'
-				let aliasNode = ts.namedChild(part, 0);
-				if (aliasNode) bind(scope, source, aliasNode, targetName, out);
-			} else if (pnt === 'named_imports') {
-				// import { x } or import { x as y }
-				for (let k = 0; k < ts.namedChildCount(part); k++) {
-					let spec = ts.namedChild(part, k);
-					if (ts.nodeType(spec) !== 'import_specifier') continue;
-					let count = ts.namedChildCount(spec);
-					if (count === 0) continue;
-					// For { remote as local }, local binding is the last child.
-					// For { name }, first (and only) child is both remote and local.
-					let localNode = ts.namedChild(spec, count - 1);
-					if (localNode) bind(scope, source, localNode, targetName, out);
-				}
-			}
-		}
-	}
+	for (let n in mode.importBindingNodes(node))
+		bind(scope, source, n, targetName, out);
 }
 
 // Walk `node` maintaining `scope`.

@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import * as mode from 'code_analysis.mode';
 import { rangeOf } from 'code_analysis.positions';
 
 let SEVERITY_HINT = 4;
@@ -9,34 +10,9 @@ function collectImportBindings(root, source, out) {
 	for (let i = 0; i < ts.namedChildCount(root); i++) {
 		let stmt = ts.namedChild(root, i);
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
-
-		for (let j = 0; j < ts.namedChildCount(stmt); j++) {
-			let clause = ts.namedChild(stmt, j);
-			if (ts.nodeType(clause) !== 'import_clause') continue;
-
-			for (let k = 0; k < ts.namedChildCount(clause); k++) {
-				let part = ts.namedChild(clause, k);
-				let pnt  = ts.nodeType(part);
-
-				if (pnt === 'namespace_import') {
-					let alias = ts.namedChild(part, 0);
-					if (alias && ts.nodeType(alias) === 'identifier')
-						push(out, { name: ts.text(alias, source), declByte: ts.startByte(alias), nameNode: alias });
-
-				} else if (pnt === 'named_imports') {
-					for (let m = 0; m < ts.namedChildCount(part); m++) {
-						let spec = ts.namedChild(part, m);
-						if (ts.nodeType(spec) !== 'import_specifier') continue;
-						let cnt = ts.namedChildCount(spec);
-						if (cnt === 0) continue;
-						// Last named child is the local name (alias if present, original otherwise).
-						let localNode = ts.namedChild(spec, cnt - 1);
-						if (localNode && ts.nodeType(localNode) === 'identifier')
-							push(out, { name: ts.text(localNode, source), declByte: ts.startByte(localNode), nameNode: localNode });
-					}
-				}
-			}
-		}
+		for (let n in mode.importBindingNodes(stmt))
+			if (ts.nodeType(n) === 'identifier')
+				push(out, { name: ts.text(n, source), declByte: ts.startByte(n), nameNode: n });
 	}
 }
 
