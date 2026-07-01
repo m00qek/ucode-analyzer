@@ -30,6 +30,6 @@ export function diagnosticsFor(uri, doc) {
 	for (let d in duplicateObjectKey(doc))        push(diags, d);
 	for (let d in assignmentToConst(doc))         push(diags, d);
 	for (let d in missingReturn(doc))             push(diags, d);
-	for (let d in formatString(doc))              push(diags, d);
+	for (let d in formatString(uri, doc))         push(diags, d);
 	return diags;
 };

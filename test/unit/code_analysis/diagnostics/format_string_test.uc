@@ -8,7 +8,7 @@ afterEach(() => documents.close(URI));
 
 function diags(text) {
 	documents.open(URI, text, 1);
-	return formatString(documents.get(URI));
+	return formatString(URI, documents.get(URI));
 }
 function count(text, code) {
 	return length(filter(diags(text), (d) => d.code === code));
@@ -73,5 +73,36 @@ describe('diagnostics — format string: correctly silent', () => {
 	});
 	it('only sprintf/printf are checked', () => {
 		assert.match(0, length(diags('myfunc("%d %d", x);')));
+	});
+});
+
+describe('diagnostics — format string: argument type', () => {
+	it('flags an array literal passed to %d', () => {
+		assert.match(1, count('sprintf("%d", [1,2]);', 'format-argument-type'));
+	});
+	it('flags an object literal passed to %x', () => {
+		assert.match(1, count('sprintf("%x", {a:1});', 'format-argument-type'));
+	});
+	it('flags a function passed to %d', () => {
+		assert.match(1, count('function f() {}\nsprintf("%d", f);', 'format-argument-type'));
+	});
+	it('does NOT flag a structured value passed to %s', () => {
+		assert.match(0, count('sprintf("%s", [1,2]);', 'format-argument-type'));
+	});
+	it('does NOT flag a structured value passed to %J', () => {
+		assert.match(0, count('sprintf("%J", {a:1});', 'format-argument-type'));
+	});
+	it('does NOT flag an integer passed to %d', () => {
+		assert.match(0, count('sprintf("%d", 5);', 'format-argument-type'));
+	});
+	it('does NOT flag a string passed to %d (coercion is ambiguous)', () => {
+		assert.match(0, count('sprintf("%d", "42");', 'format-argument-type'));
+	});
+	it('does NOT flag an unknown-typed argument', () => {
+		assert.match(0, count('sprintf("%d", x);', 'format-argument-type'));
+	});
+	it('maps conversions to arguments by position', () => {
+		// %s accepts the list; %d gets the record -> exactly one type warning
+		assert.match(1, count('sprintf("%s %d", [1], {a:1});', 'format-argument-type'));
 	});
 });
