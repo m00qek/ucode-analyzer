@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 import { stringLiteralText } from 'code_analysis.ast_text';
 import * as dag from 'code_analysis.dag.dag';
 
@@ -14,7 +14,7 @@ export function unknownImports(uri, doc) {
 		if (!imps[i].resolvedUri) unresolved[imps[i].specifier] = true;
 	if (!length(keys(unresolved))) return [];
 
-	let lineTable = buildLineTable(doc.text);
+	let lineTable = doc.lineTable;
 	let diags = [];
 	let reported = {};
 	let root = ts.rootNode(doc.tree);

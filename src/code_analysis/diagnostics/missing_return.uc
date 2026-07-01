@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf, docBefore } from 'code_analysis.positions';
+import { rangeOf, docBefore } from 'code_analysis.positions';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 
 let SEVERITY_WARNING = 2;
@@ -156,7 +156,7 @@ function walk(node, source, lineTable, diags) {
 export function missingReturn(doc) {
 	let root      = ts.rootNode(doc.tree);
 	let source    = doc.text;
-	let lineTable = buildLineTable(source);
+	let lineTable = doc.lineTable;
 	let diags     = [];
 	walk(root, source, lineTable, diags);
 	return diags;

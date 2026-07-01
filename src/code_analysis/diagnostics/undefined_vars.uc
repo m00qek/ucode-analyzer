@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 import * as dag from 'code_analysis.dag.dag';
 import { globalUri } from 'code_analysis.types.dag_bridge';
 import { makeScope, scopeHas, scopeSet } from 'code_analysis.types.scope';
@@ -269,7 +269,7 @@ export function undefinedVars(doc) {
 	for (let i = 0; i < length(exps); i++) globals[exps[i].name] = true;
 
 	let source    = doc.text;
-	let lineTable = buildLineTable(source);
+	let lineTable = doc.lineTable;
 	let diags     = [];
 	walk(ts.rootNode(doc.tree), makeScope(null), source, globals, lineTable, diags);
 	return diags;

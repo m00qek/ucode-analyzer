@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 
 let SEVERITY_HINT = 4;
 
@@ -62,7 +62,7 @@ function buildRefIndex(root, source) {
 export function unusedImports(doc) {
 	let root      = ts.rootNode(doc.tree);
 	let source    = doc.text;
-	let lineTable = buildLineTable(source);
+	let lineTable = doc.lineTable;
 
 	let bindings = [];
 	collectImportBindings(root, source, bindings);

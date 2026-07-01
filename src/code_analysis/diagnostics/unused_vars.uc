@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 
 let SEVERITY_WARNING = 2;
 
@@ -103,7 +103,7 @@ function buildIdentifierIndex(root, source) {
 export function unusedVars(doc) {
 	let root = ts.rootNode(doc.tree);
 	let source = doc.text;
-	let lineTable = buildLineTable(source);
+	let lineTable = doc.lineTable;
 
 	let decls = [];
 	collectDeclarations(root, source, decls);

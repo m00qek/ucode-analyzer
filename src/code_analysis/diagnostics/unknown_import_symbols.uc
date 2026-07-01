@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 import { stringLiteralText } from 'code_analysis.ast_text';
 import * as dag from 'code_analysis.dag.dag';
 
@@ -48,7 +48,7 @@ export function unknownImportSymbols(uri, doc) {
 	let imps = dag.importsOf(uri);
 	if (!imps) return [];
 
-	let lineTable = buildLineTable(doc.text);
+	let lineTable = doc.lineTable;
 	let diags = [];
 	let root = ts.rootNode(doc.tree);
 

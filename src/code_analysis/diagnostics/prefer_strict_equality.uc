@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 
 let SEVERITY_HINT = 4;
 
@@ -23,7 +23,7 @@ function collect(node, source, lineTable, out) {
 }
 
 export function preferStrictEquality(doc) {
-	let lineTable = buildLineTable(doc.text);
+	let lineTable = doc.lineTable;
 	let diags     = [];
 	collect(ts.rootNode(doc.tree), doc.text, lineTable, diags);
 	return diags;

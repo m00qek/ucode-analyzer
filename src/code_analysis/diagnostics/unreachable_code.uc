@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 
 let SEVERITY_WARNING = 2;
 
@@ -44,7 +44,7 @@ function walk(node, source, lineTable, out) {
 }
 
 export function unreachableCode(doc) {
-	let lineTable = buildLineTable(doc.text);
+	let lineTable = doc.lineTable;
 	let diags     = [];
 	walk(ts.rootNode(doc.tree), doc.text, lineTable, diags);
 	return diags;

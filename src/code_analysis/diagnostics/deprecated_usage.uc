@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 import { resolveDoc } from 'code_analysis.doc_resolver';
 import { globalUri } from 'code_analysis.types.dag_bridge';
 
@@ -95,7 +95,7 @@ export function deprecatedUsage(uri, doc) {
 	// Nothing in scope is deprecated → no identifier can be, skip the walk.
 	if (length(candidates) === 0) return [];
 
-	let lineTable = buildLineTable(doc.text);
+	let lineTable = doc.lineTable;
 	let diags     = [];
 	walk(ts.rootNode(doc.tree), doc.text, uri, lineTable, candidates, diags);
 	return diags;

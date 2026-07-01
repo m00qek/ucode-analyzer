@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 
 let SEVERITY_ERROR = 1;
 
@@ -162,7 +162,7 @@ _walk = function(node, scope, source, lineTable, diags) {
 export function assignmentToConst(doc) {
 	let root      = ts.rootNode(doc.tree);
 	let source    = doc.text;
-	let lineTable = buildLineTable(source);
+	let lineTable = doc.lineTable;
 	let diags     = [];
 	_walkBlock(root, makeScope(null), source, lineTable, diags);
 	return diags;

@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { rangeOf } from 'code_analysis.positions';
 
 let SEVERITY_ERROR = 1;
 
@@ -49,7 +49,7 @@ function walk(node, source, lineTable, diags) {
 export function redeclaredVars(doc) {
 	let root      = ts.rootNode(doc.tree);
 	let source    = doc.text;
-	let lineTable = buildLineTable(source);
+	let lineTable = doc.lineTable;
 	let diags     = [];
 	walk(root, source, lineTable, diags);
 	return diags;
