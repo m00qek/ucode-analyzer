@@ -1,20 +1,7 @@
 ## Remaining work
 
----
-
-### Done
-
-**uloop I/O backbone**
-- Non-blocking stdin: `protocol.startListening(dispatch, onEof)` over `uloop.handle(fs.stdin, …, ULOOP_READ)`; `lsp.uc` runs `uloop.init()` / `uloop.signal('SIGTERM')` / `uloop.run()` instead of a blocking `while(true)`. Timers and `uloop.task` callbacks fire between messages.
-
-**`workspace/diagnostic` (pull model)**
-- Pull-based workspace-wide diagnostics (LSP 3.17): `handlers/diagnostic_reports.uc` computes per-document reports inline and forks a background `uloop.task` for the whole-project scan, so the server stays responsive on the Pi Zero floor. Per-URI resultId generation + `invalidate` cascade; `workspace/diagnostic/refresh` on cross-file / on-disk changes. `didChange` keeps document-state work synchronous and never pushes — clients re-pull. (This replaced the earlier push + 300 ms debounce idea, which is now moot: there is no push path left to debounce.)
-
-**CLI linter**
-- `ucode-linter` runs the exact same analysis headlessly (file and workspace modes) for CI gating and on-save `nvim-lint`. Entry `src/ucode-linter.uc` → `src/linter/run.uc` + `src/linter/reporters.uc` (text/json), over the shared `code_analysis.workspace` engine (`loadWorkspace` / `collectWorkspaceDiagnostics`). No native module of its own — reuses `tree_sitter.native`.
-
-**Discriminated-union narrowing**
-- Tagged-variant support, delivered in four phases: `unionOf` keeps distinct record shapes (was collapsing them to one); literal types as a `primitive` refinement (`value` field) born on object-literal fields; a `variant` guard in `narrowing.uc` that refines a union by `r.field === <literal>` per branch; and `unknownFieldOf` checking a field against every member of an un-narrowed union. So `if (r.kind === 'fail') r.value` resolves, and a field absent from the matching variant (or from all variants) is flagged.
+> Completed work lives in git history and `CLAUDE.md`; decisions we deliberately
+> did not act on live in `decisions.md`. This file tracks open items only.
 
 ---
 
