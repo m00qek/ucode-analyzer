@@ -61,6 +61,32 @@ describe('definition — local declarations', () => {
 		assert.match(9, result.range.start.character);  // 'greet' after 'function '
 	});
 
+	it('resolves a forward reference to a hoisted function declaration', () => {
+		// ucode hoists function declarations, so a call above the declaration is
+		// valid and go-to-definition must jump down to it.
+		let text = "foo();\nfunction foo() { return 1; }\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		let result = definition(URI, doc, { line: 0, character: 0 });
+
+		assert.match(URI, result.uri);
+		assert.match(1, result.range.start.line);       // the declaration below
+		assert.match(9, result.range.start.character);  // 'foo' after 'function '
+	});
+
+	it('resolves a use of a let before its declaration in the same block', () => {
+		let text = "x;\nlet x = 1;\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+
+		let result = definition(URI, doc, { line: 0, character: 0 });
+
+		assert.match(URI, result.uri);
+		assert.match(1, result.range.start.line);       // 'let x' below
+		assert.match(4, result.range.start.character);
+	});
+
 	it('finds an exported let declaration', () => {
 		let text = "export let x = 1;\nx;";
 		documents.open(URI, text, 1);
