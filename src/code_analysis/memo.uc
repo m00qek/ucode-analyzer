@@ -1,5 +1,8 @@
-let _cache = {};    // uri → { 'startByte|nodeType|scopeId' → Type }
-let _docMaps = {};  // uri → { parentStartByte → { childStartByte → docText|null } }
+import { buildLineTable } from 'code_analysis.positions';
+
+let _cache = {};       // uri → { 'startByte|nodeType|scopeId' → Type }
+let _docMaps = {};     // uri → { parentKey → { childStartByte → docText|null } }
+let _lineTables = {};  // uri → { src, table }
 
 export function memoGet(uri, offset, nodeType, scopeId) {
 	let bucket = _cache[uri];
@@ -29,7 +32,21 @@ export function docMapSet(uri, parentKey, map) {
 	_docMaps[uri][parentKey] = map;
 };
 
+// Line table for a source, cached per uri. Inference builds many objects from
+// one file text; each would otherwise rebuild the whole-file line table. Keyed
+// by string identity (source === cached.src is a fast native compare, no
+// staleness possible) rather than a length/offset proxy, so it's correct even
+// on the test path where a uri is re-opened without invalidation.
+export function lineTableFor(uri, source) {
+	let cached = _lineTables[uri];
+	if (cached && cached.src === source) return cached.table;
+	let table = buildLineTable(source);
+	_lineTables[uri] = { src: source, table };
+	return table;
+};
+
 export function invalidateUri(uri) {
 	delete _cache[uri];
 	delete _docMaps[uri];
+	delete _lineTables[uri];
 };

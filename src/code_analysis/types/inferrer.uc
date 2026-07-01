@@ -2,11 +2,11 @@ import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import { unify, substitute } from 'code_analysis.types.unifier';
-import { memoGet, memoSet, docMapGet, docMapSet } from 'code_analysis.memo';
+import { memoGet, memoSet, docMapGet, docMapSet, lineTableFor } from 'code_analysis.memo';
 import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal } from 'code_analysis.types.type_utils';
-import { buildLineTable, offsetToPosition, docBeforeMap } from 'code_analysis.positions';
+import { offsetToPosition, docBeforeMap } from 'code_analysis.positions';
 import { stringLiteralText } from 'code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'code_analysis.types.dag_bridge';
 
@@ -400,7 +400,7 @@ function literalValueOf(valNode, source) {
 }
 
 function inferObject(node, source, uri, scope, depth) {
-	let lineTable = buildLineTable(source);
+	let lineTable = lineTableFor(uri, source);
 	let fields = [];
 	// A record is "open" when its full field set can't be known statically —
 	// spreading a non-record (e.g. an untyped value) contributes unknown extra
