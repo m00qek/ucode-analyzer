@@ -54,6 +54,29 @@ export function docBeforeMap(parent, text) {
 	return map;
 };
 
+// The statement-level ancestor of `node` whose leading /** */ documents it, and
+// that statement's enclosing block. Walks up until the parent is a program or
+// statement_block. Returns { target, parent } with parent=null when `node` has
+// no enclosing block/program.
+export function docBearingStatement(node) {
+	let target = node;
+	let p = ts.parent(target);
+	while (p) {
+		let pt = ts.nodeType(p);
+		if (pt === 'program' || pt === 'statement_block') break;
+		target = p;
+		p = ts.parent(target);
+	}
+	return { target, parent: p };
+};
+
+// The /** */ doc text immediately preceding `node`'s statement, or null. The
+// inferrer has its own cached variant on the hot path; everything else uses this.
+export function precedingDoc(node, text) {
+	let s = docBearingStatement(node);
+	return s.parent ? docBefore(s.target, s.parent, text) : null;
+};
+
 // Build a table of byte offsets at which each line starts.
 // lines[n] is the byte offset of the first byte on line n.
 // One native split plus a per-line accumulation, rather than a per-byte

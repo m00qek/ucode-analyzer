@@ -6,7 +6,7 @@ import { memoGet, memoSet, docMapGet, docMapSet, lineTableFor } from 'code_analy
 import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal } from 'code_analysis.types.type_utils';
-import { offsetToPosition, docBeforeMap } from 'code_analysis.positions';
+import { offsetToPosition, docBeforeMap, docBearingStatement } from 'code_analysis.positions';
 import { stringLiteralText } from 'code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'code_analysis.types.dag_bridge';
 
@@ -17,23 +17,16 @@ import { exportType, dagNamedLookup, dagMemberLookup } from 'code_analysis.types
 // child list is scanned once (docBeforeMap) and cached per (uri, parent) so a
 // file with many sibling functions doesn't rescan the list per function.
 function precedingDoc(node, source, uri) {
-	let target = node;
-	let p = ts.parent(target);
-	while (p) {
-		let pt = ts.nodeType(p);
-		if (pt === 'program' || pt === 'statement_block') break;
-		target = p;
-		p = ts.parent(target);
-	}
-	if (!p) return null;
+	let s = docBearingStatement(node);
+	if (!s.parent) return null;
 
-	let pKey = ts.startByte(p) + '|' + ts.endByte(p);
+	let pKey = ts.startByte(s.parent) + '|' + ts.endByte(s.parent);
 	let map = docMapGet(uri, pKey);
 	if (!map) {
-		map = docBeforeMap(p, source);
+		map = docBeforeMap(s.parent, source);
 		docMapSet(uri, pKey, map);
 	}
-	return map[ts.startByte(target)] ?? null;
+	return map[ts.startByte(s.target)] ?? null;
 }
 
 // ── Forward declarations (mutual recursion) ────────────────────────────────

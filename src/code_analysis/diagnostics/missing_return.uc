@@ -1,22 +1,8 @@
 import * as ts from 'tree_sitter';
-import { rangeOf, docBefore } from 'code_analysis.positions';
+import { rangeOf, precedingDoc } from 'code_analysis.positions';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 
 let SEVERITY_WARNING = 2;
-
-// Find the /** */ comment immediately preceding node inside its parent block.
-// Mirrors the private precedingDoc() in inferrer.uc.
-function precedingDoc(node, source) {
-	let target = node;
-	let p = ts.parent(target);
-	while (p) {
-		let pt = ts.nodeType(p);
-		if (pt === 'program' || pt === 'statement_block') break;
-		target = p;
-		p = ts.parent(target);
-	}
-	return p ? docBefore(target, p, source) : null;
-}
 
 // Returns true when type is a documented non-void return type.
 function hasConcreteReturn(doc) {
