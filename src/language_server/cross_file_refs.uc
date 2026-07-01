@@ -28,10 +28,16 @@ function importStmtSpecifier(stmt, text) {
 	return null;
 }
 
-// Find the local binding node in an import_statement for a given (specifier, remoteName).
-// For `import { foo } from 'spec'`: returns the `foo` node (local = remote).
-// For `import { foo as bar } from 'spec'`: returns the `bar` node (local alias).
-function importLocalNode(root, text, specifier, remoteName) {
+// Locate the import_specifier for `remoteName` imported from `specifier` and
+// return both of its nodes in a single statement scan:
+//   localNode  — the local binding: `bar` for `import { foo as bar }`, else the
+//                `foo` node itself (local = remote).
+//   remoteNode — the remote-name node, non-null only for an aliased specifier
+//                (`import { foo as bar }`); null when local = remote.
+// Matches the specifier by remote name first so a mixed list like
+// `import { a, foo as bar }` resolves `foo` correctly rather than bailing on the
+// first non-aliased entry.
+function importSpecNodes(root, text, specifier, remoteName) {
 	for (let stmt in mode.topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
 		if (importStmtSpecifier(stmt, text) !== specifier) continue;
@@ -46,36 +52,14 @@ function importLocalNode(root, text, specifier, remoteName) {
 				let remoteNode = ts.namedChild(spec, 0);
 				if (!remoteNode || ts.text(remoteNode, text) !== remoteName) continue;
 				let count = ts.namedChildCount(spec);
-				return ts.namedChild(spec, count - 1);
+				return {
+					localNode:  ts.namedChild(spec, count - 1),
+					remoteNode: (count >= 2) ? remoteNode : null,
+				};
 			}
 		}
 	}
-	return null;
-}
-
-// Find the remote-name node in an aliased import: `import { remoteName as local }`.
-// Returns null when the import has no alias (remote = local).
-function importRemoteNode(root, text, specifier, remoteName) {
-	for (let stmt in mode.topLevelStatements(root)) {
-		if (ts.nodeType(stmt) !== 'import_statement') continue;
-		if (importStmtSpecifier(stmt, text) !== specifier) continue;
-		for (let j = 0; j < ts.childCount(stmt); j++) {
-			let clause = ts.child(stmt, j);
-			if (ts.nodeType(clause) !== 'import_clause') continue;
-			let inner = ts.namedChild(clause, 0);
-			if (!inner || ts.nodeType(inner) !== 'named_imports') continue;
-			for (let k = 0; k < ts.namedChildCount(inner); k++) {
-				let spec = ts.namedChild(inner, k);
-				if (ts.nodeType(spec) !== 'import_specifier') continue;
-				let count = ts.namedChildCount(spec);
-				if (count < 2) return null;
-				let remoteNode = ts.namedChild(spec, 0);
-				if (!remoteNode || ts.text(remoteNode, text) !== remoteName) continue;
-				return remoteNode;
-			}
-		}
-	}
-	return null;
+	return { localNode: null, remoteNode: null };
 }
 
 // Find the property identifier nodes (the `bar` part) for `alias.bar` member expressions.
@@ -222,10 +206,10 @@ export function crossFileRefsOf(declaringUri, exportName, excludeUri) {
 				}
 				if (index(imp.symbols, localName) < 0) continue;
 
-				let localNode = importLocalNode(root, doc.text, imp.specifier, exportName);
-				if (!localNode) continue;
+				let sn = importSpecNodes(root, doc.text, imp.specifier, exportName);
+				if (!sn.localNode) continue;
 
-				let allNodes = referencesOf(root, doc.text, ts.startByte(localNode));
+				let allNodes = referencesOf(root, doc.text, ts.startByte(sn.localNode));
 				if (!allNodes) continue;
 
 				refRanges = nodeRanges(allNodes, doc.text, lt);
@@ -233,8 +217,7 @@ export function crossFileRefsOf(declaringUri, exportName, excludeUri) {
 				if (localName !== exportName) {
 					// Aliased (`{ foo as bar }`): only the remote name in the import
 					// specifier changes on rename; local uses of `bar` are unaffected.
-					let remoteNode = importRemoteNode(root, doc.text, imp.specifier, exportName);
-					renameRanges = remoteNode ? nodeRanges([remoteNode], doc.text, lt) : [];
+					renameRanges = sn.remoteNode ? nodeRanges([sn.remoteNode], doc.text, lt) : [];
 				} else {
 					renameRanges = refRanges;
 				}

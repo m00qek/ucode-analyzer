@@ -187,6 +187,22 @@ describe('cross-file rename', () => {
 		assert.match('baz', editsB[0].newText);
 	});
 
+	it('aliased import in a mixed specifier list: renames only the remote name', () => {
+		// `{ other, foo as bar }` — the leading non-aliased `other` used to make the
+		// remote-name scan bail early and drop the `foo` rename edit entirely.
+		let textA = "export function foo() { foo(); }\nexport function other() {}\n";
+		let textB = "import { other, foo as bar } from 'a';\nbar(); other();\n";
+		setupFiles(textA, textB);
+
+		// cursor on 'foo' export in URI_A (line 0, char 16)
+		let edit = rename(URI_A, documents.get(URI_A), { line: 0, character: 16 }, 'baz');
+
+		let editsB = edit.changes[URI_B];
+		assert.match(true, type(editsB) === 'array');
+		assert.match(1, length(editsB));                 // just the remote `foo`
+		assert.match('baz', editsB[0].newText);
+	});
+
 	it('namespace import: renaming export updates property accesses in namespace importer', () => {
 		setupFiles(TEXT_A, TEXT_B_NS);
 
