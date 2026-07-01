@@ -12,6 +12,7 @@ import { redeclaredVars }         from 'code_analysis.diagnostics.redeclared_var
 import { duplicateObjectKey }     from 'code_analysis.diagnostics.duplicate_object_key';
 import { assignmentToConst }      from 'code_analysis.diagnostics.assignment_const';
 import { missingReturn }          from 'code_analysis.diagnostics.missing_return';
+import { formatString }            from 'code_analysis.diagnostics.format_string';
 
 export function diagnosticsFor(uri, doc) {
 	let diags = [];
@@ -29,5 +30,6 @@ export function diagnosticsFor(uri, doc) {
 	for (let d in duplicateObjectKey(doc))        push(diags, d);
 	for (let d in assignmentToConst(doc))         push(diags, d);
 	for (let d in missingReturn(doc))             push(diags, d);
+	for (let d in formatString(doc))              push(diags, d);
 	return diags;
 };
