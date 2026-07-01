@@ -5,7 +5,7 @@ import { unify, substitute } from 'code_analysis.types.unifier';
 import { memoGet, memoSet } from 'code_analysis.memo';
 import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';
-import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType } from 'code_analysis.types.type_utils';
+import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal } from 'code_analysis.types.type_utils';
 import { buildLineTable, offsetToPosition, docBefore } from 'code_analysis.positions';
 
 let _builtinScope = makeScope(null);
@@ -398,6 +398,26 @@ function inferArray(node, source, uri, scope, depth) {
 	return { kind: 'generic', base: 'list', params: [elem] };
 }
 
+// If valNode is a direct string/number literal, return its concrete value so the
+// containing object-literal field can carry a literal type (which drives
+// discriminated-union narrowing). Any other expression returns null and the field
+// keeps its widened base type — literals are born only here, at field positions.
+function literalValueOf(valNode, source) {
+	if (!valNode) return null;
+	let nt = ts.nodeType(valNode);
+	if (nt === 'string') {
+		for (let k = 0; k < ts.childCount(valNode); k++)
+			if (ts.nodeType(ts.child(valNode, k)) === 'string_fragment')
+				return ts.text(ts.child(valNode, k), source);
+		return '';   // "" — an empty string literal has no string_fragment child
+	}
+	if (nt === 'number') {
+		let v = +ts.text(valNode, source);
+		if (type(v) === 'int' || type(v) === 'double') return v;
+	}
+	return null;
+}
+
 function inferObject(node, source, uri, scope, depth) {
 	let lineTable = buildLineTable(source);
 	let fields = [];
@@ -444,7 +464,12 @@ function inferObject(node, source, uri, scope, depth) {
 		}
 		if (!keyName) continue;
 		let position = offsetToPosition(source, lineTable, ts.startByte(keyNode));
-		push(fields, { name: keyName, type: valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN, position });
+		let ft = valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN;
+		if (ft.kind === 'primitive') {
+			let lv = literalValueOf(valNode, source);
+			if (lv !== null) ft = literal(ft.name, lv);
+		}
+		push(fields, { name: keyName, type: ft, position });
 	}
 	let result = { kind: 'record', fields, sourceUri: uri };
 	if (open) result.open = true;

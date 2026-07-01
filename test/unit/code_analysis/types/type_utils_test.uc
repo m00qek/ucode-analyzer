@@ -1,5 +1,5 @@
 import { describe, it, assert, beforeEach } from 'utest';
-import { UNKNOWN, STR, INT, unionOf, memberOfType, resolveRef } from 'code_analysis.types.type_utils';
+import { UNKNOWN, STR, INT, unionOf, memberOfType, resolveRef, literal, widen } from 'code_analysis.types.type_utils';
 import * as registry from 'code_analysis.types.registry';
 
 beforeEach(() => {
@@ -62,6 +62,32 @@ describe('type_utils.unionOf', () => {
 		let a = { kind: 'record', fields: [{ name: 'x', type: INT }, { name: 'y', type: STR }] };
 		let b = { kind: 'record', fields: [{ name: 'y', type: STR }, { name: 'x', type: INT }] };
 		assert.match('record', unionOf([a, b]).kind);
+	});
+
+	it('keeps distinct string literals apart', () => {
+		let r = unionOf([literal('string', 'a'), literal('string', 'b')]);
+		assert.match('union', r.kind);
+		assert.match(2, length(r.members));
+	});
+
+	it('collapses equal string literals', () => {
+		assert.match({ kind: 'primitive', name: 'string', value: 'a' },
+		             unionOf([literal('string', 'a'), literal('string', 'a')]));
+	});
+
+	it('widens a literal unioned with its own base to the base', () => {
+		assert.match(STR, unionOf([literal('string', 'a'), STR]));
+		assert.match(STR, unionOf([STR, literal('string', 'a')]));
+	});
+});
+
+describe('type_utils.widen', () => {
+	it('strips the value from a literal, leaving the base primitive', () => {
+		assert.match(STR, widen(literal('string', 'fail')));
+	});
+
+	it('leaves a non-literal primitive unchanged', () => {
+		assert.match(INT, widen(INT));
 	});
 });
 

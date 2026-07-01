@@ -8,6 +8,21 @@ export let INT     = { kind: 'primitive', name: 'int' };
 export let FLOAT   = { kind: 'primitive', name: 'float' };
 export let NULL_T  = { kind: 'primitive', name: 'null' };
 
+// A literal type is a primitive refined with a concrete `value` (e.g. the string
+// 'fail'). It is deliberately NOT a distinct kind: every `kind === 'primitive'` /
+// `name === 'string'` check keeps working unchanged, and literal-awareness is
+// opt-in only where it matters (union dedup, discriminant narrowing). Literals
+// widen back to their base type anywhere the value is not needed.
+export function literal(name, value) {
+	return { kind: 'primitive', name, value };
+};
+
+export function widen(type) {
+	if (type && type.kind === 'primitive' && exists(type, 'value'))
+		return { kind: 'primitive', name: type.name };
+	return type;
+};
+
 // Two records are the "same" for union-dedup purposes when they carry the same
 // set of field names — enough to keep tagged variants ({kind:'fail', value,
 // error} vs {kind:'pass'}) distinct while still collapsing repeated shapes.
@@ -32,10 +47,18 @@ export function unionOf(types) {
 		for (let j = 0; j < length(members); j++) {
 			let m = members[j];
 			if (m.kind !== t.kind) continue;
-			if (t.kind === 'primitive' && m.name !== t.name) continue;
-			if (t.kind === 'ref'       && m.name !== t.name) continue;
+			if (t.kind === 'primitive') {
+				if (m.name !== t.name) continue;
+				let mv = exists(m, 'value'), tv = exists(t, 'value');
+				// Different literal values stay distinct ('a' | 'b'); a literal
+				// alongside its own bare base widens to the base.
+				if (mv && tv && m.value !== t.value) continue;
+				if (mv && !tv) members[j] = t;
+				seen = true; break;
+			}
+			if (t.kind === 'ref' && m.name !== t.name) continue;
 			// Distinct record shapes are kept apart so tagged unions survive.
-			if (t.kind === 'record'    && !sameFieldNames(m, t)) continue;
+			if (t.kind === 'record' && !sameFieldNames(m, t)) continue;
 			seen = true; break;
 		}
 		if (!seen) push(members, t);

@@ -494,14 +494,20 @@ describe('inferrer — buildScope: assignment expression', () => {
 });
 
 describe('inferrer — object literals', () => {
-	it('infers a record type from an object literal', () => {
+	it('infers a record type from an object literal, with literal field values', () => {
 		let t = infer('let o = { a: 1, b: "hi" };');
 		assert.match('record', t.kind);
 		assert.match(2, length(t.fields));
 		assert.match('a', t.fields[0].name);
-		assert.match(prim('int'), t.fields[0].type);
+		// String/number literal field values carry their concrete value.
+		assert.match({ kind: 'primitive', name: 'int', value: 1 }, t.fields[0].type);
 		assert.match('b', t.fields[1].name);
-		assert.match(prim('string'), t.fields[1].type);
+		assert.match({ kind: 'primitive', name: 'string', value: 'hi' }, t.fields[1].type);
+	});
+
+	it('does not attach a literal value to a non-literal field expression', () => {
+		let t = infer('let o = { a: 1 + 2 };');
+		assert.match(prim('int'), t.fields[0].type);  // computed → widened base, no value
 	});
 
 	it('infers an empty record for an empty object', () => {
