@@ -2,7 +2,7 @@ import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import * as dag from 'code_analysis.dag.dag';
 import * as documents from 'code_analysis.documents';
-import { positionToOffset, offsetToPosition, buildLineTable } from 'code_analysis.positions';
+import { positionToOffset, rangeOf, buildLineTable } from 'code_analysis.positions';
 import { referencesOf, anchorOf } from 'language_server.scope_references';
 import * as mode from 'code_analysis.mode';
 
@@ -78,10 +78,7 @@ function loadDoc(uri) {
 
 // Convert tree-sitter nodes to `[{ start, end }]` LSP ranges.
 function nodeRanges(nodes, text, lineTable) {
-	return map(nodes, (n) => ({
-		start: offsetToPosition(text, lineTable, ts.startByte(n)),
-		end:   offsetToPosition(text, lineTable, ts.endByte(n)),
-	}));
+	return map(nodes, (n) => rangeOf(text, lineTable, n));
 }
 
 // Determine whether (uri, doc, cursorOffset) refers to an exported symbol.

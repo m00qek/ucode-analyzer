@@ -2,7 +2,7 @@ import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import * as documents from 'code_analysis.documents';
 import * as dag from 'code_analysis.dag.dag';
-import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'code_analysis.positions';
+import { positionToOffset, rangeOf, buildLineTable, nodeAtOffset } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'language_server.cross_file_refs';
 import * as mode from 'code_analysis.mode';
@@ -21,13 +21,6 @@ function loadDoc(uri) {
 	return { uri, text, tree: mode.parse(text), lineTable: buildLineTable(text) };
 }
 
-function rangeOf(text, lineTable, startByte, endByte) {
-	return {
-		start: offsetToPosition(text, lineTable, startByte),
-		end:   offsetToPosition(text, lineTable, endByte),
-	};
-}
-
 // True when refNode (an identifier) is the direct callee of a call_expression.
 function isCallSite(refNode) {
 	let parent = ts.parent(refNode);
@@ -40,9 +33,9 @@ function isCallSite(refNode) {
 
 // Build an item for a named function declaration or function-valued variable.
 function makeItem(name, fnNode, nameNode, uri, text, lineTable) {
-	let fnRange   = rangeOf(text, lineTable, ts.startByte(fnNode), ts.endByte(fnNode));
+	let fnRange   = rangeOf(text, lineTable, fnNode);
 	let nameRange = nameNode
-		? rangeOf(text, lineTable, ts.startByte(nameNode), ts.endByte(nameNode))
+		? rangeOf(text, lineTable, nameNode)
 		: fnRange;
 	return {
 		name,
@@ -302,7 +295,7 @@ export function incomingCalls(item) {
 		if (!isCallSite(refNode)) return;
 		let lt    = refDoc.lineTable;
 		let text  = refDoc.text;
-		let fnRange = rangeOf(text, lt, ts.startByte(refNode), ts.endByte(refNode));
+		let fnRange = rangeOf(text, lt, refNode);
 		let caller  = enclosingItem(refNode, refUri, text, lt);
 		let key     = sprintf('%s:%d:%d', caller.uri, caller.range.start.line, caller.range.start.character);
 		if (!exists(callerMap, key))
@@ -368,8 +361,7 @@ export function outgoingCalls(item) {
 		let key = sprintf('%s:%d', resolved.uri, ts.startByte(resolved.nameNode ?? resolved.fnNode));
 		if (exists(seen, key)) {
 			// Already have this callee; just add the from-range.
-			let fromRange = rangeOf(doc.text, doc.lineTable,
-				ts.startByte(callee), ts.endByte(callee));
+			let fromRange = rangeOf(doc.text, doc.lineTable, callee);
 			push(seen[key].fromRanges, fromRange);
 			continue;
 		}
@@ -382,8 +374,7 @@ export function outgoingCalls(item) {
 			resolved.doc.text,
 			resolved.doc.lineTable
 		);
-		let fromRange = rangeOf(doc.text, doc.lineTable,
-			ts.startByte(callee), ts.endByte(callee));
+		let fromRange = rangeOf(doc.text, doc.lineTable, callee);
 		let entry = { to: calleeItem, fromRanges: [fromRange] };
 		seen[key] = entry;
 		push(result, entry);

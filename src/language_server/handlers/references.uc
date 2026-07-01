@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
-import { positionToOffset, offsetToPosition } from 'code_analysis.positions';
+import { positionToOffset, rangeOf } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'language_server.cross_file_refs';
 
@@ -12,11 +12,7 @@ export function references(uri, doc, position, includeDeclaration) {
 	let nodes = referencesOf(root, doc.text, offset, includeDeclaration);
 	if (!nodes) return null;
 
-	let result = map(nodes, (n) => {
-		let start = offsetToPosition(doc.text, doc.lineTable, ts.startByte(n));
-		let end   = offsetToPosition(doc.text, doc.lineTable, ts.endByte(n));
-		return { uri, range: { start, end } };
-	});
+	let result = map(nodes, (n) => ({ uri, range: rangeOf(doc.text, doc.lineTable, n) }));
 
 	let identity = resolveExportIdentity(uri, doc, offset);
 	if (identity) {

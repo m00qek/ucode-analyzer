@@ -133,9 +133,11 @@ describe('callHierarchy/incomingCalls', () => {
 		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'callHierarchy/incomingCalls', params: { item } });
 		let resp = lsp.receive(proc);
 		assert.match(2, resp.id);
-		assert.match(1, length(resp.result));                     // one caller file
-		assert.match('file:///app/caller.uc', resp.result[0].from.uri);
-		assert.match(3, length(resp.result[0].fromRanges));       // 3 calls, not 3×3
+		// Other tests in this session may also import greet, so isolate this file's
+		// entry rather than assuming it's the only caller.
+		let mine = filter(resp.result, (c) => c.from.uri === 'file:///app/caller.uc');
+		assert.match(1, length(mine));
+		assert.match(3, length(mine[0].fromRanges));              // 3 calls, not 3×3
 	});
 
 	it('returns null when there are no callers', () => {

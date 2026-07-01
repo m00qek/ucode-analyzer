@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition } from 'code_analysis.positions';
+import { positionToOffset, rangeOf } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 
 export function documentHighlight(uri, doc, position) {
@@ -10,11 +10,5 @@ export function documentHighlight(uri, doc, position) {
 	let nodes = referencesOf(root, doc.text, offset, true);
 	if (!nodes) return null;
 
-	return map(nodes, (n) => ({
-		range: {
-			start: offsetToPosition(doc.text, doc.lineTable, ts.startByte(n)),
-			end:   offsetToPosition(doc.text, doc.lineTable, ts.endByte(n)),
-		},
-		kind: 1,
-	}));
+	return map(nodes, (n) => ({ range: rangeOf(doc.text, doc.lineTable, n), kind: 1 }));
 };

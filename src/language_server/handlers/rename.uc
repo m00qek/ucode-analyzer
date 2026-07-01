@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition } from 'code_analysis.positions';
+import { positionToOffset, rangeOf } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'language_server.cross_file_refs';
 
@@ -11,11 +11,7 @@ export function rename(uri, doc, position, newName) {
 	let nodes = referencesOf(root, doc.text, offset);
 	if (!nodes) return null;
 
-	let edits = map(nodes, (n) => {
-		let start = offsetToPosition(doc.text, doc.lineTable, ts.startByte(n));
-		let end   = offsetToPosition(doc.text, doc.lineTable, ts.endByte(n));
-		return { range: { start, end }, newText: newName };
-	});
+	let edits = map(nodes, (n) => ({ range: rangeOf(doc.text, doc.lineTable, n), newText: newName }));
 
 	let changes = { [uri]: edits };
 
