@@ -1,15 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, positionToOffset, offsetToPosition } from 'code_analysis.positions';
-
-// Walk up from node to find the nearest ancestor of the given type.
-function ancestor(node, type) {
-	let p = ts.parent(node);
-	while (p) {
-		if (ts.nodeType(p) === type) return p;
-		p = ts.parent(p);
-	}
-	return null;
-}
+import { buildLineTable, positionToOffset, offsetToPosition, findAncestor } from 'code_analysis.positions';
 
 // Find the deepest node whose span contains offset.
 function nodeAt(node, offset) {
@@ -71,7 +61,7 @@ export function actionsFor(uri, doc, diagnostics) {
 		let nameNode = nodeAt(root, offset);
 		if (!nameNode) continue;
 
-		let importStmt = ancestor(nameNode, 'import_statement');
+		let importStmt = findAncestor(nameNode, 'import_statement');
 		if (!importStmt) continue;
 
 		// Find the named_imports clause (if any) to decide single vs multi specifier.
@@ -99,7 +89,7 @@ export function actionsFor(uri, doc, diagnostics) {
 		let edit;
 		if (specCount > 1) {
 			// Find the import_specifier ancestor of nameNode.
-			let specNode = ancestor(nameNode, 'import_specifier') ?? nameNode;
+			let specNode = findAncestor(nameNode, 'import_specifier') ?? nameNode;
 			let range = specifierRange(namedImports, specNode, source, lineTable);
 			if (!range) continue;
 			edit = { range, newText: '' };

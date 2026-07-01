@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition } from 'code_analysis.positions';
+import { positionToOffset, offsetToPosition, findAncestor } from 'code_analysis.positions';
 
 function nodeAt(node, offset) {
 	if (ts.startByte(node) > offset || offset >= ts.endByte(node)) return null;
@@ -9,15 +9,6 @@ function nodeAt(node, offset) {
 		if (child) result = child;
 	}
 	return result;
-}
-
-function ancestor(node, type) {
-	let p = ts.parent(node);
-	while (p) {
-		if (ts.nodeType(p) === type) return p;
-		p = ts.parent(p);
-	}
-	return null;
 }
 
 export function actionsFor(uri, doc, diagnostics) {
@@ -33,10 +24,10 @@ export function actionsFor(uri, doc, diagnostics) {
 		let keyNode = nodeAt(root, offset);
 		if (!keyNode) continue;
 
-		let pairNode = ancestor(keyNode, 'pair');
+		let pairNode = findAncestor(keyNode, 'pair');
 		if (!pairNode) continue;
 
-		let objNode = ancestor(pairNode, 'object');
+		let objNode = findAncestor(pairNode, 'object');
 		if (!objNode) continue;
 
 		// Collect all pair named children of the object.

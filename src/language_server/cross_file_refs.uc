@@ -2,20 +2,11 @@ import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import * as dag from 'code_analysis.dag.dag';
 import * as documents from 'code_analysis.documents';
-import { positionToOffset, rangeOf, buildLineTable } from 'code_analysis.positions';
+import { positionToOffset, rangeOf, buildLineTable, findAncestor } from 'code_analysis.positions';
 import { referencesOf, anchorOf } from 'language_server.scope_references';
 import * as mode from 'code_analysis.mode';
 
 // Walk up parent chain looking for a node of the given type.
-function findAncestor(node, type) {
-	let n = ts.parent(node);
-	while (n) {
-		if (ts.nodeType(n) === type) return n;
-		n = ts.parent(n);
-	}
-	return null;
-}
-
 // Extract the module specifier string (without quotes) from an import_statement.
 
 // Locate the import_specifier for `remoteName` imported from `specifier` and

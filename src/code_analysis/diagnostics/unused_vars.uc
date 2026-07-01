@@ -1,5 +1,6 @@
 import * as ts from 'tree_sitter';
 import { rangeOf } from 'code_analysis.positions';
+import { identifierOccurrences } from 'code_analysis.ast_text';
 
 let SEVERITY_WARNING = 2;
 
@@ -80,26 +81,6 @@ function collectDeclarations(root, source, out) {
 	walk(root);
 }
 
-// Build a map of { name → [startBytes] } for every identifier in the tree
-// in a single pass. Skips formal_parameters to avoid counting inner function
-// params as uses of an outer variable with the same name.
-function buildIdentifierIndex(root, source) {
-	let idx = {};
-	function walk(node) {
-		let nt = ts.nodeType(node);
-		if (nt === 'formal_parameters') return;
-		if (nt === 'identifier' || nt === 'shorthand_property_identifier') {
-			let name = ts.text(node, source);
-			if (!exists(idx, name)) idx[name] = [];
-			push(idx[name], ts.startByte(node));
-		}
-		for (let i = 0; i < ts.namedChildCount(node); i++)
-			walk(ts.namedChild(node, i));
-	}
-	walk(root);
-	return idx;
-}
-
 export function unusedVars(doc) {
 	let root = ts.rootNode(doc.tree);
 	let source = doc.text;
@@ -108,7 +89,9 @@ export function unusedVars(doc) {
 	let decls = [];
 	collectDeclarations(root, source, decls);
 
-	let byName = buildIdentifierIndex(root, source);
+	// Skip formal_parameters so an inner function's params don't count as uses of
+	// an outer variable of the same name.
+	let byName = identifierOccurrences(root, source, true);
 
 	let diags = [];
 	for (let i = 0; i < length(decls); i++) {

@@ -1,5 +1,15 @@
 import * as ts from 'tree_sitter';
 
+// The nearest ancestor of `node` whose nodeType === type, or null.
+export function findAncestor(node, type) {
+	let p = ts.parent(node);
+	while (p) {
+		if (ts.nodeType(p) === type) return p;
+		p = ts.parent(p);
+	}
+	return null;
+};
+
 // Walk to the deepest named node that contains offset.
 export function nodeAtOffset(node, offset) {
 	let count = ts.namedChildCount(node);

@@ -1,6 +1,7 @@
 import * as ts from 'tree_sitter';
 import * as mode from 'code_analysis.mode';
 import { rangeOf } from 'code_analysis.positions';
+import { identifierOccurrences } from 'code_analysis.ast_text';
 
 let SEVERITY_HINT = 4;
 
@@ -16,25 +17,6 @@ function collectImportBindings(root, source, out) {
 	}
 }
 
-// Build a set of byte offsets for every identifier in the tree.
-// Import clauses are intentionally included so their bytes match declByte;
-// any reference outside will have a different byte.
-function buildRefIndex(root, source) {
-	let idx = {};
-	function walk(node) {
-		let nt = ts.nodeType(node);
-		if (nt === 'identifier' || nt === 'shorthand_property_identifier') {
-			let name = ts.text(node, source);
-			if (!exists(idx, name)) idx[name] = [];
-			push(idx[name], ts.startByte(node));
-		}
-		for (let i = 0; i < ts.namedChildCount(node); i++)
-			walk(ts.namedChild(node, i));
-	}
-	walk(root);
-	return idx;
-}
-
 export function unusedImports(doc) {
 	let root      = ts.rootNode(doc.tree);
 	let source    = doc.text;
@@ -43,7 +25,9 @@ export function unusedImports(doc) {
 	let bindings = [];
 	collectImportBindings(root, source, bindings);
 
-	let refs = buildRefIndex(root, source);
+	// Import clauses are intentionally included so their bytes match a binding's
+	// declByte; any reference outside the clause has a different byte.
+	let refs = identifierOccurrences(root, source, false);
 
 	let diags = [];
 	for (let i = 0; i < length(bindings); i++) {
