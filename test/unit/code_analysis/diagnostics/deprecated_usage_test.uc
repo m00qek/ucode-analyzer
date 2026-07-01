@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, prop, gen } from 'utest';
 import * as documents from 'code_analysis.documents';
 import * as dag from 'code_analysis.dag.dag';
 import { deprecatedUsage } from 'code_analysis.diagnostics.deprecated_usage';
@@ -51,28 +51,21 @@ describe('diagnostics — deprecated usage', () => {
 		assert.match(0, length(deprecatedUsage(URI, doc)));
 	});
 
-	it('reports a hint for a reference to an imported @deprecated symbol', () => {
-		let depText = "/** @deprecated */\nexport function old() {}\n";
-		dag.add(URI_B, depText, documents.get(URI) ? documents.get(URI).tree : (() => {
-			documents.open(URI_B, depText, 1);
-			let t = documents.get(URI_B).tree;
-			documents.close(URI_B);
-			return t;
-		})());
-
-		// Use a fresh parse for URI_B
-		documents.open(URI_B, depText, 1);
-		dag.add(URI_B, depText, documents.get(URI_B).tree);
-		documents.close(URI_B);
-
-		let src = "import { old } from 'fixtures.deprecated_dep';\nold();\n";
+	it('flags a deprecated imported symbol but not a non-deprecated one', () => {
+		// fixtures/deprecated.uc exports oldFn (@deprecated) and newFn (not).
+		let DEP = 'file:///app/test/fixtures/deprecated.uc';
+		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src', 'test'] } });
+		dag.addFromDisk(DEP);
+		let src = "import { oldFn, newFn } from 'fixtures.deprecated';\noldFn();\nnewFn();\n";
 		documents.open(URI, src, 1);
 		dag.add(URI, src, documents.get(URI).tree);
 
 		let diags = deprecatedUsage(URI, documents.get(URI));
-		// 'old' appears in import_specifier (skipped) and as a call (flagged)
-		let usageDiags = filter(diags, (d) => d.message === 'Deprecated');
-		assert.match(true, length(usageDiags) >= 0);  // import may not resolve in unit test
+		// only the oldFn() call is flagged; newFn() and the import_specifier are not
+		assert.match(1, length(diags));
+		assert.match(1, diags[0].range.start.line);   // line 1: `oldFn();`
+		assert.match(0, diags[0].range.start.character);
+		dag.remove(DEP);
 	});
 
 	it('does not flag import_specifier binding names', () => {
@@ -91,4 +84,48 @@ describe('diagnostics — deprecated usage', () => {
 		assert.match(2, diags[0].range.start.line);   // 0-indexed: line 2 is 'old();'
 		assert.match(0, diags[0].range.start.character);
 	});
+});
+
+// The candidate-name gate (deprecatedNames) is a perf prefilter whose failure
+// mode is silently dropping diagnostics. This property is a positive oracle: we
+// generate a module with known @deprecated and plain exports plus a body of
+// references, and assert the gate flags ALL-AND-ONLY the deprecated references.
+// If deprecatedNames() ever under-populates, a deprecated reference goes
+// unflagged and the property fails (with a shrunk counterexample).
+describe('diagnostics — deprecated usage: gate flags all-and-only deprecated refs', () => {
+	// spec: { nDep, nOk, refs[] } → { src, expected } where expected is the number
+	// of references that point at a deprecated name.
+	function buildDoc(spec) {
+		let src = "";
+		for (let i = 0; i < spec.nDep; i++)
+			src += sprintf("/** @deprecated */\nexport function dep%d() {}\n", i);
+		for (let i = 0; i < spec.nOk; i++)
+			src += sprintf("export function ok%d() {}\n", i);
+		let total = spec.nDep + spec.nOk, expected = 0;
+		for (let r in spec.refs) {
+			let idx = r % total;               // nDep >= 1 so total >= 1
+			if (idx < spec.nDep) { src += sprintf("dep%d;\n", idx); expected++; }
+			else                 { src += sprintf("ok%d;\n", idx - spec.nDep); }
+		}
+		return { src, expected };
+	}
+
+	prop("flags exactly the references to deprecated names",
+		gen.record({
+			nDep: gen.int(1, 3),
+			nOk:  gen.int(0, 3),
+			refs: gen.array(gen.int(0, 20), { min_len: 0, max_len: 8 }),
+		}),
+		(spec, ctx) => {
+			let d = buildDoc(spec);
+			ctx.classify("no refs",   length(spec.refs) === 0);
+			ctx.classify("has ok",    spec.nOk > 0);
+			dag.init(_config);
+			documents.open(URI, d.src, 1);
+			dag.add(URI, d.src, documents.get(URI).tree);
+			let diags = deprecatedUsage(URI, documents.get(URI));
+			documents.close(URI);
+			dag.remove(URI);
+			assert.match(d.expected, length(diags));
+		});
 });

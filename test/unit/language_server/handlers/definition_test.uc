@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, beforeEach } from 'utest';
+import { describe, it, assert, afterEach, beforeEach, prop, gen } from 'utest';
 import * as documents from 'code_analysis.documents';
 import { definition } from 'language_server.handlers.definition';
 import * as dag from 'code_analysis.dag.dag';
@@ -468,6 +468,73 @@ describe('definition — local (block/loop/catch) declarations', () => {
 		assert.match(0, result.range.start.line);         // the `let x`, not the loop header
 		assert.match(4, result.range.start.character);
 	});
+
+	it('resolves an outer-function local captured by a nested closure', () => {
+		//  1: \tlet cap = 1;      <- outer local, 'cap' at col 5
+		//  3: \t\treturn cap;     <- captured inside inner(), 'cap' at col 9
+		let text = "function outer() {\n\tlet cap = 1;\n\tfunction inner() {\n\t\treturn cap;\n\t}\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		let result = definition(URI, doc, { line: 3, character: 9 });
+		assert.match(URI, result.uri);
+		assert.match(1, result.range.start.line);         // outer's `let cap`
+		assert.match(5, result.range.start.character);
+	});
+
+	it('resolves a parameter that shadows a builtin name to the parameter', () => {
+		// 'length' is a builtin; as a param it must resolve locally, not to global.d.uc
+		let text = "function f(length) {\n\treturn length;\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		let result = definition(URI, doc, { line: 1, character: 8 });
+		assert.match(URI, result.uri);                    // the param, not the builtin file
+		assert.match(0, result.range.start.line);
+		assert.match(11, result.range.start.character);   // 'length' after 'function f('
+	});
+});
+
+// Property: for every local binder form, go-to-definition on a use site must
+// resolve to a binding whose text is exactly the queried name. This fuzzes the
+// whole binderIn/localScopeDef surface in one loop — the two-var and no-let
+// for-in bugs would have been caught here by shrinking.
+describe('definition — local binder identity (property)', () => {
+	// Reference sites are placed on their own line so the use column is fixed
+	// regardless of the (random) identifier length.
+	function buildBinderSource(shape, n) {
+		if (shape === "let")     return { src: sprintf("function f() {\n\tlet %s = 1;\n\t%s;\n}\n", n, n),                 use: { line: 2, character: 1 } };
+		if (shape === "block")   return { src: sprintf("function f() {\n\t{\n\t\tlet %s = 1;\n\t\t%s;\n\t}\n}\n", n, n),   use: { line: 3, character: 2 } };
+		if (shape === "for-in")  return { src: sprintf("for (let %s in [1]) {\n\t%s;\n}\n", n, n),                        use: { line: 1, character: 1 } };
+		if (shape === "for-in2") return { src: sprintf("for (let k, %s in obj) {\n\t%s;\n}\n", n, n),                     use: { line: 1, character: 1 } };
+		if (shape === "for-c")   return { src: sprintf("for (let %s = 0; %s < 3; %s++) {\n\t0;\n}\n", n, n, n),           use: { line: 0, character: 9 } };
+		if (shape === "catch")   return { src: sprintf("try {} catch (%s) {\n\t%s;\n}\n", n, n),                          use: { line: 1, character: 1 } };
+		if (shape === "param")   return { src: sprintf("function f(%s) {\n\t%s;\n}\n", n, n),                             use: { line: 1, character: 1 } };
+		// arrow bare param
+		return { src: sprintf("let g = %s => {\n\treturn %s;\n};\n", n, n),                                               use: { line: 1, character: 8 } };
+	}
+
+	// The identifier text at a resolved Location's start position.
+	function identAt(src, pos) {
+		let line = split(src, "\n")[pos.line];
+		let m = match(substr(line, pos.character), /^[A-Za-z_][A-Za-z0-9_]*/);
+		return m ? m[0] : "";
+	}
+
+	prop("gd on a local binder resolves to a node whose text is the name",
+		gen.bind(gen.alphanumeric({ min_len: 1, max_len: 3 }), (raw) =>
+			gen.map(gen.elements("let", "block", "for-in", "for-in2", "for-c", "catch", "param", "arrow"),
+			        (shape) => ({ name: "v" + raw, shape }))),
+		(c, ctx) => {
+			ctx.classify(c.shape, true);
+			let b = buildBinderSource(c.shape, c.name);
+			dag.init(_config);
+			documents.open(URI, b.src, 1);
+			dag.add(URI, b.src, documents.get(URI).tree);
+			let r = definition(URI, documents.get(URI), b.use);
+			documents.close(URI);
+			dag.remove(URI);
+			assert.match(true, r !== null);
+			assert.match(c.name, identAt(b.src, r.range.start));
+		});
 });
 
 describe('definition — member expression (record type, named import)', () => {

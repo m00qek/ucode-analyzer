@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
 import * as mode from 'code_analysis.mode';
 import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'code_analysis.dag.indexer';
@@ -227,6 +227,38 @@ describe('indexer.extractExports', () => {
 		assert.match('function', foos[0].kind); // and it's the ES one (pushed first)
 		assert.match(true, index(map(exps, (e) => e.name), 'bar') >= 0);
 	});
+
+	it('does not surface a return object nested inside a function', () => {
+		let text = "function f() { return { secret: 1 }; }\nexport { f };\n";
+		let names = map(extractExports(text, parse(text)), (e) => e.name);
+		assert.match(true, index(names, 'f') >= 0);
+		assert.match(false, index(names, 'secret') >= 0);
+	});
+
+	it('takes only the first top-level return object as the module value', () => {
+		let text = "return { a: 1 };\nreturn { b: 2 };\n";
+		let names = map(extractExports(text, parse(text)), (e) => e.name);
+		assert.match(true, index(names, 'a') >= 0);
+		assert.match(false, index(names, 'b') >= 0);
+	});
+
+	it('surfaces a shorthand field of the return object', () => {
+		let text = "let helper = 1;\nreturn { helper };\n";
+		let names = map(extractExports(text, parse(text)), (e) => e.name);
+		assert.match(true, index(names, 'helper') >= 0);
+	});
+
+	// A return object is only the module's exports at the top level. Nested at any
+	// depth inside a function it is a return value, never an export.
+	prop("a return object nested inside function(s) yields no exports",
+		gen.int(1, 4),
+		(depth) => {
+			let src = "return { a: 1, b: 2 };";
+			for (let i = 0; i < depth; i++) src = sprintf("function f%d() { %s }", i, src);
+			let names = map(extractExports(src, parse(src)), (e) => e.name);
+			assert.match(false, index(names, 'a') >= 0);
+			assert.match(false, index(names, 'b') >= 0);
+		});
 });
 
 describe('indexer.extractImports', () => {

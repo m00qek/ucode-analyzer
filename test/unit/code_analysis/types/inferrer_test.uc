@@ -1,4 +1,4 @@
-import { describe, it, assert, mock, beforeEach } from 'utest';
+import { describe, it, assert, mock, beforeEach, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
 import { inferNode } from 'code_analysis.types.inferrer';
@@ -1108,6 +1108,40 @@ describe('inferrer — require() module loader', () => {
 		let t = infer('let m = require(dynamicName);');
 		assert.match(true, t.kind !== 'module');
 	});
+
+	// ── guard branches ──────────────────────────────────────────────────────
+	it('a zero-argument require() is not a module type', () => {
+		let t = infer('let m = require();');
+		assert.match(true, t.kind !== 'module');
+	});
+
+	it('an empty-string require("") is not a module type', () => {
+		let t = infer('let m = require("");');
+		assert.match(true, t.kind !== 'module');
+	});
+
+	it('require of an unresolved specifier is still a module type (path preserved)', () => {
+		let t = infer('let m = require("no.such.module.xyz");');
+		assert.match('module', t.kind);
+		assert.match('no.such.module.xyz', t.path);
+	});
+
+	it('member access on an unresolved required module is unknown, not a crash', () => {
+		let t = infer('let g = require("no.such.module.xyz").whatever;');
+		assert.match('unknown', t.kind);
+	});
+
+	// ── round-trip property ─────────────────────────────────────────────────
+	// For any dotted specifier that survives as a single string_fragment, the
+	// inferred module type must carry that exact specifier as its path.
+	prop("require(\"S\") round-trips the specifier into module.path",
+		gen.map(gen.array(gen.alphanumeric({ min_len: 1, max_len: 4 }), { min_len: 1, max_len: 4 }),
+		        (segs) => join('.', segs)),
+		(spec) => {
+			let t = infer(sprintf('let m = require("%s");', spec));
+			assert.match('module', t.kind);
+			assert.match(spec, t.path);
+		});
 });
 
 describe('inferrer — importScope: object-literal export typed as record', () => {
