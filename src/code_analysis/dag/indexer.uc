@@ -2,7 +2,7 @@ import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import * as type_registry from 'code_analysis.types.registry';
-import { buildLineTable, offsetToPosition, docBefore } from 'code_analysis.positions';
+import { buildLineTable, offsetToPosition, docBefore, docBeforeMap } from 'code_analysis.positions';
 import { topLevelStatements } from 'code_analysis.mode';
 
 
@@ -15,32 +15,47 @@ function dotToSlash(s) {
 	return out;
 }
 
-// Return { kind, doc, startByte } for the local declaration of name.
-// startByte is the byte offset of the name identifier node, or null if not found.
-function localDeclInfo(root, text, name) {
+// Build a { name -> { kind, doc, startByte } } index of every top-level
+// declaration in one pass. Callers that need to resolve many names (an
+// export_clause, or a legacy return object's identifier fields) share one
+// index instead of re-walking the tree per name — that re-walk was O(fields²)
+// on large modules (fw4.uc's 88-field return object ≈ 67ms per reindex).
+// First declaration of a name wins, matching the old first-match scan.
+function buildDeclIndex(root, text) {
+	let index = {};
 	for (let stmt in topLevelStatements(root)) {
 		let nt = ts.nodeType(stmt);
 		if (nt === 'function_declaration') {
 			let nameNode = ts.namedChild(stmt, 0);
-			if (nameNode && ts.text(nameNode, text) === name) {
-				let docText = docBefore(stmt, root, text);
-				return { kind: 'function', doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
-			}
+			if (!nameNode) continue;
+			let name = ts.text(nameNode, text);
+			if (exists(index, name)) continue;
+			let docText = docBefore(stmt, root, text);
+			index[name] = { kind: 'function', doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
 		} else if (nt === 'lexical_declaration') {
 			for (let j = 0; j < ts.namedChildCount(stmt); j++) {
 				let vd = ts.namedChild(stmt, j);
 				if (ts.nodeType(vd) !== 'variable_declarator') continue;
 				let nameNode = ts.namedChild(vd, 0);
-				if (!nameNode || ts.text(nameNode, text) !== name) continue;
+				if (!nameNode) continue;
+				let name = ts.text(nameNode, text);
+				if (exists(index, name)) continue;
 				let init = ts.childByField(vd, 'value');
 				let it = init ? ts.nodeType(init) : null;
 				let kind = (it === 'arrow_function' || it === 'function_expression') ? 'function' : 'let';
 				let docText = docBefore(stmt, root, text);
-				return { kind, doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
+				index[name] = { kind, doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
 			}
 		}
 	}
-	return { kind: 'let', doc: null, startByte: null };
+	return index;
+}
+
+// Return { kind, doc, startByte } for the local declaration of name, from a
+// prebuilt declIndex. startByte is the byte offset of the name identifier node,
+// or null if the name has no top-level declaration.
+function localDeclInfo(index, name) {
+	return exists(index, name) ? index[name] : { kind: 'let', doc: null, startByte: null };
 }
 
 // Extracts the module specifier string from an import_statement node.
@@ -61,13 +76,15 @@ function importSpecifier(stmt, text) {
 // For function-expression values the preceding /** */ inside the object is used.
 // For identifier values the local declaration (function or const) is resolved.
 // For nested object literals the function recurses, populating properties.
-function extractObjectProperties(objectNode, root, text, pos) {
+function extractObjectProperties(objectNode, index, text, pos) {
 	let props = [];
+	// One pass for all field docs; per-field docBefore would be O(fields²).
+	let docMap = docBeforeMap(objectNode, text);
 	for (let i = 0; i < ts.namedChildCount(objectNode); i++) {
 		let pair = ts.namedChild(objectNode, i);
 		if (ts.nodeType(pair) === 'shorthand_property_identifier') {
 			let name = ts.text(pair, text);
-			let info = localDeclInfo(root, text, name);
+			let info = localDeclInfo(index, name);
 			push(props, { name, kind: info.kind, doc: info.doc, properties: null,
 			              position: pos ? pos(ts.startByte(pair)) : null });
 			continue;
@@ -83,18 +100,18 @@ function extractObjectProperties(objectNode, root, text, pos) {
 		let kind, doc, properties;
 		if (vtype === 'function_expression' || vtype === 'arrow_function') {
 			kind       = 'function';
-			let docText = docBefore(pair, objectNode, text);
+			let docText = docMap[ts.startByte(pair)];
 			doc        = docText ? parseDoc(docText) : null;
 			properties = null;
 		} else if (vtype === 'identifier') {
-			let info   = localDeclInfo(root, text, ts.text(valNode, text));
+			let info   = localDeclInfo(index, ts.text(valNode, text));
 			kind       = info.kind;
 			doc        = info.doc;
 			properties = null;
 		} else if (vtype === 'object') {
 			kind       = 'object';
 			doc        = null;
-			properties = extractObjectProperties(valNode, root, text, pos);
+			properties = extractObjectProperties(valNode, index, text, pos);
 		} else {
 			kind       = 'value';
 			doc        = null;
@@ -114,8 +131,32 @@ export function extractExports(text, tree) {
 		return offsetToPosition(text, lineTable, startByte);
 	}
 
+	// The declaration index is only needed for `export { ... }` clauses and the
+	// legacy return object; pure `export function`/`export let` files never touch
+	// it. Build it at most once, on first use.
+	let _declIndex = null;
+	function declIndex() {
+		if (_declIndex === null) _declIndex = buildDeclIndex(root, text);
+		return _declIndex;
+	}
+
+	// The first top-level `return {…}` is the legacy module export object (see
+	// note below). Captured during the single statement pass and processed after
+	// the ES exports so those take precedence.
+	let sawReturn  = false;
+	let returnObj  = null;
+
 	for (let stmt in topLevelStatements(root)) {
-		if (ts.nodeType(stmt) !== 'export_statement') continue;
+		let stmtType = ts.nodeType(stmt);
+		if (stmtType === 'return_statement') {
+			if (!sawReturn) {
+				sawReturn = true;
+				let val = ts.namedChild(stmt, 0);
+				if (val && ts.nodeType(val) === 'object') returnObj = val;
+			}
+			continue;
+		}
+		if (stmtType !== 'export_statement') continue;
 
 		let decl = ts.namedChild(stmt, 0);
 		if (!decl) continue;
@@ -159,7 +200,7 @@ export function extractExports(text, tree) {
 				} else if (init && ts.nodeType(init) === 'identifier') {
 					localRef = ts.text(init, text);
 				} else if (init && ts.nodeType(init) === 'object') {
-					properties = extractObjectProperties(init, root, text, pos);
+					properties = extractObjectProperties(init, declIndex(), text, pos);
 				}
 				push(result, { name: ts.text(nameNode, text), kind, doc, memberRef, localRef, properties,
 				               position: pos(ts.startByte(nameNode)) });
@@ -177,7 +218,7 @@ export function extractExports(text, tree) {
 				// for the declaration lookup so kind/doc reflect the actual local binding.
 				let localNameNode = (count > 1) ? ts.namedChild(spec, 0) : nameNode;
 				let localName = localNameNode ? ts.text(localNameNode, text) : name;
-				let info = localDeclInfo(root, text, localName);
+				let info = localDeclInfo(declIndex(), localName);
 				let position = (info.startByte !== null) ? pos(info.startByte) : null;
 				push(result, { name, kind: info.kind, doc: info.doc, position });
 			}
@@ -189,20 +230,13 @@ export function extractExports(text, tree) {
 	// luci) instead of ES `export`. Surface each field as an export so a
 	// require()'d member (`fw4.read_state`) resolves for hover, definition and
 	// type inference exactly like a namespace member. ES `export`s take
-	// precedence: they are pushed above and resolveExport returns the first match
-	// by name. Only the first top-level return is the module value.
-	for (let stmt in topLevelStatements(root)) {
-		if (ts.nodeType(stmt) !== 'return_statement') continue;
-		let val = ts.namedChild(stmt, 0);
-		if (val && ts.nodeType(val) === 'object') {
-			// A file mixing `export` and a top-level return object: the ES export
-			// wins (pushed above), so don't emit a duplicate entry for the name.
-			let seen = {};
-			for (let i = 0; i < length(result); i++) seen[result[i].name] = true;
-			for (let prop in extractObjectProperties(val, root, text, pos))
-				if (!seen[prop.name]) push(result, prop);
-		}
-		break;
+	// precedence: they are pushed above, so a name already present is skipped.
+	// Only the first top-level return is the module value (captured above).
+	if (returnObj) {
+		let seen = {};
+		for (let i = 0; i < length(result); i++) seen[result[i].name] = true;
+		for (let prop in extractObjectProperties(returnObj, declIndex(), text, pos))
+			if (!seen[prop.name]) push(result, prop);
 	}
 
 	return result;

@@ -31,15 +31,42 @@ export function docBefore(stmt, parent, text) {
 	return found;
 };
 
+// Like docBefore, but resolves the preceding /** */ doc for EVERY named child of
+// parent in a single left-to-right pass, returning { startByte -> docText|null }.
+// Callers needing docs for many siblings (object fields, top-level declarations)
+// use this instead of calling docBefore per sibling — the latter re-fetches and
+// re-scans the whole child list each time (O(siblings²); ~31ms on fw4.uc's
+// 88-field return object). Same reset rule: a // comment or an intervening named
+// node clears the pending doc.
+export function docBeforeMap(parent, text) {
+	let map = {};
+	let pending = null;
+	for (let c in ts.children(parent)) {
+		let ct = ts.nodeType(c);
+		if (ct === 'comment') {
+			let txt = ts.text(c, text);
+			pending = (substr(txt, 0, 3) === '/**') ? txt : null;
+		} else if (ts.isNamed(c)) {
+			map[ts.startByte(c)] = pending;
+			pending = null;
+		}
+	}
+	return map;
+};
+
 // Build a table of byte offsets at which each line starts.
 // lines[n] is the byte offset of the first byte on line n.
+// One native split plus a per-line accumulation, rather than a per-byte
+// substr scan — the latter was ~38ms on a 3400-line file (length() on a
+// ucode string is a byte count, so the offsets stay byte-accurate).
 export function buildLineTable(text) {
 	let lines = [0];
-	let len = length(text);
+	let parts = split(text, "\n");
+	let off = 0;
 
-	for (let i = 0; i < len; i++) {
-		if (substr(text, i, 1) === '\n')
-			push(lines, i + 1);
+	for (let i = 0; i < length(parts) - 1; i++) {
+		off += length(parts[i]) + 1;   // +1 for the consumed '\n'
+		push(lines, off);
 	}
 
 	return lines;
