@@ -51,7 +51,7 @@ $(BUILD_DIR)/tree_sitter_native.so: $(shell find mod test/mod third_party/tree-s
 			./scripts/feeds update base && \
 			./scripts/feeds install ucode && \
 			make defconfig && \
-			echo 'CONFIG_PACKAGE_$(PKG_NAME)-testmod=y' >> .config && \
+			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-mod-language-server ucode-mod-language-server-test-client ucode-code-analysis ucode-language-server ucode-linter >> .config && \
 			make defconfig && \
 			make package/$(PKG_NAME)/compile V=s && \
 			find /builder/build_dir -path '*/tree_sitter/native.so' \
@@ -116,6 +116,8 @@ package:
 		sh -c " \
 			./scripts/feeds update base && \
 			./scripts/feeds install ucode && \
+			make defconfig && \
+			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-mod-language-server ucode-code-analysis ucode-language-server ucode-linter >> .config && \
 			make defconfig && \
 			make package/$(PKG_NAME)/compile V=s \
 		"; EC=$$?; rm -f $(BUILD_DIR)/$(PKG_NAME)-Makefile; exit $$EC
