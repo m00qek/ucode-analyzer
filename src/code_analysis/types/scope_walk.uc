@@ -1,5 +1,6 @@
 import * as ts from 'tree_sitter';
-import { inferNode, importScope } from 'code_analysis.types.inferrer';
+import { inferNode } from 'code_analysis.types.inferrer';
+import { importScope } from 'code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeHas, scopeFork } from 'code_analysis.types.scope';
 import { UNKNOWN, STR } from 'code_analysis.types.type_utils';
 import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';

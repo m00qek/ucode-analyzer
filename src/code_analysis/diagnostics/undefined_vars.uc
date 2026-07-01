@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { buildLineTable, rangeOf } from 'code_analysis.positions';
 import * as dag from 'code_analysis.dag.dag';
-import { globalUri } from 'code_analysis.types.inferrer';
+import { globalUri } from 'code_analysis.types.dag_bridge';
 import { makeScope, scopeHas, scopeSet } from 'code_analysis.types.scope';
 
 let SEVERITY_WARNING = 2;

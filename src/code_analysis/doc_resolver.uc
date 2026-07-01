@@ -1,6 +1,7 @@
 import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
-import { inferNode, globalUri } from 'code_analysis.types.inferrer';
+import { inferNode } from 'code_analysis.types.inferrer';
+import { globalUri } from 'code_analysis.types.dag_bridge';
 
 // A module's own export entry for `name`, WITHOUT following re-export chains.
 // Lets hover prefer a wrapper's own JSDoc (e.g. on `export const x = native.y`)

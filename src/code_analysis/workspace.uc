@@ -1,7 +1,7 @@
 import * as glob from 'code_analysis.glob';
 import * as dag from 'code_analysis.dag.dag';
 import * as documents from 'code_analysis.documents';
-import { initBuiltinsFromDag } from 'code_analysis.types.inferrer';
+import { initBuiltinsFromDag } from 'code_analysis.types.dag_bridge';
 import { diagnosticsFor } from 'code_analysis.diagnostics';
 
 // Build the cross-file graph and the builtin scope for a workspace: index every

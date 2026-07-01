@@ -1,7 +1,7 @@
 import { describe, it, assert, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
-import { initBuiltinsFromDag } from 'code_analysis.types.inferrer';
+import { initBuiltinsFromDag } from 'code_analysis.types.dag_bridge';
 import { buildScopeMap, scopeAtOffset } from 'code_analysis.types.scope_walk';
 import { scopeGet } from 'code_analysis.types.scope';
 import { invalidateUri } from 'code_analysis.memo';

@@ -2,7 +2,7 @@ import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'code_analysis.documents';
 import { undefinedVars } from 'code_analysis.diagnostics.undefined_vars';
 import * as dag from 'code_analysis.dag.dag';
-import { initBuiltinsFromDag } from 'code_analysis.types.inferrer';
+import { initBuiltinsFromDag } from 'code_analysis.types.dag_bridge';
 
 let URI = 'file:///test.uc';
 

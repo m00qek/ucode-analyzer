@@ -2,7 +2,8 @@ import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'code_analysis.positions';
 import * as dag from 'code_analysis.dag.dag';
 import * as fs from 'fs';
-import { inferNode, globalUri } from 'code_analysis.types.inferrer';
+import { inferNode } from 'code_analysis.types.inferrer';
+import { globalUri } from 'code_analysis.types.dag_bridge';
 import { scopeAtOffset } from 'code_analysis.types.scope_walk';
 import * as type_registry from 'code_analysis.types.registry';
 
