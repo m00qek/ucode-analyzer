@@ -32,3 +32,30 @@ export function isTemplate(text) {
 export function parse(text) {
 	return ts.parse(isTemplate(text) ? _templateParser : _scriptParser, text);
 };
+
+// Yield the logical top-level statements of a parsed file, transparently
+// unwrapping template statement tags so callers need not know the mode. For a
+// script (program root) these are simply the root's named children. For a
+// template (markup root) a `{% stmt; ... %}` block wraps its statements in a
+// `statement_tag` node — we descend one level into each and surface the real
+// statements (dropping the `statement_tag_open`/`_close` delimiters). Spanning
+// forms (`for_in_alt_statement`, …) and non-statement children (`raw_text`,
+// `expression_tag`) pass through as-is; the caller's node-type check ignores what
+// it doesn't handle, exactly as it does for a script tree.
+export function topLevelStatements(root) {
+	let out = [];
+	for (let i = 0; i < ts.namedChildCount(root); i++) {
+		let child = ts.namedChild(root, i);
+		if (ts.nodeType(child) !== 'statement_tag') {
+			push(out, child);
+			continue;
+		}
+		for (let j = 0; j < ts.namedChildCount(child); j++) {
+			let inner = ts.namedChild(child, j);
+			let it = ts.nodeType(inner);
+			if (it === 'statement_tag_open' || it === 'statement_tag_close') continue;
+			push(out, inner);
+		}
+	}
+	return out;
+};

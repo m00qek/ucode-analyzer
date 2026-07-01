@@ -1,9 +1,8 @@
 import * as fs from 'fs';
-import * as ts from 'tree_sitter';
+import * as mode from 'code_analysis.mode';
 import { extractExports, extractImports, extractTypedefs, extractModuleDoc, extractVersions, resolveModule } from 'code_analysis.dag.indexer';
 import * as type_registry from 'code_analysis.types.registry';
 
-let _parser = ts.newParser(ts.ucode());
 let _config = {};
 let _nodes = {};
 let _outEdges = {};
@@ -75,7 +74,7 @@ function readAndParse(path) {
 	if (!f) return null;
 	let text = f.read('all');
 	f.close();
-	return { text, tree: ts.parse(_parser, text) };
+	return { text, tree: mode.parse(text) };
 }
 
 export function init(config) {

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import * as type_registry from 'code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBefore } from 'code_analysis.positions';
+import { topLevelStatements } from 'code_analysis.mode';
 
 
 function dotToSlash(s) {
@@ -17,8 +18,7 @@ function dotToSlash(s) {
 // Return { kind, doc, startByte } for the local declaration of name.
 // startByte is the byte offset of the name identifier node, or null if not found.
 function localDeclInfo(root, text, name) {
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let stmt = ts.namedChild(root, i);
+	for (let stmt in topLevelStatements(root)) {
 		let nt = ts.nodeType(stmt);
 		if (nt === 'function_declaration') {
 			let nameNode = ts.namedChild(stmt, 0);
@@ -114,8 +114,7 @@ export function extractExports(text, tree) {
 		return offsetToPosition(text, lineTable, startByte);
 	}
 
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let stmt = ts.namedChild(root, i);
+	for (let stmt in topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'export_statement') continue;
 
 		let decl = ts.namedChild(stmt, 0);
@@ -192,8 +191,7 @@ export function extractImports(text, tree) {
 	let result = [];
 	let root = ts.rootNode(tree);
 
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let stmt = ts.namedChild(root, i);
+	for (let stmt in topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
 
 		let specifier = importSpecifier(stmt, text);

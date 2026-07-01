@@ -1,5 +1,6 @@
 import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
+import * as mode from 'code_analysis.mode';
 import * as dag from 'code_analysis.dag.dag';
 
 let _parser = ts.newParser(ts.ucode());
@@ -438,5 +439,42 @@ describe('dag markOpen / cascade skip', () => {
 		let exps = dag.exportsOf(URI_B);
 		let names = map(exps ?? [], (e) => e.name);
 		assert.match(true, index(names, 'diskVersion') >= 0);
+	});
+});
+
+describe('dag — template modules (markup-mode files)', () => {
+	beforeEach(reset);
+
+	it('registers exports declared inside template tags', () => {
+		let text = "{% export function widget() {} %}\n<div></div>\n";
+		dag.add(URI_B, text, mode.parse(text));
+
+		let exps = dag.exportsOf(URI_B);
+		assert.match(1, length(exps));
+		assert.match('widget', exps[0].name);
+		assert.match('function', exps[0].kind);
+	});
+
+	it('resolves an import declared inside a template tag and records the edge', () => {
+		let text = "{% import * as ts from 'tree_sitter'; %}\n{{ ts.ucode }}\n";
+		dag.add(URI_A, text, mode.parse(text));
+
+		let imps = dag.importsOf(URI_A);
+		assert.match(1, length(imps));
+		assert.match(TS_URI, imps[0].resolvedUri);
+		assert.match(true, index(dag.reverseDeps(TS_URI), URI_A) >= 0);
+	});
+
+	it('addFromDisk parses an on-disk template with the markup grammar', () => {
+		// dag.uc must route the on-disk read through mode.parse, not a script-only
+		// parser — otherwise the template is garbage and yields no exports.
+		mock.global.patch('fs', { data: { '/app/src/b.uc': "{% export const TITLE = 'Home'; %}\n<h1></h1>\n" } });
+		dag.addFromDisk(URI_B);
+		mock.global.unpatch('fs');
+
+		let exps = dag.exportsOf(URI_B);
+		assert.match(1, length(exps));
+		assert.match('TITLE', exps[0].name);
+		assert.match('const', exps[0].kind);
 	});
 });

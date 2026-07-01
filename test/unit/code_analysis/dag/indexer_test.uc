@@ -1,11 +1,17 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
+import * as mode from 'code_analysis.mode';
 import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'code_analysis.dag.indexer';
 
 let _parser = ts.newParser(ts.ucode());
 
 function parse(text) {
 	return ts.parse(_parser, text);
+}
+
+// Template snippets go through mode.parse so they get the markup grammar.
+function parseTpl(text) {
+	return mode.parse(text);
 }
 
 describe('indexer.extractExports', () => {
@@ -303,5 +309,55 @@ describe('indexer.extractVersions', () => {
 		for (let i = 0; i < 513; i++) padding += 'x';
 		let text = padding + '\n// Versions: 2026.01.16~85922056\n';
 		assert.match(null, extractVersions(text));
+	});
+});
+
+describe('indexer — template mode (imports/exports inside {% %})', () => {
+	it('extracts an import declared inside a statement tag', () => {
+		let text = "{% import { helper } from 'lib.util'; %}\n<p>hi</p>\n";
+		let imps = extractImports(text, parseTpl(text));
+		assert.match(1, length(imps));
+		assert.match('lib.util', imps[0].specifier);
+		assert.match(true, index(imps[0].symbols, 'helper') >= 0);
+	});
+
+	it('extracts a namespace import inside a statement tag', () => {
+		let text = "{% import * as u from 'lib.util'; %}\n";
+		let imps = extractImports(text, parseTpl(text));
+		assert.match(1, length(imps));
+		assert.match('u', imps[0].alias);
+	});
+
+	it('extracts an exported function declared inside a statement tag', () => {
+		let text = "{% export function render(x) { return x; } %}\n<div></div>\n";
+		let exps = extractExports(text, parseTpl(text));
+		assert.match(1, length(exps));
+		assert.match('render', exps[0].name);
+		assert.match('function', exps[0].kind);
+	});
+
+	it('extracts an exported const inside a statement tag', () => {
+		let text = "{% export const TITLE = 'Home'; %}\n";
+		let exps = extractExports(text, parseTpl(text));
+		assert.match(1, length(exps));
+		assert.match('TITLE', exps[0].name);
+		assert.match('const', exps[0].kind);
+	});
+
+	it('resolves an export clause against a local decl in another tag', () => {
+		// localDeclInfo must also descend through statement tags.
+		let text = "{% function greet() {} %}\n{% export { greet }; %}\n";
+		let exps = extractExports(text, parseTpl(text));
+		assert.match(1, length(exps));
+		assert.match('greet', exps[0].name);
+		assert.match('function', exps[0].kind);
+	});
+
+	it('finds imports and exports across separate tags in one template', () => {
+		let text = "{% import { a } from 'm'; %}\n" +
+		           "text\n" +
+		           "{% export const B = a; %}\n";
+		assert.match(1, length(extractImports(text, parseTpl(text))));
+		assert.match(1, length(extractExports(text, parseTpl(text))));
 	});
 });
