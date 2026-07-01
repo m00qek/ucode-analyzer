@@ -1,13 +1,12 @@
 import * as fs from 'fs';
-import * as ts from 'tree_sitter';
+import * as mode from 'code_analysis.mode';
 import { buildLineTable } from 'code_analysis.positions';
 import { buildScopeMap } from 'code_analysis.types.scope_walk';
 
-let _parser = ts.newParser(ts.ucode());
 let _documents = {};
 
 export function open(uri, text, version) {
-	let tree = ts.parse(_parser, text);
+	let tree = mode.parse(text);
 	_documents[uri] = {
 		uri,
 		text,
@@ -25,7 +24,7 @@ export function change(uri, changes, version) {
 		return;
 
 	let text = changes[0].text;
-	let tree = ts.parse(_parser, text);
+	let tree = mode.parse(text);
 
 	_documents[uri] = {
 		uri,
@@ -49,7 +48,7 @@ export function readParsed(uri) {
 	if (!f) return null;
 	let text = f.read('all');
 	f.close();
-	return { uri, text, version: null, tree: ts.parse(_parser, text) };
+	return { uri, text, version: null, tree: mode.parse(text) };
 };
 
 // Attach lineTable + scopeMap to a bare document (from readParsed) and return
