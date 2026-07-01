@@ -14,22 +14,36 @@ import { assignmentToConst }      from 'code_analysis.diagnostics.assignment_con
 import { missingReturn }          from 'code_analysis.diagnostics.missing_return';
 import { formatString }            from 'code_analysis.diagnostics.format_string';
 
+// Run one diagnostic pass, appending its results to `out`. Each pass is isolated:
+// a die() or runtime error in one pass (a parser edge case, a pathological tree)
+// must not drop the other passes' diagnostics for this file, nor abort a
+// workspace scan diagnosing up to 500 files. On failure the pass contributes
+// nothing — we never invent diagnostics (precision over recall) — and log to
+// stderr so the bug is still visible.
+export function runPass(name, uri, fn, out) {
+	try {
+		for (let d in fn()) push(out, d);
+	} catch (e) {
+		warn(sprintf("ucode-ls: diagnostic '%s' failed for %s: %s\n", name, uri, e));
+	}
+};
+
 export function diagnosticsFor(uri, doc) {
 	let diags = [];
-	for (let d in syntaxErrors(doc))             push(diags, d);
-	for (let d in unknownImports(uri, doc))       push(diags, d);
-	for (let d in unknownImportSymbols(uri, doc)) push(diags, d);
-	for (let d in unusedImports(doc))             push(diags, d);
-	for (let d in unusedVars(doc))                push(diags, d);
-	for (let d in undefinedVars(doc))             push(diags, d);
-	for (let d in preferStrictEquality(doc))      push(diags, d);
-	for (let d in typeErrors(uri, doc))           push(diags, d);
-	for (let d in unreachableCode(doc))           push(diags, d);
-	for (let d in deprecatedUsage(uri, doc))      push(diags, d);
-	for (let d in redeclaredVars(doc))            push(diags, d);
-	for (let d in duplicateObjectKey(doc))        push(diags, d);
-	for (let d in assignmentToConst(doc))         push(diags, d);
-	for (let d in missingReturn(doc))             push(diags, d);
-	for (let d in formatString(uri, doc))         push(diags, d);
+	runPass('syntax-errors',          uri, () => syntaxErrors(doc),             diags);
+	runPass('unknown-imports',        uri, () => unknownImports(uri, doc),      diags);
+	runPass('unknown-import-symbols', uri, () => unknownImportSymbols(uri, doc), diags);
+	runPass('unused-imports',         uri, () => unusedImports(doc),            diags);
+	runPass('unused-vars',            uri, () => unusedVars(doc),               diags);
+	runPass('undefined-vars',         uri, () => undefinedVars(doc),            diags);
+	runPass('prefer-strict-equality', uri, () => preferStrictEquality(doc),     diags);
+	runPass('type-errors',            uri, () => typeErrors(uri, doc),          diags);
+	runPass('unreachable-code',       uri, () => unreachableCode(doc),          diags);
+	runPass('deprecated-usage',       uri, () => deprecatedUsage(uri, doc),     diags);
+	runPass('redeclared-vars',        uri, () => redeclaredVars(doc),           diags);
+	runPass('duplicate-object-key',   uri, () => duplicateObjectKey(doc),       diags);
+	runPass('assignment-const',       uri, () => assignmentToConst(doc),        diags);
+	runPass('missing-return',         uri, () => missingReturn(doc),            diags);
+	runPass('format-string',          uri, () => formatString(uri, doc),        diags);
 	return diags;
 };

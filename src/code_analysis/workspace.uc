@@ -100,8 +100,15 @@ export function workspaceUris(config) {
 
 // Diagnose a single URI, loading it from disk if it is not open.
 export function diagnoseFile(uri) {
-	let doc = documents.getOrLoad(uri);
-	return doc ? diagnosticsFor(uri, doc) : [];
+	// A single pathological file must never abort a workspace scan. diagnosticsFor
+	// already isolates each pass; this also covers loading/parsing failures.
+	try {
+		let doc = documents.getOrLoad(uri);
+		return doc ? diagnosticsFor(uri, doc) : [];
+	} catch (e) {
+		warn(sprintf("ucode-ls: failed to diagnose %s: %s\n", uri, e));
+		return [];
+	}
 };
 
 // Build the DAG + builtins and return the bare (un-scoped) workspace documents,
@@ -166,8 +173,16 @@ export function loadWorkspaceDocs(config) {
 // complete (i.e. after loadWorkspaceDocs has returned), because the scopeMap
 // resolves imports. Returns { uri, diags }.
 export function diagnoseDoc(doc) {
-	documents.withScopeMap(doc);
-	return { uri: doc.uri, diags: diagnosticsFor(doc.uri, doc) };
+	// As diagnoseFile, but for the parse-once scan path: also isolate a failure in
+	// withScopeMap (scope walk / inference on a pathological tree) so one bad file
+	// cannot abort a forked worker's whole shard.
+	try {
+		documents.withScopeMap(doc);
+		return { uri: doc.uri, diags: diagnosticsFor(doc.uri, doc) };
+	} catch (e) {
+		warn(sprintf("ucode-ls: failed to diagnose %s: %s\n", doc.uri, e));
+		return { uri: doc.uri, diags: [] };
+	}
 };
 
 // Serial workspace scan: load every workspace file and diagnose it in-process.
