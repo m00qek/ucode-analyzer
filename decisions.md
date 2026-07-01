@@ -67,6 +67,38 @@ becomes a maintenance hazard.
 
 ---
 
+## Deferred: chunk the synchronous `loadWorkspace` at startup
+
+**Decision.** Keep the `initialized` handler loading the whole workspace
+(`workspace.loadWorkspace`) in one synchronous pass on the event loop. Do **not**
+(yet) split it into N-files-per-turn chunks driven by `workspace/diagnostic/refresh`.
+
+**Why the obvious fix is wrong here.** Chunked loading leaves a *partial DAG
+window*: between chunks, the DAG knows some files and not others. The
+interactive cross-file features (definition, hover, completion) resolve targets
+straight out of the DAG and, unlike `unknown_import_symbols` (which force-loads a
+missing target via `dag.addFromDisk` before deciding), they simply return `null`
+on a miss. So during a chunked load they would intermittently return "no
+definition / no hover" for symbols in not-yet-loaded files — and the e2e suite,
+which opens a file and immediately queries, would go non-deterministic.
+
+A correct chunked load therefore needs the *reads* to be lazy too: every
+cross-file DAG lookup must self-heal (force-load the target on miss) the way
+`unknown_import_symbols` already does, so a partial window is invisible to
+callers. That is a central change to DAG read semantics, not a change to the
+loader — and it is the real prerequisite, not the chunking itself.
+
+**What we did instead.** The blocking package-manager probes (the other startup
+cost) already run off the event loop in a `uloop.task` (`platform.initAsync`),
+which is safe because their output is a small serializable index dict. The DAG
+load can't use `task()` the same way: its output *is* the large shared state plus
+native tree-sitter handles, which don't survive the pipe.
+
+**Revisit if.** We make cross-file DAG reads uniformly lazy/self-healing, at
+which point chunked startup becomes a safe, mechanical follow-up.
+
+---
+
 ## Resolved review items (for provenance)
 
 The code review that produced these decisions also surfaced work that is now
