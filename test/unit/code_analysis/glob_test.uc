@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, prop, gen } from 'utest';
 import { matchPattern, scan } from 'code_analysis.glob';
 
 describe('glob.matchPattern', () => {
@@ -59,4 +59,49 @@ describe('glob.scan', () => {
 		let files = scan('/app/src', ['**/*.lua'], []);
 		assert.match(0, length(files));
 	});
+});
+
+// ---------------------------------------------------------------------------
+// Property-based tests: a literal path used as its own glob pattern must match
+// itself, even when it is riddled with regex metacharacters. This is exactly
+// the property globToRegex's escape set exists to guarantee — every character
+// in _special is escaped so it matches literally rather than acting as a regex
+// operator. The charset deliberately excludes the two glob wildcards ('*','?')
+// and the path separator ('/'), which are the only characters that are *not*
+// meant to match themselves literally.
+// ---------------------------------------------------------------------------
+
+let META_CHARSET = "abAB01.+-_(){}[]^$|";
+
+// A path segment of 1–5 metachar-laden characters, no wildcards / separators.
+let SEGMENT = gen.string({ min_len: 1, max_len: 5, charset: META_CHARSET });
+
+// Join 1–3 segments with '/'.
+function joinSegs(segs) {
+	let path = '';
+	for (let i = 0; i < length(segs); i++)
+		path += (i > 0 ? '/' : '') + segs[i];
+	return path;
+}
+
+describe('glob.matchPattern — properties', () => {
+	prop('a literal path matches itself as a pattern (metachars escaped)',
+		gen.array(SEGMENT, { min_len: 1, max_len: 3 }),
+		(segs, ctx) => {
+			let path = joinSegs(segs);
+			ctx.classify('has-dot',    index(path, '.') >= 0);
+			ctx.classify('has-bracket', index(path, '[') >= 0 || index(path, '{') >= 0);
+			assert.match(true, matchPattern(path, path),
+				sprintf('%s did not self-match', path));
+		});
+
+	prop('the pattern is anchored — a longer pattern never matches a prefix path',
+		gen.array(SEGMENT, { min_len: 1, max_len: 3 }),
+		(segs) => {
+			let path = joinSegs(segs);
+			// 'Q' is a plain literal (not a wildcard), so path+'Q' is strictly
+			// longer than path; the ^…$ anchoring must reject the shorter subject.
+			assert.match(false, matchPattern(path + 'Q', path),
+				sprintf('%sQ wrongly matched %s', path, path));
+		});
 });

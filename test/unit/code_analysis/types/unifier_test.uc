@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, prop, gen } from 'utest';
 import { unify, substitute } from 'code_analysis.types.unifier';
 
 function prim(name)          { return { kind: 'primitive', name }; }
@@ -151,4 +151,47 @@ describe('substitute', () => {
 		let resolved = substitute(paramSig.return, bindings);
 		assert.match(prim('string'), resolved);
 	});
+});
+
+// ---------------------------------------------------------------------------
+// Property: unify/substitute round-trip. Take a "template" type whose leaves are
+// distinct type variables, and a concrete type of the same shape with a real
+// primitive at each leaf. Unifying template against concrete must bind every
+// variable, and substituting the template with those bindings must reproduce the
+// concrete type exactly. This is the invariant the generic-callback machinery
+// relies on when it resolves e.g. `filter(list<T>, fn): list<T>`.
+// ---------------------------------------------------------------------------
+
+// Wrap a leaf type in the chosen container (matching template/concrete shapes).
+// The bare fall-through ('bare') returns the leaf itself.
+function wrap(container, leaf) {
+	if (container === 'list')     return list_(leaf);
+	if (container === 'dict')     return dict_(leaf);
+	if (container === 'nullable') return nullable(leaf);
+	return leaf;
+}
+
+describe('unifier — round-trip property', () => {
+	prop('substitute(template, unify(template, concrete)) === concrete',
+		gen.array(gen.record({
+			p: gen.elements('int', 'string', 'boolean', 'float', 'null'),
+			c: gen.elements('bare', 'list', 'dict', 'nullable'),
+		}), { min_len: 1, max_len: 5 }),
+		(leaves, ctx) => {
+			ctx.classify('single-leaf', length(leaves) === 1);
+
+			// Distinct variable per leaf (index-based) → no cross-leaf conflict.
+			let templateMembers = [];
+			let concreteMembers = [];
+			for (let i = 0; i < length(leaves); i++) {
+				templateMembers[i] = wrap(leaves[i].c, param_('T' + i));
+				concreteMembers[i] = wrap(leaves[i].c, prim(leaves[i].p));
+			}
+			let template = union_(...templateMembers);
+			let concrete = union_(...concreteMembers);
+
+			let bindings = {};
+			unify(template, concrete, bindings, 0);
+			assert.match(concrete, substitute(template, bindings));
+		});
 });

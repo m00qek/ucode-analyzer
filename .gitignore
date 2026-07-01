@@ -6,6 +6,9 @@
 /to-fix.md
 /linter
 
+# utest persists property-test counterexamples here (removed on pass); never track
+.utest/
+
 # .lsp/ is ignored by the global gitignore; track the root shared lint config
 # only, keeping other local .lsp/ contents (and nested .lsp/ dirs) ignored.
 !/.lsp/

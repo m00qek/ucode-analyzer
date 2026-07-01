@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from 'utest';
+import { describe, it, assert, beforeEach, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
 import * as mode from 'code_analysis.mode';
@@ -370,4 +370,80 @@ describe('buildScopeMap template if/elif/else narrowing', () => {
 		let scope = scopeAtTpl(src, '{{ n');
 		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
 	});
+});
+
+// ---------------------------------------------------------------------------
+// Property-based tests over a run of top-level `let` declarations:
+//   * declared-before-visible — a name is invisible at every offset before its
+//     own statement and visible from that statement's checkpoint onward;
+//   * monotonicity — the set of visible names only grows as the offset advances
+//     (no block scopes / shadowing here, so nothing ever leaves scope).
+// ---------------------------------------------------------------------------
+
+// Distinct two-letter names, so index() locates each declaration unambiguously.
+let NAMES = ['aa', 'bb', 'cc', 'dd', 'ee', 'ff', 'gg', 'hh'];
+
+// "let aa = 1;\nlet bb = 1;\n…" for the first n names.
+function letChain(n) {
+	let src = '';
+	for (let i = 0; i < n; i++)
+		src += 'let ' + NAMES[i] + ' = 1;\n';
+	return src;
+}
+
+// How many of the first n names are visible in `scope`.
+function visibleCount(scope, n) {
+	let c = 0;
+	for (let i = 0; i < n; i++)
+		if (scopeGet(scope, NAMES[i]) !== null) c++;
+	return c;
+}
+
+describe('scopeAtOffset — properties', () => {
+	prop('a let binding is visible from its own statement onward, never before',
+		gen.int(1, length(NAMES)),
+		(n, ctx) => {
+			ctx.classify('single', n === 1);
+			let src = letChain(n);
+			let map = buildScopeMap(URI, src, parse(src));
+
+			// Nothing is declared at the very start of the file.
+			let at0 = scopeAtOffset(map, 0);
+			for (let i = 0; i < n; i++)
+				assert.match(null, scopeGet(at0, NAMES[i]),
+					sprintf('%s leaked before any declaration', NAMES[i]));
+
+			// At statement k's checkpoint, names 0..k-1 are in scope, k..n-1 are not.
+			for (let k = 0; k < n; k++) {
+				let sc = scopeAtOffset(map, index(src, 'let ' + NAMES[k]));
+				for (let i = 0; i < k; i++)
+					assert.match(true, scopeGet(sc, NAMES[i]) !== null,
+						sprintf('%s should be visible at statement %d', NAMES[i], k));
+				for (let i = k; i < n; i++)
+					assert.match(null, scopeGet(sc, NAMES[i]),
+						sprintf('%s visible before its own declaration', NAMES[i]));
+			}
+		});
+
+	prop('visible-name count is monotonic non-decreasing as the offset advances',
+		gen.int(1, length(NAMES)),
+		(n) => {
+			let src = letChain(n);
+			let map = buildScopeMap(URI, src, parse(src));
+
+			// Probe every statement start plus end-of-file, in increasing order.
+			let offsets = [0];
+			for (let k = 0; k < n; k++) push(offsets, index(src, 'let ' + NAMES[k]));
+			push(offsets, length(src));
+
+			let prev = -1;
+			for (let off in offsets) {
+				let cur = visibleCount(scopeAtOffset(map, off), n);
+				assert.match(true, cur >= prev,
+					sprintf('visible count dropped from %d to %d at offset %d', prev, cur, off));
+				prev = cur;
+			}
+			// By end of file all n names are in scope.
+			assert.match(n, visibleCount(scopeAtOffset(map, length(src)), n));
+		});
 });

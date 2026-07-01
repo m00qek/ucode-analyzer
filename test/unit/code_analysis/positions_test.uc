@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
 import * as pos from 'code_analysis.positions';
 
@@ -190,4 +190,86 @@ describe('positions (docBefore)', () => {
 		let docTxt  = pos.docBefore(pair, objNode, text);
 		assert.match(true, docTxt !== null && index(docTxt, 'greet') >= 0);
 	});
+});
+
+// ---------------------------------------------------------------------------
+// Property-based tests: byte <-> LSP position round-trips over multi-byte and
+// astral UTF-8, and buildLineTable invariants.
+// ---------------------------------------------------------------------------
+
+// Text fragments spanning every UTF-8 length class plus a newline. The comment
+// records (byte length, UTF-16 units) so the invariants below stay readable:
+//   'a' 'Z' ' '  -> 1 byte,  1 unit  (ASCII)
+//   '\n'         -> 1 byte,  1 unit  (line break)
+//   'é'          -> 2 bytes, 1 unit  (U+00E9)
+//   '€'          -> 3 bytes, 1 unit  (U+20AC)
+//   '😀'         -> 4 bytes, 2 units (U+1F600, astral / surrogate pair)
+let PIECES = ['a', "\n", 'é', '€', '😀', 'Z', ' '];
+
+// Concatenate the chosen pieces and record the byte offset of every character
+// boundary (including 0 and end-of-text).
+function buildText(idxs) {
+	let text = '';
+	let boundaries = [0];
+	for (let k in idxs) {
+		text += PIECES[k];
+		push(boundaries, length(text));
+	}
+	return { text, boundaries };
+}
+
+describe('positions — properties', () => {
+	prop('offset -> position -> offset is identity at every character boundary',
+		gen.array(gen.int(0, length(PIECES) - 1), { max_len: 14 }),
+		(idxs, ctx) => {
+			let b = buildText(idxs);
+			ctx.classify('empty', length(b.text) === 0);
+			ctx.classify('has-astral', index(b.text, '😀') >= 0);
+			ctx.classify('multiline', index(b.text, "\n") >= 0);
+			let lt = pos.buildLineTable(b.text);
+			for (let off in b.boundaries) {
+				let p = pos.offsetToPosition(b.text, lt, off);
+				let back = pos.positionToOffset(b.text, lt, p);
+				assert.match(off, back,
+					sprintf('round-trip broke at byte %d (line %d, char %d)',
+						off, p.line, p.character));
+			}
+		});
+
+	prop('offsetToPosition is monotonic non-decreasing across boundaries',
+		gen.array(gen.int(0, length(PIECES) - 1), { max_len: 14 }),
+		(idxs) => {
+			let b = buildText(idxs);
+			let lt = pos.buildLineTable(b.text);
+			let prev = pos.offsetToPosition(b.text, lt, b.boundaries[0]);
+			for (let i = 1; i < length(b.boundaries); i++) {
+				let cur = pos.offsetToPosition(b.text, lt, b.boundaries[i]);
+				let advanced = cur.line > prev.line ||
+					(cur.line === prev.line && cur.character >= prev.character);
+				assert.match(true, advanced,
+					sprintf('position went backwards at byte %d', b.boundaries[i]));
+				prev = cur;
+			}
+		});
+
+	prop('buildLineTable: starts at 0, strictly increasing, one entry per line',
+		gen.array(gen.int(0, length(PIECES) - 1), { max_len: 14 }),
+		(idxs, ctx) => {
+			let b = buildText(idxs);
+			let lt = pos.buildLineTable(b.text);
+
+			// Independently compute the byte offsets of every line start.
+			let expected = [0];
+			for (let i = 0; i < length(b.text); i++)
+				if (substr(b.text, i, 1) === "\n") push(expected, i + 1);
+
+			let newlines = length(expected) - 1;
+			ctx.classify('multiline', newlines > 0);
+
+			assert.match(0, lt[0]);
+			assert.match(newlines + 1, length(lt));   // one line start per newline, plus the first
+			for (let i = 1; i < length(lt); i++)
+				assert.match(true, lt[i] > lt[i - 1], 'line starts must strictly increase');
+			assert.match(expected, lt);               // byte-accurate against the scan
+		});
 });

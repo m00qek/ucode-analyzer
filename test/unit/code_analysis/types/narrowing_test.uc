@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
 import { narrowToNonNull, parseGuard, applyGuard, narrowUnionByDiscriminant } from 'code_analysis.types.narrowing';
 import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
@@ -318,4 +318,59 @@ describe('narrowUnionByDiscriminant', () => {
 	it('returns the union unchanged when nothing matches', () => {
 		assert.match(U, narrowUnionByDiscriminant(U, 'kind', 'other', true));
 	});
+});
+
+// ---------------------------------------------------------------------------
+// Property: narrowToNonNull is *sound* (its result never admits null — no bare
+// null primitive, no nullable wrapper, no null member left in a union) and
+// *idempotent* (narrowing an already-narrowed type changes nothing). These are
+// the two contracts every caller relies on when it drops a guard's null case.
+// ---------------------------------------------------------------------------
+
+let ALL_T     = [STR, INT, FLOAT, BOOL, NULL_T];
+let NONNULL_T = [STR, INT, FLOAT, BOOL];
+
+// True when no null can flow through `t` at the top level.
+function isNullFree(t) {
+	if (t.kind === 'nullable') return false;
+	if (t.kind === 'primitive' && t.name === 'null') return false;
+	if (t.kind === 'union')
+		for (let m in t.members)
+			if (m.kind === 'primitive' && m.name === 'null') return false;
+	return true;
+}
+
+function buildType(c) {
+	if (c.mode === 'unknown')  return UNKNOWN;
+	if (c.mode === 'bare')     return ALL_T[c.idxs[0]];
+	if (c.mode === 'nullable') return { kind: 'nullable', inner: NONNULL_T[c.innerIdx] };
+	let members = [];
+	for (let ix in c.idxs) push(members, ALL_T[ix]);   // ix is a value (an index into ALL_T)
+	return { kind: 'union', members };
+}
+
+describe('narrowToNonNull — properties', () => {
+	let typeGen = gen.record({
+		mode:     gen.elements('bare', 'nullable', 'union', 'unknown'),
+		idxs:     gen.array(gen.int(0, length(ALL_T) - 1), { min_len: 1, max_len: 4 }),
+		innerIdx: gen.int(0, length(NONNULL_T) - 1),
+	});
+
+	prop('the result is null-free (sound)',
+		typeGen,
+		(c, ctx) => {
+			let t = buildType(c);
+			ctx.classify('nullable-in',  t.kind === 'nullable');
+			ctx.classify('union-in',     t.kind === 'union');
+			assert.match(true, isNullFree(narrowToNonNull(t)),
+				sprintf('narrowToNonNull left a null in %J', narrowToNonNull(t)));
+		});
+
+	prop('narrowing is idempotent',
+		typeGen,
+		(c) => {
+			let once  = narrowToNonNull(buildType(c));
+			let twice = narrowToNonNull(once);
+			assert.match(once, twice);
+		});
 });
