@@ -2,19 +2,21 @@ import * as ts from 'tree_sitter';
 import * as dag from 'code_analysis.dag.dag';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import { unify, substitute } from 'code_analysis.types.unifier';
-import { memoGet, memoSet } from 'code_analysis.memo';
+import { memoGet, memoSet, docMapGet, docMapSet } from 'code_analysis.memo';
 import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal } from 'code_analysis.types.type_utils';
-import { buildLineTable, offsetToPosition, docBefore } from 'code_analysis.positions';
+import { buildLineTable, offsetToPosition, docBeforeMap } from 'code_analysis.positions';
 import { stringLiteralText } from 'code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'code_analysis.types.dag_bridge';
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
 
 // Walk up to the nearest enclosing program or statement_block, then return
-// the /** */ immediately before the containing statement via docBefore.
-function precedingDoc(node, source) {
+// the /** */ immediately before the containing statement. The parent's whole
+// child list is scanned once (docBeforeMap) and cached per (uri, parent) so a
+// file with many sibling functions doesn't rescan the list per function.
+function precedingDoc(node, source, uri) {
 	let target = node;
 	let p = ts.parent(target);
 	while (p) {
@@ -23,7 +25,15 @@ function precedingDoc(node, source) {
 		target = p;
 		p = ts.parent(target);
 	}
-	return p ? docBefore(target, p, source) : null;
+	if (!p) return null;
+
+	let pKey = ts.startByte(p) + '|' + ts.endByte(p);
+	let map = docMapGet(uri, pKey);
+	if (!map) {
+		map = docBeforeMap(p, source);
+		docMapSet(uri, pKey, map);
+	}
+	return map[ts.startByte(target)] ?? null;
 }
 
 // ── Forward declarations (mutual recursion) ────────────────────────────────
@@ -446,7 +456,7 @@ function inferObject(node, source, uri, scope, depth) {
 }
 
 function inferFunctionExpr(node, source, uri, scope, depth) {
-	let docTxt = precedingDoc(node, source);
+	let docTxt = precedingDoc(node, source, uri);
 	let doc = docTxt ? parseDoc(docTxt) : null;
 	// @returns declared: trust it and skip body inference.
 	if (doc && doc.returns && doc.returns.type) {
@@ -475,7 +485,7 @@ function inferLexicalDecl(node, source, uri, scope, depth) {
 }
 
 function inferFunctionDecl(node, source, uri, scope, depth) {
-	let docTxt = precedingDoc(node, source);
+	let docTxt = precedingDoc(node, source, uri);
 	let doc = docTxt ? parseDoc(docTxt) : null;
 	let docParams = (doc && doc.params) ? doc.params : [];
 
