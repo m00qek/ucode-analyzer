@@ -302,6 +302,18 @@ describe('definition — require() module loader', () => {
 		assert.match(null, result);
 	});
 
+	it('does not module-jump on the string of a locally-shadowed require', () => {
+		// a user `let require = …` is not the builtin loader
+		let text = "let require = (n) => n;\nlet m = require(\"fixtures.greet\");\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		let doc = documents.get(URI);
+
+		// (1, 18) is inside the "fixtures.greet" argument
+		let result = definition(URI, doc, { line: 1, character: 18 });
+		assert.match(null, result);
+	});
+
 	// fixtures/legacy_mod.uc exports via a top-level `return { greet, version }`.
 	it('jumps into a legacy (return-object) module on member access', () => {
 		let LEGACY_URI = 'file:///app/test/fixtures/legacy_mod.uc';
@@ -413,6 +425,27 @@ describe('definition — local (block/loop/catch) declarations', () => {
 		let result = definition(URI, doc, { line: 1, character: 7 });
 		assert.match(0, result.range.start.line);
 		assert.match(14, result.range.start.character);  // 'e' after 'try {} catch ('
+	});
+
+	it('jumps to the value variable of a two-variable for-in', () => {
+		// for (let k, v in obj) — 'v' is bound at col 12 on line 0
+		let text = "let obj = {};\nfor (let k, v in obj) {\n\tprint(v);\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		let result = definition(URI, doc, { line: 2, character: 7 });  // v in print(v)
+		assert.match(URI, result.uri);
+		assert.match(1, result.range.start.line);
+		assert.match(12, result.range.start.character);  // 'v' after 'for (let k, '
+	});
+
+	it('a for-in without let assigns, so gd resolves to the real declaration', () => {
+		// `for (x in …)` does not declare x; gd on the body x must reach `let x`.
+		let text = "let x = 0;\nfor (x in [1]) {\n\tprint(x);\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		let result = definition(URI, doc, { line: 2, character: 7 });
+		assert.match(0, result.range.start.line);         // the `let x`, not the loop header
+		assert.match(4, result.range.start.character);
 	});
 });
 

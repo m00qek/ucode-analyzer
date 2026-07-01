@@ -343,9 +343,22 @@ function walkIfAlt(node, source, uri, scope, map) {
             branch = makeScope(scope);
             applyGuard(branch, ifGuard, false);
         } else if (ct === 'elif_clause' || ct === 'else_alt_clause') {
-            // Inline (non-markup) form with a nested body: walk it under the
-            // parent scope so no prior branch's narrowing leaks in.
-            walkNode(child, source, uri, scope, map);
+            // Inline (colon / non-markup) form: the clause node CONTAINS its own
+            // condition and body. Narrow a fresh branch by the clause's guard and
+            // thread the body through stepStatement so each body offset gets its
+            // own checkpoint — walking it bare would leave those offsets resolving
+            // to the previous branch's (if-branch) checkpoint and its narrowing.
+            let truthy = (ct === 'elif_clause');
+            let guard  = ifGuard;   // else: if-condition false
+            if (truthy) {
+                let ec = ts.childByField(child, 'condition');
+                let ecInner = ec ? ts.namedChild(ec, 0) : null;
+                if (ecInner) walkNode(ecInner, source, uri, scope, map);
+                guard = ecInner ? parseGuard(ecInner, source) : null;
+            }
+            let inlineBranch = makeScope(scope);
+            applyGuard(inlineBranch, guard, truthy);
+            walkAltBody(child, source, uri, inlineBranch, map, altHeaderBytes(child));
         } else {
             branch = stepStatement(child, source, uri, branch, map);
         }

@@ -124,6 +124,24 @@ describe('buildScopeMap if-statement narrowing', () => {
 	});
 });
 
+// ── colon / endif (alt-form) if narrowing in a plain script ─────────────────────
+
+describe('buildScopeMap colon-form if/elif narrowing', () => {
+	// `if (…): … elif (…): … endif` in a script parses to if_alt_statement with
+	// inline elif_clause bodies (no {% %} tags). Each branch must see its OWN
+	// guard, not inherit the previous branch's narrowing.
+	it('narrows the if body and does not leak that narrowing into the elif body', () => {
+		let src = "let m = (1 > 0) ? 'x' : null;\n" +
+		          "if (m):\n\tlet a = m;\n" +
+		          "elif (m == null):\n\tlet b = m;\n" +
+		          "endif;\n";
+		// if body: m truthy → non-null string
+		assert.match('string', scopeGet(scopeAt(src, 'let a'), 'm')?.name);
+		// elif body: its own guard (m == null) → null; NOT the if body's string
+		assert.match({ kind: 'primitive', name: 'null' }, scopeGet(scopeAt(src, 'let b'), 'm'));
+	});
+});
+
 // ── ternary narrowing ─────────────────────────────────────────────────────────
 
 describe('buildScopeMap ternary narrowing', () => {

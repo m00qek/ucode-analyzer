@@ -194,9 +194,14 @@ export function extractExports(text, tree) {
 	for (let stmt in topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'return_statement') continue;
 		let val = ts.namedChild(stmt, 0);
-		if (val && ts.nodeType(val) === 'object')
+		if (val && ts.nodeType(val) === 'object') {
+			// A file mixing `export` and a top-level return object: the ES export
+			// wins (pushed above), so don't emit a duplicate entry for the name.
+			let seen = {};
+			for (let i = 0; i < length(result); i++) seen[result[i].name] = true;
 			for (let prop in extractObjectProperties(val, root, text, pos))
-				push(result, prop);
+				if (!seen[prop.name]) push(result, prop);
+		}
 		break;
 	}
 

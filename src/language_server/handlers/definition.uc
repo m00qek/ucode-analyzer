@@ -74,6 +74,19 @@ function declaratorName(declNode, name, text) {
 	return null;
 }
 
+// True if a for-in header declares its loop variable(s) — `for (let k in …)` —
+// rather than assigning to a pre-existing binding — `for (x in …)`. The `let`/
+// `const` keyword is an anonymous child token of the for node.
+function forInDeclares(node, text) {
+	for (let i = 0; i < ts.childCount(node); i++) {
+		let c = ts.child(node, i);
+		if (ts.isNamed(c)) continue;
+		let s = ts.text(c, text);
+		if (s === 'let' || s === 'const') return true;
+	}
+	return false;
+}
+
 // If `scopeNode` binds `name`, return the binding identifier node. Covers every
 // local binder: block-level let/const and nested function declarations, function
 // parameters, for-in / C-for loop variables, and catch parameters.
@@ -109,11 +122,13 @@ function binderIn(scopeNode, name, text) {
 	}
 
 	if (nt === 'for_in_statement' || nt === 'for_in_alt_statement') {
-		let left = ts.childByField(scopeNode, 'left');
-		if (left) {
-			if (ts.nodeType(left) === 'identifier' && ts.text(left, text) === name) return left;
-			let nn = declaratorName(left, name, text);
-			if (nn) return nn;
+		// `for (x in y)` (no let/const) assigns to a binding declared elsewhere,
+		// so this node does not bind `name` — let the real declaration win.
+		if (!forInDeclares(scopeNode, text)) return null;
+		// `for (let k, v in obj)` binds both the key (`left`) and value (`value`).
+		for (let f in ['left', 'value']) {
+			let v = ts.childByField(scopeNode, f);
+			if (v && ts.nodeType(v) === 'identifier' && ts.text(v, text) === name) return v;
 		}
 		return null;
 	}
@@ -285,8 +300,10 @@ function moduleFileLocation(spec) {
 
 // If strNode is the string specifier of a `require("...")` call, return the
 // Location of the module it names. `require` is ucode's runtime module loader,
-// so its literal argument behaves like an import specifier for navigation.
-function requireStringTarget(doc, strNode) {
+// so its literal argument behaves like an import specifier for navigation. A
+// locally-declared `require` is not the builtin loader, so it is not treated as
+// such (mirrors requireModuleType's shadow guard in the inferrer).
+function requireStringTarget(uri, doc, strNode, offset) {
 	let argsNode = ts.parent(strNode);
 	if (!argsNode || ts.nodeType(argsNode) !== 'arguments') return null;
 	let call = ts.parent(argsNode);
@@ -294,6 +311,7 @@ function requireStringTarget(doc, strNode) {
 	let fnNode = ts.childByField(call, 'function');
 	if (!fnNode || ts.nodeType(fnNode) !== 'identifier' ||
 	    ts.text(fnNode, doc.text) !== 'require') return null;
+	if (localScopeDef(ts.rootNode(doc.tree), uri, doc, 'require', offset)) return null;
 	for (let k = 0; k < ts.childCount(strNode); k++)
 		if (ts.nodeType(ts.child(strNode, k)) === 'string_fragment')
 			return moduleFileLocation(ts.text(ts.child(strNode, k), doc.text));
@@ -319,7 +337,7 @@ export function definition(uri, doc, position) {
 	// The string specifier of require("...") → jump to the module file.
 	if (nt === 'string' || nt === 'string_fragment') {
 		let strNode = (nt === 'string_fragment') ? ts.parent(node) : node;
-		return strNode ? requireStringTarget(doc, strNode) : null;
+		return strNode ? requireStringTarget(uri, doc, strNode, offset) : null;
 	}
 
 	if (nt !== 'identifier') return null;

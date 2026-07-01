@@ -218,6 +218,15 @@ describe('indexer.extractExports', () => {
 		let exps = extractExports(text, parse(text));
 		assert.match(0, length(exps));
 	});
+
+	it('does not duplicate a name exported by both ES export and the return object', () => {
+		let text = "export function foo() {}\nreturn { foo, bar: 1 };\n";
+		let exps = extractExports(text, parse(text));
+		let foos = filter(exps, (e) => e.name === 'foo');
+		assert.match(1, length(foos));          // the ES export, once
+		assert.match('function', foos[0].kind); // and it's the ES one (pushed first)
+		assert.match(true, index(map(exps, (e) => e.name), 'bar') >= 0);
+	});
 });
 
 describe('indexer.extractImports', () => {
