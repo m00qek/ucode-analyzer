@@ -48,6 +48,56 @@ function narrowExcluding(type, exclude) {
 	return { kind: 'union', members: kept };
 }
 
+// A direct string/number literal node's concrete value (mirrors the inferrer's
+// literalValueOf), or null when the node isn't a plain literal.
+function literalNodeValue(node, source) {
+	if (!node) return null;
+	let nt = ts.nodeType(node);
+	if (nt === 'string') {
+		for (let k = 0; k < ts.childCount(node); k++)
+			if (ts.nodeType(ts.child(node, k)) === 'string_fragment')
+				return ts.text(ts.child(node, k), source);
+		return '';
+	}
+	if (nt === 'number') {
+		let v = +ts.text(node, source);
+		if (type(v) === 'int' || type(v) === 'double') return v;
+	}
+	return null;
+}
+
+// How a single record variant relates to `field === value`:
+//   'match'    — its `field` is a literal equal to value
+//   'no-match' — its `field` is a literal NOT equal to value
+//   'unknown'  — `field` is absent or not a literal (can't decide → keep in both)
+function discriminantState(record, field, value) {
+	if (!record || record.kind !== 'record') return 'unknown';
+	let ft = null;
+	for (let i = 0; i < length(record.fields); i++)
+		if (record.fields[i].name === field) { ft = record.fields[i].type; break; }
+	if (!ft || ft.kind !== 'primitive' || !exists(ft, 'value')) return 'unknown';
+	return ft.value === value ? 'match' : 'no-match';
+}
+
+// Refine a union of record variants by a discriminant test `name.field === value`.
+// keep=true  (true branch): drop variants that definitely don't match.
+// keep=false (false branch): drop the variant that definitely does match.
+// Variants whose discriminant is unknown survive both branches (sound). Non-union
+// inputs, or a partition that removes nothing/everything, are returned unchanged.
+export function narrowUnionByDiscriminant(type, field, value, keep) {
+	type = resolveRef(type);
+	if (type.kind !== 'union') return type;
+	let kept = [];
+	for (let i = 0; i < length(type.members); i++) {
+		let state = discriminantState(resolveRef(type.members[i]), field, value);
+		let drop = keep ? (state === 'no-match') : (state === 'match');
+		if (!drop) push(kept, type.members[i]);
+	}
+	if (length(kept) === 0 || length(kept) === length(type.members)) return type;
+	if (length(kept) === 1) return kept[0];
+	return { kind: 'union', members: kept };
+};
+
 // Guards are typed objects describing what a condition asserts about a variable:
 //
 //   { kind: 'truthy', name, positive }
@@ -56,6 +106,10 @@ function narrowExcluding(type, exclude) {
 //
 //   { kind: 'type', name, positive, toType }
 //       type(x) === 'string' (positive=true) or !== (positive=false).
+//
+//   { kind: 'variant', name, field, value, positive }
+//       Discriminant test r.field === <literal> (positive=true) or !==. Refines
+//       a tagged union bound to `name` to the matching variant(s) per branch.
 //
 //   { kind: 'and', guards }
 //       Compound &&: all sub-guards hold in the consequent; alternate is
@@ -141,6 +195,28 @@ export function parseGuard(node, source) {
 			}
 		}
 
+		// r.kind === 'fail'  /  r.kind !== 'fail'  — discriminant test on a
+		// tagged union: one side is `identifier.field`, the other a literal.
+		let memberSide = null, litSide = null;
+		if (ts.nodeType(left) === 'member_expression') { memberSide = left; litSide = right; }
+		else if (ts.nodeType(right) === 'member_expression') { memberSide = right; litSide = left; }
+		if (memberSide) {
+			let objNode  = ts.childByField(memberSide, 'object');
+			let propNode = ts.childByField(memberSide, 'property');
+			if (objNode  && ts.nodeType(objNode)  === 'identifier' &&
+			    propNode && ts.nodeType(propNode) === 'property_identifier') {
+				let lv = literalNodeValue(litSide, source);
+				if (lv !== null)
+					return {
+						kind: 'variant',
+						name:  ts.text(objNode,  source),
+						field: ts.text(propNode, source),
+						value: lv,
+						positive: isEq,
+					};
+			}
+		}
+
 		// x !== null  /  x === null
 		let varNode = null;
 		if (ts.nodeType(right) === 'null' && ts.nodeType(left) === 'identifier')
@@ -166,7 +242,10 @@ export function applyGuard(scope, guard, positive) {
 	}
 	let current = scopeGet(scope, guard.name);
 	let inTrueBranch = guard.positive ? positive : !positive;
-	if (guard.kind === 'type') {
+	if (guard.kind === 'variant') {
+		scopeSet(scope, guard.name,
+			narrowUnionByDiscriminant(current ?? UNKNOWN, guard.field, guard.value, inTrueBranch));
+	} else if (guard.kind === 'type') {
 		scopeSet(scope, guard.name, inTrueBranch
 			? guard.toType
 			: narrowExcluding(current ?? UNKNOWN, guard.toType));

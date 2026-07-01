@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
-import { narrowToNonNull, parseGuard, applyGuard } from 'code_analysis.types.narrowing';
+import { narrowToNonNull, parseGuard, applyGuard, narrowUnionByDiscriminant } from 'code_analysis.types.narrowing';
 import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL } from 'code_analysis.types.type_utils';
 
@@ -137,6 +137,38 @@ describe('parseGuard', () => {
 		assert.match(INT, g.toType);
 	});
 
+	it('r.kind === "fail" → positive variant guard', () => {
+		let g = parseGuard(conditionNode(parseSource('if (r.kind === "fail") {}')), 'if (r.kind === "fail") {}');
+		assert.match('variant', g.kind);
+		assert.match('r', g.name);
+		assert.match('kind', g.field);
+		assert.match('fail', g.value);
+		assert.match(true, g.positive);
+	});
+
+	it('r.kind !== "fail" → negative variant guard', () => {
+		let doc = parseSource('if (r.kind !== "fail") {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match('variant', g.kind);
+		assert.match(false, g.positive);
+	});
+
+	it('"fail" === r.kind → variant guard (operands reversed)', () => {
+		let doc = parseSource('if ("fail" === r.kind) {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match('variant', g.kind);
+		assert.match('r', g.name);
+		assert.match('fail', g.value);
+	});
+
+	it('r.tag === 2 → variant guard with a numeric discriminant', () => {
+		let doc = parseSource('if (r.tag === 2) {}');
+		let g = parseGuard(conditionNode(doc), doc.source);
+		assert.match('variant', g.kind);
+		assert.match('tag', g.field);
+		assert.match(2, g.value);
+	});
+
 	it('type(x) === "bool" → toType BOOL', () => {
 		let doc = parseSource('if (type(x) === "bool") {}');
 		let g = parseGuard(conditionNode(doc), doc.source);
@@ -250,5 +282,40 @@ describe('applyGuard', () => {
 		scopeSet(scope, 'x', NULLABLE_STR);
 		applyGuard(scope, null, true);
 		assert.match(NULLABLE_STR, scopeGet(scope, 'x'));
+	});
+});
+
+describe('narrowUnionByDiscriminant', () => {
+	function litStr(v) { return { kind: 'primitive', name: 'string', value: v }; }
+	let PASS = { kind: 'record', fields: [{ name: 'kind', type: litStr('pass') }] };
+	let FAIL = { kind: 'record', fields: [
+		{ name: 'kind',  type: litStr('fail') },
+		{ name: 'value', type: INT },
+	]};
+	let U = { kind: 'union', members: [PASS, FAIL] };
+
+	it('true branch keeps the matching variant', () => {
+		assert.match(FAIL, narrowUnionByDiscriminant(U, 'kind', 'fail', true));
+	});
+
+	it('false branch drops the matching variant', () => {
+		assert.match(PASS, narrowUnionByDiscriminant(U, 'kind', 'fail', false));
+	});
+
+	it('leaves a non-union type unchanged', () => {
+		assert.match(STR, narrowUnionByDiscriminant(STR, 'kind', 'fail', true));
+	});
+
+	it('keeps a variant whose discriminant is unknown in both branches', () => {
+		let OPEN = { kind: 'record', fields: [{ name: 'kind', type: STR }] };  // no literal value
+		let u2 = { kind: 'union', members: [FAIL, OPEN] };
+		// true branch: FAIL matches, OPEN unknown → both survive
+		assert.match('union', narrowUnionByDiscriminant(u2, 'kind', 'fail', true).kind);
+		// false branch: FAIL dropped, OPEN survives → single member
+		assert.match(OPEN, narrowUnionByDiscriminant(u2, 'kind', 'fail', false));
+	});
+
+	it('returns the union unchanged when nothing matches', () => {
+		assert.match(U, narrowUnionByDiscriminant(U, 'kind', 'other', true));
 	});
 });

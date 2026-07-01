@@ -230,3 +230,31 @@ describe('diagnostics — type errors: unknown-property', () => {
 		assert.match(1, length(unknownProps("let base = { a: 1 };\nlet m = { ...base };\nm.b;\n")));
 	});
 });
+
+describe('diagnostics — type errors: discriminated unions', () => {
+	function unknownProps(text) {
+		return filter(typeErrors(URI, open(text)), (d) => d.code === 'unknown-property');
+	}
+
+	// f() returns a tagged union: {kind:'fail', value} | {kind:'pass'}
+	let VARIANT_FN =
+		"function f(c) {\n" +
+		"  if (c) return { kind: 'fail', value: 1 };\n" +
+		"  return { kind: 'pass' };\n" +
+		"}\n";
+
+	it('allows a field of the narrowed variant inside the guard', () => {
+		assert.match(0, length(unknownProps(
+			VARIANT_FN + "let r = f(1);\nif (r.kind === 'fail') { r.value; }\n")));
+	});
+
+	it('flags a field absent from the narrowed variant', () => {
+		assert.match(1, length(unknownProps(
+			VARIANT_FN + "let r = f(1);\nif (r.kind === 'fail') { r.nope; }\n")));
+	});
+
+	it('stays silent on the un-narrowed union', () => {
+		assert.match(0, length(unknownProps(
+			VARIANT_FN + "let r = f(1);\nr.value;\n")));
+	});
+});
