@@ -114,6 +114,11 @@ function binderIn(scopeNode, name, text) {
 			for (let j = 0; j < ts.namedChildCount(params); j++) {
 				let p = ts.namedChild(params, j);
 				if (ts.nodeType(p) === 'identifier' && ts.text(p, text) === name) return p;
+				// rest parameter: `...args` — the name is the identifier under it.
+				if (ts.nodeType(p) === 'rest_element') {
+					let id = ts.namedChild(p, 0);
+					if (id && ts.nodeType(id) === 'identifier' && ts.text(id, text) === name) return id;
+				}
 			}
 		// arrow with a single bare parameter: `x => …`
 		let bare = ts.childByField(scopeNode, 'parameter');

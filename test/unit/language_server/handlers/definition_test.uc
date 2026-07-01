@@ -368,6 +368,27 @@ describe('definition — function parameters', () => {
 
 		assert.match(null, result);
 	});
+
+	it('jumps to a rest parameter of a function', () => {
+		// function f(a, ...rest) — 'rest' is at col 17 (after 'function f(a, ...')
+		let text = "function f(a, ...rest) {\n\treturn rest;\n}\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		let result = definition(URI, doc, { line: 1, character: 8 });  // rest in `return rest`
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(17, result.range.start.character);
+	});
+
+	it('jumps to a rest parameter of an arrow function', () => {
+		// let g = (...xs) => xs; — 'xs' at col 12
+		let text = "let g = (...xs) => xs;\n";
+		documents.open(URI, text, 1);
+		let doc = documents.get(URI);
+		let result = definition(URI, doc, { line: 0, character: 19 });  // xs in the body
+		assert.match(0, result.range.start.line);
+		assert.match(12, result.range.start.character);
+	});
 });
 
 describe('definition — local (block/loop/catch) declarations', () => {
