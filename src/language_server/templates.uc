@@ -10,7 +10,7 @@ export function resolveTemplate(name, config) {
 	if (exists(_cache, name)) return _cache[name];
 	let candidates = [];
 	if (config.configDir)  push(candidates, config.configDir  + '/templates/' + name + '.uc');
-	if (config.selfSrcDir) push(candidates, config.selfSrcDir + '/templates/' + name + '.uc');
+	if (config.selfSrcDir) push(candidates, config.selfSrcDir + '/language_server/templates/' + name + '.uc');
 	for (let p in candidates) {
 		if (fs.stat(p)) { _cache[name] = p; return p; }
 	}

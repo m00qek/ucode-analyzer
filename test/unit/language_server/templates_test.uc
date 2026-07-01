@@ -8,7 +8,7 @@ describe('templates.resolveTemplate', () => {
 
 	it('returns the built-in path when only selfSrcDir is configured', () => {
 		let path = templates.resolveTemplate('hover/function', { selfSrcDir: SELF_SRC });
-		assert.match(SELF_SRC + '/templates/hover/function.uc', path);
+		assert.match(SELF_SRC + '/language_server/templates/hover/function.uc', path);
 	});
 
 	it('returns null when neither configDir nor selfSrcDir is set', () => {
@@ -34,7 +34,7 @@ describe('templates.resolveTemplate', () => {
 	it('falls back to selfSrcDir when the configDir file does not exist', () => {
 		let config = { configDir: '/nonexistent_user_dir', selfSrcDir: SELF_SRC };
 		let path = templates.resolveTemplate('hover/function', config);
-		assert.match(SELF_SRC + '/templates/hover/function.uc', path);
+		assert.match(SELF_SRC + '/language_server/templates/hover/function.uc', path);
 	});
 
 	it('caches: second call returns same result without re-checking disk', () => {
