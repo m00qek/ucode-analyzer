@@ -61,9 +61,10 @@ describe('definition — local declarations', () => {
 		assert.match(9, result.range.start.character);  // 'greet' after 'function '
 	});
 
-	it('resolves a forward reference to a hoisted function declaration', () => {
-		// ucode hoists function declarations, so a call above the declaration is
-		// valid and go-to-definition must jump down to it.
+	it('resolves a forward reference to a later function declaration', () => {
+		// ucode does NOT hoist function declarations (calling foo() above its
+		// declaration is a runtime error), but there is only one `foo` in the
+		// file, so go-to-definition should still jump to the declaration.
 		let text = "foo();\nfunction foo() { return 1; }\n";
 		documents.open(URI, text, 1);
 		let doc = documents.get(URI);

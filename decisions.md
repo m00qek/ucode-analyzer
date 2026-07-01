@@ -17,9 +17,14 @@ type scope map.
 
 - `binderIn` is *whole-region*; the type scope is *positional* (`advanceScope`
   adds a declaration to the scope only after its own statement). Go-to-definition
-  today resolves forward references — a call above a hoisted `function`
-  declaration, and a use of a `let` before its declaration both resolve. A
-  positional scope-map query returns `null` for both → regression.
+  today resolves references to a *later* declaration in the same region — a use
+  of a `let` before its declaration (valid ucode; the name reads as null until
+  init) and, more leniently, a call above a `function` declaration (ucode does
+  NOT hoist, so that call is a runtime error, but gd still points at the sole
+  declaration). A positional scope-map query returns `null` for both → the
+  use-before-`let` case is a real regression. (ucode has no hoisting — see the
+  ucode-language-nonfeatures memory — so the function case is UX-nicety, not a
+  correctness requirement.)
 - A faithful version needs a *separate hoisted decl map* replicating five
   visibility models — block = whole-block, function = params, for-in = loop
   var(s), catch = param, template `statement_tag` = whole-tag — across ~10
@@ -35,7 +40,7 @@ already delivered by the 8-shape binder-identity property test, which fails if
 structure with an untested edge.
 
 **Guardrails in place.** The forward-reference behaviors are locked by unit
-tests (hoisted forward function ref, use-before-`let`), and the binder-identity
+tests (later function declaration, use-before-`let`), and the binder-identity
 property covers let / block / for-in / two-var for-in / C-for / catch / param /
 arrow shapes.
 

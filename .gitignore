@@ -3,6 +3,7 @@
 /test/mod/compile_flags.txt
 /.docker-image
 /roadmap.md
+/to-fix.md
 /linter
 
 # .lsp/ is ignored by the global gitignore; track the root shared lint config
