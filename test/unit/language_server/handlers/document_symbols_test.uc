@@ -1,5 +1,5 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'language_server.documents';
+import * as documents from 'code_analysis.documents';
 import { documentSymbols } from 'language_server.handlers.document_symbols';
 
 let URI = 'file:///test.uc';

@@ -88,12 +88,13 @@ test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) \
 		test/unit/ \
 		test/unit/linter/ \
+		test/unit/code_analysis/ \
+		test/unit/code_analysis/dag/ \
+		test/unit/code_analysis/diagnostics/ \
+		test/unit/code_analysis/types/ \
 		test/unit/language_server/ \
-		test/unit/language_server/dag/ \
 		test/unit/language_server/handlers/ \
-		test/unit/language_server/handlers/code_actions/ \
-		test/unit/language_server/handlers/diagnostics/ \
-		test/unit/language_server/types/
+		test/unit/language_server/handlers/code_actions/
 
 test-e2e: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) -j 8 test/e2e/language_server/

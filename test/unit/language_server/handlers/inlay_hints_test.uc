@@ -1,8 +1,8 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'language_server.documents';
+import * as documents from 'code_analysis.documents';
 import { inlayHints } from 'language_server.handlers.inlay_hints';
-import { invalidateUri } from 'language_server.memo';
-import * as dag from 'language_server.dag.dag';
+import { invalidateUri } from 'code_analysis.memo';
+import * as dag from 'code_analysis.dag.dag';
 
 let URI = 'file:///test.uc';
 

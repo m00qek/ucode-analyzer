@@ -1,6 +1,6 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
-import * as documents from 'language_server.documents';
-import * as dag from 'language_server.dag.dag';
+import * as documents from 'code_analysis.documents';
+import * as dag from 'code_analysis.dag.dag';
 import { workspaceSymbol } from 'language_server.handlers.workspace_symbol';
 
 let URI_A = 'file:///a.uc';

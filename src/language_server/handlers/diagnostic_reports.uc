@@ -1,7 +1,7 @@
 import * as uloop from 'uloop';
 import * as protocol from 'language_server.protocol';
-import { diagnosticsFor } from 'language_server.handlers.diagnostics';
-import { workspaceUris, diagnoseFile } from 'language_server.workspace';
+import { diagnosticsFor } from 'code_analysis.diagnostics';
+import { workspaceUris, diagnoseFile } from 'code_analysis.workspace';
 
 // Per-URI resultId generation. Bumped whenever a document's diagnostics may
 // have changed (edit, dependency cascade, watched-file change). A pull request

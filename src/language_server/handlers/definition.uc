@@ -1,10 +1,10 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'language_server.positions';
-import * as dag from 'language_server.dag.dag';
+import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'code_analysis.positions';
+import * as dag from 'code_analysis.dag.dag';
 import * as fs from 'fs';
-import { inferNode, globalUri } from 'language_server.types.inferrer';
-import { scopeAtOffset } from 'language_server.types.scope_walk';
-import * as type_registry from 'language_server.types.registry';
+import { inferNode, globalUri } from 'code_analysis.types.inferrer';
+import { scopeAtOffset } from 'code_analysis.types.scope_walk';
+import * as type_registry from 'code_analysis.types.registry';
 
 let _parser = ts.newParser(ts.ucode());
 

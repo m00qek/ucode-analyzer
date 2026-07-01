@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'language_server.positions';
+import { buildLineTable, rangeOf } from 'code_analysis.positions';
 
 // LSP SymbolKind constants
 let KIND_FUNCTION  = 12;

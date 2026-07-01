@@ -1,8 +1,8 @@
 import * as ts from 'tree_sitter';
 import * as fs from 'fs';
-import * as documents from 'language_server.documents';
-import * as dag from 'language_server.dag.dag';
-import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'language_server.positions';
+import * as documents from 'code_analysis.documents';
+import * as dag from 'code_analysis.dag.dag';
+import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'language_server.cross_file_refs';
 

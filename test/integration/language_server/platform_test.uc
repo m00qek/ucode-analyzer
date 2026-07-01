@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import * as dag from 'language_server.dag.dag';
+import * as dag from 'code_analysis.dag.dag';
 import * as platform from 'language_server.platform';
 
 const DECL_DIR = '/app/src/declarations';

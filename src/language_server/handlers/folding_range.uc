@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { offsetToPosition } from 'language_server.positions';
+import { offsetToPosition } from 'code_analysis.positions';
 
 // Nodes whose statement_block bodies are good fold targets.
 let BLOCK_PARENTS = {

@@ -2,7 +2,7 @@
 'use strict';
 
 import { docopt } from 'docopt';
-import { load as loadConfig } from 'language_server.config';
+import { load as loadConfig } from 'code_analysis.config';
 import { run } from 'language_server.lsp';
 
 const doc = `

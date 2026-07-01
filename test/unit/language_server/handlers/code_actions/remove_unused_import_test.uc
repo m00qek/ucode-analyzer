@@ -1,7 +1,7 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'language_server.documents';
+import * as documents from 'code_analysis.documents';
 import { actionsFor } from 'language_server.handlers.code_actions.remove_unused_import';
-import { unusedImports } from 'language_server.handlers.diagnostics.unused_imports';
+import { unusedImports } from 'code_analysis.diagnostics.unused_imports';
 
 let URI = 'file:///test.uc';
 

@@ -1,0 +1,33 @@
+import { syntaxErrors }          from 'code_analysis.diagnostics.syntax_errors';
+import { unknownImports }         from 'code_analysis.diagnostics.unknown_imports';
+import { unknownImportSymbols }   from 'code_analysis.diagnostics.unknown_import_symbols';
+import { unusedImports }          from 'code_analysis.diagnostics.unused_imports';
+import { unusedVars }             from 'code_analysis.diagnostics.unused_vars';
+import { undefinedVars }          from 'code_analysis.diagnostics.undefined_vars';
+import { preferStrictEquality }   from 'code_analysis.diagnostics.prefer_strict_equality';
+import { typeErrors }             from 'code_analysis.diagnostics.type_errors';
+import { unreachableCode }        from 'code_analysis.diagnostics.unreachable_code';
+import { deprecatedUsage }        from 'code_analysis.diagnostics.deprecated_usage';
+import { redeclaredVars }         from 'code_analysis.diagnostics.redeclared_var';
+import { duplicateObjectKey }     from 'code_analysis.diagnostics.duplicate_object_key';
+import { assignmentToConst }      from 'code_analysis.diagnostics.assignment_const';
+import { missingReturn }          from 'code_analysis.diagnostics.missing_return';
+
+export function diagnosticsFor(uri, doc) {
+	let diags = [];
+	for (let d in syntaxErrors(doc))             push(diags, d);
+	for (let d in unknownImports(uri, doc))       push(diags, d);
+	for (let d in unknownImportSymbols(uri, doc)) push(diags, d);
+	for (let d in unusedImports(doc))             push(diags, d);
+	for (let d in unusedVars(doc))                push(diags, d);
+	for (let d in undefinedVars(doc))             push(diags, d);
+	for (let d in preferStrictEquality(doc))      push(diags, d);
+	for (let d in typeErrors(uri, doc))           push(diags, d);
+	for (let d in unreachableCode(doc))           push(diags, d);
+	for (let d in deprecatedUsage(uri, doc))      push(diags, d);
+	for (let d in redeclaredVars(doc))            push(diags, d);
+	for (let d in duplicateObjectKey(doc))        push(diags, d);
+	for (let d in assignmentToConst(doc))         push(diags, d);
+	for (let d in missingReturn(doc))             push(diags, d);
+	return diags;
+};

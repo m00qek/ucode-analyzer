@@ -1,10 +1,10 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset } from 'language_server.positions';
-import { inferNode } from 'language_server.types.inferrer';
-import { scopeAtOffset } from 'language_server.types.scope_walk';
-import { typeToString } from 'language_server.types.doc_parser';
-import * as dag from 'language_server.dag.dag';
-import * as type_registry from 'language_server.types.registry';
+import { positionToOffset } from 'code_analysis.positions';
+import { inferNode } from 'code_analysis.types.inferrer';
+import { scopeAtOffset } from 'code_analysis.types.scope_walk';
+import { typeToString } from 'code_analysis.types.doc_parser';
+import * as dag from 'code_analysis.dag.dag';
+import * as type_registry from 'code_analysis.types.registry';
 import * as platform from 'language_server.platform';
 
 // LSP CompletionItemKind constants

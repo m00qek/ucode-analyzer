@@ -1,7 +1,7 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'language_server.documents';
+import * as documents from 'code_analysis.documents';
 import { codeAction } from 'language_server.handlers.code_actions';
-import { preferStrictEquality } from 'language_server.handlers.diagnostics.prefer_strict_equality';
+import { preferStrictEquality } from 'code_analysis.diagnostics.prefer_strict_equality';
 
 let URI = 'file:///test.uc';
 

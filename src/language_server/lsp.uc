@@ -1,12 +1,12 @@
 import * as protocol from 'language_server.protocol';
 import * as uloop from 'uloop';
-import * as documents from 'language_server.documents';
+import * as documents from 'code_analysis.documents';
 import { hover as hoverDoc } from 'language_server.handlers.hover';
 import { definition as definitionDoc } from 'language_server.handlers.definition';
 import { completion as completionDoc } from 'language_server.handlers.completion';
-import * as dag from 'language_server.dag.dag';
-import * as workspace from 'language_server.workspace';
-import { invalidateUri } from 'language_server.memo';
+import * as dag from 'code_analysis.dag.dag';
+import * as workspace from 'code_analysis.workspace';
+import { invalidateUri } from 'code_analysis.memo';
 import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics } from 'language_server.handlers.diagnostic_reports';
 import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.signature_help';
 import { references as referencesDoc } from 'language_server.handlers.references';

@@ -1,12 +1,12 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, nodeAtOffset, docBefore } from 'language_server.positions';
-import { inferNode } from 'language_server.types.inferrer';
-import { scopeAtOffset } from 'language_server.types.scope_walk';
-import { typeToString, parseDoc } from 'language_server.types.doc_parser';
-import { UNKNOWN, STR } from 'language_server.types.type_utils';
-import * as dag from 'language_server.dag.dag';
+import { positionToOffset, nodeAtOffset, docBefore } from 'code_analysis.positions';
+import { inferNode } from 'code_analysis.types.inferrer';
+import { scopeAtOffset } from 'code_analysis.types.scope_walk';
+import { typeToString, parseDoc } from 'code_analysis.types.doc_parser';
+import { UNKNOWN, STR } from 'code_analysis.types.type_utils';
+import * as dag from 'code_analysis.dag.dag';
 import * as templates from 'language_server.templates';
-import { resolveDoc } from 'language_server.doc_resolver';
+import { resolveDoc } from 'code_analysis.doc_resolver';
 import * as platform from 'language_server.platform';
 
 // JSDoc descriptions often start with "- text" (dash from @param formatting).

@@ -1,7 +1,7 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'language_server.documents';
+import * as documents from 'code_analysis.documents';
 import { actionsFor } from 'language_server.handlers.code_actions.remove_duplicate_key';
-import { duplicateObjectKey } from 'language_server.handlers.diagnostics.duplicate_object_key';
+import { duplicateObjectKey } from 'code_analysis.diagnostics.duplicate_object_key';
 
 let URI = 'file:///test.uc';
 

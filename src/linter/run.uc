@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as uloop from 'uloop';
-import * as workspace from 'language_server.workspace';
+import * as workspace from 'code_analysis.workspace';
 import * as reporters from 'linter.reporters';
 
 // Resolve a (possibly relative) path to an absolute file:// URI, or null if the

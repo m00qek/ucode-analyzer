@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, rangeOf } from 'language_server.positions';
-import { nodeAtOffset } from 'language_server.positions';
+import { positionToOffset, rangeOf } from 'code_analysis.positions';
+import { nodeAtOffset } from 'code_analysis.positions';
 
 // Build a SelectionRange chain (innermost → outermost) for one cursor position.
 // Each link covers one ancestor node; consecutive nodes with identical ranges

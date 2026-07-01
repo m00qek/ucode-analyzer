@@ -1,0 +1,181 @@
+import * as glob from 'code_analysis.glob';
+import * as dag from 'code_analysis.dag.dag';
+import * as documents from 'code_analysis.documents';
+import { initBuiltinsFromDag } from 'code_analysis.types.inferrer';
+import { diagnosticsFor } from 'code_analysis.diagnostics';
+
+// Build the cross-file graph and the builtin scope for a workspace: index every
+// library / declaration / system-lib file into the DAG and initialise builtins.
+// Returns the declaration @version map ({ uri -> versions[] }) so the caller can
+// decide whether and how to initialise platform availability.
+//
+// Imports only analysis modules (no protocol/io/uloop), so it is shared by both
+// the language server (`initialized`) and the standalone linter.
+export function loadWorkspace(config) {
+	let workspaceDir = config.workspaceDir ?? '/root/project';
+	let ws = config.workspace ?? {};
+	let libPaths = ws.libraryPaths ?? ['src'];
+
+	dag.init(config);
+
+	for (let relPath in libPaths) {
+		let files = glob.scan(workspaceDir + '/' + relPath, ['**/*.uc'], []);
+		for (let path in files)
+			dag.addFromDisk('file://' + path);
+	}
+
+	if (config.selfSrcDir) {
+		let files = glob.scan(config.selfSrcDir + '/declarations', ['**/*.uc'], []);
+		for (let path in files)
+			dag.addFromDisk('file://' + path);
+	}
+
+	for (let sysPath in (config.systemLibPaths ?? [])) {
+		let files = glob.scan(sysPath, ['**/*.uc'], []);
+		for (let path in files)
+			dag.addFromDisk('file://' + path);
+	}
+
+	let globalUri = dag.resolveSpecifier('global');
+	if (globalUri) initBuiltinsFromDag(globalUri);
+
+	let declVersions = {};
+	for (let uri in dag.allUris()) {
+		if (index(uri, '.d.uc') < 0) continue;
+		let v = dag.versionsOf(uri);
+		if (v) declVersions[uri] = v;
+	}
+	return declVersions;
+};
+
+// Directories under workspaceDir that carry their own .lsp/config.json. Each is
+// a self-contained nested workspace (e.g. the linter's test fixtures) and is
+// diagnosed on its own terms, not as part of the parent — so the parent scan
+// skips it. The parent's own config (at workspaceDir/.lsp/config.json) does not
+// count. Computed once per scan and passed to isWorkspaceUri.
+function nestedWorkspaceRoots(config) {
+	let workdir = config.workspaceDir ?? '/';
+	let suffix = '/.lsp/config.json';
+	let roots = [];
+	for (let cfg in glob.scan(workdir, ['**/.lsp/config.json'], [])) {
+		if (substr(cfg, length(cfg) - length(suffix)) !== suffix) continue;
+		let root = substr(cfg, 0, length(cfg) - length(suffix));
+		if (root !== workdir && root !== '')
+			push(roots, root + '/');
+	}
+	return roots;
+};
+
+// A URI is part of the user's workspace when its path is under workspaceDir and
+// is not one of the server's own bundled sources, a system library, a
+// declaration stub, or a nested workspace (those are dependencies or separate
+// projects, not files we diagnose here).
+function isWorkspaceUri(uri, config, nestedRoots) {
+	let path = substr(uri, 7);  // strip "file://"
+	let workdir = config.workspaceDir ?? '/';
+	if (substr(path, 0, length(workdir)) !== workdir) return false;
+
+	let self = config.selfSrcDir;
+	if (self && substr(path, 0, length(self)) === self) return false;
+	for (let sp in (config.systemLibPaths ?? []))
+		if (substr(path, 0, length(sp)) === sp) return false;
+
+	for (let root in (nestedRoots ?? []))
+		if (substr(path, 0, length(root)) === root) return false;
+
+	if (length(path) >= 5 && substr(path, length(path) - 5) === '.d.uc') return false;
+
+	return true;
+};
+
+// Every workspace URI currently known to the DAG.
+export function workspaceUris(config) {
+	let nested = nestedWorkspaceRoots(config);
+	let uris = [];
+	for (let uri in dag.allUris())
+		if (isWorkspaceUri(uri, config, nested))
+			push(uris, uri);
+	return uris;
+};
+
+// Diagnose a single URI, loading it from disk if it is not open.
+export function diagnoseFile(uri) {
+	let doc = documents.getOrLoad(uri);
+	return doc ? diagnosticsFor(uri, doc) : [];
+};
+
+// Build the DAG + builtins and return the bare (un-scoped) workspace documents,
+// each read and parsed exactly once: the parsed tree is reused for both DAG
+// indexing and later diagnosis, instead of parsing once to index (loadWorkspace)
+// and again to diagnose (getOrLoad). Shared setup for the serial and parallel
+// workspace scans. The returned docs have no scopeMap yet — call diagnoseDoc()
+// (which attaches it) once this has returned and the DAG is therefore complete.
+export function loadWorkspaceDocs(config) {
+	let workspaceDir = config.workspaceDir ?? '/root/project';
+	let ws = config.workspace ?? {};
+	let libPaths = ws.libraryPaths ?? ['src'];
+
+	dag.init(config);
+
+	// Parse each workspace file once, index it from that parse, and keep the bare
+	// doc. The scopeMap is deliberately NOT built yet — it resolves imports, so it
+	// must wait until the whole DAG is populated.
+	let docs = [];
+	let seen = {};
+	for (let relPath in libPaths) {
+		for (let path in glob.scan(workspaceDir + '/' + relPath, ['**/*.uc'], [])) {
+			let uri = 'file://' + path;
+			if (seen[uri]) continue;
+			seen[uri] = true;
+			let doc = documents.readParsed(uri);
+			if (!doc) continue;
+			dag.add(uri, doc.text, doc.tree);
+			push(docs, doc);
+		}
+	}
+
+	// Index dependencies we resolve against but never diagnose (declaration
+	// stubs, system libraries): a single parse-and-discard is enough.
+	if (config.selfSrcDir)
+		for (let path in glob.scan(config.selfSrcDir + '/declarations', ['**/*.uc'], [])) {
+			let uri = 'file://' + path;
+			if (seen[uri]) continue;
+			seen[uri] = true;
+			dag.addFromDisk(uri);
+		}
+	for (let sysPath in (config.systemLibPaths ?? []))
+		for (let path in glob.scan(sysPath, ['**/*.uc'], [])) {
+			let uri = 'file://' + path;
+			if (seen[uri]) continue;
+			seen[uri] = true;
+			dag.addFromDisk(uri);
+		}
+
+	let globalUri = dag.resolveSpecifier('global');
+	if (globalUri) initBuiltinsFromDag(globalUri);
+
+	let nested = nestedWorkspaceRoots(config);
+	let out = [];
+	for (let doc in docs)
+		if (isWorkspaceUri(doc.uri, config, nested))
+			push(out, doc);
+	return out;
+};
+
+// Build a bare doc's scopeMap and diagnose it. Must be called after the DAG is
+// complete (i.e. after loadWorkspaceDocs has returned), because the scopeMap
+// resolves imports. Returns { uri, diags }.
+export function diagnoseDoc(doc) {
+	documents.withScopeMap(doc);
+	return { uri: doc.uri, diags: diagnosticsFor(doc.uri, doc) };
+};
+
+// Serial workspace scan: load every workspace file and diagnose it in-process.
+// Returns [{ uri, diags }]. Used by the linter for --jobs=1; the parallel path
+// (linter/run.uc) reuses loadWorkspaceDocs + diagnoseDoc across forked workers.
+export function diagnoseWorkspace(config) {
+	let results = [];
+	for (let doc in loadWorkspaceDocs(config))
+		push(results, diagnoseDoc(doc));
+	return results;
+};

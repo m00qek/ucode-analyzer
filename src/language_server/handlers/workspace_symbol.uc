@@ -1,4 +1,4 @@
-import * as dag from 'language_server.dag.dag';
+import * as dag from 'code_analysis.dag.dag';
 
 let KIND_FUNCTION = 12;
 let KIND_VARIABLE = 13;

@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset } from 'language_server.positions';
+import { positionToOffset } from 'code_analysis.positions';
 
 function nodeAt(node, offset) {
 	if (ts.startByte(node) > offset || offset >= ts.endByte(node)) return null;

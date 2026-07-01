@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, positionToOffset, offsetToPosition } from 'language_server.positions';
+import { buildLineTable, positionToOffset, offsetToPosition } from 'code_analysis.positions';
 
 // Walk up from node to find the nearest ancestor of the given type.
 function ancestor(node, type) {

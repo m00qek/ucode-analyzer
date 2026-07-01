@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition, buildLineTable } from 'language_server.positions';
+import { positionToOffset, offsetToPosition, buildLineTable } from 'code_analysis.positions';
 import { referencesOf } from 'language_server.scope_references';
 
 export function prepareRename(uri, doc, position) {

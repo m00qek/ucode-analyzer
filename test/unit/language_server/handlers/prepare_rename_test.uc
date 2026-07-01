@@ -1,5 +1,5 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'language_server.documents';
+import * as documents from 'code_analysis.documents';
 import { prepareRename } from 'language_server.handlers.prepare_rename';
 
 let URI = 'file:///test.uc';

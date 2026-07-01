@@ -1,7 +1,7 @@
 'use strict';
 
 import { describe, it, assert } from 'utest';
-import * as dag from 'language_server.dag.dag';
+import * as dag from 'code_analysis.dag.dag';
 
 import * as mod_bpf     from 'bpf';
 import * as mod_debug   from 'debug';

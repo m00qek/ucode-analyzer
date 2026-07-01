@@ -1,8 +1,8 @@
 import * as ts from 'tree_sitter';
 import * as fs from 'fs';
-import * as dag from 'language_server.dag.dag';
-import * as documents from 'language_server.documents';
-import { positionToOffset, offsetToPosition, buildLineTable } from 'language_server.positions';
+import * as dag from 'code_analysis.dag.dag';
+import * as documents from 'code_analysis.documents';
+import { positionToOffset, offsetToPosition, buildLineTable } from 'code_analysis.positions';
 import { referencesOf, anchorOf } from 'language_server.scope_references';
 
 let _parser = ts.newParser(ts.ucode());
