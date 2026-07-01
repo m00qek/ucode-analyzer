@@ -90,11 +90,12 @@ describe('textDocument/diagnostic', () => {
 		assert.match(1, d[0].severity);
 	});
 
-	it('reports error for member access on a null variable', () => {
+	it('reports error for member access on a provably-null variable', () => {
 		let diags = diagnose('file:///t.uc', "let x = null;\nlet y = x.foo;\ny;\n");
-		let d = filter(diags, (d) => index(d.message, 'may be null') >= 0);
+		let d = filter(diags, (d) => d.code === 'null-access');
 		assert.match(true, length(d) >= 1);
-		assert.match(1, d[0].severity);
+		assert.match(1, d[0].severity);   // ERROR
+		assert.match(true, index(d[0].message, 'is null') >= 0);
 	});
 
 	it('suppresses null member access warning inside if (x) { } guard body', () => {

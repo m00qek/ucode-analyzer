@@ -47,6 +47,48 @@ function isNullLike(type) {
 	return false;
 }
 
+// Provably null: the type can *only* be null — a bare null primitive, or a
+// union whose every member is itself provably null. A nullable (`T | null`) is
+// deliberately excluded: it still has a non-null inhabitant, so dereferencing
+// it is a *possible*, not a *certain*, error.
+function isDefinitelyNull(type) {
+	if (!type) return false;
+	type = resolveRef(type);
+	if (type.kind === 'primitive' && type.name === 'null') return true;
+	if (type.kind === 'union') {
+		if (length(type.members) === 0) return false;
+		for (let i = 0; i < length(type.members); i++)
+			if (!isDefinitelyNull(type.members[i])) return false;
+		return true;
+	}
+	return false;
+}
+
+// The concatenated text of a string literal's fragments (excludes the quotes).
+function stringText(node, source) {
+	let out = '';
+	for (let k = 0; k < ts.childCount(node); k++) {
+		let ch = ts.child(node, k);
+		if (ts.nodeType(ch) === 'string_fragment') out += ts.text(ch, source);
+	}
+	return out;
+}
+
+// A leading `'use strict';` directive puts the whole file in strict mode, where
+// a *possibly*-null dereference is escalated from a warning to an error. Scan
+// the directive prologue: the run of leading bare-string expression statements.
+function isStrict(root, source) {
+	for (let i = 0; i < ts.namedChildCount(root); i++) {
+		let stmt = ts.namedChild(root, i);
+		if (ts.nodeType(stmt) !== 'expression_statement') return false;
+		let inner = ts.namedChild(stmt, 0);
+		if (!inner || ts.nodeType(inner) !== 'string') return false;
+		if (stringText(inner, source) === 'use strict') return true;
+		// another leading string directive — keep scanning the prologue
+	}
+	return false;
+}
+
 // True when this member_expression is the left-hand side of an assignment, i.e.
 // a write target. ucode dicts are open, so `obj.newKey = ...` legitimately
 // creates a property and must not be reported as unknown-property.
@@ -100,7 +142,7 @@ function unknownFieldOf(type, propName) {
 
 let _walk;
 
-_walk = function(node, source, uri, scopeMap, lineTable, diags) {
+_walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 	if (!node) return;
 	let nt = ts.nodeType(node);
 
@@ -120,13 +162,13 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags) {
 					});
 				}
 			} else {
-				_walk(callee, source, uri, scopeMap, lineTable, diags);
+				_walk(callee, source, uri, scopeMap, lineTable, diags, strict);
 			}
 		}
 		let args = ts.childByField(node, 'arguments');
 		if (args) {
 			for (let i = 0; i < ts.namedChildCount(args); i++)
-				_walk(ts.namedChild(args, i), source, uri, scopeMap, lineTable, diags);
+				_walk(ts.namedChild(args, i), source, uri, scopeMap, lineTable, diags, strict);
 		}
 		return;
 	}
@@ -139,10 +181,21 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags) {
 			let objType = ts.nodeType(obj) === 'identifier'
 				? (scopeGet(scope, ts.text(obj, source)) ?? UNKNOWN)
 				: inferNode(obj, source, uri, scope, 0);
-			if (isNullLike(objType)) {
+			if (isDefinitelyNull(objType)) {
+				// The value can only ever be null — dereferencing it always fails.
 				push(diags, {
 					range:    rangeOf(source, lineTable, obj),
 					severity: SEVERITY_ERROR,
+					source:   'ucode-ls',
+					code:     'null-access',
+					message:  sprintf("'%s' is null", ts.text(obj, source)),
+				});
+			} else if (isNullLike(objType)) {
+				// `T | null`: null is only one possibility, so this is a warning by
+				// default. Under `'use strict';` it is escalated to an error.
+				push(diags, {
+					range:    rangeOf(source, lineTable, obj),
+					severity: strict ? SEVERITY_ERROR : SEVERITY_WARNING,
 					source:   'ucode-ls',
 					code:     'may-be-null',
 					message:  sprintf("'%s' may be null", ts.text(obj, source)),
@@ -160,7 +213,7 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags) {
 				}
 			}
 			// Recurse into the object to catch errors nested within it.
-			if (ts.nodeType(obj) !== 'identifier') _walk(obj, source, uri, scopeMap, lineTable, diags);
+			if (ts.nodeType(obj) !== 'identifier') _walk(obj, source, uri, scopeMap, lineTable, diags, strict);
 		}
 		return;
 	}
@@ -180,10 +233,10 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags) {
 					    iterType.kind === 'primitive' ? iterType.name : iterType.kind),
 				});
 			}
-			_walk(right, source, uri, scopeMap, lineTable, diags);
+			_walk(right, source, uri, scopeMap, lineTable, diags, strict);
 		}
 		let body = ts.childByField(node, 'body');
-		if (body) _walk(body, source, uri, scopeMap, lineTable, diags);
+		if (body) _walk(body, source, uri, scopeMap, lineTable, diags, strict);
 		return;
 	}
 
@@ -191,11 +244,13 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags) {
 
 	let n = ts.namedChildCount(node);
 	for (let i = 0; i < n; i++)
-		_walk(ts.namedChild(node, i), source, uri, scopeMap, lineTable, diags);
+		_walk(ts.namedChild(node, i), source, uri, scopeMap, lineTable, diags, strict);
 };
 
 export function typeErrors(uri, doc) {
 	let diags = [];
-	_walk(ts.rootNode(doc.tree), doc.text, uri, doc.scopeMap, doc.lineTable, diags);
+	let root = ts.rootNode(doc.tree);
+	let strict = isStrict(root, doc.text);
+	_walk(root, doc.text, uri, doc.scopeMap, doc.lineTable, diags, strict);
 	return diags;
 };

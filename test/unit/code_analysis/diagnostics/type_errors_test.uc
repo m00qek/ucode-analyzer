@@ -56,17 +56,18 @@ describe('diagnostics — type errors: call non-function', () => {
 });
 
 describe('diagnostics — type errors: member access on null', () => {
-	it('reports error for member access on a null variable', () => {
+	it('reports error for member access on a provably-null variable', () => {
 		let doc = open("let x = null;\nx.foo;\n");
 		let diags = typeErrors(URI, doc);
-		let d = filter(diags, (d) => index(d.message, 'may be null') >= 0)[0];
+		let d = filter(diags, (d) => d.code === 'null-access')[0];
 		assert.match(true, d !== null);
 		assert.match(1, d.severity);
+		assert.match(true, index(d.message, 'is null') >= 0);
 	});
 
 	it('error range covers the object identifier', () => {
 		let doc = open("let x = null;\nx.foo;\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
+		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'null-access');
 		let d = diags[0];
 		assert.match(1, d.range.start.line);
 		assert.match(0, d.range.start.character);
@@ -76,7 +77,8 @@ describe('diagnostics — type errors: member access on null', () => {
 		let doc = open("function f() {}\nlet x = f;\n");
 		// Accessing a property on an identifier typed as function is not null-like.
 		// (UNKNOWN-typed accesses are also suppressed.)
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
+		let diags = filter(typeErrors(URI, doc),
+			(d) => d.code === 'null-access' || d.code === 'may-be-null');
 		assert.match(0, length(diags));
 	});
 });
@@ -96,7 +98,8 @@ describe('diagnostics — type errors: flow sensitivity (if-body narrowing)', ()
 
 	it('still warns OUTSIDE the if-body when no guard clause exits', () => {
 		let doc = open("let x = null;\nif (x) {\n  x.foo;\n}\nx.bar;\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
+		let diags = filter(typeErrors(URI, doc),
+			(d) => d.code === 'null-access' || d.code === 'may-be-null');
 		// bar access on line 4 is NOT guarded
 		let outsideWarning = filter(diags, (d) => d.range.start.line === 4);
 		assert.match(1, length(outsideWarning));
@@ -118,7 +121,8 @@ describe('diagnostics — type errors: flow sensitivity (guard clause)', () => {
 
 	it('still warns on line BEFORE the guard, where null is possible', () => {
 		let doc = open("let x = null;\nx.foo;\nif (!x) return;\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
+		let diags = filter(typeErrors(URI, doc),
+			(d) => d.code === 'null-access' || d.code === 'may-be-null');
 		let beforeGuard = filter(diags, (d) => d.range.start.line === 1);
 		assert.match(1, length(beforeGuard));
 	});
@@ -269,5 +273,50 @@ describe('diagnostics — type errors: discriminated unions', () => {
 		        "  return { ...x };\n" +
 		        "}\n";
 		assert.match(0, length(unknownProps(g + "let u = g(1, {});\nu.zzz;\n")));
+	});
+});
+
+describe('diagnostics — type errors: tiered null-safety', () => {
+	function nullDiags(text) {
+		return filter(typeErrors(URI, open(text)),
+			(d) => d.code === 'null-access' || d.code === 'may-be-null');
+	}
+
+	it('a provably-null access is an error (code null-access)', () => {
+		let d = nullDiags("let x = null;\nx.foo;\n")[0];
+		assert.match(true, d !== null);
+		assert.match('null-access', d.code);
+		assert.match(1, d.severity);   // ERROR
+		assert.match(true, index(d.message, 'is null') >= 0);
+	});
+
+	it('a possibly-null (T | null) access is a warning, not an error', () => {
+		// A `?string` param is nullable: null is only one of its inhabitants.
+		let d = nullDiags("/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
+		assert.match(true, d !== null);
+		assert.match('may-be-null', d.code);
+		assert.match(2, d.severity);   // WARNING
+		assert.match(true, index(d.message, 'may be null') >= 0);
+	});
+
+	it("escalates a possibly-null access to an error under 'use strict'", () => {
+		let d = nullDiags("'use strict';\n/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
+		assert.match(true, d !== null);
+		assert.match('may-be-null', d.code);
+		assert.match(1, d.severity);   // ERROR under strict
+	});
+
+	it("a provably-null access stays an error under 'use strict' too", () => {
+		let d = nullDiags("'use strict';\nlet x = null;\nx.foo;\n")[0];
+		assert.match(true, d !== null);
+		assert.match('null-access', d.code);
+		assert.match(1, d.severity);
+	});
+
+	it('a non-directive leading string does not enable strict mode', () => {
+		// "hello" is not the strict directive, so possibly-null stays a warning.
+		let d = nullDiags("'hello';\n/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
+		assert.match(true, d !== null);
+		assert.match(2, d.severity);   // still WARNING
 	});
 });
