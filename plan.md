@@ -13,13 +13,12 @@
 **CLI linter**
 - `ucode-linter` runs the exact same analysis headlessly (file and workspace modes) for CI gating and on-save `nvim-lint`. Entry `src/ucode-linter.uc` → `src/linter/run.uc` + `src/linter/reporters.uc` (text/json), over the shared `code_analysis.workspace` engine (`loadWorkspace` / `collectWorkspaceDiagnostics`). No native module of its own — reuses `tree_sitter.native`.
 
+**Discriminated-union narrowing**
+- Tagged-variant support, delivered in four phases: `unionOf` keeps distinct record shapes (was collapsing them to one); literal types as a `primitive` refinement (`value` field) born on object-literal fields; a `variant` guard in `narrowing.uc` that refines a union by `r.field === <literal>` per branch; and `unknownFieldOf` checking a field against every member of an un-narrowed union. So `if (r.kind === 'fail') r.value` resolves, and a field absent from the matching variant (or from all variants) is flagged.
+
 ---
 
 ### To do
-
-**Discriminated-union narrowing** — see `discriminated-unions.plan.md`
-- `unionOf` collapses record variants, so a function returning tagged records infers to one variant and `if (r.kind === 'fail') r.value` is misdiagnosed.
-- Phased: fix `unionOf` (clears the false positives on its own), then literal types + discriminant guards for real narrowing. Full design in the dedicated plan.
 
 **Assignment widening**
 - `let x = 1; if (cond) x = "hello";` — after the if block, `x` should be `int | string`.
