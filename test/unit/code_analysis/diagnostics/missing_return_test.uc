@@ -115,4 +115,49 @@ describe('diagnostics — missing return', () => {
 		let text = DOC + "function f(x) { switch (x) { case 1: break; default: return 0; } }\n";
 		assert.match(1, length(missingReturn(open(text))));
 	});
+
+	// infinite loops — a body ending in `while(true)`/`for(;;)` never falls
+	// through, so no return is needed on the fall-through path. break-analysis is
+	// intentionally not modeled (that would only ever miss a bug, never add a
+	// false positive — precision over recall).
+	it('no warning when the body ends in while (true)', () => {
+		let text = DOC + "function f() { while (true) { doStuff(); } }\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('no warning when the body ends in while (1)', () => {
+		let text = DOC + "function f() { while (1) { doStuff(); } }\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('no warning when the body ends in for (;;)', () => {
+		let text = DOC + "function f() { for (;;) { doStuff(); } }\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('warns for a while loop with a non-constant condition', () => {
+		let text = DOC + "function f() { while (running) { doStuff(); } }\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
+
+	it('warns for a while (0) loop (never infinite)', () => {
+		let text = DOC + "function f() { while (0) { doStuff(); } }\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
+
+	it('warns for a finite C-style for loop', () => {
+		let text = DOC + "function f() { for (let i = 0; i < 10; i++) { doStuff(); } }\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
+
+	it('no warning when while (true) follows other non-returning statements', () => {
+		let text = DOC + "function f() { let x = 1; while (true) { doStuff(); } }\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('still warns when a non-terminating statement follows the infinite loop', () => {
+		// The loop is not the last statement, so control can reach the tail.
+		let text = DOC + "function f() { while (true) { break; } let x = 1; }\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
 });

@@ -23,6 +23,37 @@ function isNoReturnCall(node, source) {
 	return name === 'die' || name === 'exit';
 }
 
+// A statically truthy loop condition. Conservative: only bare `true` and a
+// nonzero numeric literal count; anything else (identifiers, comparisons, calls)
+// is treated as possibly-false so the loop is NOT assumed infinite.
+function isConstTruthy(node, source) {
+	if (!node) return false;
+	let nt = ts.nodeType(node);
+	if (nt === 'true') return true;
+	if (nt === 'number') return (+ts.text(node, source)) != 0;
+	return false;
+}
+
+// An infinite loop (`while(true)`/`while(1)` or `for(;;)`/`for(;true;)`) never
+// exits normally, so control cannot fall past it. We do NOT analyse `break`, so a
+// loop that can break is still treated as infinite — that only ever suppresses a
+// warning (a possible false negative), never adds one (precision over recall).
+function isInfiniteLoop(node, source) {
+	let nt = ts.nodeType(node);
+	if (nt === 'while_statement') {
+		let cond = ts.childByField(node, 'condition');
+		// while's condition is wrapped in a parenthesized_expression.
+		return isConstTruthy(cond ? (ts.namedChild(cond, 0) ?? cond) : null, source);
+	}
+	if (nt === 'for_statement') {
+		// C-style for; an absent/empty condition clause means `for(;;)`.
+		let cond = ts.childByField(node, 'condition');
+		if (!cond || ts.nodeType(cond) === 'empty_statement') return true;
+		return isConstTruthy(cond, source);
+	}
+	return false;
+}
+
 // Forward declaration: switchAlwaysReturns and alwaysReturns are mutually
 // recursive and ucode does not hoist function declarations, so the name must
 // exist before switchAlwaysReturns closes over it.
@@ -104,6 +135,10 @@ alwaysReturns = function(node, source) {
 	}
 	if (nt === 'switch_statement')
 		return switchAlwaysReturns(node, source);
+	// An infinite loop never falls through, so a function body ending in one
+	// needs no return on the fall-through path.
+	if (nt === 'while_statement' || nt === 'for_statement')
+		return isInfiniteLoop(node, source);
 	return false;
 };
 
