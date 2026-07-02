@@ -70,4 +70,23 @@ describe('diagnostics — unreachable code', () => {
 		documents.open(URI, "let x = 1;\nlet y = 2;\n", 1);
 		assert.match(0, length(unreachableCode(documents.get(URI))));
 	});
+
+	it('does not flag a trailing comment after return (comment is not code)', () => {
+		documents.open(URI, "function f() {\n  return 1;  // done\n}\n", 1);
+		assert.match(0, length(unreachableCode(documents.get(URI))));
+	});
+
+	it('does not flag a comment on its own line after return', () => {
+		documents.open(URI, "function f() {\n  return 1;\n  // trailing note\n}\n", 1);
+		assert.match(0, length(unreachableCode(documents.get(URI))));
+	});
+
+	it('still flags real code that follows a comment after return', () => {
+		// The comment must not "revive" the block: code after it is still dead.
+		documents.open(URI, "function f() {\n  return 1;\n  // note\n  let x = 2;\n}\n", 1);
+		let diags = unreachableCode(documents.get(URI));
+		assert.match(1, length(diags));
+		assert.match('Unreachable code', diags[0].message);
+		assert.match(3, diags[0].range.start.line);  // 'let x = 2' on line 3
+	});
 });

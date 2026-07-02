@@ -18,6 +18,11 @@ function walk(node, source, lineTable, out) {
 		let hitTerminator = false;
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let stmt = ts.namedChild(node, i);
+			// Comments are extra nodes, not code: a trailing `return x; // note`
+			// must not be reported as unreachable, and a comment never terminates
+			// or revives a block. Skip without touching hitTerminator.
+			if (ts.nodeType(stmt) === 'comment')
+				continue;
 			if (hitTerminator) {
 				push(out, {
 					range:    rangeOf(source, lineTable, stmt),
