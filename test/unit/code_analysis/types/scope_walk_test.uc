@@ -277,7 +277,7 @@ describe('buildScopeMap template mode', () => {
 	});
 
 	it('an exported function in a tag is visible to a later tag', () => {
-		let src = "{% export function render(x) { return x; } %}\n{% let r = render; %}\n";
+		let src = "{% export function render(x) { return x; }; %}\n{% let r = render; %}\n";
 		let scope = scopeAtTpl(src, 'let r');
 		assert.match('function', scopeGet(scope, 'render')?.kind);
 	});

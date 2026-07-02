@@ -189,7 +189,7 @@ describe('hover — parameter declaration site', () => {
 	});
 
 	it('shows type from @param for an exported function', () => {
-		let text = "/** @param {string} name — greeting target */\nexport function greet(name) {}";
+		let text = "/** @param {string} name — greeting target */\nexport function greet(name) {};";
 		documents.open(URI, text, 1);
 		let doc = documents.get(URI);
 

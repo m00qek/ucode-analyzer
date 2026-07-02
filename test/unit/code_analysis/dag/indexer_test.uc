@@ -206,7 +206,7 @@ describe('indexer.extractExports', () => {
 	});
 
 	it('lets an ES export take precedence over a same-named return field', () => {
-		let text = "export function foo() {}\nreturn { foo: 1 };\n";
+		let text = "export function foo() {};\nreturn { foo: 1 };\n";
 		let exps = extractExports(text, parse(text));
 		// the ES export is pushed first, so it is the first match by name
 		assert.match('foo', exps[0].name);
@@ -220,7 +220,7 @@ describe('indexer.extractExports', () => {
 	});
 
 	it('does not duplicate a name exported by both ES export and the return object', () => {
-		let text = "export function foo() {}\nreturn { foo, bar: 1 };\n";
+		let text = "export function foo() {};\nreturn { foo, bar: 1 };\n";
 		let exps = extractExports(text, parse(text));
 		let foos = filter(exps, (e) => e.name === 'foo');
 		assert.match(1, length(foos));          // the ES export, once
@@ -335,24 +335,24 @@ describe('indexer.resolveModule', () => {
 
 describe('indexer.extractModuleDoc', () => {
 	it('returns null when file has no leading doc comment', () => {
-		let text = 'export function foo() {}';
+		let text = 'export function foo() {};';
 		assert.match(null, extractModuleDoc(text, parse(text)));
 	});
 
 	it('returns null when leading comment has no description', () => {
-		let text = '/** @param {string} x */\nexport function foo(x) {}';
+		let text = '/** @param {string} x */\nexport function foo(x) {};';
 		assert.match(null, extractModuleDoc(text, parse(text)));
 	});
 
 	it('returns the parsed doc for a leading /** */ with a description', () => {
-		let text = '/**\n * Module for doing things.\n * @module mymod\n */\nexport function foo() {}';
+		let text = '/**\n * Module for doing things.\n * @module mymod\n */\nexport function foo() {};';
 		let doc = extractModuleDoc(text, parse(text));
 		assert.match(true, doc !== null);
 		assert.match('Module for doing things.', doc.description);
 	});
 
 	it('returns null when the first comment is a line comment', () => {
-		let text = '// not a jsdoc\nexport function foo() {}';
+		let text = '// not a jsdoc\nexport function foo() {};';
 		assert.match(null, extractModuleDoc(text, parse(text)));
 	});
 });
@@ -407,7 +407,7 @@ describe('indexer — template mode (imports/exports inside {% %})', () => {
 	});
 
 	it('extracts an exported function declared inside a statement tag', () => {
-		let text = "{% export function render(x) { return x; } %}\n<div></div>\n";
+		let text = "{% export function render(x) { return x; }; %}\n<div></div>\n";
 		let exps = extractExports(text, parseTpl(text));
 		assert.match(1, length(exps));
 		assert.match('render', exps[0].name);

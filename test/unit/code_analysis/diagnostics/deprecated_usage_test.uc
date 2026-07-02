@@ -27,12 +27,12 @@ function open(text) {
 
 describe('diagnostics — deprecated usage', () => {
 	it('returns empty list when no deprecated symbols are used', () => {
-		let doc = open("export function foo() {}\nfoo();\n");
+		let doc = open("export function foo() {};\nfoo();\n");
 		assert.match(0, length(deprecatedUsage(URI, doc)));
 	});
 
 	it('reports a hint for a call to a same-file @deprecated export', () => {
-		let doc = open("/** @deprecated */\nexport function old() {}\nold();\n");
+		let doc = open("/** @deprecated */\nexport function old() {};\nold();\n");
 		let diags = deprecatedUsage(URI, doc);
 		assert.match(1, length(diags));
 		assert.match(4, diags[0].severity);  // HINT
@@ -40,14 +40,14 @@ describe('diagnostics — deprecated usage', () => {
 	});
 
 	it('includes DiagnosticTag.Deprecated (tag=2) on the diagnostic', () => {
-		let doc = open("/** @deprecated */\nexport function old() {}\nold();\n");
+		let doc = open("/** @deprecated */\nexport function old() {};\nold();\n");
 		let diags = deprecatedUsage(URI, doc);
 		assert.match(true, length(diags) >= 1);
 		assert.match(true, index(diags[0].tags, 2) >= 0);
 	});
 
 	it('does not flag the declaration site itself', () => {
-		let doc = open("/** @deprecated */\nexport function old() {}\n");
+		let doc = open("/** @deprecated */\nexport function old() {};\n");
 		assert.match(0, length(deprecatedUsage(URI, doc)));
 	});
 
@@ -78,7 +78,7 @@ describe('diagnostics — deprecated usage', () => {
 	});
 
 	it('reports the correct range for the deprecated identifier', () => {
-		let doc = open("/** @deprecated */\nexport function old() {}\nold();\n");
+		let doc = open("/** @deprecated */\nexport function old() {};\nold();\n");
 		let diags = deprecatedUsage(URI, doc);
 		assert.match(1, length(diags));
 		assert.match(2, diags[0].range.start.line);   // 0-indexed: line 2 is 'old();'
@@ -98,9 +98,9 @@ describe('diagnostics — deprecated usage: gate flags all-and-only deprecated r
 	function buildDoc(spec) {
 		let src = "";
 		for (let i = 0; i < spec.nDep; i++)
-			src += sprintf("/** @deprecated */\nexport function dep%d() {}\n", i);
+			src += sprintf("/** @deprecated */\nexport function dep%d() {};\n", i);
 		for (let i = 0; i < spec.nOk; i++)
-			src += sprintf("export function ok%d() {}\n", i);
+			src += sprintf("export function ok%d() {};\n", i);
 		let total = spec.nDep + spec.nOk, expected = 0;
 		for (let r in spec.refs) {
 			let idx = r % total;               // nDep >= 1 so total >= 1

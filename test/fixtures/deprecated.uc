@@ -1,4 +1,4 @@
 /** @deprecated Use newFn instead. */
-export function oldFn() {}
+export function oldFn() {};
 
-export function newFn() {}
+export function newFn() {};

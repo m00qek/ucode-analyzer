@@ -198,7 +198,7 @@ describe('definition — cross-file into a template module', () => {
 	});
 
 	it('jumps to an export declared inside a {% %} tag in a template file', () => {
-		// fixtures/template_lib.uc: {% export function render(name) {...} %}
+		// fixtures/template_lib.uc: {% export function render(name) {...}; %}
 		let text = "import { render } from 'fixtures.template_lib';\nrender;\n";
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);

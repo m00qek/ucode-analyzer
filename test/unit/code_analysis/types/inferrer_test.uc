@@ -389,7 +389,7 @@ describe('inferrer — buildScope: export let', () => {
 
 describe('inferrer — buildScope: export function', () => {
 	it('export function declarations are in scope for later references', () => {
-		let text = "/**\n * @returns {string}\n */\nexport function tag(x) {}\nexport function caller(v) {\n    let r = tag(v);\n    r;\n}\n";
+		let text = "/**\n * @returns {string}\n */\nexport function tag(x) {};\nexport function caller(v) {\n    let r = tag(v);\n    r;\n};\n";
 		let tree = parse(text);
 		// offset at 'r;' inside caller
 		let offset = index(text, '\n    r;') + 5;
@@ -1469,7 +1469,8 @@ describe('inferrer — binary_expression &&/||', () => {
 
 describe('inferrer — unary delete', () => {
 	it('delete returns boolean', () => {
-		let t = infer("let x = delete obj;");
+		// ucode's `delete` only accepts a property access (member/subscript).
+		let t = infer("let x = delete obj.k;");
 		assert.match('primitive', t.kind);
 		assert.match('boolean', t.name);
 	});

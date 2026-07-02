@@ -31,7 +31,7 @@ describe('workspace/symbol', () => {
 	});
 
 	it('returns exported function with FUNCTION kind (12)', () => {
-		addDoc(URI_A, "export function greet() {}\n");
+		addDoc(URI_A, "export function greet() {};\n");
 		let syms = workspaceSymbol('');
 		let s = filter(syms, (s) => s.name === 'greet')[0];
 		assert.match(true, s !== null);
@@ -47,21 +47,21 @@ describe('workspace/symbol', () => {
 	});
 
 	it('includes location with uri', () => {
-		addDoc(URI_A, "export function greet() {}\n");
+		addDoc(URI_A, "export function greet() {};\n");
 		let syms = workspaceSymbol('');
 		let s = filter(syms, (s) => s.name === 'greet')[0];
 		assert.match(URI_A, s.location.uri);
 	});
 
 	it('includes containerName derived from URI basename', () => {
-		addDoc(URI_A, "export function greet() {}\n");
+		addDoc(URI_A, "export function greet() {};\n");
 		let syms = workspaceSymbol('');
 		let s = filter(syms, (s) => s.name === 'greet')[0];
 		assert.match('a.uc', s.containerName);
 	});
 
 	it('location range end is offset by name length from start', () => {
-		addDoc(URI_A, "export function greet() {}\n");
+		addDoc(URI_A, "export function greet() {};\n");
 		let syms = workspaceSymbol('');
 		let s = filter(syms, (s) => s.name === 'greet')[0];
 		let r = s.location.range;
@@ -70,43 +70,43 @@ describe('workspace/symbol', () => {
 	});
 
 	it('empty query returns all exported symbols', () => {
-		addDoc(URI_A, "export function a() {}\nexport function b() {}\n");
+		addDoc(URI_A, "export function a() {};\nexport function b() {};\n");
 		let names = map(workspaceSymbol(''), (s) => s.name);
 		assert.match(true, index(names, 'a') >= 0);
 		assert.match(true, index(names, 'b') >= 0);
 	});
 
 	it('filters by case-insensitive substring match', () => {
-		addDoc(URI_A, "export function handleRequest() {}\nexport function init() {}\n");
+		addDoc(URI_A, "export function handleRequest() {};\nexport function init() {};\n");
 		let syms = workspaceSymbol('req');
 		assert.match(1, length(syms));
 		assert.match('handleRequest', syms[0].name);
 	});
 
 	it('query is case-insensitive', () => {
-		addDoc(URI_A, "export function handleRequest() {}\n");
+		addDoc(URI_A, "export function handleRequest() {};\n");
 		let syms = workspaceSymbol('REQ');
 		assert.match(1, length(syms));
 		assert.match('handleRequest', syms[0].name);
 	});
 
 	it('returns symbols from multiple files', () => {
-		addDoc(URI_A, "export function fromA() {}\n");
-		addDoc(URI_B, "export function fromB() {}\n");
+		addDoc(URI_A, "export function fromA() {};\n");
+		addDoc(URI_B, "export function fromB() {};\n");
 		let names = map(workspaceSymbol(''), (s) => s.name);
 		assert.match(true, index(names, 'fromA') >= 0);
 		assert.match(true, index(names, 'fromB') >= 0);
 	});
 
 	it('non-exported declarations are not included', () => {
-		addDoc(URI_A, "function hidden() {}\nexport function visible() {}\n");
+		addDoc(URI_A, "function hidden() {}\nexport function visible() {};\n");
 		let names = map(workspaceSymbol(''), (s) => s.name);
 		assert.match(false, index(names, 'hidden') >= 0);
 		assert.match(true, index(names, 'visible') >= 0);
 	});
 
 	it('query with no matches returns empty list', () => {
-		addDoc(URI_A, "export function greet() {}\n");
+		addDoc(URI_A, "export function greet() {};\n");
 		assert.match(0, length(workspaceSymbol('zzznomatch')));
 	});
 });

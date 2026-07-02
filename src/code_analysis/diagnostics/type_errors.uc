@@ -96,12 +96,12 @@ function isAssignmentTarget(node) {
 
 // True when this member_expression is the operand of `delete`. Deleting a key
 // that may not exist is a legal no-op in ucode, so it must not be reported as
-// unknown-property (mirrors the assignment-target exemption above).
+// unknown-property (mirrors the assignment-target exemption above). `delete o.k`
+// parses as a dedicated delete_expression node (its argument is always a
+// member/subscript expression).
 function isDeleteTarget(node) {
 	let parent = ts.parent(node);
-	if (!parent || ts.nodeType(parent) !== 'unary_expression') return false;
-	let op = ts.childByField(parent, 'operator');
-	return op && ts.nodeType(op) === 'delete';
+	return parent && ts.nodeType(parent) === 'delete_expression';
 }
 
 // Returns the field name that is missing on a known record type, or null if

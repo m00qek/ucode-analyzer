@@ -28,7 +28,7 @@ describe('workspace/symbol', () => {
 	it('empty query returns exported symbols from indexed files', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "export function greet() {}\nexport let count = 0;\n" },
+				text: "export function greet() {};\nexport let count = 0;\n" },
 		}});
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: '' } });
@@ -44,7 +44,7 @@ describe('workspace/symbol', () => {
 	it('substring query filters results', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "export function handleRequest() {}\nexport function init() {}\n" },
+				text: "export function handleRequest() {};\nexport function init() {};\n" },
 		}});
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: 'req' } });
@@ -59,7 +59,7 @@ describe('workspace/symbol', () => {
 	it('result includes location with uri and range', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "export function handleConn() {}\n" },
+				text: "export function handleConn() {};\n" },
 		}});
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: 'handleConn' } });
@@ -75,7 +75,7 @@ describe('workspace/symbol', () => {
 	it('non-exported symbols are not returned', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "function hidden() {}\nexport function visible() {}\n" },
+				text: "function hidden() {}\nexport function visible() {};\n" },
 		}});
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: '' } });

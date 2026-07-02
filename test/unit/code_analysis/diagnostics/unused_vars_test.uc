@@ -46,7 +46,7 @@ describe('diagnostics — unused variables', () => {
 	});
 
 	it('does not warn for an exported function (consumed externally)', () => {
-		let text = "export function api() { return 1; }\n";
+		let text = "export function api() { return 1; };\n";
 		documents.open(URI, text, 1);
 
 		assert.match(0, length(unusedVars(documents.get(URI))));

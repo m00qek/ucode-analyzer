@@ -492,7 +492,7 @@ describe('dag — template modules (markup-mode files)', () => {
 	beforeEach(reset);
 
 	it('registers exports declared inside template tags', () => {
-		let text = "{% export function widget() {} %}\n<div></div>\n";
+		let text = "{% export function widget() {}; %}\n<div></div>\n";
 		dag.add(URI_B, text, mode.parse(text));
 
 		let exps = dag.exportsOf(URI_B);

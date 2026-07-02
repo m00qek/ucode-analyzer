@@ -170,7 +170,7 @@ describe('references — scope awareness', () => {
 });
 
 describe('cross-file references', () => {
-	let TEXT_A         = "export function foo() { foo(); }\n";
+	let TEXT_A         = "export function foo() { foo(); };\n";
 	let TEXT_B_NAMED   = "import { foo } from 'a';\nfoo();\n";
 	let TEXT_B_ALIASED = "import { foo as bar } from 'a';\nbar();\n";
 	let TEXT_B_NS      = "import * as a from 'a';\na.foo();\n";

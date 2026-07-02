@@ -53,7 +53,7 @@ describe('documentSymbols', () => {
 	});
 
 	it('includes exported declarations', () => {
-		let text = "export function hello() {}\nexport let x = 1;\n";
+		let text = "export function hello() {};\nexport let x = 1;\n";
 		documents.open(URI, text, 1);
 
 		let syms = documentSymbols(documents.get(URI));

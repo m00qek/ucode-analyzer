@@ -96,7 +96,7 @@ describe('template type parameter propagation', () => {
 
 describe('export function visible to later code in same file', () => {
 	it('calling a sibling export function resolves to its return type', () => {
-		let src = "/**\n * @returns {string}\n */\nexport function tag(x) { return '' + x; }\nexport function caller(v) {\n    let r = tag(v);\n    r;\n}\n";
+		let src = "/**\n * @returns {string}\n */\nexport function tag(x) { return '' + x; };\nexport function caller(v) {\n    let r = tag(v);\n    r;\n};\n";
 		let uri = 'file:///export_fn_scope.uc';
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri, languageId: 'ucode', version: 1, text: src },

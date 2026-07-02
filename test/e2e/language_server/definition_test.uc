@@ -141,7 +141,7 @@ describe('textDocument/definition', () => {
 		// 'export function greet' — 'greet' starts at col 16 (after 'export function ')
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "export function greet() {}\ngreet;\n" },
+				text: "export function greet() {};\ngreet;\n" },
 		}});
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
 			textDocument: { uri: 'file:///t.uc' },

@@ -35,7 +35,7 @@ function firstIdent(root, source, name) {
 
 describe('doc_resolver — resolveDoc precedence', () => {
 	it('resolves an own-file export\'s JSDoc', () => {
-		let src = "/** greets politely */\nexport function greet() {}\n";
+		let src = "/** greets politely */\nexport function greet() {};\n";
 		let tree = parse(src);
 		dag.add(URI_A, src, tree);
 
@@ -46,7 +46,7 @@ describe('doc_resolver — resolveDoc precedence', () => {
 	});
 
 	it('resolves an imported name to the declaring module\'s JSDoc', () => {
-		let srcA = "/** the answer */\nexport function answer() {}\n";
+		let srcA = "/** the answer */\nexport function answer() {};\n";
 		let srcB = "import { answer } from 'a';\nanswer;\n";
 
 		dag.add(URI_A, srcA, parse(srcA));

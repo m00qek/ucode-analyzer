@@ -112,7 +112,7 @@ describe('rename — scope awareness', () => {
 });
 
 describe('cross-file rename', () => {
-	let TEXT_A         = "export function foo() { foo(); }\n";
+	let TEXT_A         = "export function foo() { foo(); };\n";
 	let TEXT_B_NAMED   = "import { foo } from 'a';\nfoo();\n";
 	let TEXT_B_ALIASED = "import { foo as bar } from 'a';\nbar();\n";
 	let TEXT_B_NS      = "import * as a from 'a';\na.foo();\n";
@@ -190,7 +190,7 @@ describe('cross-file rename', () => {
 	it('aliased import in a mixed specifier list: renames only the remote name', () => {
 		// `{ other, foo as bar }` — the leading non-aliased `other` used to make the
 		// remote-name scan bail early and drop the `foo` rename edit entirely.
-		let textA = "export function foo() { foo(); }\nexport function other() {}\n";
+		let textA = "export function foo() { foo(); };\nexport function other() {};\n";
 		let textB = "import { other, foo as bar } from 'a';\nbar(); other();\n";
 		setupFiles(textA, textB);
 

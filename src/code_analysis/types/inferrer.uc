@@ -319,7 +319,7 @@ function inferParenthesized(node, source, uri, scope, depth) {
 
 function inferUnary(node, source, uri, scope, depth) {
 	let op = ts.nodeType(ts.childByField(node, 'operator'));
-	if (op === '!' || op === 'delete') return BOOL;
+	if (op === '!') return BOOL;   // `delete` is now its own delete_expression node
 	if (op === '~') return INT;   // bitwise complement is always int
 	let operand = ts.childByField(node, 'argument');
 	let t = operand ? _infer(operand, source, uri, scope, depth + 1) : UNKNOWN;
@@ -565,6 +565,7 @@ let INFER = {
 	'property_identifier':      inferPropertyIdentifier,
 	'parenthesized_expression': inferParenthesized,
 	'unary_expression':         inferUnary,
+	'delete_expression':        () => BOOL,   // `delete o.k` returns a boolean
 	'binary_expression':        inferBinary,
 	'ternary_expression':       inferTernary,
 	'array':                    inferArray,
