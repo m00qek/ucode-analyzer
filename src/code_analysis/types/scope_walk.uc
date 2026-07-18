@@ -315,11 +315,13 @@ function walkWhileAlt(node, source, uri, scope, map) {
     walkAltBody(node, source, uri, scope, map, altHeaderBytes(node));
 }
 
-// {% if (cond): %} … {% elif (c2): %} … {% else %} … {% endif %}. The if-branch
-// body is a run of statements directly under the node; the elif/else branches are
-// `elif_clause`/`else_alt_clause` (inline colon form) or `elif_clause_tag`/
-// `else_alt_clause_tag` (tag form) nodes that each CONTAIN their own condition and
-// body. Walk each body under the scope narrowed by that branch's guard: the
+// {% if (cond): %} … {% elif (c2): %} … {% else %} … {% endif %}, and the brace
+// form {% if (cond) { %} … {% } else if (c2) { %} … {% } else { %} … {% } %}. The
+// if-branch body is a run of statements directly under the node; the elif/else
+// branches are clause nodes that each CONTAIN their own condition and body, named
+// `elif_clause`/`else_alt_clause` (inline colon), `elif_clause_tag`/
+// `else_alt_clause_tag` (colon tag form), or `elseif_clause_tag`/`else_clause_tag`
+// (brace tag form). Walk each body under the scope narrowed by that branch's guard: the
 // if/elif bodies see their condition as true; the else body sees the if condition
 // as false. We omit the cumulative negation of earlier conditions in elif/else
 // branches — that only ever narrows *less*, never incorrectly. Declarations thread
@@ -338,14 +340,14 @@ function walkIfAlt(node, source, uri, scope, map) {
         let child = ts.namedChild(node, i);
         if (hdr[ts.startByte(child)]) continue;
         let ct = ts.nodeType(child);
-        if (ct === 'elif_clause' || ct === 'elif_clause_tag' ||
-            ct === 'else_alt_clause' || ct === 'else_alt_clause_tag') {
+        if (ct === 'elif_clause' || ct === 'elif_clause_tag' || ct === 'elseif_clause_tag' ||
+            ct === 'else_alt_clause' || ct === 'else_alt_clause_tag' || ct === 'else_clause_tag') {
             // The clause node CONTAINS its own condition and body. Narrow a fresh
             // branch by the clause's guard and thread the body through stepStatement
             // (via walkAltBody) so each body offset gets its own checkpoint — walking
             // it bare would leave those offsets resolving to the previous branch's
             // (if-branch) checkpoint and its narrowing.
-            let truthy = (ct === 'elif_clause' || ct === 'elif_clause_tag');
+            let truthy = (ct === 'elif_clause' || ct === 'elif_clause_tag' || ct === 'elseif_clause_tag');
             let guard  = ifGuard;   // else: if-condition false
             if (truthy) {
                 let ec = ts.childByField(child, 'condition');
@@ -455,7 +457,8 @@ walkNode = function(node, source, uri, scope, map) {
     } else if (nt === 'while_alt_statement' || nt === 'while_alt_statement_tag' ||
                nt === 'while_statement_tag') {
         walkWhileAlt(node, source, uri, scope, map);
-    } else if (nt === 'if_alt_statement' || nt === 'if_alt_statement_tag') {
+    } else if (nt === 'if_alt_statement' || nt === 'if_alt_statement_tag' ||
+               nt === 'if_statement_tag') {
         walkIfAlt(node, source, uri, scope, map);
     } else if (nt === 'while_statement') {
         let cond = ts.childByField(node, 'condition');

@@ -367,6 +367,40 @@ describe('buildScopeMap template brace-spanning forms', () => {
 	});
 });
 
+// ── template mode: brace-spanning if/elif/else narrowing ────────────────────────
+// {% if (c) { %}…{% } else if (c2) { %}…{% } else { %}…{% } %} parses to
+// if_statement_tag with elseif_clause_tag / else_clause_tag branches.
+
+describe('buildScopeMap template brace-form if/elif/else narrowing', () => {
+	const nullable = "{% let m = (1 > 0) ? 'str' : null; %}\n";
+
+	it('the true branch narrows a nullable to non-null', () => {
+		let src = nullable + "{% if (m) { %}\n{{ m }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ m');
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'm'));
+	});
+
+	it('the else branch sees the if condition as false', () => {
+		let src = nullable + "{% if (m) { %}\nt\n{% } else { %}\n{{ m }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ m');
+		assert.match({ kind: 'primitive', name: 'null' }, scopeGet(scope, 'm'));
+	});
+
+	it('an else-if branch narrows on its own condition', () => {
+		let src = "{% let a = (1 > 0) ? 'x' : null; %}\n" +
+		          "{% let b = (1 > 0) ? 'y' : null; %}\n" +
+		          "{% if (a) { %}\nt\n{% } else if (b) { %}\n{{ b }}\n{% } else { %}\nf\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ b');
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'b'));
+	});
+
+	it('narrowing does not leak past the closing tag', () => {
+		let src = nullable + "{% if (m) { %}\nt\n{% } %}\n{% let after = m; %}\n";
+		let scope = scopeAtTpl(src, 'let after');
+		assert.match('union', scopeGet(scope, 'm')?.kind);
+	});
+});
+
 // ── template mode: if/elif/else branch narrowing (flat alt form) ────────────────
 
 describe('buildScopeMap template if/elif/else narrowing', () => {
