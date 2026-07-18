@@ -99,6 +99,45 @@ which point chunked startup becomes a safe, mechanical follow-up.
 
 ---
 
+## Won't-do: builtin call validation (argument count / type / coercion)
+
+**Decision.** Do **not** add a diagnostic that validates call sites against
+declared signatures for argument *count* or argument *type* — the "builtin call
+validation" roadmap item (Tier 2). It is not precision-safe in ucode.
+
+**Why.** The premise ("the typed `declarations/*.d.uc` files hold the raw
+material") is true but insufficient: ucode's runtime tolerates almost every
+mismatch a signature check would flag, so the checks would fire on code the
+interpreter runs without error. Verified against `ucode -e`:
+
+- **Arity underflow** — a missing argument is filled with `null`, not an error.
+  `f(1)` where `f(a,b)`; `substr("hi")`; `math.abs()`; `length()`.
+- **Arity overflow** — extra arguments are ignored. `f(1,2,3)` where `f(a)` → `1`;
+  `substr("hello",1,2,3)` → `"el"`.
+- **Type mismatch** — arguments coerce, they don't throw. `math.abs("hello")` →
+  `NaN`; and even structured values coerce: `math.abs([1,2])`, `int([1,2])`,
+  `math.sqrt({})` all → `NaN`; `substr([1,2,3],1)` and `length(5)` return quietly.
+
+The only builtins that *throw* do so on the specific runtime *value*, not on
+anything a signature encodes: `require("nonexistent")` (module name), `json("not
+json")` (malformed literal), `json()` (throws because `null` is neither string
+nor object). None is provable from arity or declared type without guessing the
+value, so a static signature check can't reach them without false positives.
+
+This is the meta-lesson in CLAUDE.md / `to-fix.md` applied to a *feature*: the
+grammar and declarations describe a superset of what the language enforces, so
+"the data exists" never implies "the check is true." The one call-shaped check
+that survived this bar — the printf/sprintf format checker — did so because it is
+grounded in observably-wrong behavior, not signature matching; the provable call
+errors that remain (`not-a-function`, unknown module member, null dereference)
+are already covered by existing diagnostics.
+
+**Revisit if.** A future ucode gains a strict mode that actually enforces arity or
+argument types at runtime — then the check would describe real errors and the
+declaration data is ready for it.
+
+---
+
 ## Resolved review items (for provenance)
 
 The code review that produced these decisions also surfaced work that is now

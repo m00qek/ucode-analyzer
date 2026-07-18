@@ -13,6 +13,7 @@ import { duplicateObjectKey }     from 'code_analysis.diagnostics.duplicate_obje
 import { assignmentToConst }      from 'code_analysis.diagnostics.assignment_const';
 import { missingReturn }          from 'code_analysis.diagnostics.missing_return';
 import { formatString }            from 'code_analysis.diagnostics.format_string';
+import { jsdocConsistency }        from 'code_analysis.diagnostics.jsdoc_consistency';
 
 // Run one diagnostic pass, appending its results to `out`. Each pass is isolated:
 // a die() or runtime error in one pass (a parser edge case, a pathological tree)
@@ -45,5 +46,6 @@ export function diagnosticsFor(uri, doc) {
 	runPass('assignment-const',       uri, () => assignmentToConst(doc),        diags);
 	runPass('missing-return',         uri, () => missingReturn(doc),            diags);
 	runPass('format-string',          uri, () => formatString(uri, doc),        diags);
+	runPass('jsdoc-consistency',      uri, () => jsdocConsistency(doc),         diags);
 	return diags;
 };

@@ -87,6 +87,30 @@ export function precedingDoc(node, text) {
 	return s.parent ? docBefore(s.target, s.parent, text) : null;
 };
 
+// Like docBefore, but returns the /** */ comment NODE (for its byte offsets)
+// instead of its text. Same reset rule: a // comment or an intervening named
+// node clears the pending doc.
+export function docNodeBefore(stmt, parent, text) {
+	let stmtStart = ts.startByte(stmt);
+	let found = null;
+	for (let c in ts.children(parent)) {
+		if (ts.startByte(c) >= stmtStart) break;
+		if (ts.nodeType(c) === 'comment')
+			found = (substr(ts.text(c, text), 0, 3) === '/**') ? c : null;
+		else if (ts.isNamed(c))
+			found = null;
+	}
+	return found;
+};
+
+// The /** */ comment NODE immediately preceding `node`'s statement, or null —
+// the node counterpart of precedingDoc, for callers that need the comment's
+// source position (e.g. to anchor a diagnostic inside the doc block).
+export function precedingDocNode(node, text) {
+	let s = docBearingStatement(node);
+	return s.parent ? docNodeBefore(s.target, s.parent, text) : null;
+};
+
 // Build a table of byte offsets at which each line starts.
 // lines[n] is the byte offset of the first byte on line n.
 // One native split plus a per-line accumulation, rather than a per-byte

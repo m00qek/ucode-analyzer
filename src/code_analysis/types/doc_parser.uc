@@ -199,11 +199,16 @@ export function parseDoc(commentText) {
 			let rest = typeNode !== null && ts.nodeType(typeNode) === 'rest_type_expression';
 			let optional = nameNode !== null && ts.nodeType(nameNode) === 'optional_param';
 			let name = null;
+			// The node that carries the bare name — unwrapped from the `[…]` optional
+			// wrapper — so its byte offsets locate the name within the comment (used
+			// by consumers that report a diagnostic range on the @param name).
+			let nameHolder = null;
 			if (nameNode) {
 				if (optional) {
-					let ppath = ts.namedChild(nameNode, 0);
-					name = ppath ? ts.text(ppath, commentText) : null;
+					nameHolder = ts.namedChild(nameNode, 0);
+					name = nameHolder ? ts.text(nameHolder, commentText) : null;
 				} else {
+					nameHolder = nameNode;
 					name = ts.text(nameNode, commentText);
 				}
 			}
@@ -213,6 +218,9 @@ export function parseDoc(commentText) {
 				optional,
 				rest,
 				description: descText(descNode, commentText),
+				// Byte offsets of the name within commentText, or null when unnamed.
+				nameStart: nameHolder ? ts.startByte(nameHolder) : null,
+				nameEnd:   nameHolder ? ts.endByte(nameHolder) : null,
 			});
 
 		} else if (ntype === 'returns_tag') {
