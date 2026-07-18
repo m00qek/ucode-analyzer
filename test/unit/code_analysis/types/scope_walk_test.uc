@@ -401,6 +401,34 @@ describe('buildScopeMap template brace-form if/elif/else narrowing', () => {
 	});
 });
 
+// ── template mode: brace-spanning try/catch ({% try { %}…{% } catch (e) { %}) ────
+
+describe('buildScopeMap template brace-spanning try/catch', () => {
+	it('the catch parameter is visible as a string inside the catch body', () => {
+		let src = "{% try { %}\nx\n{% } catch (e) { %}\n{{ e }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ e');
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'e'));
+	});
+
+	it('an outer declaration is visible inside the try body', () => {
+		let src = "{% let base = 10; %}\n{% try { %}\n{{ base }}\n{% } catch (e) { %}\nx\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ base');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'base'));
+	});
+
+	it('a let declared inside the try body threads to later body nodes', () => {
+		let src = "{% try { %}\n{% let n = 5; %}\n{{ n }}\n{% } catch (e) { %}\nx\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ n');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
+	});
+
+	it('the catch parameter is not visible after the try', () => {
+		let src = "{% try { %}\nx\n{% } catch (e) { %}\ny\n{% } %}\n{% let after = 1; %}\n";
+		let scope = scopeAtTpl(src, 'let after');
+		assert.match(null, scopeGet(scope, 'e'));
+	});
+});
+
 // ── template mode: if/elif/else branch narrowing (flat alt form) ────────────────
 
 describe('buildScopeMap template if/elif/else narrowing', () => {

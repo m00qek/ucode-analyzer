@@ -249,10 +249,13 @@ function walkForStmt(node, source, uri, scope, map) {
 // walker serves both.
 
 // Byte offsets of an alt statement's header field nodes — the parts that are not
-// body content and must be skipped when threading the body.
+// body content and must be skipped when threading the body. Covers every header
+// field across the spanning forms (loop headers, catch `handler`/`parameter`,
+// function `name`/`parameters`); a field absent on a given node is simply skipped.
 function altHeaderBytes(node) {
     let hdr = {};
-    for (let f in ['left', 'right', 'value', 'condition', 'initializer', 'increment']) {
+    for (let f in ['left', 'right', 'value', 'condition', 'initializer', 'increment',
+                   'handler', 'parameter', 'name', 'parameters']) {
         let n = ts.childByField(node, f);
         if (n) hdr[ts.startByte(n)] = true;
     }
@@ -364,6 +367,23 @@ function walkIfAlt(node, source, uri, scope, map) {
     }
 }
 
+// {% try { %} … {% } catch (e) { %} … {% } %} — the brace-spanning try form.
+// Try body and catch body are threaded markup (not statement_blocks), so use
+// walkAltBody; the catch parameter binds as a string, as in walkTry. The try
+// body is every non-handler child; the catch body is the handler's non-parameter
+// children (altHeaderBytes skips `handler` and `parameter` respectively).
+function walkTryTag(node, source, uri, scope, map) {
+    let handler = ts.childByField(node, 'handler');   // catch_clause_tag
+    walkAltBody(node, source, uri, makeScope(scope), map, altHeaderBytes(node));
+    if (handler) {
+        let param      = ts.childByField(handler, 'parameter');
+        let catchScope = makeScope(scope);
+        if (param && ts.nodeType(param) === 'identifier')
+            scopeSet(catchScope, ts.text(param, source), STR);
+        walkAltBody(handler, source, uri, catchScope, map, altHeaderBytes(handler));
+    }
+}
+
 function walkTry(node, source, uri, scope, map) {
     let body    = ts.childByField(node, 'body');
     let handler = ts.childByField(node, 'handler');
@@ -467,6 +487,8 @@ walkNode = function(node, source, uri, scope, map) {
         if (body) walkNode(body, source, uri, scope, map);
     } else if (nt === 'try_statement') {
         walkTry(node, source, uri, scope, map);
+    } else if (nt === 'try_statement_tag') {
+        walkTryTag(node, source, uri, scope, map);
     } else if (nt === 'function_declaration' || nt === 'function_expression' || nt === 'arrow_function') {
         walkFn(node, source, uri, scope, map);
     } else if (nt === 'ternary_expression') {
