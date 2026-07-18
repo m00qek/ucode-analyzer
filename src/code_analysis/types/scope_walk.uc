@@ -243,6 +243,10 @@ function walkForStmt(node, source, uri, scope, map) {
 // These mirror the brace-form walkers, but their body is a *repeat* of markup
 // nodes (raw_text, expression tags, nested tags) rather than a single
 // statement_block, so the body is threaded child-by-child through stepStatement.
+// Both tag-spanning shapes route here: the colon/end form ({% for …: %}…
+// {% endfor %}, node `*_alt_statement_tag`) and the brace form
+// ({% for … { %}…{% } %}, node `*_statement_tag`) — identical fields, so one
+// walker serves both.
 
 // Byte offsets of an alt statement's header field nodes — the parts that are not
 // body content and must be skipped when threading the body.
@@ -442,11 +446,14 @@ walkNode = function(node, source, uri, scope, map) {
         walkForIn(node, source, uri, scope, map);
     } else if (nt === 'for_statement') {
         walkForStmt(node, source, uri, scope, map);
-    } else if (nt === 'for_in_alt_statement' || nt === 'for_in_alt_statement_tag') {
+    } else if (nt === 'for_in_alt_statement' || nt === 'for_in_alt_statement_tag' ||
+               nt === 'for_in_statement_tag') {
         walkForInAlt(node, source, uri, scope, map);
-    } else if (nt === 'for_alt_statement' || nt === 'for_alt_statement_tag') {
+    } else if (nt === 'for_alt_statement' || nt === 'for_alt_statement_tag' ||
+               nt === 'for_statement_tag') {
         walkForAlt(node, source, uri, scope, map);
-    } else if (nt === 'while_alt_statement' || nt === 'while_alt_statement_tag') {
+    } else if (nt === 'while_alt_statement' || nt === 'while_alt_statement_tag' ||
+               nt === 'while_statement_tag') {
         walkWhileAlt(node, source, uri, scope, map);
     } else if (nt === 'if_alt_statement' || nt === 'if_alt_statement_tag') {
         walkIfAlt(node, source, uri, scope, map);

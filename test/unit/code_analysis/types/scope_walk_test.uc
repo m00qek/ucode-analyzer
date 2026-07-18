@@ -330,6 +330,43 @@ describe('buildScopeMap template spanning forms', () => {
 	});
 });
 
+// ── template mode: brace-spanning control-flow forms ({% for … { %}…{% } %}) ────
+// The brace form spans tags with `{ … }` instead of `: … end…`; it parses to the
+// `*_statement_tag` node types, which share fields with the colon `*_alt_statement`
+// forms and route through the same walkers.
+
+describe('buildScopeMap template brace-spanning forms', () => {
+	it('for-in loop variable is typed from the iterable inside the body', () => {
+		let src = "{% for (n in [1, 2, 3]) { %}\n{{ n }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ n');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
+	});
+
+	it('a C-style for initializer variable is visible in the body', () => {
+		let src = "{% for (let i = 0; i < 3; i++) { %}\n{{ i }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ i');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'i'));
+	});
+
+	it('an outer tag declaration is visible inside a while body', () => {
+		let src = "{% let base = 10; %}\n{% while (base) { %}\n{{ base }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ base');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'base'));
+	});
+
+	it('a let declared inside the loop body threads to later body nodes', () => {
+		let src = "{% for (n in [1]) { %}\n{% let sq = n; %}\n{{ sq }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ sq');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'sq'));
+	});
+
+	it('the loop variable is not visible after the loop', () => {
+		let src = "{% for (item in ['a']) { %}\n{{ item }}\n{% } %}\n{% let after = 1; %}\n";
+		let scope = scopeAtTpl(src, 'let after');
+		assert.match(null, scopeGet(scope, 'item'));
+	});
+});
+
 // ── template mode: if/elif/else branch narrowing (flat alt form) ────────────────
 
 describe('buildScopeMap template if/elif/else narrowing', () => {
