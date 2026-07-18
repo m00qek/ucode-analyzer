@@ -384,6 +384,34 @@ function walkTryTag(node, source, uri, scope, map) {
     }
 }
 
+// Bind a formal_parameters node's identifiers into scope as UNKNOWN. Used for the
+// spanning function forms: the inferrer doesn't model their node types, so there
+// is no function-type/JSDoc param typing to draw on — params bind untyped, which
+// is faithful (a plain `function f(a)` has no param type anyway) and never wrong.
+function bindTagFnParams(paramsNode, source, scope) {
+    for (let i = 0; i < ts.namedChildCount(paramsNode); i++) {
+        let p  = ts.namedChild(paramsNode, i);
+        let pt = ts.nodeType(p);
+        if (pt === 'identifier') {
+            scopeSet(scope, ts.text(p, source), UNKNOWN);
+        } else if (pt === 'rest_element') {
+            let inner = ts.namedChild(p, 0);
+            if (inner && ts.nodeType(inner) === 'identifier')
+                scopeSet(scope, ts.text(inner, source), UNKNOWN);
+        }
+    }
+}
+
+// {% function f(a, b) { %} … {% } %} (function_declaration_tag) and the colon form
+// {% function f(a): %} … {% endfunction %} (function_alt_declaration). Body is
+// threaded markup; params bind via bindTagFnParams under a fresh function scope.
+function walkFnTag(node, source, uri, scope, map) {
+    let params  = ts.childByField(node, 'parameters');
+    let fnScope = makeScope(scope);
+    if (params) bindTagFnParams(params, source, fnScope);
+    walkAltBody(node, source, uri, fnScope, map, altHeaderBytes(node));
+}
+
 function walkTry(node, source, uri, scope, map) {
     let body    = ts.childByField(node, 'body');
     let handler = ts.childByField(node, 'handler');
@@ -491,6 +519,8 @@ walkNode = function(node, source, uri, scope, map) {
         walkTryTag(node, source, uri, scope, map);
     } else if (nt === 'function_declaration' || nt === 'function_expression' || nt === 'arrow_function') {
         walkFn(node, source, uri, scope, map);
+    } else if (nt === 'function_declaration_tag' || nt === 'function_alt_declaration') {
+        walkFnTag(node, source, uri, scope, map);
     } else if (nt === 'ternary_expression') {
         walkTernary(node, source, uri, scope, map);
     } else if (nt === 'binary_expression') {

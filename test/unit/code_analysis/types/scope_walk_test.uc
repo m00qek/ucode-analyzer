@@ -429,6 +429,44 @@ describe('buildScopeMap template brace-spanning try/catch', () => {
 	});
 });
 
+// ── template mode: spanning function forms ─────────────────────────────────────
+// {% function f(a) { %}…{% } %} (function_declaration_tag) and the colon form
+// {% function f(a): %}…{% endfunction %} (function_alt_declaration). Params bind
+// untyped (UNKNOWN) — the inferrer doesn't model these node types.
+
+describe('buildScopeMap template spanning function forms', () => {
+	it('a brace-form parameter is visible inside the body', () => {
+		let src = "{% function f(a, b) { %}\n{{ a }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ a');
+		assert.match('unknown', scopeGet(scope, 'a')?.kind);
+		assert.match('unknown', scopeGet(scope, 'b')?.kind);
+	});
+
+	it('a colon-form parameter is visible inside the body', () => {
+		let src = "{% function g(a): %}\n{{ a }}\n{% endfunction %}\n";
+		let scope = scopeAtTpl(src, '{{ a');
+		assert.match('unknown', scopeGet(scope, 'a')?.kind);
+	});
+
+	it('an outer declaration is visible inside the function body', () => {
+		let src = "{% let base = 10; %}\n{% function f(a) { %}\n{{ base }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ base');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'base'));
+	});
+
+	it('a let declared inside the body threads to later body nodes', () => {
+		let src = "{% function f(a) { %}\n{% let n = 5; %}\n{{ n }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ n');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
+	});
+
+	it('a parameter is not visible after the function', () => {
+		let src = "{% function f(a) { %}\nx\n{% } %}\n{% let after = 1; %}\n";
+		let scope = scopeAtTpl(src, 'let after');
+		assert.match(null, scopeGet(scope, 'a'));
+	});
+});
+
 // ── template mode: if/elif/else branch narrowing (flat alt form) ────────────────
 
 describe('buildScopeMap template if/elif/else narrowing', () => {
