@@ -111,9 +111,11 @@ pre-v0.8.0 grammar):
   half-migrated state (old grammar + new code, or vice versa).
 - Bump message should note the breaking markup node renames and that this is a
   tagged release (`v0.8.0`), aligning with the existing pin convention.
-- Core tree-sitter (C lib) is a separate, optional chore: pin is v0.26.9;
-  v0.26.10/11 exist on `release-0.26` (query internals/aliasing fixes only,
-  no API we call). Bump opportunistically in its own commit; do not bundle.
+- Core tree-sitter (C lib) — DONE: bumped v0.26.9 → **v0.26.11** in its own
+  commit. Verified no api.h signature/type changes and identical ABI constants
+  (LANGUAGE_VERSION 15 / MIN_COMPATIBLE 13) between the two tags; the delta is
+  query-internal/aliasing fixes only, none of the API our binding calls. Native
+  module recompiled from source; full suite + lint green.
 
 ## Verification checklist (after tasks 1–3)
 - `make test` fully green (unit + integration + e2e), `make lint` zero.
