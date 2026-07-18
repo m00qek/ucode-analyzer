@@ -91,7 +91,7 @@ export function parse(text) {
 // template (markup root) a `{% stmt; ... %}` block wraps its statements in a
 // `statement_tag` node — we descend one level into each and surface the real
 // statements (dropping the `statement_tag_open`/`_close` delimiters). Spanning
-// forms (`for_in_alt_statement`, …) and non-statement children (`raw_text`,
+// forms (`for_in_alt_statement_tag`, …) and non-statement children (`raw_text`,
 // `expression_tag`) pass through as-is; the caller's node-type check ignores what
 // it doesn't handle, exactly as it does for a script tree.
 export function topLevelStatements(root) {

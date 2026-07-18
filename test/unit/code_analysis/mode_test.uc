@@ -121,7 +121,7 @@ describe('mode — topLevelStatements', () => {
 
 	it('passes a spanning form through as-is', () => {
 		let types = stmtTypes("{% for (x in xs): %}\n{{ x }}\n{% endfor %}\n");
-		assert.match(true, index(types, 'for_in_alt_statement') >= 0);
+		assert.match(true, index(types, 'for_in_alt_statement_tag') >= 0);
 	});
 });
 
