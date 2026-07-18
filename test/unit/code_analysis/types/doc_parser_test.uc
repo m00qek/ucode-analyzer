@@ -106,6 +106,18 @@ describe('parseDoc — @template and type params', () => {
 		let doc = parseDoc("/** @returns {MyType} */");
 		assert.match(ref('MyType'), doc.returns.type);
 	});
+
+	// Regression (tree-sitter-ucode < v0.8.0): a single-character type name lost a
+	// longest-match tie to the brace-text description token, so `{T}` parsed as
+	// prose and the tag ended up with no type. Fixed upstream in v0.8.0 (prec(-1)
+	// on the brace-text lead token). Multi-character names were never affected.
+	// See upgrade.plan.md task 5.
+	it('parses a single-character type name as a type, not description', () => {
+		let doc = parseDoc("/** @param {T} x @returns {U} */");
+		assert.match(ref('T'), doc.params[0].type);
+		assert.match('x', doc.params[0].name);
+		assert.match(ref('U'), doc.returns.type);
+	});
 });
 
 describe('parseDoc — @typedef', () => {

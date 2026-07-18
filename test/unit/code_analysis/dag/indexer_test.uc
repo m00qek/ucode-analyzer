@@ -77,6 +77,33 @@ describe('indexer.extractExports', () => {
 		assert.match(null, exps[0].doc);
 	});
 
+	// Regression (tree-sitter-ucode < v0.8.0): the automatic-semicolon token
+	// swallowed an own-line comment that followed a brace-terminated statement
+	// with no explicit `;` (e.g. `function f() {}`), so the comment node vanished
+	// into the preceding declaration and docBefore found nothing for the next
+	// export. Fixed upstream in v0.8.0; guard it here since doc association relies
+	// on it. See upgrade.plan.md task 5.
+	it('associates a doc comment after a brace-terminated statement with the next export', () => {
+		let text = "function f() { return 1; }\n/** @returns {int} */\nexport const a = 1;\n";
+		let exps = extractExports(text, parse(text));
+
+		// f is not exported, so `a` is the only export.
+		assert.match(1, length(exps));
+		assert.match('a', exps[0].name);
+		assert.match(true, exps[0].doc !== null);
+		assert.match({ kind: 'primitive', name: 'int' }, exps[0].doc.returns.type);
+	});
+
+	it('associates a block doc comment between a semicolon-less let and the next export', () => {
+		let text = "let x = 1\n/** @returns {string} */\nexport function g() {}\n";
+		let exps = extractExports(text, parse(text));
+
+		assert.match(1, length(exps));
+		assert.match('g', exps[0].name);
+		assert.match(true, exps[0].doc !== null);
+		assert.match({ kind: 'primitive', name: 'string' }, exps[0].doc.returns.type);
+	});
+
 	it('extracts memberRef for member-expression re-export', () => {
 		let text = 'export const describe = dsl.describe;';
 		let exps = extractExports(text, parse(text));

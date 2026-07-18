@@ -93,13 +93,16 @@ Implemented across four commits:
 Each step shipped with `scope_walk_test`/`definition_test` coverage. Full suite
 green. `undefined_vars.uc` walks generically in source order and needed no change.
 
-### 5. Add regression tests for the two fixed upstream bugs
-Cheap insurance against a grammar re-regression, since our features depend on
-both behaviors:
-- doc association across an ASI boundary: `function f() {…}` + `/** doc */` +
-  `export const …` → `extractExports` doc present (unit, `indexer_test`).
-- `parseDoc("/** @template T @param {T} x */")` → `params[0].type` resolves
-  (already covered by `doc_parser_test`, which now passes — keep it).
+### 5. Regression tests for the two fixed upstream bugs — DONE
+Both behaviors our features depend on are now pinned (verified they fail on the
+pre-v0.8.0 grammar):
+- ASI/comment doc association (`indexer_test`): two tests — a `/** doc */` after
+  a brace-terminated `function f() {}` and after a semicolon-less `let x = 1`,
+  each asserting `extractExports` attaches the doc to the following export.
+- single-character ucdocs type (`doc_parser_test`): `parseDoc("/** @param {T} x
+  @returns {U} */")` → `params[0].type` / `returns.type` resolve as `ref` types,
+  not description prose (sharper than the pre-existing `@template` test, which
+  stays).
 
 ### 6. Commit strategy for the submodule bump
 - Upstream has now tagged **`v0.8.0`** (the node-type renames are breaking, so
