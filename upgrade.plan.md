@@ -71,23 +71,27 @@ Inline colon-form handling preserved (its test still passes).
 needed no change. (Deferred nicety: also pin a brace-spanning `if_statement_tag`
 as pass-through — folded into task 4's test work.)
 
-### 4. Decide on the new brace-spanning forms (follow-up, not blocking)
-`if/for/for_in/while/try_statement_tag`, `function_declaration_tag`,
-`function_alt_declaration`: today they hit `walkNode`'s default recursion —
-declarations inside them don't thread and no checkpoints are emitted, so
-hover/narrowing inside such regions degrades to the enclosing scope (silent,
-not wrong-crashy). Options:
-- **A (recommended):** add walkers mirroring the brace-form walkers
-  (`walkIfStmt`, `walkForStmt`, …) with `walkAltBody`-style body threading —
-  same fields, body is a repeat of markup children rather than a
-  `statement_block`.
-- **B:** accept generic recursion for now and add tests documenting the
-  degradation. Cheaper; revisit if brace-spanning templates show up in real
-  corpora (firewall4 uses colon forms).
-Also sweep other consumers for the new types: `definition.uc:96` treats
-`statement_tag` as a scope boundary — decide whether `*_statement_tag`
-spanning forms should count as boundaries too; `undefined_vars.uc` walks
-generically in source order and needs no change.
+### 4. The new brace-spanning forms — DONE (Option A, full support)
+`for_in/for/while/if/try_statement_tag`, `function_declaration_tag`,
+`function_alt_declaration` (the `{% … { %}…{% } %}` brace forms, plus the colon
+`function` form) previously hit `walkNode`'s default recursion — no checkpoints,
+no binding threading, so scope/narrowing degraded to the enclosing scope.
+Implemented across four commits:
+- **loop trio** (`for_in/for/while_statement_tag`): structurally identical to the
+  `*_alt_statement_tag` forms → routed to the existing walkers, no new code.
+- **`if_statement_tag`**: routed to `walkIfAlt`; its clause-narrowing arm now
+  also recognizes `elseif_clause_tag`/`else_clause_tag` (the brace form's
+  differently-named clauses).
+- **`try_statement_tag`**: new `walkTryTag` (try + `catch_clause_tag` bodies
+  threaded via `walkAltBody`, catch param bound as string). `altHeaderBytes`
+  extended with `handler`/`parameter`/`name`/`parameters`.
+- **function forms**: new `walkFnTag` + `bindTagFnParams` (params bound UNKNOWN —
+  the inferrer doesn't model these node types, so no JSDoc param typing).
+- **go-to-def** (`definition.uc` `binderIn`): extended to resolve loop vars,
+  catch params, and function params in all the new tag forms — the `localScopeDef`
+  ancestor chain already descends into them, so only `binderIn` needed the names.
+Each step shipped with `scope_walk_test`/`definition_test` coverage. Full suite
+green. `undefined_vars.uc` walks generically in source order and needed no change.
 
 ### 5. Add regression tests for the two fixed upstream bugs
 Cheap insurance against a grammar re-regression, since our features depend on

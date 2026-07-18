@@ -628,3 +628,55 @@ describe('definition — chained member expression', () => {
 		assert.match(null, result);
 	});
 });
+
+describe('definition — brace-spanning template tag bindings', () => {
+	it('jumps to a for-in loop variable declared in a brace-spanning tag', () => {
+		let text = "{% for (let x in [1]) { %}\n{{ x }}\n{% } %}\n";
+		documents.open(URI, text, 1);
+		let result = definition(URI, documents.get(URI), { line: 1, character: 3 });
+
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(12, result.range.start.character);  // 'x' after '{% for (let '
+	});
+
+	it('jumps to a C-for initializer variable in a brace-spanning tag', () => {
+		let text = "{% for (let i = 0; i < 3; i++) { %}\n{{ i }}\n{% } %}\n";
+		documents.open(URI, text, 1);
+		let result = definition(URI, documents.get(URI), { line: 1, character: 3 });
+
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(12, result.range.start.character);  // 'i' after '{% for (let '
+	});
+
+	it('jumps to a catch parameter in a brace-spanning try tag', () => {
+		let text = "{% try { %}\nx\n{% } catch (e) { %}\n{{ e }}\n{% } %}\n";
+		documents.open(URI, text, 1);
+		let result = definition(URI, documents.get(URI), { line: 3, character: 3 });
+
+		assert.match(URI, result.uri);
+		assert.match(2, result.range.start.line);
+		assert.match(12, result.range.start.character);  // 'e' after '{% } catch ('
+	});
+
+	it('jumps to a parameter of a brace-spanning function tag', () => {
+		let text = "{% function f(a, b) { %}\n{{ a }}\n{% } %}\n";
+		documents.open(URI, text, 1);
+		let result = definition(URI, documents.get(URI), { line: 1, character: 3 });
+
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(14, result.range.start.character);  // 'a' after '{% function f('
+	});
+
+	it('jumps to a parameter of a colon-form function tag', () => {
+		let text = "{% function g(a): %}\n{{ a }}\n{% endfunction %}\n";
+		documents.open(URI, text, 1);
+		let result = definition(URI, documents.get(URI), { line: 1, character: 3 });
+
+		assert.match(URI, result.uri);
+		assert.match(0, result.range.start.line);
+		assert.match(14, result.range.start.character);  // 'a' after '{% function g('
+	});
+});
