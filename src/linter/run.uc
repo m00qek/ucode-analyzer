@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as uloop from 'uloop';
 import * as workspace from 'code_analysis.workspace';
 import * as reporters from 'linter.reporters';
+import { fanOut } from 'code_analysis.parallel';
 
 // Resolve a (possibly relative) path to an absolute file:// URI, or null if the
 // file cannot be resolved.
@@ -10,26 +11,18 @@ function toUri(path) {
 	return abs ? ('file://' + abs) : null;
 }
 
-// Distribute `items` round-robin into `jobs` shards: shard s holds items
-// s, s+jobs, s+2*jobs, … This spreads work evenly (sizes differ by at most one)
-// and assigns every item to exactly one shard — a sharding bug would silently
-// drop or double-lint files. Exported so the shard math can be tested apart from
-// the fork machinery.
-export function shardRoundRobin(items, jobs) {
-	let shards = [];
-	for (let i = 0; i < jobs; i++) push(shards, []);
-	for (let i = 0; i < length(items); i++)
-		push(shards[i % jobs], items[i]);
-	return shards;
-};
-
 // Diagnose the whole workspace across `jobs` worker processes.
 //
 // The parent builds the entire DAG + builtins and parses every file once
-// (loadWorkspaceDocs), then forks workers with uloop.task. Each worker inherits
-// the fully-built DAG and all parsed trees via copy-on-write — no re-parsing or
-// re-indexing — and only runs the expensive per-file work (scopeMap + type
-// inference) for its shard, streaming { uri, diags } back over its pipe.
+// (loadWorkspaceDocs), then fans the docs out to workers with `fanOut`. Each
+// worker inherits the fully-built DAG and all parsed trees via copy-on-write —
+// no re-parsing or re-indexing — and only runs the expensive per-file work
+// (scopeMap + type inference) for its shard, streaming results back.
+//
+// Being a one-shot CLI, the linter owns the event loop here: it wraps the
+// loop-agnostic `fanOut` in its own `uloop.init`/`run`, ending the loop from the
+// completion callback. (The LSP shares `fanOut` but drives it on its own live
+// loop instead — see language_server/handlers/diagnostic_reports.uc.)
 function diagnoseWorkspaceParallel(config, jobs) {
 	let docs = workspace.loadWorkspaceDocs(config);
 	if (jobs > length(docs)) jobs = length(docs);
@@ -40,27 +33,12 @@ function diagnoseWorkspaceParallel(config, jobs) {
 		return results;
 	}
 
-	let shards = shardRoundRobin(docs, jobs);
-
 	let results = [];
-	let done = 0;
 	uloop.init();
-	for (let s = 0; s < jobs; s++) {
-		let shard = shards[s];
-		uloop.task(
-			function(pipe) {
-				for (let doc in shard) pipe.send(workspace.diagnoseDoc(doc));
-			},
-			function(item) {
-				// null is uloop's per-task completion sentinel.
-				if (item === null) {
-					if (++done === jobs) uloop.end();
-					return;
-				}
-				push(results, item);
-			}
-		);
-	}
+	fanOut(docs, jobs,
+		(doc)  => workspace.diagnoseDoc(doc),
+		(item) => push(results, item),
+		()     => uloop.end());
 	uloop.run();
 	return results;
 }

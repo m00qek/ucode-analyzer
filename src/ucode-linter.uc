@@ -4,6 +4,7 @@
 import { docopt } from 'docopt';
 import { load as loadConfig } from 'code_analysis.config';
 import { run } from 'linter.run';
+import { detectJobs } from 'code_analysis.parallel';
 import * as fs from 'fs';
 
 const doc = `
@@ -28,19 +29,6 @@ Options:
   -h --help           Show this screen.
   --version           Show version.
 `;
-
-// Number of online CPUs (Linux), capped, as the default worker count.
-function detectJobs() {
-	let f = fs.open('/proc/cpuinfo', 'r');
-	if (!f) return 1;
-	let text = f.read('all');
-	f.close();
-	let n = 0;
-	for (let line in split(text, '\n'))
-		if (match(line, /^processor[ \t]*:/)) n++;
-	if (n < 1) n = 1;
-	return (n > 8) ? 8 : n;
-}
 
 const args = docopt(doc, ARGV, true, '0.1.0');
 

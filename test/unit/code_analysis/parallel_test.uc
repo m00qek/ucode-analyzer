@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import { shardRoundRobin } from 'linter.run';
+import { shardRoundRobin, fanOut } from 'code_analysis.parallel';
 
 // [0, 1, …, n-1]
 function nums(n) {
@@ -8,7 +8,7 @@ function nums(n) {
 	return a;
 }
 
-describe('linter/run — shardRoundRobin', () => {
+describe('parallel — shardRoundRobin', () => {
 	it('creates exactly `jobs` shards', () => {
 		assert.match(3, length(shardRoundRobin(nums(10), 3)));
 	});
@@ -54,5 +54,24 @@ describe('linter/run — shardRoundRobin', () => {
 		assert.match(5, length(shards[0]));
 		assert.match(0, shards[0][0]);
 		assert.match(4, shards[0][4]);
+	});
+});
+
+describe('parallel — fanOut', () => {
+	// The forking path is exercised end-to-end by the LSP workspace/diagnostic and
+	// CLI linter suites (both run at detectJobs() >= 2 on a 2-vCPU runner). Here we
+	// pin the non-forking contract: an empty workload must still drive the caller's
+	// completion path so its uniform teardown/respond logic fires regardless of size.
+	it('invokes onDone immediately and forks nothing for an empty item list', () => {
+		let doneCalled = false;
+		let itemCalls  = 0;
+		let tasks = fanOut([], 4,
+			(x) => x,
+			(_) => { itemCalls++; },
+			()  => { doneCalled = true; });
+
+		assert.match(true, doneCalled);
+		assert.match(0, itemCalls);
+		assert.match(0, length(tasks));
 	});
 });

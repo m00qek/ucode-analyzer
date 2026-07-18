@@ -1,7 +1,7 @@
-import * as uloop from 'uloop';
 import * as protocol from 'language_server.protocol';
 import { diagnosticsFor } from 'code_analysis.diagnostics';
 import { workspaceUris, diagnoseFile } from 'code_analysis.workspace';
+import { fanOut, detectJobs } from 'code_analysis.parallel';
 
 // Per-URI resultId generation. Bumped whenever a document's diagnostics may
 // have changed (edit, dependency cascade, watched-file change). A pull request
@@ -32,26 +32,31 @@ export function documentDiagnostics(uri, doc, previousResultId) {
 // Clients treat it as "obsolete, re-request" rather than a hard failure.
 let CONTENT_MODIFIED = -32801;
 
-let _activeTask = null;
+// The forked workers of the current scan (one per shard). Held so a supersede or
+// teardown can kill every one of them, not just a single task.
+let _activeTasks = [];
 let _pendingReqId = null;
 let _report = [];
-// Bumped for every scan. A superseded task keeps running (kill() is not
+// Bumped for every scan. A superseded worker keeps running (kill() is not
 // guaranteed to cancel its pending pipe callbacks), and its late items / sentinel
 // would otherwise corrupt the successor's report or emit a duplicate response.
-// Each task closes over its own generation and drops any callback that is no
-// longer current.
+// Every worker's onItem/onDone closes over its scan's generation and drops any
+// callback that is no longer current — so a stale sentinel can neither tick the
+// successor's completion counter (each fanOut owns its own counter) nor respond.
 let _scanGen = 0;
 
+function killAll() {
+	for (let t in _activeTasks) t.kill();
+	_activeTasks = [];
+}
+
 export function workspaceDiagnostics(requestId, params, config) {
-	// A newer request supersedes any in-flight scan. The superseded task never
-	// delivers a usable result, so the previous request id would otherwise never be
+	// A newer request supersedes any in-flight scan. The superseded workers never
+	// deliver a usable result, so the previous request id would otherwise never be
 	// answered — the client's pending promise would leak. Abort it explicitly with
 	// ContentModified so the client re-pulls.
 	if (_pendingReqId !== null) {
-		if (_activeTask) {
-			_activeTask.kill();
-			_activeTask = null;
-		}
+		killAll();
 		protocol.error(_pendingReqId, CONTENT_MODIFIED,
 			'workspace/diagnostic superseded by a newer request');
 		_pendingReqId = null;
@@ -68,47 +73,42 @@ export function workspaceDiagnostics(requestId, params, config) {
 	_pendingReqId = requestId;
 	_report = [];
 
-	// The child inherits the parent's full state at fork time (DAG, open
-	// documents, resultId generations) and runs the scan synchronously without
-	// blocking the parent's event loop. Results stream back over the pipe.
-	_activeTask = uloop.task(
-		function(pipe) {
-			for (let uri in uris) {
-				let id = resultId(uri);
-				if (prevIds[uri] === id) {
-					pipe.send({ kind: 'unchanged', uri, version: null, resultId: id });
-					continue;
-				}
-				pipe.send({ kind: 'full', uri, version: null, resultId: id, items: diagnoseFile(uri) });
-			}
+	// Shard the files across worker processes (batch work is the one place the
+	// design permits using more than the 2-core floor). Each worker inherits the
+	// parent's full state at fork time (DAG, open documents, resultId generations)
+	// via copy-on-write and diagnoses its shard without blocking the parent's event
+	// loop; results stream back and the report is sent once every worker completes.
+	// Order within the report is not significant — each item carries its own uri.
+	_activeTasks = fanOut(
+		uris, detectJobs(),
+		function(uri) {
+			let id = resultId(uri);
+			if (prevIds[uri] === id)
+				return { kind: 'unchanged', uri, version: null, resultId: id };
+			return { kind: 'full', uri, version: null, resultId: id, items: diagnoseFile(uri) };
 		},
 		function(item) {
-			// Ignore callbacks from a scan that has since been superseded — their
-			// items must not leak into the current report and their sentinel must
-			// not double-respond.
+			// Drop items from a scan that has since been superseded.
 			if (myGen !== _scanGen) return;
-			// A null item is uloop's task-completion sentinel.
-			if (item === null) {
-				protocol.respond(_pendingReqId, { items: _report });
-				_activeTask = null;
-				_pendingReqId = null;
-				_report = [];
-				return;
-			}
 			push(_report, item);
+		},
+		function() {
+			// Drop the completion of a superseded scan — it must not double-respond.
+			if (myGen !== _scanGen) return;
+			protocol.respond(_pendingReqId, { items: _report });
+			_activeTasks = [];
+			_pendingReqId = null;
+			_report = [];
 		}
 	);
 };
 
-// Kill an in-flight background scan on server teardown so the forked child is not
-// orphaned. The scan generation is bumped so any late callback from the killed
-// task is ignored. We are exiting, so the pending request is left unanswered
+// Kill an in-flight background scan on server teardown so the forked children are
+// not orphaned. The scan generation is bumped so any late callback from a killed
+// worker is ignored. We are exiting, so the pending request is left unanswered
 // (the client is going away too).
 export function cancel() {
-	if (_activeTask) {
-		_activeTask.kill();
-		_activeTask = null;
-	}
+	killAll();
 	_scanGen += 1;
 	_pendingReqId = null;
 	_report = [];
