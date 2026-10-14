@@ -105,12 +105,18 @@ describe('mode — topLevelStatements', () => {
 		assert.match(true, index(types, 'function_declaration') >= 0);
 	});
 
-	it('unwraps a statement tag to surface the inner statement', () => {
+	it('surfaces a template\'s statements and drops the tag delimiters', () => {
 		let types = stmtTypes("{% import { helper } from 'lib.util'; %}\n{{ y }}\n");
 		// the import inside {% %} is surfaced; the delimiters are dropped
 		assert.match(true, index(types, 'import_statement') >= 0);
 		assert.match(false, index(types, 'statement_tag_open') >= 0);
-		assert.match(false, index(types, 'statement_tag') >= 0);
+		assert.match(false, index(types, 'statement_tag_close') >= 0);
+	});
+
+	it('drops the trim and lstrip delimiter variants too', () => {
+		let types = stmtTypes("{%- let a = 1; -%}\n{%+ let b = 2; %}\n");
+		assert.match(2, length(filter(types, (t) => t === 'lexical_declaration')));
+		assert.match(0, length(filter(types, (t) => index(t, 'statement_tag_') === 0)));
 	});
 
 	it('surfaces every statement of a multi-statement tag', () => {
@@ -119,9 +125,9 @@ describe('mode — topLevelStatements', () => {
 		assert.match(2, length(lex));
 	});
 
-	it('passes a spanning form through as-is', () => {
+	it('a spanning form is the ordinary statement', () => {
 		let types = stmtTypes("{% for (x in xs): %}\n{{ x }}\n{% endfor %}\n");
-		assert.match(true, index(types, 'for_in_alt_statement_tag') >= 0);
+		assert.match(true, index(types, 'for_in_alt_statement') >= 0);
 	});
 });
 

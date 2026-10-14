@@ -25,11 +25,12 @@ type scope map.
   use-before-`let` case is a real regression. (ucode has no hoisting — see the
   ucode-language-nonfeatures memory — so the function case is UX-nicety, not a
   correctness requirement.)
-- A faithful version needs a *separate hoisted decl map* replicating five
+- A faithful version needs a *separate hoisted decl map* replicating four
   visibility models — block = whole-block, function = params, for-in = loop
-  var(s), catch = param, template `statement_tag` = whole-tag — across ~10
-  walker variants (`walkBlock`, `walkFn`, `walkForIn`/`walkForInAlt`,
-  `walkForStmt`/`walkForAlt`, `walkTry`, statement-tag threading).
+  var(s), catch = param — across ~9 walker variants (`walkBlock`, `walkFn`,
+  `walkForIn`/`walkForInAlt`, `walkForStmt`/`walkForAlt`, `walkTry`).
+  (Templates no longer add a fifth: since the grammar models a template as
+  ucode's statement stream, its code nests exactly like a script's.)
 - **Local go-to-definition inside template / alt-form bodies is untested**, so
   that surface would be unguarded during the change.
 

@@ -26,6 +26,7 @@ set_target_properties(ucode_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(ucdocs_grammar STATIC
   ${TREE_SITTER_UCODE_DIR}/ucdocs/src/parser.c
+  ${TREE_SITTER_UCODE_DIR}/ucdocs/src/scanner.c
 )
 target_include_directories(ucdocs_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucdocs/src)
 set_target_properties(ucdocs_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -332,8 +332,8 @@ describe('buildScopeMap template spanning forms', () => {
 
 // ── template mode: brace-spanning control-flow forms ({% for … { %}…{% } %}) ────
 // The brace form spans tags with `{ … }` instead of `: … end…`; it parses to the
-// `*_statement_tag` node types, which share fields with the colon `*_alt_statement`
-// forms and route through the same walkers.
+// ordinary for/while/if/try nodes, with the text between tags as text_statement
+// nodes inside their statement_block.
 
 describe('buildScopeMap template brace-spanning forms', () => {
 	it('for-in loop variable is typed from the iterable inside the body', () => {
@@ -368,8 +368,8 @@ describe('buildScopeMap template brace-spanning forms', () => {
 });
 
 // ── template mode: brace-spanning if/elif/else narrowing ────────────────────────
-// {% if (c) { %}…{% } else if (c2) { %}…{% } else { %}…{% } %} parses to
-// if_statement_tag with elseif_clause_tag / else_clause_tag branches.
+// {% if (c) { %}…{% } else if (c2) { %}…{% } else { %}…{% } %} parses to an
+// ordinary if_statement with else_clause branches.
 
 describe('buildScopeMap template brace-form if/elif/else narrowing', () => {
 	const nullable = "{% let m = (1 > 0) ? 'str' : null; %}\n";
@@ -430,9 +430,9 @@ describe('buildScopeMap template brace-spanning try/catch', () => {
 });
 
 // ── template mode: spanning function forms ─────────────────────────────────────
-// {% function f(a) { %}…{% } %} (function_declaration_tag) and the colon form
-// {% function f(a): %}…{% endfunction %} (function_alt_declaration). Params bind
-// untyped (UNKNOWN) — the inferrer doesn't model these node types.
+// {% function f(a) { %}…{% } %} and the colon form {% function f(a): %}…
+// {% endfunction %} — both ordinary function_declaration nodes (brace body, or a
+// run of body statements), so params bind exactly as in a script.
 
 describe('buildScopeMap template spanning function forms', () => {
 	it('a brace-form parameter is visible inside the body', () => {
@@ -583,4 +583,34 @@ describe('scopeAtOffset — properties', () => {
 			// By end of file all n names are in scope.
 			assert.match(n, visibleCount(scopeAtOffset(map, length(src)), n));
 		});
+});
+
+// ── template mode: shapes the statement-stream grammar newly parses ─────────────
+// Before the markup grammar modelled a template as ucode's statement stream these
+// were ERROR trees (only an enumerated set of shapes could span tags).
+
+describe('buildScopeMap template statement-stream shapes', () => {
+	it('an arrow function body spanning tags binds its parameter', () => {
+		let src = "{% let show = (item) => { %}\n{{ item }}\n{% }; %}\n";
+		let scope = scopeAtTpl(src, '{{ item');
+		assert.match('unknown', scopeGet(scope, 'item')?.kind);
+	});
+
+	it('a switch case body spanning tags sees outer declarations', () => {
+		let src = "{% let base = 10; %}\n{% switch (base) { case 10: %}\n{{ base }}\n{% break; } %}\n";
+		let scope = scopeAtTpl(src, '{{ base');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'base'));
+	});
+
+	it('a statement sharing the tag before a block header is visible in the block', () => {
+		let src = "{% let n = 5; if (n) { %}\n{{ n }}\n{% } %}\n";
+		let scope = scopeAtTpl(src, '{{ n');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
+	});
+
+	it('a let inside a colon-form function body threads to later body nodes', () => {
+		let src = "{% function f(a): %}\n{% let k = 3; %}\n{{ k }}\n{% endfunction %}\n";
+		let scope = scopeAtTpl(src, '{{ k');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'k'));
+	});
 });

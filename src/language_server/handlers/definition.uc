@@ -93,7 +93,7 @@ function forInDeclares(node, text) {
 function binderIn(scopeNode, name, text) {
 	let nt = ts.nodeType(scopeNode);
 
-	if (nt === 'statement_block' || nt === 'program' || nt === 'statement_tag') {
+	if (nt === 'statement_block' || nt === 'program' || nt === 'markup') {
 		for (let i = 0; i < ts.namedChildCount(scopeNode); i++) {
 			let stmt = ts.namedChild(scopeNode, i);
 			let st = ts.nodeType(stmt);
@@ -108,8 +108,7 @@ function binderIn(scopeNode, name, text) {
 		return null;
 	}
 
-	if (nt === 'function_declaration' || nt === 'function_expression' || nt === 'arrow_function' ||
-	    nt === 'function_declaration_tag' || nt === 'function_alt_declaration') {
+	if (nt === 'function_declaration' || nt === 'function_expression' || nt === 'arrow_function') {
 		let params = ts.childByField(scopeNode, 'parameters');
 		if (params)
 			for (let j = 0; j < ts.namedChildCount(params); j++) {
@@ -127,8 +126,7 @@ function binderIn(scopeNode, name, text) {
 		return null;
 	}
 
-	if (nt === 'for_in_statement' || nt === 'for_in_alt_statement' ||
-	    nt === 'for_in_alt_statement_tag' || nt === 'for_in_statement_tag') {
+	if (nt === 'for_in_statement' || nt === 'for_in_alt_statement') {
 		// `for (x in y)` (no let/const) assigns to a binding declared elsewhere,
 		// so this node does not bind `name` — let the real declaration win.
 		if (!forInDeclares(scopeNode, text)) return null;
@@ -140,15 +138,14 @@ function binderIn(scopeNode, name, text) {
 		return null;
 	}
 
-	if (nt === 'for_statement' || nt === 'for_alt_statement' ||
-	    nt === 'for_alt_statement_tag' || nt === 'for_statement_tag') {
+	if (nt === 'for_statement' || nt === 'for_alt_statement') {
 		let init = ts.childByField(scopeNode, 'initializer');
 		if (init && ts.nodeType(init) === 'lexical_declaration')
 			return declaratorName(init, name, text);
 		return null;
 	}
 
-	if (nt === 'catch_clause' || nt === 'catch_clause_tag') {
+	if (nt === 'catch_clause') {
 		let param = ts.childByField(scopeNode, 'parameter');
 		if (param && ts.nodeType(param) === 'identifier' && ts.text(param, text) === name)
 			return param;
@@ -159,8 +156,8 @@ function binderIn(scopeNode, name, text) {
 }
 
 // Resolve `name` to its declaration in the enclosing lexical scope at `offset`.
-// Descends the tree by offset (so it transparently enters template statement
-// tags), then walks the resulting ancestor chain innermost-first so the nearest
+// Descends the tree by offset (a template's code nests exactly like a script's,
+// its root `markup` playing `program`'s part), then walks the resulting ancestor chain innermost-first so the nearest
 // binding wins (closures capture outer-function locals, so outer scopes count).
 function localScopeDef(root, uri, doc, name, offset) {
 	let chain = [];

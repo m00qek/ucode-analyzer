@@ -262,3 +262,29 @@ describe('typeToString', () => {
 		assert.match('(string) => int', typeToString(fn_([ap(prim('string'))], prim('int'))));
 	});
 });
+
+describe('parseDoc — grammar forms added with ucdocs 0.9', () => {
+	it('reports a property path by its root parameter', () => {
+		let doc = parseDoc("/** @param {int} opts.timeout Timeout in ms. */");
+		assert.match('opts', doc.params[0].name);
+		assert.match('Timeout in ms.', doc.params[0].description);
+	});
+
+	it('reports an optional property path by its root parameter', () => {
+		let doc = parseDoc("/** @param {int} [opts.timeout=30] Timeout. */");
+		assert.match('opts', doc.params[0].name);
+		assert.match(true, doc.params[0].optional);
+	});
+
+	it('drops the JSDoc " - " separator from a param description', () => {
+		let doc = parseDoc("/** @param {int} n - The count */");
+		assert.match('The count', doc.params[0].description);
+	});
+
+	it('keeps ucode runtime type names as the opaque refs they always were', () => {
+		for (let n in ['number', 'integer', 'double', 'object', 'array', 'regexp', 'resource']) {
+			let doc = parseDoc(sprintf("/** @returns {%s} */", n));
+			assert.match(ref(n), doc.returns.type, n);
+		}
+	});
+});

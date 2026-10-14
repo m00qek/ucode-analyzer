@@ -78,36 +78,34 @@ export function isTemplate(text) {
 };
 
 // Parse source with the grammar matching its detected mode. Returns a tree whose
-// root is 'markup' for a template or 'program' for a script; the code *inside*
-// template tags carries the same node types as a script, so downstream analysis
-// applies unchanged once it descends through the tag wrappers.
+// root is 'markup' for a template or 'program' for a script. Both grammars share
+// one rule set: a template is ucode's statement stream, in which the text between
+// `%}` and `{%` is a `text_statement` wherever a statement may appear. So a
+// template's code carries the node types — and the nesting — of a script:
+// `{% if (c) { %}…{% } %}` is an ordinary if_statement whose statement_block
+// holds the text, and downstream analysis applies unchanged.
 export function parse(text) {
 	return ts.parse(isTemplate(text) ? _templateParser : _scriptParser, text);
 };
 
-// Yield the logical top-level statements of a parsed file, transparently
-// unwrapping template statement tags so callers need not know the mode. For a
-// script (program root) these are simply the root's named children. For a
-// template (markup root) a `{% stmt; ... %}` block wraps its statements in a
-// `statement_tag` node — we descend one level into each and surface the real
-// statements (dropping the `statement_tag_open`/`_close` delimiters). Spanning
-// forms (`for_in_alt_statement_tag`, …) and non-statement children (`raw_text`,
-// `expression_tag`) pass through as-is; the caller's node-type check ignores what
-// it doesn't handle, exactly as it does for a script tree.
+// The `{%` / `%}` delimiters (with their trim `-` and lstrip `+` variants) that a
+// template's root holds between its statements.
+const TAG_DELIMITERS = {
+	statement_tag_open: true, statement_tag_trim_open: true, statement_tag_lstrip_open: true,
+	statement_tag_close: true, statement_tag_trim_close: true,
+};
+
+// Yield the logical top-level statements of a parsed file, so callers need not
+// know the mode. For a script (program root) these are the root's named children.
+// A template's root (markup) holds its statements directly too, interleaved with
+// the tag delimiters (dropped here) and the text around the tags — raw_text,
+// expression/comment tags, text_statement — which pass through; the caller's
+// node-type check ignores what it doesn't handle, exactly as for a script tree.
 export function topLevelStatements(root) {
 	let out = [];
 	for (let i = 0; i < ts.namedChildCount(root); i++) {
 		let child = ts.namedChild(root, i);
-		if (ts.nodeType(child) !== 'statement_tag') {
-			push(out, child);
-			continue;
-		}
-		for (let j = 0; j < ts.namedChildCount(child); j++) {
-			let inner = ts.namedChild(child, j);
-			let it = ts.nodeType(inner);
-			if (it === 'statement_tag_open' || it === 'statement_tag_close') continue;
-			push(out, inner);
-		}
+		if (!TAG_DELIMITERS[ts.nodeType(child)]) push(out, child);
 	}
 	return out;
 };

@@ -21,6 +21,16 @@ function descText(node, source) {
 
 // ── Type parsing ──────────────────────────────────────────────────────────
 
+// Builtin names the ucdocs grammar lexes as primitive_type that this type system
+// has no primitive for (ucode's runtime names, plus `number`). Earlier grammars
+// parsed them as named_type references; keep producing exactly those opaque refs
+// so typing is unchanged. (Mapping them — number → int|float, object → dict,
+// array → list — would be a deliberate type-system change, not a port.)
+const OPAQUE_BUILTINS = {
+	integer: true, double: true, number: true,
+	object: true, array: true, regexp: true, resource: true,
+};
+
 // Forward declaration: flattenUnion and parseTypeNode are mutually recursive,
 // and ucode does not hoist function declarations.
 let parseTypeNode;
@@ -44,6 +54,8 @@ parseTypeNode = function(node, source, tparams) {
 		// (`{function(): T}` with a signature is handled by function_type below.)
 		if (name === 'function')
 			return { kind: 'function', params: [], return: { kind: 'unknown' } };
+		if (OPAQUE_BUILTINS[name])
+			return { kind: 'ref', name, params: [] };
 		return { kind: 'primitive', name };
 	}
 
@@ -203,15 +215,15 @@ export function parseDoc(commentText) {
 			// wrapper — so its byte offsets locate the name within the comment (used
 			// by consumers that report a diagnostic range on the @param name).
 			let nameHolder = null;
-			if (nameNode) {
-				if (optional) {
-					nameHolder = ts.namedChild(nameNode, 0);
-					name = nameHolder ? ts.text(nameHolder, commentText) : null;
-				} else {
-					nameHolder = nameNode;
-					name = ts.text(nameNode, commentText);
-				}
-			}
+			if (nameNode)
+				nameHolder = optional ? ts.namedChild(nameNode, 0) : nameNode;
+			// A property path `opts.count` documents a field of parameter `opts`:
+			// report its root identifier (the grammar parses the whole path as one
+			// param_path name).
+			if (nameHolder && ts.nodeType(nameHolder) === 'param_path')
+				nameHolder = ts.namedChild(nameHolder, 0);
+			if (nameHolder)
+				name = ts.text(nameHolder, commentText);
 			push(result.params, {
 				name,
 				type: typeNode ? parseTypeExpr(typeNode, commentText, tparams) : null,
