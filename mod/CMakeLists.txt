@@ -18,10 +18,10 @@ target_include_directories(tree_sitter_core PUBLIC
 set_target_properties(tree_sitter_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(ucode_grammar STATIC
-  ${TREE_SITTER_UCODE_DIR}/src/parser.c
-  ${TREE_SITTER_UCODE_DIR}/src/scanner.c
+  ${TREE_SITTER_UCODE_DIR}/ucode/src/parser.c
+  ${TREE_SITTER_UCODE_DIR}/ucode/src/scanner.c
 )
-target_include_directories(ucode_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/src)
+target_include_directories(ucode_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucode/src)
 set_target_properties(ucode_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(ucdocs_grammar STATIC
@@ -35,10 +35,10 @@ set_target_properties(ucdocs_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # tag handling. Same inner code node names as ucode_grammar, so the analysis
 # layer treats the code inside tags identically.
 add_library(ucode_markup_grammar STATIC
-  ${TREE_SITTER_UCODE_DIR}/markup/src/parser.c
-  ${TREE_SITTER_UCODE_DIR}/markup/src/scanner.c
+  ${TREE_SITTER_UCODE_DIR}/ucode_markup/src/parser.c
+  ${TREE_SITTER_UCODE_DIR}/ucode_markup/src/scanner.c
 )
-target_include_directories(ucode_markup_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/markup/src)
+target_include_directories(ucode_markup_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucode_markup/src)
 set_target_properties(ucode_markup_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(tree_sitter_native SHARED tree_sitter/native.c)
