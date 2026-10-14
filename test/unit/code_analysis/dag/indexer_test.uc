@@ -82,7 +82,7 @@ describe('indexer.extractExports', () => {
 	// with no explicit `;` (e.g. `function f() {}`), so the comment node vanished
 	// into the preceding declaration and docBefore found nothing for the next
 	// export. Fixed upstream in v0.8.0; guard it here since doc association relies
-	// on it. See upgrade.plan.md task 5.
+	// on it.
 	it('associates a doc comment after a brace-terminated statement with the next export', () => {
 		let text = "function f() { return 1; }\n/** @returns {int} */\nexport const a = 1;\n";
 		let exps = extractExports(text, parse(text));
