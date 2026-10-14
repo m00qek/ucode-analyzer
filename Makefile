@@ -68,9 +68,10 @@ $(BUILD_DIR)/tree_sitter_native.so: $(shell find mod test/mod third_party/tree-s
 
 # clangd compile flags for the native C sources (mod/ ships modules, test/mod/
 # holds the test-only rpc_client). Same include set; the extra tree-sitter paths
-# are harmless for rpc_client.
+# are harmless for rpc_client. -Wno-unused-parameter as in ucode's own build:
+# every native function takes (uc_vm_t *vm, size_t nargs), used or not.
 define gen_compile_flags
-	@printf -- '-I%s\n-I%s\n-I%s\n-Wall\n-Wextra\n-Werror\n-std=gnu99\n' \
+	@printf -- '-I%s\n-I%s\n-I%s\n-Wall\n-Wextra\n-Wno-unused-parameter\n-Werror\n-std=gnu99\n' \
 		"$(CURDIR)/$(BUILD_DIR)/include" \
 		"$(CURDIR)/third_party/tree-sitter/lib/include" \
 		"$(CURDIR)/third_party/tree-sitter-ucode/bindings/c" > $@
