@@ -14,13 +14,12 @@
  */
 
 #include <tree_sitter/api.h>
+#include <tree_sitter/tree-sitter-ucdocs.h>
+#include <tree_sitter/tree-sitter-ucode-markup.h>
+#include <tree_sitter/tree-sitter-ucode.h>
 
 #include <ucode/lib.h>
 #include <ucode/module.h>
-
-const TSLanguage *tree_sitter_ucode(void);
-const TSLanguage *tree_sitter_ucdocs(void);
-const TSLanguage *tree_sitter_ucode_markup(void);
 
 /*
  * A ucode node value must keep the owning tree alive: TSNode is a value

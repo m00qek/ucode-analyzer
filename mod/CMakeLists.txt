@@ -17,33 +17,23 @@ target_include_directories(tree_sitter_core PUBLIC
 )
 set_target_properties(tree_sitter_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_library(ucode_grammar STATIC
-  ${TREE_SITTER_UCODE_DIR}/ucode/src/parser.c
-  ${TREE_SITTER_UCODE_DIR}/ucode/src/scanner.c
-)
-target_include_directories(ucode_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucode/src)
-set_target_properties(ucode_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-add_library(ucdocs_grammar STATIC
-  ${TREE_SITTER_UCODE_DIR}/ucdocs/src/parser.c
-  ${TREE_SITTER_UCODE_DIR}/ucdocs/src/scanner.c
-)
-target_include_directories(ucdocs_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucdocs/src)
-set_target_properties(ucdocs_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-# Template-mode grammar ('ucode_markup'): base grammar wrapped in {% %}/{{ }}/{# #}
-# tag handling. Same inner code node names as ucode_grammar, so the analysis
-# layer treats the code inside tags identically.
-add_library(ucode_markup_grammar STATIC
-  ${TREE_SITTER_UCODE_DIR}/ucode_markup/src/parser.c
-  ${TREE_SITTER_UCODE_DIR}/ucode_markup/src/scanner.c
-)
-target_include_directories(ucode_markup_grammar PRIVATE ${TREE_SITTER_UCODE_DIR}/ucode_markup/src)
-set_target_properties(ucode_markup_grammar PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# The three grammars, built by tree-sitter-ucode's own CMakeLists.txt (its C
+# binding), so its source list and include paths stay its business:
+#   tree-sitter-ucode         plain scripts
+#   tree-sitter-ucode-markup  templates: {% %}/{{ }}/{# #} tags around the same
+#                             code nodes as the script grammar, so the analysis
+#                             layer treats the code inside tags identically
+#   tree-sitter-ucdocs        doc comments
+# Static (BUILD_SHARED_LIBS is the grammar build's library-type switch), so all
+# three link into tree_sitter_native. EXCLUDE_FROM_ALL builds them only as its
+# dependencies and drops their install rules (headers, .pc files, queries),
+# which none of our packages ship.
+set(BUILD_SHARED_LIBS OFF)
+add_subdirectory(${TREE_SITTER_UCODE_DIR} tree-sitter-ucode EXCLUDE_FROM_ALL)
 
 add_library(tree_sitter_native SHARED tree_sitter/native.c)
 set_target_properties(tree_sitter_native PROPERTIES PREFIX "")
-target_link_libraries(tree_sitter_native ${UCODE_LIB} ucode_grammar ucdocs_grammar ucode_markup_grammar tree_sitter_core)
+target_link_libraries(tree_sitter_native ${UCODE_LIB} tree-sitter-ucode tree-sitter-ucdocs tree-sitter-ucode-markup tree_sitter_core)
 
 # Raw stdin I/O primitives for the server's uloop-driven read loop.
 add_library(language_server_native SHARED language_server/native.c)
