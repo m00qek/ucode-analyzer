@@ -155,6 +155,21 @@ export const nodeType = native.ts_node_type;
 export const isNamed = native.ts_node_is_named;
 
 /**
+ * Return true if node is a MISSING node: a zero-width token the parser
+ * inserted to recover from an error (e.g. the `}` of a block left open).
+ * @param {Node} node
+ * @returns {boolean}
+ */
+export const isMissing = native.ts_node_is_missing;
+
+/**
+ * Return true if node is, or contains, an ERROR or MISSING node.
+ * @param {Node} node
+ * @returns {boolean}
+ */
+export const hasError = native.ts_node_has_error;
+
+/**
  * Return the source text that node spans.
  * @param {Node} node
  * @param {string} source — the same source string passed to ts.parse()

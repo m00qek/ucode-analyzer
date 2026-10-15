@@ -227,6 +227,18 @@ static uc_value_t *uc_ts_node_is_named(uc_vm_t *vm, size_t nargs) {
   return node ? ucv_boolean_new(ts_node_is_named(node->node)) : NULL;
 }
 
+static uc_value_t *uc_ts_node_is_missing(uc_vm_t *vm, size_t nargs) {
+  uc_ts_node_t *node = node_arg(vm, nargs, 0);
+
+  return node ? ucv_boolean_new(ts_node_is_missing(node->node)) : NULL;
+}
+
+static uc_value_t *uc_ts_node_has_error(uc_vm_t *vm, size_t nargs) {
+  uc_ts_node_t *node = node_arg(vm, nargs, 0);
+
+  return node ? ucv_boolean_new(ts_node_has_error(node->node)) : NULL;
+}
+
 static uc_value_t *uc_ts_node_text(uc_vm_t *vm, size_t nargs) {
   uc_ts_node_t *node = node_arg(vm, nargs, 0);
   uc_value_t *srcval = uc_fn_arg(1);
@@ -481,6 +493,8 @@ static const uc_function_list_t global_fns[] = {
     {"ts_root_node", uc_ts_root_node},
     {"ts_node_type", uc_ts_node_type},
     {"ts_node_is_named", uc_ts_node_is_named},
+    {"ts_node_is_missing", uc_ts_node_is_missing},
+    {"ts_node_has_error", uc_ts_node_has_error},
     {"ts_node_text", uc_ts_node_text},
     {"ts_node_start_byte", uc_ts_node_start_byte},
     {"ts_node_end_byte", uc_ts_node_end_byte},

@@ -66,6 +66,12 @@ export function ts_node_type(node) {};
 /** @param {Node} node @returns {boolean} True for named (non-anonymous) nodes. */
 export function ts_node_is_named(node) {};
 
+/** @param {Node} node @returns {boolean} True for a zero-width token the parser inserted to recover (MISSING). */
+export function ts_node_is_missing(node) {};
+
+/** @param {Node} node @returns {boolean} True if the node is or contains an ERROR or MISSING node. */
+export function ts_node_has_error(node) {};
+
 /**
  * @param {Node} node
  * @param {string} source - The source string passed to ts_parse.

@@ -65,4 +65,15 @@ describe('diagnostics — syntax errors', () => {
 		assert.match(true, length(diags) >= 1);
 		assert.match(true, length(diags) <= 3);
 	});
+
+	it('names the token of a MISSING node', () => {
+		// A block left open at the end of the file gets a MISSING `}`.
+		let text = "function foo() {\n\tlet x = 1;\n";
+		documents.open(URI, text, 1);
+
+		let diags = syntaxErrors(documents.get(URI));
+
+		assert.match(1, length(diags));
+		assert.match("Syntax error: missing '}'", diags[0].message);
+	});
 });
