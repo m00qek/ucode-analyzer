@@ -286,6 +286,17 @@ export function run(config) {
 
 	uloop.init();
 
+	// An exception escaping any event-loop callback -- the stdin reader, a
+	// background task's output callback (workspace scan, package queries), a
+	// timer -- would otherwise end the whole process (ucode exits with 254).
+	// Log it and keep serving. Request handlers below still turn their own
+	// errors into JSON-RPC error responses.
+	uloop.guard(function(e) {
+		let at = e?.stacktrace?.[0];
+		warn(sprintf('ucode-ls: uncaught error in an event-loop callback: %s%s\n',
+			e?.message ?? e, at ? sprintf(' (%s:%d)', at.filename, at.line) : ''));
+	});
+
 	protocol.startListening(
 		function(body) {
 			let msg;
@@ -330,9 +341,11 @@ export function run(config) {
 			}
 		},
 		function() {
-			// EOF on stdin — exit cleanly if shutdown was requested.
-			teardown();
-			exit(shutdown_requested ? 0 : 1);
+			// EOF on stdin: stop the loop; the code after uloop.run() tears down
+			// and exits (cleanly if shutdown was requested). Never exit() inside
+			// a loop callback: the uloop.guard handler above would receive it as
+			// an ordinary error, drop the exit status and keep the loop running.
+			uloop.end();
 		}
 	);
 

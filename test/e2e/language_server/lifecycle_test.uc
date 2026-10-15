@@ -1,5 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as lsp from 'client';
+import * as fs from 'fs';
 
 describe('initialize response', () => {
 	it('returns capabilities and serverInfo', () => {
@@ -32,6 +33,50 @@ describe('exit behavior', () => {
 
 		lsp.send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });
 		assert.match(true, lsp.close(proc) !== 0);
+	});
+
+	// close() closes the server's stdin and waits for it: end of stream must
+	// end the server (it used to hang once the event loop was guarded, because
+	// the EOF callback's exit() reached the guard as an ordinary error).
+	it('stdin EOF without shutdown exits non-zero', () => {
+		let proc = lsp.connect();
+		lsp.initialize(proc);
+
+		assert.match(true, lsp.close(proc) !== 0);
+	});
+
+	it('stdin EOF after shutdown exits zero', () => {
+		let proc = lsp.connect();
+		lsp.initialize(proc);
+
+		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'shutdown', params: null });
+		lsp.receive(proc);
+		assert.match(0, lsp.close(proc));
+	});
+
+	// The whole input is already in the pipe, writer closed, when the server
+	// first polls, so the last data and the hangup arrive in one event: libubox
+	// unregisters stdin on that event, and the server used to read one chunk
+	// and then wait forever. Exiting 0 also proves the drain reached shutdown.
+	it('input followed by an immediate close is fully read', () => {
+		let input = '';
+		for (let msg in [
+			{ jsonrpc: '2.0', id: 0, method: 'initialize', params: { capabilities: {} } },
+			{ jsonrpc: '2.0', method: 'initialized', params: {} },
+			{ jsonrpc: '2.0', id: 1, method: 'shutdown', params: null },
+		]) {
+			let body = sprintf('%J', msg);
+			input += sprintf('Content-Length: %d\r\n\r\n%s', length(body), body);
+		}
+		let path = '/tmp/lifecycle-input.txt';
+		fs.writefile(path, input);
+
+		// A timeout returns a negative signal number instead of hanging the suite.
+		let status = system(sprintf(
+			'cat %s | ucode -L /app/src /app/src/ucode-language-server.uc ' +
+			'--config /tmp --workspace /app >/dev/null 2>&1', path), 30000);
+		fs.unlink(path);
+		assert.match(0, status);
 	});
 });
 
