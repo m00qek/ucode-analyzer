@@ -1,7 +1,6 @@
 /*
  * ucode native extension exposing the tree-sitter C API, installed as
- * ucode_language_server.native
- * (/usr/lib/ucode/ucode_language_server/native.so).
+ * tree_sitter.native (/usr/lib/ucode/tree_sitter/native.so).
  *
  * This is deliberately a thin, mechanical FFI layer: one function per
  * tree-sitter call, minimal validation. Ergonomics (argument-checking with

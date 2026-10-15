@@ -25,7 +25,6 @@ BUILD_IMAGE = docker run --rm \
 TEST_IMAGE = docker run --rm $(TEST_OPTS) \
 	-v $(CURDIR):/app \
 	$(if $(wildcard $(BUILD_DIR)/tree_sitter_native.so),-v $(CURDIR)/$(BUILD_DIR)/tree_sitter_native.so:/usr/lib/ucode/tree_sitter/native.so:ro) \
-	$(if $(wildcard $(BUILD_DIR)/language_server_native.so),-v $(CURDIR)/$(BUILD_DIR)/language_server_native.so:/usr/lib/ucode/language_server/native.so:ro) \
 	$(if $(wildcard $(BUILD_DIR)/rpc_client_native.so),-v $(CURDIR)/$(BUILD_DIR)/rpc_client_native.so:/usr/lib/ucode/rpc_client/native.so:ro) \
 	-w /app \
 	$(IMAGE)
@@ -51,17 +50,14 @@ $(BUILD_DIR)/tree_sitter_native.so: $(shell find mod test/mod third_party/tree-s
 			./scripts/feeds update base && \
 			./scripts/feeds install ucode && \
 			make defconfig && \
-			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-mod-language-server ucode-mod-language-server-test-client ucode-code-analysis ucode-language-server ucode-linter >> .config && \
+			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-mod-language-server-test-client ucode-code-analysis ucode-language-server ucode-linter >> .config && \
 			make defconfig && \
 			make package/$(PKG_NAME)/compile V=s && \
 			find /builder/build_dir -path '*/tree_sitter/native.so' \
 				-exec cp {} /builder/bin/tree_sitter_native.so \; -quit && \
-			find /builder/build_dir -path '*/language_server/native.so' \
-				-exec cp {} /builder/bin/language_server_native.so \; -quit && \
 			find /builder/build_dir -path '*/rpc_client/native.so' \
 				-exec cp {} /builder/bin/rpc_client_native.so \; -quit && \
 			test -f /builder/bin/tree_sitter_native.so && \
-			test -f /builder/bin/language_server_native.so && \
 			test -f /builder/bin/rpc_client_native.so && \
 			cp -fpR /builder/staging_dir/target-*/usr/include/* /builder/out_include/ \
 		"; EC=$$?; rm -f $(BUILD_DIR)/$(PKG_NAME)-Makefile; exit $$EC
@@ -124,7 +120,7 @@ package:
 			./scripts/feeds update base && \
 			./scripts/feeds install ucode && \
 			make defconfig && \
-			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-mod-language-server ucode-code-analysis ucode-language-server ucode-linter >> .config && \
+			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-code-analysis ucode-language-server ucode-linter >> .config && \
 			make defconfig && \
 			make package/$(PKG_NAME)/compile V=s \
 		"; EC=$$?; rm -f $(BUILD_DIR)/$(PKG_NAME)-Makefile; exit $$EC

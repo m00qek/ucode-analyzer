@@ -12,9 +12,14 @@ include $(INCLUDE_DIR)/cmake.mk
 UCODE_MOD_NAME:=language_server
 CMAKE_OPTIONS += -DPKG_NAME=$(UCODE_MOD_NAME)
 
-# One source tree, six packages. The analysis engine (code_analysis) is shared;
+# One source tree, five packages. The analysis engine (code_analysis) is shared;
 # the language server and the linter are thin frontends over it, and the native
 # C extensions are split by consumer so each package installs only what it runs.
+#
+# DEPENDS lists every ucode module a package imports (ucode-mod-fs, -uloop,
+# -io, …): OpenWrt splits ucode's modules into separate packages, and a base
+# image is not guaranteed to have them. ucode-docopt (command-line parsing for
+# both frontends) comes from the packages.ucode.dev feed, not OpenWrt's.
 
 # ---- Native modules (C extensions) --------------------------------------
 
@@ -28,17 +33,6 @@ endef
 define Package/ucode-mod-tree-sitter/description
   Native tree-sitter binding (with the ucode grammar) plus its ucode wrapper.
   The shared parser used by both the language server and the linter.
-endef
-
-define Package/ucode-mod-language-server
-  SECTION:=utils
-  CATEGORY:=Utilities
-  TITLE:=Raw stdin I/O native module for the ucode language server
-  DEPENDS:=+ucode +libucode
-endef
-
-define Package/ucode-mod-language-server/description
-  Native raw-stdin I/O primitives for the language server's uloop read loop.
 endef
 
 define Package/ucode-mod-language-server-test-client
@@ -59,7 +53,7 @@ define Package/ucode-code-analysis
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=Static analysis engine for ucode
-  DEPENDS:=+ucode +libucode +ucode-mod-tree-sitter
+  DEPENDS:=+ucode +libucode +ucode-mod-tree-sitter +ucode-mod-fs +ucode-mod-uloop
 endef
 
 define Package/ucode-code-analysis/description
@@ -72,7 +66,8 @@ define Package/ucode-language-server
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=Language Server Protocol implementation for ucode
-  DEPENDS:=+ucode +libucode +ucode-code-analysis +ucode-mod-language-server
+  DEPENDS:=+ucode +libucode +ucode-code-analysis +ucode-mod-fs +ucode-mod-io \
+    +ucode-mod-uloop +ucode-docopt
 endef
 
 define Package/ucode-language-server/description
@@ -85,7 +80,8 @@ define Package/ucode-linter
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=Standalone linter for ucode
-  DEPENDS:=+ucode +libucode +ucode-code-analysis
+  DEPENDS:=+ucode +libucode +ucode-code-analysis +ucode-mod-fs +ucode-mod-uloop \
+    +ucode-docopt
 endef
 
 define Package/ucode-linter/description
@@ -113,12 +109,6 @@ define Package/ucode-mod-tree-sitter/install
 		$(1)/usr/lib/ucode/tree_sitter/native.so
 	$(INSTALL_DIR) $(1)/usr/share/ucode
 	$(INSTALL_DATA) ./src/tree_sitter.uc $(1)/usr/share/ucode/tree_sitter.uc
-endef
-
-define Package/ucode-mod-language-server/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode/language_server
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/language_server/native.so \
-		$(1)/usr/lib/ucode/language_server/native.so
 endef
 
 define Package/ucode-mod-language-server-test-client/install
@@ -155,7 +145,6 @@ define Package/ucode-linter/install
 endef
 
 $(eval $(call BuildPackage,ucode-mod-tree-sitter))
-$(eval $(call BuildPackage,ucode-mod-language-server))
 $(eval $(call BuildPackage,ucode-mod-language-server-test-client))
 $(eval $(call BuildPackage,ucode-code-analysis))
 $(eval $(call BuildPackage,ucode-language-server))

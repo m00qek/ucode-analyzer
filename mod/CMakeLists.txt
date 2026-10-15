@@ -35,11 +35,6 @@ add_library(tree_sitter_native SHARED tree_sitter/native.c)
 set_target_properties(tree_sitter_native PROPERTIES PREFIX "")
 target_link_libraries(tree_sitter_native ${UCODE_LIB} tree-sitter-ucode tree-sitter-ucdocs tree-sitter-ucode-markup tree_sitter_core)
 
-# Raw stdin I/O primitives for the server's uloop-driven read loop.
-add_library(language_server_native SHARED language_server/native.c)
-set_target_properties(language_server_native PROPERTIES PREFIX "")
-target_link_libraries(language_server_native ${UCODE_LIB})
-
 # Test-only (JSON-RPC client primitives for the e2e harness). Its source lives
 # under test/mod/rpc_client/ and is flattened into the build dir by Build/Prepare
 # so it resolves here at rpc_client/native.c. CMake-installed into the staging
@@ -60,7 +55,5 @@ endif()
 # must differ to avoid a CMake/Ninja conflict in the shared build directory.
 install(FILES $<TARGET_FILE:tree_sitter_native>
         DESTINATION lib/ucode/tree_sitter RENAME native.so)
-install(FILES $<TARGET_FILE:language_server_native>
-        DESTINATION lib/ucode/language_server RENAME native.so)
 install(FILES $<TARGET_FILE:rpc_client_native>
         DESTINATION lib/ucode/rpc_client RENAME native.so)
