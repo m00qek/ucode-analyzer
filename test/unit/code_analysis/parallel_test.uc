@@ -1,5 +1,6 @@
 import { describe, it, assert } from 'utest';
-import { shardRoundRobin, fanOut } from 'code_analysis.parallel';
+import * as uloop from 'uloop';
+import { shardRoundRobin, fanOut, jobsFor } from 'code_analysis.parallel';
 
 // [0, 1, …, n-1]
 function nums(n) {
@@ -73,5 +74,80 @@ describe('parallel — fanOut', () => {
 		assert.match(true, doneCalled);
 		assert.match(0, itemCalls);
 		assert.match(0, length(tasks));
+	});
+});
+
+// Run fanOut on a fresh event loop until it reports completion (or a 5 s
+// safety timeout). Returns the results in arrival order and how many times
+// onDone fired.
+function runFanOut(items, jobs, work) {
+	let results = [];
+	let doneCount = 0;
+	uloop.init();
+	let timeout = uloop.timer(5000, () => uloop.end());
+	fanOut(items, jobs, work,
+		(r) => push(results, r),
+		()  => { doneCount++; uloop.end(); });
+	uloop.run();
+	if (timeout) timeout.cancel();
+	return { results, doneCount };
+}
+
+describe('parallel — fanOut across worker processes', () => {
+	it('delivers every result exactly once and completes once', () => {
+		let r = runFanOut(nums(10), 3, (x) => x * 2);
+		assert.match(1, r.doneCount);
+		assert.match([0, 2, 4, 6, 8, 10, 12, 14, 16, 18], sort(r.results));
+	});
+
+	it('delivers a null result as an item, not as the end of a worker', () => {
+		let r = runFanOut(nums(4), 2, (x) => (x % 2) ? x : null);
+		assert.match(1, r.doneCount);
+		assert.match(4, length(r.results));
+		assert.match(2, length(filter(r.results, (v) => v === null)));
+	});
+
+	it('skips an item whose work throws and still completes', () => {
+		let r = runFanOut(nums(6), 2, (x) => { if (x === 3) die('boom'); return x; });
+		assert.match(1, r.doneCount);
+		assert.match([0, 1, 2, 4, 5], sort(r.results));
+	});
+
+	it('completes when a worker process dies before finishing its shard', () => {
+		// exit() cannot be caught inside the worker: it ends the process, like a
+		// crash, without the worker ever reporting completion.
+		let r = runFanOut(nums(6), 2, (x) => { if (x === 1) exit(1); return x; });
+		assert.match(1, r.doneCount);
+		// Worker 0 (items 0, 2, 4) finishes; worker 1 dies at its first item.
+		assert.match([0, 2, 4], sort(r.results));
+	});
+});
+
+describe('parallel — jobsFor', () => {
+	it('counts the CPUs in the affinity mask, not every host CPU', () => {
+		let cpuinfo = join('', map(nums(16), (i) => sprintf('processor\t: %d\n', i)));
+		assert.match(3, jobsFor('Name:\tucode\nCpus_allowed_list:\t0-2\n', 'max 100000', cpuinfo));
+	});
+
+	it('honours a fractional CPU quota, rounding up', () => {
+		assert.match(2, jobsFor('Cpus_allowed_list:\t0-15\n', '150000 100000', null));
+	});
+
+	it('takes the smaller of the affinity mask and the quota', () => {
+		assert.match(2, jobsFor('Cpus_allowed_list:\t0-7\n', '200000 100000', null));
+		assert.match(3, jobsFor('Cpus_allowed_list:\t0-2\n', '800000 100000', null));
+	});
+
+	it('parses lists with single CPUs and ranges', () => {
+		assert.match(7, jobsFor('Cpus_allowed_list:\t0-3,8,10-11\n', null, null));
+	});
+
+	it('falls back to /proc/cpuinfo, then to 1', () => {
+		assert.match(4, jobsFor(null, null, 'processor\t: 0\nprocessor\t: 1\nprocessor\t: 2\nprocessor\t: 3\n'));
+		assert.match(1, jobsFor(null, null, null));
+	});
+
+	it('caps the count at 8', () => {
+		assert.match(8, jobsFor('Cpus_allowed_list:\t0-31\n', 'max 100000', null));
 	});
 });

@@ -27,35 +27,90 @@ export function shardRoundRobin(items, jobs) {
 	return shards;
 };
 
-// Number of online CPUs (Linux), capped, as the default worker count. Batch
-// workspace work is the one place the design permits scaling past the 2-core
-// floor (see CLAUDE.md) — the interactive hot path never forks.
-export function detectJobs() {
-	let f = fs.open('/proc/cpuinfo', 'r');
-	if (!f) return 1;
+function readText(path) {
+	let f = fs.open(path, 'r');
+	if (!f) return null;
 	let text = f.read('all');
 	f.close();
+	return text;
+}
+
+// Count the CPUs in a Linux CPU list: "0-3,8,10-11" → 7.
+function countCpuList(list) {
 	let n = 0;
-	for (let line in split(text, '\n'))
-		if (match(line, /^processor[ \t]*:/)) n++;
+	for (let part in split(trim(list), ',')) {
+		let m = match(part, /^([0-9]+)(-([0-9]+))?$/);
+		if (m) n += m[3] ? int(m[3]) - int(m[1]) + 1 : 1;
+	}
+	return n;
+}
+
+// The worker count for the given contents of /proc/self/status, the cgroup CPU
+// quota ("<quota> <period>", as in cgroup v2's cpu.max; "max …" = unlimited)
+// and /proc/cpuinfo — any may be null. Pure, so the arithmetic is testable.
+//
+// Counts the CPUs this process may actually use: the affinity mask (a
+// container's --cpuset-cpus) and the CPU quota (--cpus) both limit it, while
+// /proc/cpuinfo lists every host CPU regardless; it is only the fallback.
+// Capped at 8.
+export function jobsFor(status, cpuMax, cpuinfo) {
+	let n = 0;
+	let allowed = status ? match(status, /Cpus_allowed_list:[ \t]*([0-9,-]+)/) : null;
+	if (allowed)
+		n = countCpuList(allowed[1]);
+	if (n < 1 && cpuinfo)
+		for (let line in split(cpuinfo, '\n'))
+			if (match(line, /^processor[ \t]*:/)) n++;
+
+	let quota = cpuMax ? match(cpuMax, /^([0-9]+)[ \t]+([0-9]+)/) : null;
+	if (quota && int(quota[2]) > 0) {
+		let limit = int((int(quota[1]) + int(quota[2]) - 1) / int(quota[2]));
+		if (n < 1 || limit < n) n = limit;
+	}
+
 	if (n < 1) n = 1;
 	return (n > 8) ? 8 : n;
+};
+
+// Default worker count for batch work. Batch workspace work is the one place
+// the design permits scaling past the 2-core floor (see CLAUDE.md) — the
+// interactive hot path never forks.
+export function detectJobs() {
+	// cgroup v2 exposes the quota as cpu.max; v1 as two files (-1 = unlimited).
+	let cpuMax = readText('/sys/fs/cgroup/cpu.max');
+	if (cpuMax === null) {
+		let q = readText('/sys/fs/cgroup/cpu/cpu.cfs_quota_us');
+		let p = readText('/sys/fs/cgroup/cpu/cpu.cfs_period_us');
+		if (q !== null && p !== null && int(q) > 0)
+			cpuMax = sprintf('%d %d', int(q), int(p));
+	}
+	return jobsFor(readText('/proc/self/status'), cpuMax, readText('/proc/cpuinfo'));
 };
 
 // Fan `items` out across up to `jobs` worker processes on the CURRENT event loop
 // (the caller owns `uloop.init`/`run`/`end`; this function touches none of them).
 //
-//   work(item)   runs in the child; its return value is piped back to the parent
+//   work(item)   runs in the child; its return value (null included) is piped
+//                back to the parent
 //   onItem(res)  runs in the parent once per result
-//   onDone()     runs in the parent exactly once, after every worker's completion
-//                sentinel has arrived
+//   onDone()     runs in the parent exactly once, after every worker has finished
 //
-// Returns the array of task handles so the caller can `kill()` them (e.g. to
-// abort a superseded scan). `jobs` is clamped to `[1, length(items)]`. An empty
-// `items` forks nothing and invokes `onDone()` immediately, so the caller's
-// completion path fires uniformly regardless of workload size.
+// A work(item) that throws is reported on stderr and skipped; its worker goes
+// on with the rest of its shard. Returns the array of task handles so the
+// caller can `kill()` them (e.g. to abort a superseded scan). `jobs` is clamped
+// to `[1, length(items)]`. An empty `items` forks nothing and invokes `onDone()`
+// immediately, so the caller's completion path fires uniformly regardless of
+// workload size.
 //
-// Each call owns its own completion counter, so overlapping fan-outs (a new scan
+// Completion does not rely on uloop's implicit end-of-task message (the task
+// function's return value, sent after it returns): a worker that dies without
+// returning -- a crash in native code, a kill -- never sends it. Each worker
+// sends an explicit `done` marker instead, and a watchdog also counts a worker
+// as finished once its process has exited; uloop delivers everything the
+// worker sent before it marks the task finished. Results are wrapped, so a null
+// result cannot be mistaken for the end of a worker either.
+//
+// Each call owns its own completion state, so overlapping fan-outs (a new scan
 // started before an old one drains) never cross-count. Note `kill()` does not
 // guarantee a child's already-queued pipe callbacks stop firing, so a caller
 // that reuses shared state across scans must still guard `onItem`/`onDone`
@@ -69,24 +124,81 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 	if (jobs > n) jobs = n;
 	if (jobs < 1) jobs = 1;
 
-	let shards = shardRoundRobin(items, jobs);
-	let tasks  = [];
-	let done   = 0;
-	for (let s = 0; s < jobs; s++) {
-		let shard = shards[s];
-		push(tasks, uloop.task(
-			function(pipe) {
-				for (let item in shard) pipe.send(work(item));
-			},
-			function(result) {
-				// null is uloop's per-task completion sentinel.
-				if (result === null) {
-					if (++done === jobs) onDone();
-					return;
-				}
-				onItem(result);
-			}
-		));
+	let shards    = shardRoundRobin(items, jobs);
+	let tasks     = [];
+	let finished  = [];
+	let remaining = jobs;
+	let watchdog  = null;
+
+	function runItem(item) {
+		try {
+			return { result: work(item) };
+		} catch (e) {
+			return { error: e?.message ?? sprintf('%s', e) };
+		}
 	}
-	return tasks;
+
+	function deliver(msg) {
+		if (exists(msg, 'error'))
+			warn(sprintf('ucode-ls: worker item failed: %s\n', msg.error));
+		else
+			onItem(msg.result);
+	}
+
+	function finish(s) {
+		if (finished[s]) return;
+		finished[s] = true;
+		if (--remaining > 0) return;
+		if (watchdog) {
+			watchdog.cancel();
+			watchdog = null;
+		}
+		onDone();
+	}
+
+	for (let s = 0; s < jobs; s++) {
+		let idx   = s;
+		let shard = shards[idx];
+		let task  = uloop.task(
+			function(pipe) {
+				for (let item in shard)
+					pipe.send(runItem(item));
+				pipe.send({ done: true });
+			},
+			function(msg) {
+				// null: uloop's implicit end-of-task message, superseded by `done`.
+				if (msg === null) return;
+				if (msg.done) return finish(idx);
+				deliver(msg);
+			}
+		);
+
+		// Fork failed: do this shard here rather than lose it.
+		if (!task) {
+			warn('ucode-ls: could not fork a worker; running its shard in-process\n');
+			for (let item in shard)
+				deliver(runItem(item));
+			finish(idx);
+			continue;
+		}
+		tasks[idx] = task;
+	}
+
+	// A self-re-arming uloop.timer rather than uloop.interval: on the ucode we
+	// target (OpenWrt 25.12), an interval that is cancelled and later
+	// garbage-collected unregisters fd 0 from the event loop -- in the LSP that
+	// is stdin, so the server silently stops receiving requests.
+	if (remaining > 0) {
+		watchdog = uloop.timer(250, function() {
+			for (let s = 0; s < jobs; s++) {
+				if (finished[s] || !tasks[s] || !tasks[s].finished()) continue;
+				warn(sprintf('ucode-ls: worker %d exited before finishing its shard\n', s));
+				finish(s);
+			}
+			// finish() cleared it if this tick completed the fan-out.
+			if (watchdog) watchdog.set(250);
+		});
+	}
+
+	return filter(tasks, (t) => t != null);
 };
