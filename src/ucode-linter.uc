@@ -48,12 +48,9 @@ config.configDir    = configDir;
 
 // Derive this script's directory so the analysis stack can fall back to the
 // bundled stdlib declarations (mirrors ucode-language-server.uc).
-const selfPath = sourcepath();
-if (selfPath) {
-	const parts = split(selfPath, '/');
-	pop(parts);
-	config.selfSrcDir = join('/', parts) || '/';
-}
+const selfDir = sourcepath(0, true);
+if (selfDir)
+	config.selfSrcDir = selfDir;
 
 const jobs = args['--jobs'] ? (+args['--jobs'] || 1) : detectJobs();
 

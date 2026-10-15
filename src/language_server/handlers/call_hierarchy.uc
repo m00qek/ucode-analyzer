@@ -52,11 +52,8 @@ function makeItem(name, fnNode, nameNode, uri, text, lineTable) {
 
 // Fallback item for callers at module level (not inside any function).
 function moduleItem(uri) {
-	let name = uri;
-	let slash = rindex(uri, '/');
-	if (slash >= 0) name = substr(uri, slash + 1);
 	return {
-		name,
+		name: fs.basename(uri),
 		kind: KIND_MODULE,
 		uri,
 		range:          { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },

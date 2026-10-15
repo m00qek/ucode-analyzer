@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as dag from 'code_analysis.dag.dag';
 
 let KIND_FUNCTION = 12;
@@ -12,8 +13,7 @@ export function workspaceSymbol(query) {
 		if (!exports) continue;
 
 		// Derive a human-readable container name from the URI (last path component).
-		let parts = split(uri, '/');
-		let container = parts[length(parts) - 1];
+		let container = fs.basename(uri);
 
 		for (let i = 0; i < length(exports); i++) {
 			let exp = exports[i];

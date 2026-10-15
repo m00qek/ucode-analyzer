@@ -7,9 +7,7 @@ let _pkgMgr   = null; // 'apk' | 'opkg' | '' (detected-none) | null (not yet che
 let _pkgTask  = null; // background uloop.task running the package-manager queries
 
 function modNameFromUri(uri) {
-	let i = length(uri) - 1;
-	while (i >= 0 && substr(uri, i, 1) !== '/') i--;
-	let filename = substr(uri, i + 1);
+	let filename = fs.basename(uri);
 	return substr(filename, 0, length(filename) - 5); // strip ".d.uc"
 }
 

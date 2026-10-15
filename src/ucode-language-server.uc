@@ -27,11 +27,8 @@ config.configDir    = args['--config'];
 
 // Derive the directory containing this script so lsp.uc can fall back to
 // the bundled stdlib declarations when the project workspace doesn't have them.
-const selfPath = sourcepath();
-if (selfPath) {
-	const parts = split(selfPath, '/');
-	pop(parts);
-	config.selfSrcDir = join('/', parts) || '/';
-}
+const selfDir = sourcepath(0, true);
+if (selfDir)
+	config.selfSrcDir = selfDir;
 
 run(config);
