@@ -137,7 +137,7 @@ endef
 define Package/ucode-language-server/install
 	$(INSTALL_DIR) $(1)/usr/share/ucode/language_server
 	$(CP) ./src/language_server/* $(1)/usr/share/ucode/language_server/
-	$(INSTALL_DATA) ./src/ucode-language-server.uc \
+	$(INSTALL_BIN) ./src/ucode-language-server.uc \
 		$(1)/usr/share/ucode/ucode-language-server.uc
 	$(INSTALL_DIR) $(1)/usr/bin
 	ln -sf /usr/share/ucode/ucode-language-server.uc \
@@ -147,7 +147,7 @@ endef
 define Package/ucode-linter/install
 	$(INSTALL_DIR) $(1)/usr/share/ucode/linter
 	$(CP) ./src/linter/* $(1)/usr/share/ucode/linter/
-	$(INSTALL_DATA) ./src/ucode-linter.uc \
+	$(INSTALL_BIN) ./src/ucode-linter.uc \
 		$(1)/usr/share/ucode/ucode-linter.uc
 	$(INSTALL_DIR) $(1)/usr/bin
 	ln -sf /usr/share/ucode/ucode-linter.uc \
