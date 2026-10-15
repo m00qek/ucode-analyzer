@@ -1,5 +1,6 @@
 import { describe, it, assert, prop, gen } from 'utest';
 import { matchPattern, scan } from 'code_analysis.glob';
+import * as fs from 'fs';
 
 describe('glob.matchPattern', () => {
 	it('matches ** at start', () => {
@@ -58,6 +59,35 @@ describe('glob.scan', () => {
 	it('returns empty list when no files match', () => {
 		let files = scan('/app/src', ['**/*.lua'], []);
 		assert.match(0, length(files));
+	});
+
+	it('follows a symlink back up the tree only once', () => {
+		let root = '/tmp/glob-loop';
+		system(sprintf('rm -rf %s', root));
+		fs.mkdir(root);
+		fs.mkdir(root + '/src');
+		fs.writefile(root + '/src/a.uc', 'let a = 1;\n');
+		fs.symlink('..', root + '/src/loop');
+
+		let files = scan(root + '/src', ['**/*.uc'], []);
+		system(sprintf('rm -rf %s', root));
+
+		assert.match([root + '/src/a.uc'], files);
+	});
+
+	it('follows a symlinked directory outside the tree', () => {
+		let root = '/tmp/glob-link';
+		system(sprintf('rm -rf %s', root));
+		fs.mkdir(root);
+		fs.mkdir(root + '/shared');
+		fs.mkdir(root + '/src');
+		fs.writefile(root + '/shared/b.uc', 'let b = 1;\n');
+		fs.symlink('../shared', root + '/src/lib');
+
+		let files = scan(root + '/src', ['**/*.uc'], []);
+		system(sprintf('rm -rf %s', root));
+
+		assert.match([root + '/src/lib/b.uc'], files);
 	});
 });
 

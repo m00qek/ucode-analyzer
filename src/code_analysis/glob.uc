@@ -54,14 +54,15 @@ function matchesAny(relPath, patterns) {
 	return false;
 }
 
-function walkDir(absDir, relDir, includes, excludes, results) {
-	let dir = fs.opendir(absDir);
-	if (!dir) return;
+// Symlinks are followed (fs.stat), but each real directory is entered at most
+// once (keyed by fs.realpath), so a link back up the tree -- or two links to the
+// same directory -- cannot make the walk loop or report a file twice.
+function walkDir(absDir, relDir, includes, excludes, results, visited) {
+	let real = fs.realpath(absDir);
+	if (!real || visited[real]) return;
+	visited[real] = true;
 
-	let entry;
-	while ((entry = dir.read()) !== null) {
-		if (entry === '.' || entry === '..') continue;
-
+	for (let entry in (fs.lsdir(absDir) ?? [])) {
 		let absPath = absDir + '/' + entry;
 		let relPath = relDir !== '' ? relDir + '/' + entry : entry;
 		let stat = fs.stat(absPath);
@@ -69,20 +70,18 @@ function walkDir(absDir, relDir, includes, excludes, results) {
 		if (!stat) continue;
 
 		if (stat.type === 'directory') {
-			walkDir(absPath, relPath, includes, excludes, results);
+			walkDir(absPath, relPath, includes, excludes, results, visited);
 		} else {
 			if (matchesAny(relPath, includes) && !matchesAny(relPath, excludes))
 				push(results, absPath);
 		}
 	}
-
-	dir.close();
 }
 
 // Returns absolute paths of files under dir matching includes/excludes.
 export function scan(dir, includes, excludes) {
 	let results = [];
-	walkDir(dir, '', includes, excludes ?? [], results);
+	walkDir(dir, '', includes, excludes ?? [], results, {});
 	return results;
 };
 
