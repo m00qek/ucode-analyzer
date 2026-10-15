@@ -228,4 +228,14 @@ describe('diagnostics — undefined variables', () => {
 		assert.match(false, index(names, "'k' is not defined") >= 0);
 		assert.match(false, index(names, "'v' is not defined") >= 0);
 	});
+
+	it('does not warn for the loop variables of an alt-syntax for-in', () => {
+		let text = "let obj = {};\nfor (let k, v in obj): k; v; endfor\n";
+		documents.open(URI, text, 1);
+
+		let diags = undefinedVars(documents.get(URI));
+		let names = map(diags, (d) => d.message);
+		assert.match(false, index(names, "'k' is not defined") >= 0);
+		assert.match(false, index(names, "'v' is not defined") >= 0);
+	});
 });

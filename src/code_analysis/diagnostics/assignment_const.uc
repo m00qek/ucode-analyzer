@@ -97,7 +97,7 @@ _walk = function(node, scope, source, lineTable, diags) {
 		return;
 	}
 
-	if (nt === 'statement_block') {
+	if (nt === 'statement_block' || nt === 'statement_list') {
 		_walkBlock(node, makeScope(scope), source, lineTable, diags);
 		return;
 	}

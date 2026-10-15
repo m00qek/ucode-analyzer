@@ -14,7 +14,7 @@ let TERMINATORS = {
 function walk(node, source, lineTable, out) {
 	let nt = ts.nodeType(node);
 
-	if (nt === 'statement_block') {
+	if (nt === 'statement_block' || nt === 'statement_list') {
 		let hitTerminator = false;
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let stmt = ts.namedChild(node, i);

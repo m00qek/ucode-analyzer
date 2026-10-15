@@ -155,7 +155,8 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 	let bodyNode = ts.childByField(node, 'body');
 	let ret = UNKNOWN;
 	if (bodyNode) {
-		if (ts.nodeType(bodyNode) === 'statement_block') {
+		let bt = ts.nodeType(bodyNode);
+		if (bt === 'statement_block' || bt === 'statement_list') {
 			let rets = [];
 			_collectReturns(bodyNode, source, uri, childScope, depth, rets);
 			ret = unionOf(rets);

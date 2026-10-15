@@ -39,7 +39,7 @@ function checkBlock(node, source, lineTable, diags) {
 // Recursively walk the tree; call checkBlock for every scope container.
 function walk(node, source, lineTable, diags) {
 	let nt = ts.nodeType(node);
-	if (nt === 'program' || nt === 'statement_block')
+	if (nt === 'program' || nt === 'statement_block' || nt === 'statement_list')
 		checkBlock(node, source, lineTable, diags);
 
 	for (let i = 0; i < ts.namedChildCount(node); i++)

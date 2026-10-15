@@ -55,7 +55,8 @@ function collectParams(fnNode, scope, source, targetName, out) {
 // If block is the body of a for-in statement, bind the loop variable.
 function bindForInVar(block, scope, source, targetName, out) {
 	let parent = ts.parent(block);
-	if (!parent || ts.nodeType(parent) !== 'for_in_statement') return;
+	if (!parent || (ts.nodeType(parent) !== 'for_in_statement' &&
+	                ts.nodeType(parent) !== 'for_in_alt_statement')) return;
 	let left = ts.childByField(parent, 'left');
 	if (!left) return;
 	if (ts.nodeType(left) === 'identifier') {
@@ -78,7 +79,8 @@ function bindForInVar(block, scope, source, targetName, out) {
 // If block is the body of a C-style for statement, bind its initializer.
 function bindForVar(block, scope, source, targetName, out) {
 	let parent = ts.parent(block);
-	if (!parent || ts.nodeType(parent) !== 'for_statement') return;
+	if (!parent || (ts.nodeType(parent) !== 'for_statement' &&
+	                ts.nodeType(parent) !== 'for_alt_statement')) return;
 	let init = ts.childByField(parent, 'initializer');
 	if (!init || ts.nodeType(init) !== 'lexical_declaration') return;
 	for (let i = 0; i < ts.namedChildCount(init); i++) {
@@ -176,8 +178,9 @@ function walk(node, scope, source, targetName, out) {
 		return;
 	}
 
-	// ── Statement block: new scope + implicit loop/catch bindings ───────────
-	if (nt === 'statement_block') {
+	// ── Statement block (or an alt-syntax body's statement_list): new scope
+	//    + implicit loop/catch bindings ───────────────────────────────────────
+	if (nt === 'statement_block' || nt === 'statement_list') {
 		let inner = makeScope(scope);
 		bindForInVar(node, inner, source, targetName, out);
 		bindForVar(node, inner, source, targetName, out);

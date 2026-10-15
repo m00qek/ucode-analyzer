@@ -107,6 +107,10 @@ function switchAlwaysReturns(node, source) {
 //     namedChild(1): statement_block            ← consequent
 //     namedChild(2): else_clause                ← optional
 //       namedChild(0): statement_block | if_statement
+//   if_alt_statement (`if (c): … elif (c): … else … endif`)
+//     consequence: statement_list, elif_clause*: { consequence: statement_list },
+//     alternative: else_alt_clause { statement_list } — every list is absent
+//     when its body is empty
 alwaysReturns = function(node, source) {
 	if (!node) return false;
 	let nt = ts.nodeType(node);
@@ -114,9 +118,19 @@ alwaysReturns = function(node, source) {
 	if (nt === 'expression_statement')
 		return isNoReturnCall(ts.namedChild(node, 0), source);
 	if (nt === 'else_clause') return alwaysReturns(ts.namedChild(node, 0), source);
-	if (nt === 'statement_block') {
+	if (nt === 'statement_block' || nt === 'statement_list') {
 		let n = ts.namedChildCount(node);
 		return n > 0 && alwaysReturns(ts.namedChild(node, n - 1), source);
+	}
+	if (nt === 'if_alt_statement') {
+		let alt = ts.childByField(node, 'alternative');
+		if (!alt || !alwaysReturns(ts.childByField(node, 'consequence'), source)) return false;
+		for (let i = 0; i < ts.namedChildCount(node); i++) {
+			let c = ts.namedChild(node, i);
+			if (ts.nodeType(c) === 'elif_clause' &&
+			    !alwaysReturns(ts.childByField(c, 'consequence'), source)) return false;
+		}
+		return alwaysReturns(ts.namedChild(alt, 0), source);
 	}
 	if (nt === 'if_statement') {
 		if (ts.namedChildCount(node) < 3) return false;

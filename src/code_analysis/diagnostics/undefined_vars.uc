@@ -26,7 +26,8 @@ function bindFormalParams(paramsNode, scope, source) {
 
 function bindForInVar(block, scope, source) {
 	let parent = ts.parent(block);
-	if (!parent || ts.nodeType(parent) !== 'for_in_statement') return;
+	if (!parent || (ts.nodeType(parent) !== 'for_in_statement' &&
+	                ts.nodeType(parent) !== 'for_in_alt_statement')) return;
 	let left = ts.childByField(parent, 'left');
 	if (!left) return;
 	if (ts.nodeType(left) === 'identifier') {
@@ -46,7 +47,8 @@ function bindForInVar(block, scope, source) {
 
 function bindForVar(block, scope, source) {
 	let parent = ts.parent(block);
-	if (!parent || ts.nodeType(parent) !== 'for_statement') return;
+	if (!parent || (ts.nodeType(parent) !== 'for_statement' &&
+	                ts.nodeType(parent) !== 'for_alt_statement')) return;
 	let init = ts.childByField(parent, 'initializer');
 	if (!init || ts.nodeType(init) !== 'lexical_declaration') return;
 	for (let i = 0; i < ts.namedChildCount(init); i++) {
@@ -171,7 +173,8 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	if (nt === 'statement_block') {
+	// A brace block, or the statement_list of an alt-syntax body.
+	if (nt === 'statement_block' || nt === 'statement_list') {
 		let inner = makeScope(scope);
 		bindForInVar(node, inner, source);
 		bindForVar(node, inner, source);
@@ -181,13 +184,14 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	if (nt === 'for_in_statement') {
+	if (nt === 'for_in_statement' || nt === 'for_in_alt_statement') {
 		let right = ts.childByField(node, 'right');
 		if (right) walk(right, scope, source, globals, lineTable, out);
 		let body = ts.childByField(node, 'body');
 		if (body) {
-			if (ts.nodeType(body) === 'statement_block') {
-				// statement_block handler calls bindForInVar automatically.
+			let bt = ts.nodeType(body);
+			if (bt === 'statement_block' || bt === 'statement_list') {
+				// The block handler calls bindForInVar automatically.
 				walk(body, scope, source, globals, lineTable, out);
 			} else {
 				// No-brace body: bind loop var into an explicit inner scope.
@@ -199,7 +203,7 @@ function walk(node, scope, source, globals, lineTable, out) {
 		return;
 	}
 
-	if (nt === 'for_statement') {
+	if (nt === 'for_statement' || nt === 'for_alt_statement') {
 		// Walk initializer RHS in outer scope first, then bind the loop var into an
 		// inner scope so condition/increment can reference it without false positives.
 		let inner = makeScope(scope);

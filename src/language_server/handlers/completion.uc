@@ -99,7 +99,7 @@ function memberContext(root, source, offset) {
 	while (n) {
 		let nt = ts.nodeType(n);
 		if (nt === 'member_expression') return ts.namedChild(n, 0);
-		if (nt === 'program' || nt === 'statement_block') break;
+		if (nt === 'program' || nt === 'statement_block' || nt === 'statement_list') break;
 		n = ts.parent(n);
 	}
 

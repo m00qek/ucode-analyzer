@@ -65,15 +65,15 @@ export function docBeforeMap(parent, text) {
 };
 
 // The statement-level ancestor of `node` whose leading /** */ documents it, and
-// that statement's enclosing block. Walks up until the parent is a program or
-// statement_block. Returns { target, parent } with parent=null when `node` has
+// that statement's enclosing block. Walks up until the parent is a program,
+// statement_block or (alt-syntax body) statement_list. Returns { target, parent } with parent=null when `node` has
 // no enclosing block/program.
 export function docBearingStatement(node) {
 	let target = node;
 	let p = ts.parent(target);
 	while (p) {
 		let pt = ts.nodeType(p);
-		if (pt === 'program' || pt === 'statement_block') break;
+		if (pt === 'program' || pt === 'statement_block' || pt === 'statement_list') break;
 		target = p;
 		p = ts.parent(target);
 	}

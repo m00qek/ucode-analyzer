@@ -160,4 +160,24 @@ describe('diagnostics — missing return', () => {
 		let text = DOC + "function f() { while (true) { break; } let x = 1; }\n";
 		assert.match(1, length(missingReturn(open(text))));
 	});
+
+	it('no warning for a colon-form function that returns', () => {
+		let text = DOC + "function f(): return 1; endfunction\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('warns for a colon-form function that does not return', () => {
+		let text = DOC + "function f(): let x = 1; endfunction\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
+
+	it('no warning when every branch of an alt-syntax if returns', () => {
+		let text = DOC + "function f(x, y): if (x): return 1; elif (y): return 2; else return 3; endif endfunction\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('warns for an alt-syntax if without else', () => {
+		let text = DOC + "function f(x): if (x): return 1; endif endfunction\n";
+		assert.match(1, length(missingReturn(open(text))));
+	});
 });

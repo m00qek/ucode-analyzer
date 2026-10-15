@@ -230,37 +230,21 @@ function walkForStmt(node, source, uri, scope, map) {
 }
 
 // ── colon / end… (alt-syntax) forms: `for (…): … endfor` and friends ────────────
-// These mirror the brace-form walkers, but their body is a *run* of statements
-// directly under the node rather than a single statement_block, so the body is
-// threaded child-by-child through stepStatement. In a template the same nodes
-// span tags ({% for (x in xs): %}…{% endfor %}): the text between the tags is
-// just another statement (a text_statement) in that run. Brace-bodied forms that
-// span tags ({% if (c) { %}…{% } %}) need nothing here at all — they are ordinary
+// These mirror the brace-form walkers. Their body is a statement_list (absent
+// when the body is empty) rather than a statement_block, threaded statement by
+// statement through stepStatement. In a template the same nodes span tags
+// ({% for (x in xs): %}…{% endfor %}): the text between the tags is just another
+// statement (a text_statement) in that list. Brace-bodied forms that span tags
+// ({% if (c) { %}…{% } %}) need nothing here at all — they are ordinary
 // if_statement / statement_block nodes.
 
-// Byte offsets of an alt statement's header field nodes — the parts that are not
-// body content and must be skipped when threading the body: loop headers, and a
-// colon-bodied function's `name`/`parameters`. A field absent on a given node is
-// simply skipped.
-function altHeaderBytes(node) {
-    let hdr = {};
-    for (let f in ['left', 'right', 'value', 'condition', 'initializer', 'increment',
-                   'name', 'parameters']) {
-        let n = ts.childByField(node, f);
-        if (n) hdr[ts.startByte(n)] = true;
-    }
-    return hdr;
-}
-
-// Thread every non-header child of an alt statement under the given scope, so a
-// `{% let %}` inside the body flows to later body nodes and nested spanning
+// Thread every statement of a statement_list under the given scope, so a
+// `{% let %}` inside the body flows to later statements and nested spanning
 // forms recurse correctly.
-function walkAltBody(node, source, uri, scope, map, hdr) {
-    for (let i = 0; i < ts.namedChildCount(node); i++) {
-        let child = ts.namedChild(node, i);
-        if (hdr[ts.startByte(child)]) continue;
-        scope = stepStatement(child, source, uri, scope, map);
-    }
+function walkStatementList(list, source, uri, scope, map) {
+    if (!list) return;
+    for (let i = 0; i < ts.namedChildCount(list); i++)
+        scope = stepStatement(ts.namedChild(list, i), source, uri, scope, map);
 }
 
 // {% for (x in xs): %} … {% endfor %} — mirror walkForIn's loop-var binding.
@@ -273,7 +257,7 @@ function walkForInAlt(node, source, uri, scope, map) {
         let iterType = right ? inferNode(right, source, uri, scope, 0) : UNKNOWN;
         scopeSet(loopScope, ts.text(left, source), elemTypeOf(iterType));
     }
-    walkAltBody(node, source, uri, loopScope, map, altHeaderBytes(node));
+    walkStatementList(ts.childByField(node, 'body'), source, uri, loopScope, map);
 }
 
 // {% for (init; cond; incr): %} … {% endfor %} — mirror walkForStmt.
@@ -296,7 +280,7 @@ function walkForAlt(node, source, uri, scope, map) {
     }
     if (cond) walkNode(cond, source, uri, forScope, map);
     if (incr) walkNode(incr, source, uri, forScope, map);
-    walkAltBody(node, source, uri, forScope, map, altHeaderBytes(node));
+    walkStatementList(ts.childByField(node, 'body'), source, uri, forScope, map);
 }
 
 // {% while (cond): %} … {% endwhile %}. Walk the condition, then thread the body
@@ -305,12 +289,12 @@ function walkWhileAlt(node, source, uri, scope, map) {
     let condWrapper = ts.childByField(node, 'condition');
     if (condWrapper)
         walkNode(ts.namedChild(condWrapper, 0) ?? condWrapper, source, uri, scope, map);
-    walkAltBody(node, source, uri, scope, map, altHeaderBytes(node));
+    walkStatementList(ts.childByField(node, 'body'), source, uri, scope, map);
 }
 
 // `if (cond): … elif (c2): … else: … endif` — in a template, {% if (cond): %} …
-// {% elif (c2): %} … {% else %} … {% endif %}. The if-branch body is a run of
-// statements directly under the node; the elif/else branches are `elif_clause` /
+// {% elif (c2): %} … {% else %} … {% endif %}. The if-branch body is the
+// `consequence` statement_list; the elif/else branches are `elif_clause` /
 // `else_alt_clause` nodes that each CONTAIN their own condition and body. Walk
 // each body under the scope narrowed by that branch's guard: the
 // if/elif bodies see their condition as true; the else body sees the if condition
@@ -322,35 +306,34 @@ function walkIfAlt(node, source, uri, scope, map) {
     let ifCond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
     if (ifCond) walkNode(ifCond, source, uri, scope, map);
     let ifGuard = ifCond ? parseGuard(ifCond, source) : null;
-    let hdr = altHeaderBytes(node);   // skips the if's own condition
 
     let branch = makeScope(scope);
     applyGuard(branch, ifGuard, true);
+    walkStatementList(ts.childByField(node, 'consequence'), source, uri, branch, map);
 
     for (let i = 0; i < ts.namedChildCount(node); i++) {
         let child = ts.namedChild(node, i);
-        if (hdr[ts.startByte(child)]) continue;
         let ct = ts.nodeType(child);
-        if (ct === 'elif_clause' || ct === 'else_alt_clause') {
-            // The clause node CONTAINS its own condition and body. Narrow a fresh
-            // branch by the clause's guard and thread the body through stepStatement
-            // (via walkAltBody) so each body offset gets its own checkpoint — walking
-            // it bare would leave those offsets resolving to the previous branch's
-            // (if-branch) checkpoint and its narrowing.
-            let truthy = (ct === 'elif_clause');
-            let guard  = ifGuard;   // else: if-condition false
-            if (truthy) {
-                let ec = ts.childByField(child, 'condition');
-                let ecInner = ec ? ts.namedChild(ec, 0) : null;
-                if (ecInner) walkNode(ecInner, source, uri, scope, map);
-                guard = ecInner ? parseGuard(ecInner, source) : null;
-            }
-            let inlineBranch = makeScope(scope);
-            applyGuard(inlineBranch, guard, truthy);
-            walkAltBody(child, source, uri, inlineBranch, map, altHeaderBytes(child));
+        if (ct !== 'elif_clause' && ct !== 'else_alt_clause') continue;
+        // Narrow a fresh branch by the clause's guard and thread its body
+        // through stepStatement, so each body offset gets its own checkpoint —
+        // walking it bare would leave those offsets resolving to the previous
+        // branch's (if-branch) checkpoint and its narrowing.
+        let truthy = (ct === 'elif_clause');
+        let guard  = ifGuard;   // else: if-condition false
+        let body;
+        if (truthy) {
+            let ec = ts.childByField(child, 'condition');
+            let ecInner = ec ? ts.namedChild(ec, 0) : null;
+            if (ecInner) walkNode(ecInner, source, uri, scope, map);
+            guard = ecInner ? parseGuard(ecInner, source) : null;
+            body = ts.childByField(child, 'consequence');
         } else {
-            branch = stepStatement(child, source, uri, branch, map);
+            body = ts.namedChild(child, 0);   // else_alt_clause: its statement_list, if any
         }
+        let inlineBranch = makeScope(scope);
+        applyGuard(inlineBranch, guard, truthy);
+        walkStatementList(body, source, uri, inlineBranch, map);
     }
 }
 
@@ -375,12 +358,10 @@ function walkFn(node, source, uri, scope, map) {
     if (!body) return;
     if (ts.nodeType(body) === 'statement_block') {
         walkBlock(body, source, uri, fnScope, map);
-    } else if (ts.nodeType(node) === 'function_declaration') {
+    } else if (ts.nodeType(body) === 'statement_list') {
         // Colon form `function f(a): … endfunction` — in a template,
-        // {% function f(a): %}…{% endfunction %}. Its body is a run of statements
-        // directly under the node (the `body` field marks each), like the
-        // alt-syntax forms above.
-        walkAltBody(node, source, uri, fnScope, map, altHeaderBytes(node));
+        // {% function f(a): %}…{% endfunction %}.
+        walkStatementList(body, source, uri, fnScope, map);
     } else {
         // Arrow function with expression body: emit one checkpoint then recurse.
         emit(map, ts.startByte(body), fnScope);
@@ -438,6 +419,10 @@ walkNode = function(node, source, uri, scope, map) {
     if (nt === 'statement_block') {
         // Standalone block: new scope layer for its own declarations.
         walkBlock(node, source, uri, makeScope(scope), map);
+    } else if (nt === 'statement_list') {
+        // An alt-syntax body reached without its statement (normally the
+        // statement's walker threads it): like a block.
+        walkStatementList(node, source, uri, makeScope(scope), map);
     } else if (nt === 'if_statement') {
         walkIfStmt(node, source, uri, scope, map);
     } else if (nt === 'for_in_statement') {

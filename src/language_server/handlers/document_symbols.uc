@@ -23,7 +23,7 @@ function walkSymbols(node, text, lineTable) {
 	let nt = ts.nodeType(node);
 
 	// ── Containers: flatten children into caller's result ──────────────────
-	if (nt === 'program' || nt === 'statement_block') {
+	if (nt === 'program' || nt === 'statement_block' || nt === 'statement_list') {
 		let result = [];
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let children = walkSymbols(ts.namedChild(node, i), text, lineTable);

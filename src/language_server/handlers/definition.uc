@@ -93,7 +93,7 @@ function forInDeclares(node, text) {
 function binderIn(scopeNode, name, text) {
 	let nt = ts.nodeType(scopeNode);
 
-	if (nt === 'statement_block' || nt === 'program' || nt === 'markup') {
+	if (nt === 'statement_block' || nt === 'statement_list' || nt === 'program' || nt === 'markup') {
 		for (let i = 0; i < ts.namedChildCount(scopeNode); i++) {
 			let stmt = ts.namedChild(scopeNode, i);
 			let st = ts.nodeType(stmt);
