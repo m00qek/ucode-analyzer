@@ -124,6 +124,36 @@ describe('buildScopeMap between statements', () => {
 	});
 });
 
+describe('buildScopeMap switch', () => {
+	let P = '/** @param {?array} m */\nfunction f(m, k) {\n';
+
+	it('a let inside a case is in scope for the rest of the clause', () => {
+		let src = "function f(x) {\n\tswitch (x) {\n\tcase 1:\n\t\tlet y = 'a';\n\t\treturn y;\n\t}\n}\n";
+		assert.match('string', scopeGet(scopeAt(src, 'return y'), 'y')?.name);
+	});
+
+	it('a case with a non-null label narrows X in switch (X?.[i])', () => {
+		let src = P + "\tswitch (m?.[1]) {\n\tcase 'a':\n\t\tlet x = m;\n\t\tbreak;\n\tdefault:\n\t\tlet z = m;\n\t}\n}\n";
+		assert.match('ref', scopeGet(scopeAt(src, 'let x'), 'm')?.kind);
+		assert.match('nullable', scopeGet(scopeAt(src, 'let z'), 'm')?.kind);
+	});
+
+	it('does not narrow a case that default falls into', () => {
+		let src = P + "\tswitch (m?.[1]) {\n\tdefault:\n\t\tk();\n\tcase 'a':\n\t\tlet x = m;\n\t}\n}\n";
+		assert.match('nullable', scopeGet(scopeAt(src, 'let x'), 'm')?.kind);
+	});
+
+	it('narrows through fallthrough between narrowed cases', () => {
+		let src = P + "\tswitch (m?.[1]) {\n\tcase 'a':\n\t\tk();\n\tcase 'b':\n\t\tlet x = m;\n\t}\n}\n";
+		assert.match('ref', scopeGet(scopeAt(src, 'let x'), 'm')?.kind);
+	});
+
+	it('a case null label does not narrow', () => {
+		let src = P + "\tswitch (m?.[1]) {\n\tcase null:\n\t\tlet x = m;\n\t}\n}\n";
+		assert.match('nullable', scopeGet(scopeAt(src, 'let x'), 'm')?.kind);
+	});
+});
+
 describe('buildScopeMap @type', () => {
 	it('types a declaration by its @type over the initializer', () => {
 		let src = '/** @type {string} */\nlet x = foo();\nlet y = 1;\n';

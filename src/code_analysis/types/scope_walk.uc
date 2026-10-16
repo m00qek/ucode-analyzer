@@ -353,6 +353,55 @@ function walkTry(node, source, uri, scope, map) {
     }
 }
 
+// The variable a switch subject proves non-null when it equals a non-null
+// literal: `x` for `switch (x)`, `X` for `switch (X?.p)` / `switch (X?.[i])`.
+function switchSubject(value, source) {
+    let t = ts.nodeType(value);
+    if (t === 'identifier') return ts.text(value, source);
+    if ((t === 'member_expression' || t === 'subscript_expression') &&
+        ts.childByField(value, 'optional_chain')) {
+        let obj = ts.childByField(value, 'object');
+        if (obj && ts.nodeType(obj) === 'identifier') return ts.text(obj, source);
+    }
+    return null;
+}
+
+const NON_NULL_LITERALS = { string: true, template_string: true, number: true, 'true': true, 'false': true };
+
+// Each clause threads its statements; declarations carry into the next clause
+// when control falls through. A clause whose label is a non-null literal sees
+// the subject as non-null, unless the clause before it can fall into it
+// without that guarantee (default, or an un-narrowed clause).
+function walkSwitch(node, source, uri, scope, map) {
+    let valueWrap = ts.childByField(node, 'value');
+    let value = firstNamed(valueWrap) ?? valueWrap;
+    if (value) walkNode(value, source, uri, scope, map);
+    let subject = value ? switchSubject(value, source) : null;
+    let body = ts.childByField(node, 'body');
+    if (!body) return;
+    let bodyScope = makeScope(scope);
+    let prevEnd = null, prevFalls = false, prevNarrowed = false;
+    for (let clause in ts.namedChildren(body)) {
+        let ct = ts.nodeType(clause);
+        if (ct !== 'switch_case' && ct !== 'switch_default') continue;
+        let label = ts.childByField(clause, 'value');
+        let narrow = subject !== null && label !== null && NON_NULL_LITERALS[ts.nodeType(label)] === true
+                     && (!prevFalls || prevNarrowed);
+        let s = (prevFalls && (narrow || !prevNarrowed)) ? prevEnd : bodyScope;
+        if (narrow) {
+            s = makeScope(s);
+            applyGuard(s, { kind: 'truthy', name: subject, positive: true }, true);
+        }
+        emit(map, ts.startByte(clause), s);
+        let stmts = filter(namedNonComments(clause), (c) => !label || ts.startByte(c) !== ts.startByte(label));
+        for (let stmt in stmts)
+            s = stepStatement(stmt, source, uri, s, map);
+        prevEnd = s;
+        prevFalls = !length(stmts) || !endsInTerminator(stmts[-1], source);
+        prevNarrowed = narrow;
+    }
+}
+
 function walkFn(node, source, uri, scope, map) {
     let fnScope = makeScope(scope);
     addParams(node, source, uri, fnScope);
@@ -425,6 +474,7 @@ const SCOPE_TYPES = [
     'while_alt_statement', 'if_alt_statement', 'while_statement',
     'try_statement', 'function_declaration', 'function_expression',
     'arrow_function', 'ternary_expression', 'binary_expression',
+    'switch_statement',
 ];
 
 // Start bytes of the SCOPE_TYPES nodes in the tree being mapped, sorted; null
@@ -478,6 +528,8 @@ walkNode = function(node, source, uri, scope, map) {
         if (body) walkNode(body, source, uri, scope, map);
     } else if (nt === 'try_statement') {
         walkTry(node, source, uri, scope, map);
+    } else if (nt === 'switch_statement') {
+        walkSwitch(node, source, uri, scope, map);
     } else if (nt === 'function_declaration' || nt === 'function_expression' || nt === 'arrow_function') {
         walkFn(node, source, uri, scope, map);
     } else if (nt === 'ternary_expression') {
