@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL, resolveRef } from 'code_analysis.types.type_utils';
-import { stringLiteralText } from 'code_analysis.ast_text';
+import { stringLiteralText, firstNamed, namedNonComments } from 'code_analysis.ast_text';
 
 // Maps the strings returned by ucode's type() built-in to our type objects.
 // Covers the primitive/scalar types we can represent as singletons; array,
@@ -118,7 +118,7 @@ export function parseGuard(node, source) {
 	let nt = ts.nodeType(node);
 
 	if (nt === 'parenthesized_expression')
-		return parseGuard(ts.namedChild(node, 0), source);
+		return parseGuard(firstNamed(node), source);
 
 	if (nt === 'identifier')
 		return { kind: 'truthy', name: ts.text(node, source), positive: true };
@@ -172,8 +172,8 @@ export function parseGuard(node, source) {
 			let callee = ts.childByField(callSide, 'function');
 			let args   = ts.childByField(callSide, 'arguments');
 			if (callee && ts.nodeType(callee) === 'identifier' && ts.text(callee, source) === 'type'
-			    && args && ts.namedChildCount(args) === 1) {
-				let operand = ts.namedChild(args, 0);
+			    && args && length(namedNonComments(args)) === 1) {
+				let operand = firstNamed(args);
 				if (operand && ts.nodeType(operand) === 'identifier') {
 					let name    = ts.text(operand, source);
 					let raw     = ts.text(stringSide, source);

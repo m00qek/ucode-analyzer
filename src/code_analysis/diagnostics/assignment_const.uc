@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import { firstNamed, namedNonComments } from 'code_analysis.ast_text';
 import { rangeOf } from 'code_analysis.positions';
 
 let SEVERITY_ERROR = 1;
@@ -20,7 +21,7 @@ function addParams(node, source, scope) {
 		for (let i = 0; i < ts.namedChildCount(formalParams); i++) {
 			let p = ts.namedChild(formalParams, i);
 			if (ts.nodeType(p) === 'rest_element') {
-				let inner = ts.namedChild(p, 0);
+				let inner = firstNamed(p);
 				if (inner && ts.nodeType(inner) === 'identifier')
 					scope.decls[ts.text(inner, source)] = { kind: 'let' };
 			} else if (ts.nodeType(p) === 'identifier') {
@@ -68,7 +69,7 @@ _walk = function(node, scope, source, lineTable, diags) {
 	}
 
 	if (nt === 'function_declaration') {
-		let nameNode = ts.namedChild(node, 0);
+		let nameNode = ts.childByField(node, 'name');
 		if (nameNode && ts.nodeType(nameNode) === 'identifier')
 			scope.decls[ts.text(nameNode, source)] = { kind: 'let' };
 		let inner = makeScope(scope);
@@ -79,8 +80,7 @@ _walk = function(node, scope, source, lineTable, diags) {
 	}
 
 	if (nt === 'export_statement') {
-		let child = ts.namedChild(node, 0);
-		if (child) _walk(child, scope, source, lineTable, diags);
+		for (let child in namedNonComments(node)) _walk(child, scope, source, lineTable, diags);
 		return;
 	}
 
@@ -116,7 +116,7 @@ _walk = function(node, scope, source, lineTable, diags) {
 	}
 
 	if (nt === 'assignment_expression' || nt === 'augmented_assignment_expression') {
-		let left = ts.namedChild(node, 0);
+		let left = ts.childByField(node, 'left');
 		if (left && ts.nodeType(left) === 'identifier') {
 			let name  = ts.text(left, source);
 			let entry = declEntry(scope, name);
@@ -131,13 +131,13 @@ _walk = function(node, scope, source, lineTable, diags) {
 				});
 			}
 		}
-		let right = ts.namedChild(node, 1);
+		let right = ts.childByField(node, 'right');
 		if (right) _walk(right, scope, source, lineTable, diags);
 		return;
 	}
 
 	if (nt === 'update_expression') {
-		let operand = ts.namedChild(node, 0);
+		let operand = ts.childByField(node, 'argument');
 		if (operand && ts.nodeType(operand) === 'identifier') {
 			let name  = ts.text(operand, source);
 			let entry = declEntry(scope, name);

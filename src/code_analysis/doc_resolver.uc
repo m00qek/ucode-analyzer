@@ -61,7 +61,7 @@ export function resolveDoc(uri, node, source, scope) {
 		let parent = ts.parent(node);
 		if (!parent || ts.nodeType(parent) !== 'member_expression')
 			return { doc: null, modUri: null };
-		let objNode  = ts.namedChild(parent, 0);
+		let objNode  = ts.childByField(parent, 'object');
 		let propName = ts.text(node, source);
 		let objType  = inferNode(objNode, source, uri, scope, 0);
 		if (!objType) return { doc: null, modUri: null };

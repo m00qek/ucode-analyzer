@@ -7,7 +7,7 @@ import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
 import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal } from 'code_analysis.types.type_utils';
 import { offsetToPosition, docBeforeMap, docBearingStatement } from 'code_analysis.positions';
-import { stringLiteralText } from 'code_analysis.ast_text';
+import { stringLiteralText, firstNamed } from 'code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'code_analysis.types.dag_bridge';
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ _collectReturns = function(node, source, uri, scope, depth, out) {
 		let child = ts.namedChild(node, i);
 		let ct = ts.nodeType(child);
 		if (ct === 'return_statement') {
-			let expr = ts.namedChild(child, 0);
+			let expr = firstNamed(child);
 			push(out, expr ? _infer(expr, source, uri, scope, depth + 1) : NULL_T);
 		} else if (ct === 'lexical_declaration') {
 			processDecl(child, source, uri, scope, depth);
@@ -128,7 +128,7 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 		for (let i = 0; i < ts.namedChildCount(formalParams); i++) {
 			let pnode = ts.namedChild(formalParams, i);
 			if (ts.nodeType(pnode) === 'rest_element') {
-				let inner = ts.namedChild(pnode, 0);
+				let inner = firstNamed(pnode);
 				if (inner && ts.nodeType(inner) === 'identifier')
 					push(params, { name: ts.text(inner, source), type: { kind: 'generic', base: 'list', params: [UNKNOWN] } });
 				continue;
@@ -280,7 +280,7 @@ function inferSubscript(node, source, uri, scope, depth) {
 // In array context: ...list<T> → T (the element type is what gets spread into the array).
 // In object context: caller handles field merging; here return the spread type itself.
 function inferSpread(node, source, uri, scope, depth) {
-	let inner = ts.namedChild(node, 0);
+	let inner = firstNamed(node);
 	if (!inner) return UNKNOWN;
 	let t = _infer(inner, source, uri, scope, depth + 1);
 	if (t && t.kind === 'generic' && t.base === 'list')
@@ -314,7 +314,7 @@ function inferPropertyIdentifier(node, source, uri, scope, depth) {
 }
 
 function inferParenthesized(node, source, uri, scope, depth) {
-	let inner = ts.namedChild(node, 0);
+	let inner = firstNamed(node);
 	return inner ? _infer(inner, source, uri, scope, depth + 1) : UNKNOWN;
 }
 
@@ -435,7 +435,7 @@ function inferObject(node, source, uri, scope, depth) {
 		let ct = ts.nodeType(child);
 		if (ct === 'spread_element') {
 			// { ...obj } — merge fields from the spread type into this record.
-			let inner = ts.namedChild(child, 0);
+			let inner = firstNamed(child);
 			let t = inner ? _infer(inner, source, uri, scope, depth + 1) : null;
 			if (t && t.kind === 'record') {
 				for (let j = 0; j < length(t.fields); j++)
@@ -499,7 +499,7 @@ function inferFunctionExpr(node, source, uri, scope, depth) {
 }
 
 function inferReturnStatement(node, source, uri, scope, depth) {
-	let expr = ts.namedChild(node, 0);
+	let expr = firstNamed(node);
 	return expr ? _infer(expr, source, uri, scope, depth + 1) : NULL_T;
 }
 
@@ -525,7 +525,7 @@ function inferFunctionDecl(node, source, uri, scope, depth) {
 			for (let j = 0; j < ts.namedChildCount(child); j++) {
 				let p = ts.namedChild(child, j);
 				if (ts.nodeType(p) === 'rest_element') {
-					let inner = ts.namedChild(p, 0);
+					let inner = firstNamed(p);
 					if (inner && ts.nodeType(inner) === 'identifier')
 						push(params, { name: ts.text(inner, source), type: { kind: 'generic', base: 'list', params: [UNKNOWN] } });
 					continue;

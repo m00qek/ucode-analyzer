@@ -14,7 +14,7 @@ function isDeclSite(node) {
 	if (!parent) return false;
 	let pt = ts.nodeType(parent);
 	if (pt === 'variable_declarator' || pt === 'function_declaration') {
-		let first = ts.namedChild(parent, 0);
+		let first = ts.childByField(parent, 'name');
 		return first && ts.startByte(first) === ts.startByte(node);
 	}
 	if (pt === 'import_specifier' || pt === 'export_specifier' ||

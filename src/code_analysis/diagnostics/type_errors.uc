@@ -4,7 +4,7 @@ import { scopeGet } from 'code_analysis.types.scope';
 import { UNKNOWN, resolveRef } from 'code_analysis.types.type_utils';
 import { inferNode } from 'code_analysis.types.inferrer';
 import { scopeAtOffset } from 'code_analysis.types.scope_walk';
-import { stringLiteralText } from 'code_analysis.ast_text';
+import { stringLiteralText, isComment, firstNamed } from 'code_analysis.ast_text';
 
 let SEVERITY_ERROR   = 1;
 let SEVERITY_WARNING = 2;
@@ -71,8 +71,9 @@ function isDefinitelyNull(type) {
 function isStrict(root, source) {
 	for (let i = 0; i < ts.namedChildCount(root); i++) {
 		let stmt = ts.namedChild(root, i);
+		if (isComment(stmt)) continue;
 		if (ts.nodeType(stmt) !== 'expression_statement') return false;
-		let inner = ts.namedChild(stmt, 0);
+		let inner = firstNamed(stmt);
 		if (!inner || ts.nodeType(inner) !== 'string') return false;
 		if (stringLiteralText(inner, source) === 'use strict') return true;
 		// another leading string directive — keep scanning the prologue

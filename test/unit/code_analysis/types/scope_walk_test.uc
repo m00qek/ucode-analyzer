@@ -115,6 +115,16 @@ describe('buildScopeMap if-statement narrowing', () => {
 		assert.match({ kind: 'primitive', name: 'null' }, mType);
 	});
 
+	it('narrows on a condition that starts with a comment', () => {
+		let src = '/** @param {string|null} m */\nfunction f(m) {\n  if (/* set? */ m) {\n    let x = m;\n  }\n}\n';
+		assert.match('string', scopeGet(scopeAt(src, 'let x'), 'm')?.name);
+	});
+
+	it('narrows after a guard clause whose block ends in a comment', () => {
+		let src = '/** @param {string|null} m */\nfunction f(m) {\n  if (!m) { return; /* bail */ }\n  let x = m;\n}\n';
+		assert.match('string', scopeGet(scopeAt(src, 'let x'), 'm')?.name);
+	});
+
 	it('compound && guard narrows in body', () => {
 		let src = '/** @param {string|null} m */\nfunction f(m) {\n  if (m && type(m) === "string") {\n    let x = m;\n  }\n}\n';
 		let scope = scopeAt(src, 'let x');

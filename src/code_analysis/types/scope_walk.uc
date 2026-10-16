@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import { firstNamed, namedNonComments } from 'code_analysis.ast_text';
 import { inferNode } from 'code_analysis.types.inferrer';
 import { importScope } from 'code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeHas, scopeFork } from 'code_analysis.types.scope';
@@ -28,7 +29,7 @@ function forkDecl(stmt, source, uri, scope) {
 
 // Advance scope when a statement reassigns an existing binding.
 function forkAssign(stmt, source, uri, scope) {
-    let inner = ts.namedChild(stmt, 0);
+    let inner = firstNamed(stmt);
     if (!inner || ts.nodeType(inner) !== 'assignment_expression') return scope;
     let lhs = ts.childByField(inner, 'left');
     let rhs = ts.childByField(inner, 'right');
@@ -56,7 +57,7 @@ function advanceScope(stmt, source, uri, scope) {
     }
 
     if (stype === 'export_statement') {
-        let inner = ts.namedChild(stmt, 0);
+        let inner = ts.childByField(stmt, 'declaration');
         if (!inner) return scope;
         if (ts.nodeType(inner) === 'lexical_declaration')
             return forkDecl(inner, source, uri, scope);
@@ -112,10 +113,10 @@ function endsInTerminator(node, source) {
     if (nt === 'return_statement' || nt === 'break_statement' ||
         nt === 'continue_statement' || nt === 'throw_statement') return true;
     if (nt === 'expression_statement')
-        return isNoReturnCall(ts.namedChild(node, 0), source);
+        return isNoReturnCall(firstNamed(node), source);
     if (nt === 'statement_block') {
-        let n = ts.namedChildCount(node);
-        return n > 0 && endsInTerminator(ts.namedChild(node, n - 1), source);
+        let stmts = namedNonComments(node);
+        return length(stmts) > 0 && endsInTerminator(stmts[-1], source);
     }
     return false;
 }
@@ -128,7 +129,7 @@ function applyGuardClause(stmt, source, scope) {
     let cons = ts.childByField(stmt, 'consequence');
     if (alt || !cons || !endsInTerminator(cons, source)) return scope;
     let condWrapper = ts.childByField(stmt, 'condition');
-    let cond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
+    let cond = firstNamed(condWrapper);
     let guard = cond ? parseGuard(cond, source) : null;
     if (!guard) return scope;
     let narrowed = makeScope(scope);
@@ -170,7 +171,7 @@ function walkIfStmt(node, source, uri, scope, map) {
     let condWrapper = ts.childByField(node, 'condition');
     let consequent  = ts.childByField(node, 'consequence');
     let alt         = ts.childByField(node, 'alternative');
-    let cond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
+    let cond = firstNamed(condWrapper);
     if (cond) walkNode(cond, source, uri, scope, map);
     let guard = cond ? parseGuard(cond, source) : null;
     let trueScope  = makeScope(scope);
@@ -184,7 +185,7 @@ function walkIfStmt(node, source, uri, scope, map) {
         walkNode(consequent, source, uri, trueScope, map);
     }
     if (alt) {
-        let altBody = ts.namedChild(alt, 0);
+        let altBody = firstNamed(alt);
         if (altBody) {
             emit(map, ts.startByte(altBody), falseScope);
             walkNode(altBody, source, uri, falseScope, map);
@@ -288,7 +289,7 @@ function walkForAlt(node, source, uri, scope, map) {
 function walkWhileAlt(node, source, uri, scope, map) {
     let condWrapper = ts.childByField(node, 'condition');
     if (condWrapper)
-        walkNode(ts.namedChild(condWrapper, 0) ?? condWrapper, source, uri, scope, map);
+        walkNode(firstNamed(condWrapper) ?? condWrapper, source, uri, scope, map);
     walkStatementList(ts.childByField(node, 'body'), source, uri, scope, map);
 }
 
@@ -303,7 +304,7 @@ function walkWhileAlt(node, source, uri, scope, map) {
 // within a branch and reset at each boundary (branches are independent control flow).
 function walkIfAlt(node, source, uri, scope, map) {
     let condWrapper = ts.childByField(node, 'condition');
-    let ifCond = condWrapper ? ts.namedChild(condWrapper, 0) : null;
+    let ifCond = firstNamed(condWrapper);
     if (ifCond) walkNode(ifCond, source, uri, scope, map);
     let ifGuard = ifCond ? parseGuard(ifCond, source) : null;
 
@@ -324,12 +325,12 @@ function walkIfAlt(node, source, uri, scope, map) {
         let body;
         if (truthy) {
             let ec = ts.childByField(child, 'condition');
-            let ecInner = ec ? ts.namedChild(ec, 0) : null;
+            let ecInner = firstNamed(ec);
             if (ecInner) walkNode(ecInner, source, uri, scope, map);
             guard = ecInner ? parseGuard(ecInner, source) : null;
             body = ts.childByField(child, 'consequence');
         } else {
-            body = ts.namedChild(child, 0);   // else_alt_clause: its statement_list, if any
+            body = firstNamed(child);   // else_alt_clause: its statement_list, if any
         }
         let inlineBranch = makeScope(scope);
         applyGuard(inlineBranch, guard, truthy);
@@ -440,7 +441,7 @@ walkNode = function(node, source, uri, scope, map) {
     } else if (nt === 'while_statement') {
         let cond = ts.childByField(node, 'condition');
         let body = ts.childByField(node, 'body');
-        if (cond) walkNode(ts.namedChild(cond, 0) ?? cond, source, uri, scope, map);
+        if (cond) walkNode(firstNamed(cond) ?? cond, source, uri, scope, map);
         if (body) walkNode(body, source, uri, scope, map);
     } else if (nt === 'try_statement') {
         walkTry(node, source, uri, scope, map);

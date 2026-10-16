@@ -306,6 +306,11 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 		assert.match(1, d.severity);   // ERROR under strict
 	});
 
+	it("finds 'use strict' after a leading comment", () => {
+		let d = nullDiags("// header\n'use strict';\n/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
+		assert.match(1, d.severity);
+	});
+
 	it("a provably-null access stays an error under 'use strict' too", () => {
 		let d = nullDiags("'use strict';\nlet x = null;\nx.foo;\n")[0];
 		assert.match(true, d !== null);

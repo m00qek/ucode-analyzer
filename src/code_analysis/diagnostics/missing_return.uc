@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { rangeOf, precedingDoc } from 'code_analysis.positions';
 import { parseDoc } from 'code_analysis.types.doc_parser';
-import { namedNonComments } from 'code_analysis.ast_text';
+import { namedNonComments, firstNamed } from 'code_analysis.ast_text';
 
 let SEVERITY_WARNING = 2;
 
@@ -44,7 +44,7 @@ function isInfiniteLoop(node, source) {
 	if (nt === 'while_statement') {
 		let cond = ts.childByField(node, 'condition');
 		// while's condition is wrapped in a parenthesized_expression.
-		return isConstTruthy(cond ? (namedNonComments(cond)[0] ?? cond) : null, source);
+		return isConstTruthy(cond ? (firstNamed(cond) ?? cond) : null, source);
 	}
 	if (nt === 'for_statement') {
 		// C-style for; an absent/empty condition clause means `for(;;)`.
@@ -110,8 +110,8 @@ alwaysReturns = function(node, source) {
 	let nt = ts.nodeType(node);
 	if (nt === 'return_statement') return true;
 	if (nt === 'expression_statement')
-		return isNoReturnCall(ts.namedChild(node, 0), source);
-	if (nt === 'else_clause') return alwaysReturns(namedNonComments(node)[0], source);
+		return isNoReturnCall(firstNamed(node), source);
+	if (nt === 'else_clause') return alwaysReturns(firstNamed(node), source);
 	if (nt === 'statement_block' || nt === 'statement_list') {
 		let stmts = namedNonComments(node);
 		return length(stmts) > 0 && alwaysReturns(stmts[-1], source);
@@ -124,7 +124,7 @@ alwaysReturns = function(node, source) {
 			if (ts.nodeType(c) === 'elif_clause' &&
 			    !alwaysReturns(ts.childByField(c, 'consequence'), source)) return false;
 		}
-		return alwaysReturns(namedNonComments(alt)[0], source);
+		return alwaysReturns(firstNamed(alt), source);
 	}
 	if (nt === 'if_statement') {
 		let alt = ts.childByField(node, 'alternative');

@@ -166,4 +166,9 @@ describe('documentSymbols — nested declarations', () => {
 		assert.match(['title', 'row'], map(syms, (s) => s.name));
 		assert.match(['cls'], map(syms[1].children ?? [], (s) => s.name));
 	});
+
+	it('lists an export that follows a comment', () => {
+		documents.open(URI, "export /* c */ function f() {}\n", 1);
+		assert.match(['f'], map(documentSymbols(documents.get(URI)), (s) => s.name));
+	});
 });

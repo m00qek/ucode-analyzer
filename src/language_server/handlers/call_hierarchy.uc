@@ -71,7 +71,7 @@ function enclosingItem(node, uri, text, lineTable) {
 	while (n) {
 		let nt = ts.nodeType(n);
 		if (nt === 'function_declaration') {
-			let nameNode = ts.namedChild(n, 0);
+			let nameNode = ts.childByField(n, 'name');
 			let name = (nameNode && ts.nodeType(nameNode) === 'identifier')
 				? ts.text(nameNode, text) : '(anonymous)';
 			return makeItem(name, n, nameNode, uri, text, lineTable);
@@ -96,7 +96,7 @@ function findFnAt(root, text, nameByteOffset) {
 	function scan(node) {
 		let nt = ts.nodeType(node);
 		if (nt === 'function_declaration') {
-			let nm = ts.namedChild(node, 0);
+			let nm = ts.childByField(node, 'name');
 			if (nm && ts.nodeType(nm) === 'identifier' && ts.startByte(nm) === nameByteOffset)
 				return { fnNode: node, nameNode: nm };
 		}
@@ -164,14 +164,14 @@ function resolveCalleeIdent(identNode, callerUri, callerDoc) {
 	function scanLocal(node) {
 		let nt = ts.nodeType(node);
 		if (nt === 'function_declaration' || (nt === 'export_statement' && ts.namedChildCount(node) > 0)) {
-			let inner = (nt === 'export_statement') ? ts.namedChild(node, 0) : node;
+			let inner = (nt === 'export_statement') ? ts.childByField(node, 'declaration') : node;
 			if (!inner) return null;
-			let nm = ts.namedChild(inner, 0);
+			let nm = ts.childByField(inner, 'name');
 			if (nm && ts.nodeType(nm) === 'identifier' && ts.text(nm, callerDoc.text) === name)
 				return { fnNode: inner, nameNode: nm, uri: callerUri, doc: callerDoc };
 		}
 		if (nt === 'lexical_declaration' || (nt === 'export_statement' && ts.namedChildCount(node) > 0)) {
-			let inner = (nt === 'export_statement') ? ts.namedChild(node, 0) : node;
+			let inner = (nt === 'export_statement') ? ts.childByField(node, 'declaration') : node;
 			if (!inner || ts.nodeType(inner) !== 'lexical_declaration') return null;
 			for (let i = 0; i < ts.namedChildCount(inner); i++) {
 				let vd = ts.namedChild(inner, i);
@@ -212,7 +212,7 @@ export function prepareCallHierarchy(uri, doc, position) {
 
 	// Cursor on a function declaration name.
 	if (pnt === 'function_declaration') {
-		let nameChild = ts.namedChild(parent, 0);
+		let nameChild = ts.childByField(parent, 'name');
 		if (!nameChild || ts.startByte(nameChild) !== ts.startByte(node)) return null;
 		return [makeItem(name, parent, node, uri, doc.text, doc.lineTable)];
 	}
@@ -237,7 +237,7 @@ export function prepareCallHierarchy(uri, doc, position) {
 		let refParent = ts.parent(ref);
 		if (!refParent) continue;
 		let rpnt = ts.nodeType(refParent);
-		let first = ts.namedChild(refParent, 0);
+		let first = ts.childByField(refParent, 'name');
 		if (rpnt === 'function_declaration' && first && ts.startByte(first) === ts.startByte(ref))
 			return [makeItem(name, refParent, ref, uri, doc.text, doc.lineTable)];
 		if (rpnt === 'variable_declarator') {

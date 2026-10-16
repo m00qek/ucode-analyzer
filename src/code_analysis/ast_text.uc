@@ -11,6 +11,17 @@ export function namedNonComments(node) {
 	return filter(ts.namedChildren(node), (c) => !isComment(c));
 };
 
+// The first non-comment named child, for nodes without fields: parentheses,
+// expression statements, `else`, spread and rest elements, `return`.
+export function firstNamed(node) {
+	if (!node) return null;
+	for (let i = 0; i < ts.namedChildCount(node); i++) {
+		let c = ts.namedChild(node, i);
+		if (!isComment(c)) return c;
+	}
+	return null;
+};
+
 // The content of a string literal node — the concatenated text of its
 // string_fragment children, without the surrounding quotes. An empty literal
 // ('' / "") has no fragment child and yields "".

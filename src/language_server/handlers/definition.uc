@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset, isStatementList } from 'code_analysis.positions';
-import { stringLiteralText } from 'code_analysis.ast_text';
+import { stringLiteralText, firstNamed } from 'code_analysis.ast_text';
 import * as dag from 'code_analysis.dag.dag';
 import * as fs from 'fs';
 import { inferNode } from 'code_analysis.types.inferrer';
@@ -20,7 +20,7 @@ function location(uri, text, lineTable, byteOffset) {
 function findExportName(decl, name, text) {
 	let dt = ts.nodeType(decl);
 	if (dt === 'function_declaration') {
-		let nameNode = ts.namedChild(decl, 0);
+		let nameNode = ts.childByField(decl, 'name');
 		if (nameNode && ts.text(nameNode, text) === name) return nameNode;
 	} else if (dt === 'lexical_declaration') {
 		for (let i = 0; i < ts.namedChildCount(decl); i++) {
@@ -48,11 +48,11 @@ function localDefinition(uri, doc, name) {
 					return location(uri, doc.text, doc.lineTable, ts.startByte(nameNode));
 			}
 		} else if (nt === 'function_declaration') {
-			let nameNode = ts.namedChild(stmt, 0);
+			let nameNode = ts.childByField(stmt, 'name');
 			if (nameNode && ts.text(nameNode, doc.text) === name)
 				return location(uri, doc.text, doc.lineTable, ts.startByte(nameNode));
 		} else if (nt === 'export_statement') {
-			let decl = ts.namedChild(stmt, 0);
+			let decl = ts.childByField(stmt, 'declaration');
 			if (!decl) continue;
 			let nameNode = findExportName(decl, name, doc.text);
 			if (nameNode)
@@ -101,7 +101,7 @@ function binderIn(scopeNode, name, text) {
 				let nn = declaratorName(stmt, name, text);
 				if (nn) return nn;
 			} else if (st === 'function_declaration') {
-				let nn = ts.namedChild(stmt, 0);
+				let nn = ts.childByField(stmt, 'name');
 				if (nn && ts.text(nn, text) === name) return nn;
 			}
 		}
@@ -116,7 +116,7 @@ function binderIn(scopeNode, name, text) {
 				if (ts.nodeType(p) === 'identifier' && ts.text(p, text) === name) return p;
 				// rest parameter: `...args` — the name is the identifier under it.
 				if (ts.nodeType(p) === 'rest_element') {
-					let id = ts.namedChild(p, 0);
+					let id = firstNamed(p);
 					if (id && ts.nodeType(id) === 'identifier' && ts.text(id, text) === name) return id;
 				}
 			}
@@ -230,7 +230,7 @@ function resolveExportDefinition(resolvedUri, name) {
 	let lineTable = buildLineTable(text);
 	for (let stmt in mode.topLevelStatements(root)) {
 		if (ts.nodeType(stmt) !== 'export_statement') continue;
-		let decl = ts.namedChild(stmt, 0);
+		let decl = ts.childByField(stmt, 'declaration');
 		if (!decl) continue;
 		let nameNode = findExportName(decl, name, text);
 		if (nameNode)
@@ -245,7 +245,7 @@ function resolveExportDefinition(resolvedUri, name) {
 // Handles both simple `obj.prop` (objNode is identifier) and chained `a.b.prop`
 // (objNode is a member_expression — inferNode recurses through the chain).
 function memberExprDef(uri, doc, memberExpr, propName, offset) {
-	let objNode = ts.namedChild(memberExpr, 0);
+	let objNode = ts.childByField(memberExpr, 'object');
 	if (!objNode) return null;
 
 	// Namespace import fast path: only applies when the object is a direct alias.

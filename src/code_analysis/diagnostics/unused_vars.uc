@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { rangeOf } from 'code_analysis.positions';
-import { identifierOccurrences } from 'code_analysis.ast_text';
+import { identifierOccurrences, namedNonComments } from 'code_analysis.ast_text';
 
 let SEVERITY_WARNING = 2;
 
@@ -52,7 +52,7 @@ function collectDeclarations(root, source, out) {
 		}
 
 		if (nt === 'function_declaration') {
-			let nameNode = ts.namedChild(node, 0);
+			let nameNode = ts.childByField(node, 'name');
 			if (nameNode && ts.nodeType(nameNode) === 'identifier')
 				push(out, { name: ts.text(nameNode, source), declByte: ts.startByte(nameNode), nameNode });
 			let body = ts.childByField(node, 'body');
@@ -61,8 +61,7 @@ function collectDeclarations(root, source, out) {
 		}
 
 		if (nt === 'export_statement') {
-			let inner = ts.namedChild(node, 0);
-			if (inner) walk(inner);
+			for (let inner in namedNonComments(node)) walk(inner);
 			return;
 		}
 

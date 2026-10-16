@@ -18,6 +18,7 @@
 // follow-up.
 
 import * as ts from 'tree_sitter';
+import { firstNamed } from 'code_analysis.ast_text';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import { precedingDocNode, offsetToPosition } from 'code_analysis.positions';
 
@@ -35,7 +36,7 @@ function formalParamNames(fn, source) {
 		if (pt === 'identifier') {
 			names[ts.text(p, source)] = true;
 		} else if (pt === 'rest_element') {
-			let inner = ts.namedChild(p, 0);
+			let inner = firstNamed(p);
 			if (inner && ts.nodeType(inner) === 'identifier')
 				names[ts.text(inner, source)] = true;
 		}

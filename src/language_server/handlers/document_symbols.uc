@@ -34,13 +34,13 @@ function walkSymbols(node, text, lineTable) {
 
 	// ── Export: unwrap and process the inner declaration ───────────────────
 	if (nt === 'export_statement') {
-		let inner = ts.namedChild(node, 0);
-		return inner ? walkSymbols(inner, text, lineTable) : [];
+		let decl = ts.childByField(node, 'declaration');
+		return decl ? walkSymbols(decl, text, lineTable) : [];
 	}
 
 	// ── Function declaration ────────────────────────────────────────────────
 	if (nt === 'function_declaration') {
-		let nameNode = ts.namedChild(node, 0);
+		let nameNode = ts.childByField(node, 'name');
 		if (!nameNode) return [];
 		let body = ts.childByField(node, 'body');
 		let children = body ? walkSymbols(body, text, lineTable) : [];

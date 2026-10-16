@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import { firstNamed, namedNonComments } from 'code_analysis.ast_text';
 import * as mode from 'code_analysis.mode';
 import { rangeOf } from 'code_analysis.positions';
 import * as dag from 'code_analysis.dag.dag';
@@ -16,7 +17,7 @@ function bindFormalParams(paramsNode, scope, source) {
 		if (ts.nodeType(p) === 'identifier') {
 			bind(scope, ts.text(p, source));
 		} else if (ts.nodeType(p) === 'rest_element') {
-			let inner = ts.namedChild(p, 0);
+			let inner = firstNamed(p);
 			if (inner && ts.nodeType(inner) === 'identifier')
 				bind(scope, ts.text(inner, source));
 		}
@@ -132,8 +133,7 @@ function walk(node, scope, source, globals, lineTable, out) {
 	}
 
 	if (nt === 'export_statement') {
-		let inner = ts.namedChild(node, 0);
-		if (inner) walk(inner, scope, source, globals, lineTable, out);
+		for (let inner in namedNonComments(node)) walk(inner, scope, source, globals, lineTable, out);
 		return;
 	}
 

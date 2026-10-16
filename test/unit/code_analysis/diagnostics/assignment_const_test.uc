@@ -65,4 +65,10 @@ describe('diagnostics — assignment to const', () => {
 		let text = "const MAX = 100;\nlet y = MAX + 1;\ny;\n";
 		assert.match(0, length(assignmentToConst(open(text))));
 	});
+
+	it('checks the right side of an assignment after a comment', () => {
+		let diags = assignmentToConst(open("const y = 1;\nlet x;\nx /* c */ = (y = 2);\n"));
+		assert.match(1, length(diags));
+		assert.match(true, index(diags[0].message, "'y'") >= 0);
+	});
 });

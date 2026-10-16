@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import { firstNamed, namedNonComments } from 'code_analysis.ast_text';
 import * as mode from 'code_analysis.mode';
 
 // Lightweight scope used only for tracking declaration byte-offsets.
@@ -43,7 +44,7 @@ function collectParams(fnNode, scope, source, targetName, out) {
 			if (pnt === 'identifier') {
 				bind(scope, source, param, targetName, out);
 			} else if (pnt === 'rest_element') {
-				let inner = ts.namedChild(param, 0);
+				let inner = firstNamed(param);
 				if (inner && ts.nodeType(inner) === 'identifier')
 					bind(scope, source, inner, targetName, out);
 			}
@@ -143,7 +144,7 @@ function walk(node, scope, source, targetName, out) {
 
 	// ── Function declaration: name in outer scope, body in inner scope ──────
 	if (nt === 'function_declaration') {
-		let nameNode = ts.namedChild(node, 0);
+		let nameNode = ts.childByField(node, 'name');
 		if (nameNode && ts.nodeType(nameNode) === 'identifier')
 			bind(scope, source, nameNode, targetName, out);
 		let inner = makeScope(scope);
@@ -155,8 +156,7 @@ function walk(node, scope, source, targetName, out) {
 
 	// ── Export statement: delegate to the wrapped declaration ───────────────
 	if (nt === 'export_statement') {
-		let inner = ts.namedChild(node, 0);
-		if (inner) walk(inner, scope, source, targetName, out);
+		for (let inner in namedNonComments(node)) walk(inner, scope, source, targetName, out);
 		return;
 	}
 

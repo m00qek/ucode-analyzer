@@ -98,7 +98,7 @@ function memberContext(root, source, offset) {
 	let n = descend(root);
 	while (n) {
 		let nt = ts.nodeType(n);
-		if (nt === 'member_expression') return ts.namedChild(n, 0);
+		if (nt === 'member_expression') return ts.childByField(n, 'object');
 		if (isStatementList(nt)) break;
 		n = ts.parent(n);
 	}
