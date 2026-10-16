@@ -17,15 +17,9 @@ export function isStatementList(nodeType) {
 	       nodeType === 'statement_block' || nodeType === 'statement_list';
 };
 
-// Walk to the deepest named node that contains offset.
+// The deepest named node that contains the byte at offset, else `node`.
 export function nodeAtOffset(node, offset) {
-	let count = ts.namedChildCount(node);
-	for (let i = 0; i < count; i++) {
-		let child = ts.namedChild(node, i);
-		if (ts.startByte(child) <= offset && offset < ts.endByte(child))
-			return nodeAtOffset(child, offset);
-	}
-	return node;
+	return ts.namedDescendantAt(node, offset);
 };
 
 // Return the text of the /** */ comment immediately before stmt among parent's

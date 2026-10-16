@@ -331,6 +331,106 @@ static uc_value_t *uc_ts_node_parent(uc_vm_t *vm, size_t nargs) {
   return node_wrap(node->tree_ref, ts_node_parent(node->node));
 }
 
+/*
+ * The children of a node as an array, in one cursor pass: ts_node_child(i)
+ * walks from the first child on every call, so index loops are quadratic.
+ * `named` keeps only named children; a non-zero `field` keeps only children
+ * under that field id.
+ */
+static uc_value_t *children_array(uc_vm_t *vm, uc_ts_node_t *node, bool named,
+                                  TSFieldId field) {
+  uc_value_t *result = ucv_array_new(vm);
+  TSTreeCursor cursor = ts_tree_cursor_new(node->node);
+  TSNode child;
+
+  if (ts_tree_cursor_goto_first_child(&cursor)) {
+    do {
+      child = ts_tree_cursor_current_node(&cursor);
+
+      if (named && !ts_node_is_named(child))
+        continue;
+
+      if (field && ts_tree_cursor_current_field_id(&cursor) != field)
+        continue;
+
+      ucv_array_push(result, node_wrap(node->tree_ref, child));
+    } while (ts_tree_cursor_goto_next_sibling(&cursor));
+  }
+
+  ts_tree_cursor_delete(&cursor);
+
+  return result;
+}
+
+static uc_value_t *uc_ts_node_children(uc_vm_t *vm, size_t nargs) {
+  uc_ts_node_t *node = node_arg(vm, nargs, 0);
+
+  return node ? children_array(vm, node, false, 0) : NULL;
+}
+
+static uc_value_t *uc_ts_node_named_children(uc_vm_t *vm, size_t nargs) {
+  uc_ts_node_t *node = node_arg(vm, nargs, 0);
+
+  return node ? children_array(vm, node, true, 0) : NULL;
+}
+
+/* The named children under a field, for fields that hold several (`params`). */
+static uc_value_t *uc_ts_node_children_by_field(uc_vm_t *vm, size_t nargs) {
+  uc_ts_node_t *node = node_arg(vm, nargs, 0);
+  uc_value_t *fieldval = uc_fn_arg(1);
+  TSFieldId field;
+
+  if (!node)
+    return NULL;
+
+  if (ucv_type(fieldval) != UC_STRING) {
+    uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a field name string");
+    return NULL;
+  }
+
+  field = ts_language_field_id_for_name(ts_node_language(node->node),
+                                        ucv_string_get(fieldval),
+                                        ucv_string_length(fieldval));
+
+  /* An unknown field name has id 0, which would match every child. */
+  return field ? children_array(vm, node, true, field) : ucv_array_new(vm);
+}
+
+/*
+ * The smallest (named) descendant with start <= offset < end, or `node`
+ * itself when no child contains offset: the range [offset, offset + 1] is
+ * spanned exactly by the nodes that contain that byte.
+ */
+static uc_value_t *descendant_at(uc_vm_t *vm, size_t nargs, bool named) {
+  uc_ts_node_t *node = node_arg(vm, nargs, 0);
+  uc_value_t *offsetval = uc_fn_arg(1);
+  uint32_t offset;
+
+  if (!node)
+    return NULL;
+
+  if (ucv_type(offsetval) != UC_INTEGER || ucv_int64_get(offsetval) < 0) {
+    uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a byte offset");
+    return NULL;
+  }
+
+  offset = (uint32_t)ucv_int64_get(offsetval);
+
+  return node_wrap(node->tree_ref,
+                   named ? ts_node_named_descendant_for_byte_range(
+                               node->node, offset, offset + 1)
+                         : ts_node_descendant_for_byte_range(node->node, offset,
+                                                             offset + 1));
+}
+
+static uc_value_t *uc_ts_node_descendant_at(uc_vm_t *vm, size_t nargs) {
+  return descendant_at(vm, nargs, false);
+}
+
+static uc_value_t *uc_ts_node_named_descendant_at(uc_vm_t *vm, size_t nargs) {
+  return descendant_at(vm, nargs, true);
+}
+
 static const char *query_error_name(TSQueryError type) {
   switch (type) {
   case TSQueryErrorSyntax:
@@ -504,6 +604,11 @@ static const uc_function_list_t global_fns[] = {
     {"ts_node_named_child", uc_ts_node_named_child},
     {"ts_node_child_by_field", uc_ts_node_child_by_field},
     {"ts_node_parent", uc_ts_node_parent},
+    {"ts_node_children", uc_ts_node_children},
+    {"ts_node_named_children", uc_ts_node_named_children},
+    {"ts_node_children_by_field", uc_ts_node_children_by_field},
+    {"ts_node_descendant_at", uc_ts_node_descendant_at},
+    {"ts_node_named_descendant_at", uc_ts_node_named_descendant_at},
     {"ts_query_new", uc_ts_query_new},
     {"ts_query_pattern_count", uc_ts_query_pattern_count},
     {"ts_query_predicate_steps", uc_ts_query_predicate_steps},

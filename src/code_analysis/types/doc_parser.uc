@@ -96,11 +96,8 @@ parseTypeNode = function(node, source, tparams) {
 	}
 
 	if (kind === 'named_type') {
-		let nameNode = ts.childByField(node, 'name');
-		let name = ts.text(nameNode, source);
-		let params = [];
-		for (let c in ts.namedChildren(node))
-			if (ts.startByte(c) !== ts.startByte(nameNode)) push(params, parseTypeNode(c, source, tparams));
+		let name = ts.text(ts.childByField(node, 'name'), source);
+		let params = map(ts.childrenByField(node, 'params'), (c) => parseTypeNode(c, source, tparams));
 		if (tparams[name] && !length(params))
 			return { kind: 'param', name };
 		// Normalize JSDoc generic aliases to internal representations so that
@@ -112,13 +109,11 @@ parseTypeNode = function(node, source, tparams) {
 		return { kind: 'ref', name, params };
 	}
 
-	// `(a: T, ...rest: U) => R` and `function(T, ...U): R`: params are every
-	// named child but the return type.
+	// `(a: T, ...rest: U) => R` and `function(T, ...U): R`.
 	if (kind === 'function_type' || kind === 'anon_function_type') {
 		let returnNode = ts.childByField(node, 'return');
 		let params = [];
-		for (let c in ts.namedChildren(node)) {
-			if (returnNode && ts.startByte(c) === ts.startByte(returnNode)) continue;
+		for (let c in ts.childrenByField(node, 'params')) {
 			let ct = ts.nodeType(c);
 			if (ct === 'function_param' || ct === 'rest_param') {
 				let n = ts.childByField(c, 'name');

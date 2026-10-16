@@ -244,32 +244,50 @@ export function childByField(node, name) {
 export const parent = native.ts_node_parent;
 
 /**
- * Return all children of node (named and anonymous) as an array.
+ * Return all children of node (named and anonymous) as an array. One native
+ * pass: prefer it to a child(node, i) loop, which is quadratic.
  * @param {Node} node
  * @returns {Node[]}
  */
-export function children(node) {
-	let result = [];
+export const children = native.ts_node_children;
 
-	for (let i = 0; i < childCount(node); i++)
-		push(result, child(node, i));
+/**
+ * Return only the named children of node as an array. One native pass:
+ * prefer it to a namedChild(node, i) loop, which is quadratic.
+ * @param {Node} node
+ * @returns {Node[]}
+ */
+export const namedChildren = native.ts_node_named_children;
 
-	return result;
+/**
+ * Return the named children under a field, for fields that hold several
+ * (punctuation such as `,` is left out).
+ * @param {Node} node
+ * @param {string} name — field name
+ * @returns {Node[]}
+ */
+export function childrenByField(node, name) {
+	expect(type(name) === 'string', 'childrenByField() expects a field name string');
+	return native.ts_node_children_by_field(node, name);
 };
 
 /**
- * Return only the named children of node as an array.
+ * Return the smallest descendant of node (named or anonymous) containing the
+ * byte at offset, or node itself when no child does.
  * @param {Node} node
- * @returns {Node[]}
+ * @param {int} offset
+ * @returns {Node}
  */
-export function namedChildren(node) {
-	let result = [];
+export const descendantAt = native.ts_node_descendant_at;
 
-	for (let i = 0; i < namedChildCount(node); i++)
-		push(result, namedChild(node, i));
-
-	return result;
-};
+/**
+ * Return the smallest named descendant of node containing the byte at
+ * offset, or node itself when no named child does.
+ * @param {Node} node
+ * @param {int} offset
+ * @returns {Node}
+ */
+export const namedDescendantAt = native.ts_node_named_descendant_at;
 
 // ── Query API ─────────────────────────────────────────────────────────────
 

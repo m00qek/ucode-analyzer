@@ -2,16 +2,6 @@ import * as ts from 'tree_sitter';
 import { buildLineTable, positionToOffset, offsetToPosition, findAncestor } from 'code_analysis.positions';
 
 // Find the deepest node whose span contains offset.
-function nodeAt(node, offset) {
-	if (ts.startByte(node) > offset || offset >= ts.endByte(node)) return null;
-	let result = node;
-	for (let i = 0; i < ts.childCount(node); i++) {
-		let child = nodeAt(ts.child(node, i), offset);
-		if (child) result = child;
-	}
-	return result;
-}
-
 // Build a deletion range that removes `specifier` from its `named_imports` siblings.
 // Handles first/middle/last positions by absorbing the adjacent comma+whitespace.
 function specifierRange(namedImports, specifier, source, lineTable) {
@@ -58,7 +48,7 @@ export function actionsFor(uri, doc, diagnostics) {
 		if (diag.code !== 'unused-import') continue;
 
 		let offset  = positionToOffset(source, lineTable, diag.range.start);
-		let nameNode = nodeAt(root, offset);
+		let nameNode = ts.descendantAt(root, offset);
 		if (!nameNode) continue;
 
 		let importStmt = findAncestor(nameNode, 'import_statement');

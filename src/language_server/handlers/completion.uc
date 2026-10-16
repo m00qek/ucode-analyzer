@@ -104,15 +104,7 @@ function memberContext(root, source, offset) {
 	}
 
 	if (offset >= 2 && substr(source, offset - 1, 1) === '.') {
-		function findAt(node, pos) {
-			for (let i = 0; i < ts.namedChildCount(node); i++) {
-				let child = ts.namedChild(node, i);
-				if (ts.startByte(child) <= pos && pos < ts.endByte(child))
-					return findAt(child, pos);
-			}
-			return node;
-		}
-		return findAt(root, offset - 2);
+		return ts.namedDescendantAt(root, offset - 2);
 	}
 
 	return null;

@@ -127,6 +127,54 @@ describe('ts (node/tree lifecycle)', () => {
 	});
 });
 
+describe('ts (child lists and descendant lookup)', () => {
+	let src = "/** d */\nfunction f(a, ...b) {\n\tlet x = a?.b[0] + 1; // c\n\treturn `t${x}`;\n}\n";
+	let root = ts.rootNode(ts.parse(ts.newParser(ts.ucode()), src));
+
+	// Reference implementations: the index loops the native calls replace.
+	function loopChildren(n, named) {
+		let out = [];
+		let count = named ? ts.namedChildCount(n) : ts.childCount(n);
+		for (let i = 0; i < count; i++) push(out, named ? ts.namedChild(n, i) : ts.child(n, i));
+		return out;
+	}
+	function sig(nodes) { return map(nodes, (n) => sprintf('%s@%d-%d', ts.nodeType(n), ts.startByte(n), ts.endByte(n))); }
+	function eachNode(n, fn) { fn(n); for (let c in loopChildren(n, false)) eachNode(c, fn); }
+	function refNamedAt(n, off) {
+		for (let c in loopChildren(n, true))
+			if (ts.startByte(c) <= off && off < ts.endByte(c)) return refNamedAt(c, off);
+		return n;
+	}
+	function refAt(n, off) {
+		for (let c in loopChildren(n, false))
+			if (ts.startByte(c) <= off && off < ts.endByte(c)) return refAt(c, off);
+		return n;
+	}
+
+	it('children and namedChildren match the index loops on every node', () => {
+		eachNode(root, (n) => {
+			assert.match(sig(loopChildren(n, false)), sig(ts.children(n)));
+			assert.match(sig(loopChildren(n, true)), sig(ts.namedChildren(n)));
+		});
+	});
+
+	it('namedDescendantAt and descendantAt match a descent by offset at every byte', () => {
+		for (let off = 0; off <= length(src); off++) {
+			assert.match(sig([refNamedAt(root, off)]), sig([ts.namedDescendantAt(root, off)]));
+			assert.match(sig([refAt(root, off)]), sig([ts.descendantAt(root, off)]));
+		}
+	});
+
+	it('childrenByField returns the named children under a field', () => {
+		let d = "/** @type {Map<string, int>} */";
+		let droot = ts.rootNode(ts.parse(ts.newParser(ts.ucdocs()), d));
+		let named = ts.namedChild(ts.namedChild(ts.namedChild(droot, 0), 0), 0);
+		assert.match('named_type', ts.nodeType(named));
+		assert.match(['primitive_type', 'primitive_type'], map(ts.childrenByField(named, 'params'), ts.nodeType));
+		assert.match([], ts.childrenByField(named, 'no_such_field'));
+	});
+});
+
 describe('ts (query API)', () => {
 	function declarations(src) {
 		return ts.rootNode(ts.parse(ts.newParser(ts.ucode()), src));

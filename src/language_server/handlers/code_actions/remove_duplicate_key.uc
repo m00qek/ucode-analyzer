@@ -1,16 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, findAncestor } from 'code_analysis.positions';
 
-function nodeAt(node, offset) {
-	if (ts.startByte(node) > offset || offset >= ts.endByte(node)) return null;
-	let result = node;
-	for (let i = 0; i < ts.childCount(node); i++) {
-		let child = nodeAt(ts.child(node, i), offset);
-		if (child) result = child;
-	}
-	return result;
-}
-
 export function actionsFor(uri, doc, diagnostics) {
 	let root      = ts.rootNode(doc.tree);
 	let source    = doc.text;
@@ -21,7 +11,7 @@ export function actionsFor(uri, doc, diagnostics) {
 		if (diag.code !== 'duplicate-key') continue;
 
 		let offset  = positionToOffset(source, lineTable, diag.range.start);
-		let keyNode = nodeAt(root, offset);
+		let keyNode = ts.descendantAt(root, offset);
 		if (!keyNode) continue;
 
 		let pairNode = findAncestor(keyNode, 'pair');

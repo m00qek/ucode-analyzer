@@ -107,6 +107,25 @@ export function ts_node_child_by_field(node, name) {};
 /** @param {Node} node @returns {?Node} Parent node, or null at the root. */
 export function ts_node_parent(node) {};
 
+/** @param {Node} node @returns {Node[]} All children, named and anonymous, in one pass. */
+export function ts_node_children(node) {};
+
+/** @param {Node} node @returns {Node[]} Named children, in one pass. */
+export function ts_node_named_children(node) {};
+
+/**
+ * @param {Node} node
+ * @param {string} name - Grammar field name.
+ * @returns {Node[]} Named children under the field (empty for an unknown name).
+ */
+export function ts_node_children_by_field(node, name) {};
+
+/** @param {Node} node @param {int} offset @returns {Node} Smallest descendant containing the byte at offset, else node. */
+export function ts_node_descendant_at(node, offset) {};
+
+/** @param {Node} node @param {int} offset @returns {Node} Smallest named descendant containing the byte at offset, else node. */
+export function ts_node_named_descendant_at(node, offset) {};
+
 // ── Query API ───────────────────────────────────────────────────────────────
 
 /**
