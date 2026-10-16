@@ -98,6 +98,32 @@ describe('buildScopeMap nested blocks', () => {
 
 // ── if-statement narrowing ────────────────────────────────────────────────────
 
+describe('buildScopeMap between statements', () => {
+	function at(src, offset) {
+		return scopeAtOffset(buildScopeMap(URI, src, parse(src)), offset);
+	}
+
+	it('a blank line after a block\'s last let sees it', () => {
+		let src = 'function f(a) {\n  let y = 1;\n  \n}\n';
+		assert.match('int', scopeGet(at(src, index(src, '  \n}') + 2), 'y')?.name);
+	});
+
+	it('a blank line between top-level statements sees the earlier let', () => {
+		let src = 'let z = 1;\n\nprint(z);\n';
+		assert.match('int', scopeGet(at(src, index(src, '\n\n') + 1), 'z')?.name);
+	});
+
+	it('a block\'s let is gone after the block closes', () => {
+		let src = 'function f() {\n  let y = 1;\n}\n\nprint(1);\n';
+		assert.match(null, scopeGet(at(src, index(src, '}\n\n') + 2), 'y'));
+	});
+
+	it('a guard clause narrows the blank line after it', () => {
+		let src = '/** @param {string|null} m */\nfunction f(m) {\n  if (!m) return;\n  \n}\n';
+		assert.match('string', scopeGet(at(src, index(src, '  \n}') + 2), 'm')?.name);
+	});
+});
+
 describe('buildScopeMap @type', () => {
 	it('types a declaration by its @type over the initializer', () => {
 		let src = '/** @type {string} */\nlet x = foo();\nlet y = 1;\n';

@@ -103,11 +103,9 @@ function variantSuite(v) {
 			assert.match({ line: s + 1, character: 5 }, r?.range?.start);
 		});
 
-		// Inside a block a `let` is visible from the next statement on, so the
-		// innermost block's own `y` is not offered at its end, open file or not.
-		it('completion at the end of the innermost block offers outer locals and parameters', () => {
+		it('completion at the end of the innermost block offers its locals, outer locals and parameters', () => {
 			let labels = labelsAt(v.text, eof);
-			assert.match([true, true], [index(labels, 'a') >= 0, index(labels, 'x') >= 0]);
+			assert.match([true, true, true], map(['a', 'x', 'y'], (n) => index(labels, n) >= 0));
 		});
 
 		it('folding ranges cover the function body and the if block', () => {

@@ -152,9 +152,13 @@ let walkNode;
 function stepStatement(stmt, source, uri, scope, map) {
     emit(map, ts.startByte(stmt), scope);
     walkNode(stmt, source, uri, scope, map);
-    scope = advanceScope(stmt, source, uri, scope);
-    scope = applyGuardClause(stmt, source, scope);
-    return scope;
+    let next = applyGuardClause(stmt, source, advanceScope(stmt, source, uri, scope));
+    // Past the statement's end (a blank line before the next one) its
+    // declarations are in scope. Not when it is left open at EOF: the end of
+    // the file is still inside its blocks.
+    if (next !== scope && !(ts.hasError(stmt) && ts.endByte(stmt) >= length(source)))
+        emit(map, ts.endByte(stmt), next);
+    return next;
 }
 
 // Walk a statement_block with the given scope as its initial scope.
