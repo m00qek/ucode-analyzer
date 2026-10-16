@@ -1,6 +1,7 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'code_analysis.documents';
 import { typeErrors } from 'code_analysis.diagnostics.type_errors';
+import * as dag from 'code_analysis.dag.dag';
 
 let URI = 'file:///test.uc';
 
@@ -232,6 +233,34 @@ describe('diagnostics — type errors: unknown-property', () => {
 
 	it('still warns on a record spread only from a known record', () => {
 		assert.match(1, length(unknownProps("let base = { a: 1 };\nlet m = { ...base };\nm.b;\n")));
+	});
+
+	it('no warning reading a property the file writes (objects are open)', () => {
+		assert.match(0, length(unknownProps("let rv = { invert: false };\nrv.val = 1;\nprint(rv.val);\n")));
+		assert.match(0, length(unknownProps("let n = { a: 1 };\nn.kids ??= {};\nn.kids.x = 1;\n")));
+	});
+
+	it('no warning reading before the write either', () => {
+		assert.match(0, length(unknownProps("let o = { a: 1 };\nfunction get() { return o.b; }\no.b = 2;\n")));
+	});
+
+	it('knows the fields of fs.stat(), including perm', () => {
+		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'] } });
+		function statProps(text) {
+			let doc = open(text);
+			dag.add(URI, text, doc.tree);
+			documents.refreshScopeMap(URI);
+			let r = unknownProps(text);
+			dag.remove(URI);
+			return map(r, (d) => d.message);
+		}
+		assert.match([], statProps("import * as fs from 'fs';\nlet s = fs.stat('/');\nprint(s?.inode, s?.perm?.user_exec, s?.dev?.major);\n"));
+		assert.match(["Property 'user_exec' does not exist on this type"],
+			statProps("import * as fs from 'fs';\nlet s = fs.stat('/');\nprint(s?.user_exec);\n"));
+	});
+
+	it('still warns on a property written only on another object', () => {
+		assert.match(1, length(unknownProps("let o = { a: 1 };\nlet p = {};\np.b = 2;\no.b;\n")));
 	});
 });
 

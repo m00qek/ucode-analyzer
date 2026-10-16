@@ -105,6 +105,29 @@ function isDeleteTarget(node) {
 	return parent && ts.nodeType(parent) === 'delete_expression';
 }
 
+// `x.p` member writes (`x.p = …`, `x.p ??= …`) in the file, as "x.p" keys.
+// ucode objects are open: after a write, `x.p` exists, so reading it is not
+// an unknown property. Matched by name, not scope: that can only hide a
+// finding, never add one.
+let WRITES = `[
+	(assignment_expression left: (member_expression object: (identifier) @obj property: (property_identifier) @prop))
+	(augmented_assignment_expression left: (member_expression object: (identifier) @obj property: (property_identifier) @prop))
+]`;
+let _writeQuery = {};
+let _written = {};
+
+function writtenMembers(root, source) {
+	let lang = ts.nodeType(root) === 'markup' ? 'markup' : 'ucode';
+	_writeQuery[lang] ??= ts.newQuery(lang === 'markup' ? ts.markup() : ts.ucode(), WRITES);
+	let out = {};
+	for (let m in ts.queryMatches(_writeQuery[lang], root, source)) {
+		let c = {};
+		for (let cap in m.captures) c[cap.name] = cap.node;
+		out[ts.text(c.obj, source) + '.' + ts.text(c.prop, source)] = true;
+	}
+	return out;
+}
+
 // Returns the field name that is missing on a known record type, or null if
 // the field exists or the type is not a concrete record.
 function unknownFieldOf(type, propName) {
@@ -196,7 +219,8 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 					code:     'may-be-null',
 					message:  sprintf("'%s' may be null", ts.text(obj, source)),
 				});
-			} else if (prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node) && !isDeleteTarget(node)) {
+			} else if (prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node) && !isDeleteTarget(node)
+			           && !(ts.nodeType(obj) === 'identifier' && _written[ts.text(obj, source) + '.' + ts.text(prop, source)])) {
 				let field = unknownFieldOf(objType, ts.text(prop, source));
 				if (field !== null) {
 					push(diags, {
@@ -247,6 +271,8 @@ export function typeErrors(uri, doc) {
 	let diags = [];
 	let root = ts.rootNode(doc.tree);
 	let strict = isStrict(root, doc.text);
+	_written = writtenMembers(root, doc.text);
 	_walk(root, doc.text, uri, doc.scopeMap, doc.lineTable, diags, strict);
+	_written = {};
 	return diags;
 };

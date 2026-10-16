@@ -81,11 +81,16 @@
  * {@link module:fs#lstat|lstat()}.
  *
  * @typedef {{
- *   dev: int, ino: int, mode: int, nlink: int,
- *   uid: int, gid: int, rdev: int, size: int,
- *   blksize: int, blocks: int,
+ *   dev: { major: int, minor: int }, inode: int, mode: int, nlink: int,
+ *   uid: int, gid: int, size: int, blksize: int, blocks: int,
  *   atime: int, mtime: int, ctime: int,
- *   type: string
+ *   type: string,
+ *   perm: {
+ *     setuid: boolean, setgid: boolean, sticky: boolean,
+ *     user_read: boolean, user_write: boolean, user_exec: boolean,
+ *     group_read: boolean, group_write: boolean, group_exec: boolean,
+ *     other_read: boolean, other_write: boolean, other_exec: boolean
+ *   }
  * }} FileStatResult
  */
 
