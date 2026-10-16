@@ -165,6 +165,17 @@ describe('buildScopeMap if-statement narrowing', () => {
 		assert.match('string', scopeGet(scopeAt(src, 'let x'), 'm')?.name);
 	});
 
+	it('a guard clause with || narrows after it', () => {
+		let src = '/** @param {string|null} m */\nfunction f(m) {\n  if (!m || length(m) > 9) return;\n  let x = m;\n}\n';
+		assert.match('string', scopeGet(scopeAt(src, 'let x'), 'm')?.name);
+	});
+
+	it('the else branch of a || condition narrows; the then branch does not', () => {
+		let src = '/** @param {string|null} m */\nfunction f(m, k) {\n  if (!m || k) {\n    let t = 1;\n  } else {\n    let x = m;\n  }\n}\n';
+		assert.match('string', scopeGet(scopeAt(src, 'let x'), 'm')?.name);
+		assert.match('union', scopeGet(scopeAt(src, 'let t'), 'm')?.kind);
+	});
+
 	it('compound && guard narrows in body', () => {
 		let src = '/** @param {string|null} m */\nfunction f(m) {\n  if (m && type(m) === "string") {\n    let x = m;\n  }\n}\n';
 		let scope = scopeAt(src, 'let x');

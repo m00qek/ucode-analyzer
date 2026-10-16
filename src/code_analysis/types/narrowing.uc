@@ -23,6 +23,8 @@ export function narrowToNonNull(type) {
 		let kept = [];
 		for (let i = 0; i < length(type.members); i++) {
 			let m = type.members[i];
+			// A member may itself be nullable (`c ? match(…) : null`).
+			if (m.kind === 'nullable') m = m.inner;
 			if (!(m.kind === 'primitive' && m.name === 'null')) push(kept, m);
 		}
 		if (length(kept) === 0) return UNKNOWN;
@@ -112,6 +114,11 @@ export function narrowUnionByDiscriminant(type, field, value, keep) {
 //       Compound &&: all sub-guards hold in the consequent; alternate is
 //       ambiguous (we can't tell which sub-condition failed), so applyGuard
 //       skips narrowing for positive=false.
+//
+//   { kind: 'or', guards }
+//       Compound ||, the mirror image: every sub-guard fails in the alternate
+//       (`if (!m || bad(m)) return;` leaves m non-null after it); the
+//       consequent is ambiguous.
 
 export function parseGuard(node, source) {
 	if (!node) return null;
@@ -135,7 +142,7 @@ export function parseGuard(node, source) {
 	if (nt === 'binary_expression') {
 		let op = ts.nodeType(ts.childByField(node, 'operator'));
 
-		if (op === '&&') {
+		if (op === '&&' || op === '||') {
 			// In the consequent all sub-conditions hold; collect guards and apply
 			// each positively. In the alternate we can't tell which sub-condition
 			// failed, so we wrap in a compound guard that applyGuard skips when
@@ -148,7 +155,7 @@ export function parseGuard(node, source) {
 			let guards = [];
 			if (leftGuard)  push(guards, leftGuard);
 			if (rightGuard) push(guards, rightGuard);
-			return { kind: 'and', guards };
+			return { kind: op === '&&' ? 'and' : 'or', guards };
 		}
 
 		let isNotEq = (op === '!==' || op === '!=');
@@ -230,11 +237,12 @@ export function parseGuard(node, source) {
 
 export function applyGuard(scope, guard, positive) {
 	if (!guard) return;
-	if (guard.kind === 'and') {
-		// All sub-guards hold in the true branch; false branch is ambiguous.
-		if (positive)
+	if (guard.kind === 'and' || guard.kind === 'or') {
+		// `and` holds every sub-guard when true, `or` fails every one when
+		// false; the other branch is ambiguous.
+		if (positive === (guard.kind === 'and'))
 			for (let i = 0; i < length(guard.guards); i++)
-				applyGuard(scope, guard.guards[i], true);
+				applyGuard(scope, guard.guards[i], positive);
 		return;
 	}
 	let current = scopeGet(scope, guard.name);

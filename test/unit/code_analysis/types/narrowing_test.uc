@@ -37,6 +37,10 @@ describe('narrowToNonNull', () => {
 		assert.match(2, length(result.members));
 	});
 
+	it('unwraps a nullable member of a union (`c ? match(…) : null`)', () => {
+		assert.match(STR, narrowToNonNull({ kind: 'union', members: [NULLABLE_STR, NULL_T] }));
+	});
+
 	it('passes through a non-null type unchanged', () => {
 		assert.match(STR, narrowToNonNull(STR));
 	});
