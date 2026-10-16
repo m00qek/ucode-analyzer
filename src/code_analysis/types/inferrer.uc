@@ -69,14 +69,21 @@ function callbackExpectedType(fn, source, uri, scope, depth) {
 	return (expectedType && expectedType.kind === 'function') ? expectedType : null;
 }
 
+// The `@type` a /** */ before a let/const declares for its variables, or null.
+export function declaredType(stmt, source, uri) {
+	let docTxt = precedingDoc(stmt, source, uri);
+	return docTxt ? parseDoc(docTxt).type : null;
+};
+
 export function processDecl(stmt, source, uri, scope, depth) {
+	let declared = declaredType(stmt, source, uri);
 	for (let i = 0; i < ts.namedChildCount(stmt); i++) {
 		let decl = ts.namedChild(stmt, i);
 		if (ts.nodeType(decl) !== 'variable_declarator') continue;
 		let nameNode = ts.childByField(decl, 'name');
 		let valNode  = ts.childByField(decl, 'value');
 		if (nameNode && ts.nodeType(nameNode) === 'identifier') {
-			let t = valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN;
+			let t = declared ?? (valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN);
 			scopeSet(scope, ts.text(nameNode, source), t);
 		}
 	}

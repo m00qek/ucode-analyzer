@@ -15,8 +15,26 @@ function cleanDesc(text) {
 	return text;
 }
 
+// `{@link target}` renders as `target` in code; `{@link target|label}` (or
+// `target label`) as "label (`target`)".
+function inlineTagText(tag, source) {
+	let d = ts.namedChildren(tag)[1];
+	let body = d ? trim(ts.text(d, source)) : '';
+	let m = match(body, /^([^ \t\n|]+)[ \t\n|]*(.*)$/);
+	if (!m) return '';
+	return length(m[2]) ? sprintf('%s (`%s`)', trim(m[2]), m[1]) : sprintf('`%s`', m[1]);
+}
+
 function descText(node, source) {
-	return node ? cleanDesc(ts.text(node, source)) : null;
+	if (!node) return null;
+	let out = '';
+	let at = ts.startByte(node);
+	for (let c in ts.namedChildren(node)) {
+		if (ts.nodeType(c) !== 'inline_tag') continue;
+		out += substr(source, at, ts.startByte(c) - at) + inlineTagText(c, source);
+		at = ts.endByte(c);
+	}
+	return cleanDesc(out + substr(source, at, ts.endByte(node) - at));
 }
 
 // ── Type parsing ──────────────────────────────────────────────────────────
@@ -68,19 +86,21 @@ parseTypeNode = function(node, source, tparams) {
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let f = ts.namedChild(node, i);
 			if (ts.nodeType(f) !== 'record_field') continue;
+			let type = ts.childByField(f, 'type');
 			push(fields, {
-				name: ts.text(ts.namedChild(f, 0), source),
-				type: parseTypeNode(ts.namedChild(f, 1), source, tparams),
+				name: ts.text(ts.childByField(f, 'name'), source),
+				type: type ? parseTypeNode(type, source, tparams) : { kind: 'unknown' },
 			});
 		}
 		return { kind: 'record', fields };
 	}
 
 	if (kind === 'named_type') {
-		let name = ts.text(ts.namedChild(node, 0), source);
+		let nameNode = ts.childByField(node, 'name');
+		let name = ts.text(nameNode, source);
 		let params = [];
-		for (let i = 1; i < ts.namedChildCount(node); i++)
-			push(params, parseTypeNode(ts.namedChild(node, i), source, tparams));
+		for (let c in ts.namedChildren(node))
+			if (ts.startByte(c) !== ts.startByte(nameNode)) push(params, parseTypeNode(c, source, tparams));
 		if (tparams[name] && !length(params))
 			return { kind: 'param', name };
 		// Normalize JSDoc generic aliases to internal representations so that
@@ -92,30 +112,25 @@ parseTypeNode = function(node, source, tparams) {
 		return { kind: 'ref', name, params };
 	}
 
-	if (kind === 'function_type') {
+	// `(a: T, ...rest: U) => R` and `function(T, ...U): R`: params are every
+	// named child but the return type.
+	if (kind === 'function_type' || kind === 'anon_function_type') {
 		let returnNode = ts.childByField(node, 'return');
 		let params = [];
-		for (let i = 0; i < ts.namedChildCount(node); i++) {
-			let child = ts.namedChild(node, i);
-			if (ts.nodeType(child) !== 'function_param') continue;
-			push(params, {
-				name: ts.text(ts.namedChild(child, 0), source),
-				type: parseTypeNode(ts.namedChild(child, 1), source, tparams),
-			});
+		for (let c in ts.namedChildren(node)) {
+			if (returnNode && ts.startByte(c) === ts.startByte(returnNode)) continue;
+			let ct = ts.nodeType(c);
+			if (ct === 'function_param' || ct === 'rest_param') {
+				let n = ts.childByField(c, 'name');
+				let t = ts.childByField(c, 'type');
+				let p = { name: n ? ts.text(n, source) : null,
+				          type: t ? parseTypeNode(t, source, tparams) : { kind: 'unknown' } };
+				if (ct === 'rest_param') p.rest = true;
+				push(params, p);
+			} else {
+				push(params, { name: null, type: parseTypeNode(c, source, tparams) });
+			}
 		}
-		return {
-			kind: 'function',
-			params,
-			return: returnNode ? parseTypeNode(returnNode, source, tparams) : { kind: 'unknown' },
-		};
-	}
-
-	if (kind === 'anon_function_type') {
-		let returnNode = ts.childByField(node, 'return');
-		let paramCount = ts.namedChildCount(node) - (returnNode ? 1 : 0);
-		let params = [];
-		for (let i = 0; i < paramCount; i++)
-			push(params, { name: null, type: parseTypeNode(ts.namedChild(node, i), source, tparams) });
 		return {
 			kind: 'function',
 			params,
@@ -188,6 +203,9 @@ export function parseDoc(commentText) {
 		deprecated: null,
 		since: null,
 		examples: [],
+		properties: [],
+		type: null,
+		see: [],
 	};
 
 	for (let i = 0; i < ts.namedChildCount(root); i++) {
@@ -209,7 +227,7 @@ export function parseDoc(commentText) {
 			// by consumers that report a diagnostic range on the @param name).
 			let nameHolder = null;
 			if (nameNode)
-				nameHolder = optional ? ts.namedChild(nameNode, 0) : nameNode;
+				nameHolder = optional ? ts.childByField(nameNode, 'name') : nameNode;
 			// A property path `opts.count` documents a field of parameter `opts`:
 			// report its root identifier (the grammar parses the whole path as one
 			// param_path name).
@@ -263,8 +281,41 @@ export function parseDoc(commentText) {
 		} else if (ntype === 'example_tag') {
 			let descNode = ts.childByField(node, 'description');
 			if (descNode) push(result.examples, descText(descNode, commentText));
+
+		} else if (ntype === 'property_tag') {
+			let typeNode = ts.childByField(node, 'type');
+			let nameNode = ts.childByField(node, 'name');
+			let optional = nameNode !== null && ts.nodeType(nameNode) === 'optional_param';
+			let nameHolder = optional ? ts.childByField(nameNode, 'name') : nameNode;
+			push(result.properties, {
+				name: nameHolder ? ts.text(nameHolder, commentText) : null,
+				type: typeNode ? parseTypeExpr(typeNode, commentText, tparams) : null,
+				optional,
+				description: descText(ts.childByField(node, 'description'), commentText),
+			});
+
+		} else if (ntype === 'type_tag') {
+			let typeNode = ts.childByField(node, 'type');
+			if (typeNode) result.type = parseTypeExpr(typeNode, commentText, tparams);
+
+		} else if (ntype === 'see_tag') {
+			let ref = descText(ts.childByField(node, 'description'), commentText);
+			if (ref) push(result.see, ref);
 		}
 	}
+
+	// `@typedef {Object} T` + `@property` tags describe a record. Nested paths
+	// (`a.b`) are left out.
+	let props = filter(result.properties, (p) => p.name && index(p.name, '.') < 0);
+	let t = result.typedef?.type;
+	if (length(props) && result.typedef && (!t || t.kind === 'generic' && t.base === 'dict' ||
+	                                         t.kind === 'ref' && t.name === 'object'))
+		result.typedef.type = { kind: 'record',
+		                        fields: map(props, (p) => {
+			                        let f = { name: p.name, type: p.type ?? { kind: 'unknown' } };
+			                        if (p.description) f.doc = { description: p.description };
+			                        return f;
+		                        }) };
 
 	return result;
 };
@@ -290,7 +341,7 @@ export function typeToString(type) {
 		return '{ ' + join(', ', map(type.fields, (f) => f.name)) + ' }';
 	}
 	if (k === 'function') {
-		let ps = map(type.params, (p) => (p.name ? p.name + ': ' : '') + typeToString(p.type));
+		let ps = map(type.params, (p) => (p.rest ? '...' : '') + (p.name ? p.name + ': ' : '') + typeToString(p.type));
 		return '(' + join(', ', ps) + ') => ' + typeToString(type.return);
 	}
 	return '?';

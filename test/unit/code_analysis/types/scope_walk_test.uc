@@ -98,6 +98,20 @@ describe('buildScopeMap nested blocks', () => {
 
 // ── if-statement narrowing ────────────────────────────────────────────────────
 
+describe('buildScopeMap @type', () => {
+	it('types a declaration by its @type over the initializer', () => {
+		let src = '/** @type {string} */\nlet x = foo();\nlet y = 1;\n';
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scopeAt(src, 'let y'), 'x'));
+	});
+
+	it('types every variable of the declaration', () => {
+		let src = '/** @type {?int} */\nlet a, b = 2;\nlet y = 1;\n';
+		let scope = scopeAt(src, 'let y');
+		assert.match('nullable', scopeGet(scope, 'a')?.kind);
+		assert.match('nullable', scopeGet(scope, 'b')?.kind);
+	});
+});
+
 describe('buildScopeMap if-statement narrowing', () => {
 	it('nullable variable narrowed to non-null in consequent', () => {
 		let src = '/** @param {string|null} m */\nfunction f(m) {\n  if (m) {\n    let x = m;\n  }\n}\n';

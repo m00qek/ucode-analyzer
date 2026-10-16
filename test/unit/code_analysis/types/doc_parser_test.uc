@@ -293,3 +293,44 @@ describe('parseDoc — grammar forms added with ucdocs 0.9', () => {
 		}
 	});
 });
+
+describe('parseDoc — @property, @type, @see and {@link}', () => {
+	it('builds an @typedef {Object} record from its @property tags', () => {
+		let d = parseDoc("/**\n * @typedef {Object} Conn\n * @property {string} host - Host name.\n * @property {int} [port]\n */");
+		assert.match('Conn', d.typedef.name);
+		assert.match({ kind: 'record', fields: [{ name: 'host', type: prim('string'), doc: { description: 'Host name.' } },
+		                                        { name: 'port', type: prim('int') }] },
+			d.typedef.type);
+		assert.match(['host', 'port'], map(d.properties, (p) => p.name));
+		assert.match([false, true], map(d.properties, (p) => p.optional));
+		assert.match('Host name.', d.properties[0].description);
+	});
+
+	it('keeps an explicit record typedef over @property tags', () => {
+		let d = parseDoc("/**\n * @typedef {{ a: int }} R\n * @property {string} b\n */");
+		assert.match(['a'], map(d.typedef.type.fields, (f) => f.name));
+	});
+
+	it('reads @type', () => {
+		assert.match(prim('string'), parseDoc("/** @type {string} */").type);
+		assert.match(null, parseDoc("/** Just text. */").type);
+	});
+
+	it('collects @see references', () => {
+		assert.match(['close', 'fs.open'], parseDoc("/**\n * @see close\n * @see fs.open\n */").see);
+	});
+
+	it('renders {@link} in descriptions as code', () => {
+		let d = parseDoc("/** Opens it. See {@link close} or {@link fs.open|the fs one}. */");
+		assert.match('Opens it. See `close` or the fs one (`fs.open`).', d.description);
+	});
+
+	it('keeps rest parameters of function types', () => {
+		let named = parseDoc("/** @type {(a: string, ...rest: any) => int} */").type;
+		assert.match([{ name: 'a', type: prim('string') }, { name: 'rest', type: { kind: 'any' }, rest: true }], named.params);
+		let anon = parseDoc("/** @type {function(string, ...any): int} */").type;
+		assert.match([{ name: null, type: prim('string') }, { name: null, type: { kind: 'any' }, rest: true }], anon.params);
+		assert.match('(a: string, ...rest: any) => int', typeToString(named));
+	});
+});
+

@@ -9,13 +9,6 @@ import * as templates from 'language_server.templates';
 import { resolveDoc } from 'code_analysis.doc_resolver';
 import * as platform from 'language_server.platform';
 
-// JSDoc descriptions often start with "- text" (dash from @param formatting).
-// Strip the leading dash so it doesn't combine with the template's "—" separator.
-function cleanDesc(s) {
-	if (!s) return null;
-	return replace(s, /^\s*[-–—]\s*/, '');
-}
-
 // Build the structured context object passed to hover templates.
 // Merges inferred type fields with JSDoc descriptions so templates
 // receive pre-resolved, ready-to-render data.
@@ -24,7 +17,7 @@ function buildHoverCtx(label, type, doc) {
 		label,
 		kind:    type.kind,
 		typeStr: typeToString(type),
-		doc:     doc ? { description: doc.description ?? null, examples: doc.examples ?? [] } : null,
+		doc:     doc ? { description: doc.description ?? null, examples: doc.examples ?? [], see: doc.see ?? [] } : null,
 		typeToString,
 	};
 
@@ -40,13 +33,13 @@ function buildHoverCtx(label, type, doc) {
 				return {
 					name: p.name,
 					typeStr: typeToString(p.type),
-					description: cleanDesc(dp?.description),
+					description: dp?.description ?? null,
 				};
 			})
 			: [];
 		ctx.returns = type['return'] ? {
 			typeStr: typeToString(type['return']),
-			description: cleanDesc(doc?.returns?.description),
+			description: doc?.returns?.description ?? null,
 		} : null;
 		// Pre-built declaration-form signature for the code fence.
 		ctx.signature = sprintf('function %s(%s): %s',
@@ -60,7 +53,7 @@ function buildHoverCtx(label, type, doc) {
 		ctx.fields = map(type.fields ?? [], (f) => ({
 			name: f.name,
 			typeStr: f.type ? typeToString(f.type) : null,
-			description: cleanDesc(f.doc?.description),
+			description: f.doc?.description ?? null,
 		}));
 	}
 
@@ -111,7 +104,7 @@ function hoverParam(node, formalParams, doc, config) {
 	for (let p in (funcDoc?.params ?? [])) {
 		if (p.name !== paramName) continue;
 		let paramType = p.type ?? { kind: 'unknown' };
-		let ctx = buildHoverCtx(paramName, paramType, { description: cleanDesc(p.description), examples: [] });
+		let ctx = buildHoverCtx(paramName, paramType, { description: p.description, examples: [], see: [] });
 		return renderCtx(ctx, 'hover/default', config);
 	}
 

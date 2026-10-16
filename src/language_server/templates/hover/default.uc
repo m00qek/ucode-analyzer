@@ -12,6 +12,10 @@
 {{ ex }}
 ```
 {%- endfor %}
+{%- if (length(doc?.see ?? []) > 0): %}
+
+**See:** {{ join(', ', doc.see) }}
+{%- endif %}
 {%- if (since): %}
 
 *Since:* `{{ since }}`

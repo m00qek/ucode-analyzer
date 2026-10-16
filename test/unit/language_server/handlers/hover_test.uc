@@ -202,3 +202,31 @@ describe('hover — parameter declaration site', () => {
 		assert.match(true, index(result.contents.value, 'greeting') >= 0);
 	});
 });
+
+describe('hover — doc comment tags', () => {
+	// Hover shows docs of exports, so the functions under test are exported.
+	function hoverText(text, line, character) {
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+		documents.refreshScopeMap(URI);
+		let r = hover(documents.get(URI), { line, character }, _full_config);
+		dag.remove(URI);
+		return r?.contents?.value ?? '';
+	}
+
+	it('keeps a description that starts with a dash', () => {
+		let v = hoverText("/** @returns {int} -1 on failure */\nexport function f() { return -1; };\nf;\n", 2, 0);
+		assert.match(true, index(v, '-1 on failure') >= 0);
+	});
+
+	it('lists @see references', () => {
+		let v = hoverText("/**\n * Opens.\n * @see close\n */\nexport function open() {};\nopen;\n", 5, 0);
+		assert.match(true, index(v, '**See:** close') >= 0);
+	});
+
+	it('types a member declared by @property', () => {
+		let text = "/**\n * @typedef {Object} Conn\n * @property {string} host - Host name.\n */\n/** @type {Conn} */\nlet c = null;\nc.host;\n";
+		assert.match(true, index(hoverText(text, 6, 3), 'host: string') >= 0);
+	});
+});
+

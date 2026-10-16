@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { firstNamed, namedNonComments } from 'code_analysis.ast_text';
-import { inferNode } from 'code_analysis.types.inferrer';
+import { inferNode, declaredType } from 'code_analysis.types.inferrer';
 import { importScope } from 'code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeHas, scopeFork } from 'code_analysis.types.scope';
 import { UNKNOWN, STR } from 'code_analysis.types.type_utils';
@@ -14,13 +14,14 @@ function emit(map, offset, scope) {
 // Advance scope for a lexical_declaration, forking once per declarator.
 // COW: returns a new scope; does not mutate the input scope.
 function forkDecl(stmt, source, uri, scope) {
+    let declared = declaredType(stmt, source, uri);
     for (let i = 0; i < ts.namedChildCount(stmt); i++) {
         let decl = ts.namedChild(stmt, i);
         if (ts.nodeType(decl) !== 'variable_declarator') continue;
         let nameNode = ts.childByField(decl, 'name');
         let valNode  = ts.childByField(decl, 'value');
         if (nameNode && ts.nodeType(nameNode) === 'identifier') {
-            let t = valNode ? inferNode(valNode, source, uri, scope, 0) : UNKNOWN;
+            let t = declared ?? (valNode ? inferNode(valNode, source, uri, scope, 0) : UNKNOWN);
             scope = scopeFork(scope, ts.text(nameNode, source), t);
         }
     }
