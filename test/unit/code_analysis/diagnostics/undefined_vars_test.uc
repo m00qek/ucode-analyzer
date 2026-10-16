@@ -250,5 +250,35 @@ describe('diagnostics — undefined variables', () => {
 		documents.open(URI, text, 1);
 		assert.match(0, length(undefinedVars(documents.get(URI))));
 	});
+
+	it('knows the LuCI environment in a controller and a template', () => {
+		let text = "let s = http.getenv('X');\nubus.call('a', 'b');\nprint(_('Hi'), ctx);\n";
+		for (let uri in ['file:///usr/share/ucode/luci/controller/admin/x.uc',
+		                 'file:///src/luci/modules/luci-base/ucode/template/y.ut']) {
+			documents.open(uri, text, 1);
+			assert.match(0, length(undefinedVars(documents.get(uri))));
+			documents.close(uri);
+		}
+	});
+
+	it('does not give the LuCI environment to other files', () => {
+		let text = "http.getenv('X');\n";
+		documents.open(URI, text, 1);
+		assert.match(['http'], map(undefinedVars(documents.get(URI)), (d) => match(d.message, /'([^']+)'/)?.[1]));
+	});
+
+	it('reads extra globals from workspace.globals (list or glob map)', () => {
+		let saved = dag.config();
+		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'], globals: ['ext1'] } });
+		documents.open('file:///app/a.uc', "ext1; ext2;\n", 1);
+		assert.match(['ext2'], map(undefinedVars(documents.get('file:///app/a.uc')), (d) => match(d.message, /'([^']+)'/)?.[1]));
+		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'], globals: { 'www/**': ['uhttpd'] } } });
+		documents.open('file:///app/www/h.uc', "uhttpd.recv;\n", 1);
+		assert.match(0, length(undefinedVars(documents.get('file:///app/www/h.uc'))));
+		documents.open('file:///app/other.uc', "uhttpd.recv;\n", 1);
+		assert.match(1, length(undefinedVars(documents.get('file:///app/other.uc'))));
+		for (let u in ['file:///app/a.uc', 'file:///app/www/h.uc', 'file:///app/other.uc']) documents.close(u);
+		dag.init(saved);
+	});
 });
 

@@ -87,6 +87,11 @@ export function init(config) {
 	_openUris = {};
 };
 
+// The configuration passed to init().
+export function config() {
+	return _config;
+};
+
 export function markOpen(uri) { _openUris[uri] = true; };
 export function markClosed(uri) { delete _openUris[uri]; };
 
