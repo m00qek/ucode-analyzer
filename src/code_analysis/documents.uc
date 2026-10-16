@@ -2,12 +2,16 @@ import * as fs from 'fs';
 import * as mode from 'code_analysis.mode';
 import { buildLineTable } from 'code_analysis.positions';
 import { buildScopeMap } from 'code_analysis.types.scope_walk';
+import { invalidateUri } from 'code_analysis.memo';
 
 let _documents = {};
 
 // `deferScope`: leave scopeMap null for a caller that updates the DAG and
 // then calls refreshScopeMap, so the map is built once, on fresh imports.
+// The type caches are keyed by byte ranges, not content: any new text for a
+// uri must drop them, or a same-length text would read stale entries.
 export function open(uri, text, version, deferScope) {
+	invalidateUri(uri);
 	let tree = mode.parse(text);
 	_documents[uri] = {
 		uri,
@@ -26,6 +30,7 @@ export function change(uri, changes, version, deferScope) {
 		return;
 
 	let text = changes[0].text;
+	invalidateUri(uri);
 	let tree = mode.parse(text);
 
 	_documents[uri] = {
@@ -80,6 +85,7 @@ export function refreshScopeMap(uri) {
 };
 
 export function close(uri) {
+	invalidateUri(uri);
 	delete _documents[uri];
 };
 
