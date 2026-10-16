@@ -15,6 +15,7 @@ let _globalUri    = null;
 
 export function exportType(exp, sourceUri) {
 	if (exp._moduleSpecifier) return { kind: 'module', path: exp._moduleSpecifier };
+	if (exp.doc?.type) return exp.doc.type;
 	if (exp.kind === 'function' || (exp.doc && (length(exp.doc.params) > 0 || exp.doc.returns))) {
 		if (!exp.doc) return { kind: 'function', params: [], return: UNKNOWN };
 		return {

@@ -7,6 +7,7 @@ import { UNKNOWN, STR } from 'code_analysis.types.type_utils';
 import * as dag from 'code_analysis.dag.dag';
 import * as templates from 'language_server.templates';
 import { resolveDoc } from 'code_analysis.doc_resolver';
+import { exportType } from 'code_analysis.types.dag_bridge';
 import * as platform from 'language_server.platform';
 
 // Build the structured context object passed to hover templates.
@@ -67,6 +68,10 @@ function buildHoverCtx(label, type, doc) {
 		ctx.module = {
 			specifier: type.path,
 			description: modDoc?.description ?? null,
+			members: map(modUri ? (dag.exportsOf(modUri) ?? []) : [], (e) => {
+				let t = exportType(e, modUri);
+				return { name: e.name, typeStr: t.kind === 'unknown' ? null : typeToString(t) };
+			}),
 		};
 	}
 

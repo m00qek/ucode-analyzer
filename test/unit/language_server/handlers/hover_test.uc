@@ -228,5 +228,16 @@ describe('hover — doc comment tags', () => {
 		let text = "/**\n * @typedef {Object} Conn\n * @property {string} host - Host name.\n */\n/** @type {Conn} */\nlet c = null;\nc.host;\n";
 		assert.match(true, index(hoverText(text, 6, 3), 'host: string') >= 0);
 	});
+
+	it('lists a module\'s members', () => {
+		let v = hoverText("import * as ts from 'tree_sitter';\nts;\n", 1, 0);
+		assert.match(true, index(v, '**Members:**') >= 0);
+		assert.match(true, index(v, '- `parse`: `') >= 0);
+	});
+
+	it('types an exported const by its @type', () => {
+		let v = hoverText("/** @type {string} */\nexport const NAME = f();\nNAME;\n", 2, 0);
+		assert.match(true, index(v, 'NAME: string') >= 0);
+	});
 });
 
