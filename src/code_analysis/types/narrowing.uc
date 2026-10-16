@@ -120,9 +120,34 @@ export function narrowUnionByDiscriminant(type, field, value, keep) {
 //       (`if (!m || bad(m)) return;` leaves m non-null after it); the
 //       consequent is ambiguous.
 
+// The root variable of an access chain holding a `?.` link (`x?.a`,
+// `x.a?.[i]`), or null. Such a chain is non-null only if x is: a `?.` on null
+// short-circuits to null, a plain access on null throws.
+function optionalChainRoot(node, source) {
+	let opt = false;
+	while (node) {
+		let t = ts.nodeType(node);
+		if (t !== 'member_expression' && t !== 'subscript_expression') break;
+		if (ts.childByField(node, 'optional_chain')) opt = true;
+		node = ts.childByField(node, 'object');
+	}
+	return (opt && node && ts.nodeType(node) === 'identifier') ? ts.text(node, source) : null;
+}
+
+// `name` is non-null in the branch where the condition is `holds`.
+function nonNullWhen(name, holds) {
+	return holds
+		? { kind: 'and', guards: [ { kind: 'truthy', name, positive: true } ] }
+		: { kind: 'or',  guards: [ { kind: 'truthy', name, positive: false } ] };
+}
+
 export function parseGuard(node, source) {
 	if (!node) return null;
 	let nt = ts.nodeType(node);
+
+	// `if (x?.p)`: a truthy chain proves its root non-null.
+	let chainRoot = optionalChainRoot(node, source);
+	if (chainRoot) return nonNullWhen(chainRoot, true);
 
 	if (nt === 'parenthesized_expression')
 		return parseGuard(firstNamed(node), source);
@@ -135,6 +160,8 @@ export function parseGuard(node, source) {
 			let operand = ts.childByField(node, 'argument');
 			if (operand && ts.nodeType(operand) === 'identifier')
 				return { kind: 'truthy', name: ts.text(operand, source), positive: false };
+			let root = operand ? optionalChainRoot(operand, source) : null;
+			if (root) return nonNullWhen(root, false);
 		}
 		return null;
 	}
@@ -181,6 +208,10 @@ export function parseGuard(node, source) {
 			if (callee && ts.nodeType(callee) === 'identifier' && ts.text(callee, source) === 'type'
 			    && args && length(namedNonComments(args)) === 1) {
 				let operand = firstNamed(args);
+				// type(x?.p) == 'T' for a non-null T: x is non-null where it holds.
+				let root = operand ? optionalChainRoot(operand, source) : null;
+				let typeName = replace(ts.text(stringSide, source), /^['"]|['"]$/g, '');
+				if (root && typeName !== 'null') return nonNullWhen(root, isEq);
 				if (operand && ts.nodeType(operand) === 'identifier') {
 					let name    = ts.text(operand, source);
 					let raw     = ts.text(stringSide, source);
@@ -197,6 +228,14 @@ export function parseGuard(node, source) {
 						return { kind: 'and', guards: [ { kind: 'truthy', name, positive: true } ] };
 				}
 			}
+		}
+
+		// x?.p == <literal> (or != null): x is non-null where the chain is.
+		for (let pair in [[left, right], [right, left]]) {
+			let root = optionalChainRoot(pair[0], source);
+			if (!root) continue;
+			if (ts.nodeType(pair[1]) === 'null') return nonNullWhen(root, isNotEq);
+			if (literalNodeValue(pair[1], source) !== null) return nonNullWhen(root, isEq);
 		}
 
 		// r.kind === 'fail'  /  r.kind !== 'fail'  — discriminant test on a

@@ -206,6 +206,35 @@ describe('buildScopeMap assignment widening', () => {
 	});
 });
 
+describe('buildScopeMap optional-chain guards', () => {
+	let P = '/** @param {?{ t: int, k: string }} m */\nfunction f(m) {\n';
+	function mAt(body, marker) { let src = P + body + '}\n'; return scopeGet(scopeAt(src, marker), 'm'); }
+
+	it('if (m?.t) narrows m', () => {
+		assert.match('record', mAt("\tif (m?.t) { let a = m; }\n", 'let a')?.kind);
+	});
+
+	it('if (!m?.t) return narrows m after it', () => {
+		assert.match('record', mAt("\tif (!m?.t) return;\n\tlet a = m;\n", 'let a')?.kind);
+	});
+
+	it('type(m?.t) != "int" || m.t narrows m on the right', () => {
+		assert.match('record', mAt("\tif (type(m?.t) != 'int' || m.t < 1) return;\n\tlet a = m;\n", 'let a')?.kind);
+		let src = P + "\treturn type(m?.t) != 'int' || m.t < 1;\n}\n";
+		assert.match('record', scopeGet(scopeAt(src, 'm.t <'), 'm')?.kind);
+	});
+
+	it('m?.k == "a" narrows m where it holds; != null too', () => {
+		assert.match('record', mAt("\tif (m?.k == 'a') { let a = m; }\n", 'let a')?.kind);
+		assert.match('record', mAt("\tif (m?.k != null) { let a = m; }\n", 'let a')?.kind);
+		assert.match('nullable', mAt("\tif (m?.k == null) { let a = m; }\n", 'let a')?.kind);
+	});
+
+	it('type(m?.t) == "null" does not narrow', () => {
+		assert.match('nullable', mAt("\tif (type(m?.t) == 'null') { let a = m; }\n", 'let a')?.kind);
+	});
+});
+
 describe('buildScopeMap switch', () => {
 	let P = '/** @param {?array} m */\nfunction f(m, k) {\n';
 
