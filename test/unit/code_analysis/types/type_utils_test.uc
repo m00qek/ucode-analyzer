@@ -23,6 +23,12 @@ describe('type_utils.unionOf', () => {
 		assert.match(INT, unionOf([INT, INT, INT]));
 	});
 
+	it('flattens nested unions', () => {
+		let NUL = { kind: 'primitive', name: 'null' };
+		let r = unionOf([unionOf([unionOf([STR, NUL]), NUL]), INT]);
+		assert.match({ kind: 'union', members: [STR, NUL, INT] }, r);
+	});
+
 	it('returns a union for two distinct primitives', () => {
 		let r = unionOf([INT, STR]);
 		assert.match('union', r.kind);

@@ -39,7 +39,14 @@ function sameFieldNames(a, b) {
 
 // Reduce a list of Types to a single type: UNKNOWN for empty, the sole element
 // for a singleton, or a union of distinct types otherwise.
+// Nested unions are flattened: `(a | b) | c` is `a | b | c`, so a member
+// such as null is never hidden one level down.
 export function unionOf(types) {
+	let flat = [];
+	for (let t in types) {
+		if (t && t.kind === 'union') push(flat, ...t.members); else push(flat, t);
+	}
+	types = flat;
 	let members = [];
 	for (let i = 0; i < length(types); i++) {
 		let t = types[i];
