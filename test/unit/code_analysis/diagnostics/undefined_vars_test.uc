@@ -244,4 +244,11 @@ describe('diagnostics — undefined variables', () => {
 		documents.open(URI, text, 1);
 		assert.match(0, length(undefinedVars(documents.get(URI))));
 	});
+
+	it('sees earlier declarators of a for initializer in later ones', () => {
+		let text = "let xs = [5, 6];\nfor (let i = 0, x = xs[i]; i < 2; i++, x = xs[i]) print(x);\n";
+		documents.open(URI, text, 1);
+		assert.match(0, length(undefinedVars(documents.get(URI))));
+	});
 });
+

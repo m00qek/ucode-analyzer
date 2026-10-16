@@ -204,16 +204,16 @@ function walk(node, scope, source, globals, lineTable, out) {
 	}
 
 	if (nt === 'for_statement' || nt === 'for_alt_statement') {
-		// Walk initializer RHS in outer scope first, then bind the loop var into an
-		// inner scope so condition/increment can reference it without false positives.
+		// Bind the loop vars into an inner scope so condition/increment can
+		// reference them. Each initializer sees the declarators before it
+		// (`for (let i = 0, x = xs[i]; …)`).
 		let inner = makeScope(scope);
 		let init = ts.childByField(node, 'initializer');
 		if (init && ts.nodeType(init) === 'lexical_declaration') {
-			for (let i = 0; i < ts.namedChildCount(init); i++) {
-				let vd = ts.namedChild(init, i);
+			for (let vd in ts.namedChildren(init)) {
 				if (ts.nodeType(vd) !== 'variable_declarator') continue;
 				let val = ts.childByField(vd, 'value');
-				if (val) walk(val, scope, source, globals, lineTable, out);
+				if (val) walk(val, inner, source, globals, lineTable, out);
 				let nm = ts.childByField(vd, 'name');
 				if (nm && ts.nodeType(nm) === 'identifier') bind(inner, ts.text(nm, source));
 			}
