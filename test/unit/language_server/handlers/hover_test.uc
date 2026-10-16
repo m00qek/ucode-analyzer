@@ -226,7 +226,9 @@ describe('hover — doc comment tags', () => {
 
 	it('types a member declared by @property', () => {
 		let text = "/**\n * @typedef {Object} Conn\n * @property {string} host - Host name.\n */\n/** @type {Conn} */\nlet c = null;\nc.host;\n";
-		assert.match(true, index(hoverText(text, 6, 3), 'host: string') >= 0);
+		let v = hoverText(text, 6, 3);
+		assert.match(true, index(v, 'host: string') >= 0);
+		assert.match(true, index(v, 'Host name.') >= 0);
 	});
 
 	it('lists a module\'s members', () => {
@@ -258,6 +260,23 @@ describe('hover — doc comment tags', () => {
 	it('does not give a parameter its function\'s description', () => {
 		let v = hoverText("/** Doubles. @param {int} n */\nfunction f(n) {\n  return n;\n}\n", 2, 9);
 		assert.match(-1, index(v, 'Doubles.'));
+	});
+
+	it('lists the members of a value typed by a named typedef', () => {
+		let text = "/**\n * @typedef {{ host: string, port: int }} Conn\n */\n/** @type {Conn} */\nlet c = null;\nc;\n";
+		let v = hoverText(text, 5, 0);
+		assert.match(true, index(v, 'c: Conn') >= 0);
+		assert.match(true, index(v, '**Members:**') >= 0);
+		assert.match(true, index(v, '- `port`: `int`') >= 0);
+	});
+
+	it('shows the signature of a value typed by a named function typedef', () => {
+		let text = "/** @typedef {(n: int) => string} Fmt */\n/** @type {Fmt} */\nlet fmt = null;\nfmt;\n";
+		assert.match(true, index(hoverText(text, 3, 0), 'function fmt(n: int): string') >= 0);
+	});
+
+	it('shows the parameters of an undocumented function', () => {
+		assert.match(true, index(hoverText("function add(a, b) { return a + b; }\nadd;\n", 1, 0), 'function add(a, b)') >= 0);
 	});
 });
 

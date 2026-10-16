@@ -3,7 +3,7 @@ import { positionToOffset, nodeAtOffset, docBefore } from 'code_analysis.positio
 import { inferNode } from 'code_analysis.types.inferrer';
 import { scopeAtOffset } from 'code_analysis.types.scope_walk';
 import { typeToString, parseDoc } from 'code_analysis.types.doc_parser';
-import { UNKNOWN, STR } from 'code_analysis.types.type_utils';
+import { UNKNOWN, STR, resolveRef } from 'code_analysis.types.type_utils';
 import * as dag from 'code_analysis.dag.dag';
 import * as templates from 'language_server.templates';
 import { resolveDoc } from 'code_analysis.doc_resolver';
@@ -14,59 +14,60 @@ import * as platform from 'language_server.platform';
 // Merges inferred type fields with JSDoc descriptions so templates
 // receive pre-resolved, ready-to-render data.
 function buildHoverCtx(label, type, doc) {
+	// A typedef name keeps its name in typeStr but renders as what it names.
+	let shape = resolveRef(type);
+	if (shape?.kind === 'nullable') shape = shape.inner;
 	let ctx = {
 		label,
-		kind:    type.kind,
+		kind:    shape.kind,
 		typeStr: typeToString(type),
 		doc:     doc ? { description: doc.description ?? null, examples: doc.examples ?? [], see: doc.see ?? [] } : null,
 		typeToString,
 	};
 
-	if (type.kind === 'function') {
+	if (shape.kind === 'function') {
 		let docParams = doc?.params ?? [];
 		let docParamMap = {};
 		for (let p in docParams)
 			docParamMap[p.name] = p;
+		let all = map(shape.params ?? [], (p) => ({
+			name: p.name,
+			rest: !!p.rest,
+			typeStr: typeToString(p.type),
+			description: docParamMap[p.name]?.description ?? null,
+		}));
 		// Only show the Parameters section when at least one @param is documented.
-		ctx.params = length(docParams) > 0
-			? map(type.params ?? [], (p) => {
-				let dp = docParamMap[p.name];
-				return {
-					name: p.name,
-					typeStr: typeToString(p.type),
-					description: dp?.description ?? null,
-				};
-			})
-			: [];
-		ctx.returns = type['return'] ? {
-			typeStr: typeToString(type['return']),
+		ctx.params = length(docParams) > 0 ? all : [];
+		ctx.returns = shape['return'] ? {
+			typeStr: typeToString(shape['return']),
 			description: doc?.returns?.description ?? null,
 		} : null;
 		// Pre-built declaration-form signature for the code fence.
 		ctx.signature = sprintf('function %s(%s): %s',
 			label,
-			join(', ', map(ctx.params, (p) => p.name + ': ' + p.typeStr)),
+			join(', ', map(all, (p) => (p.rest ? '...' : '') +
+				(!p.name ? p.typeStr : p.typeStr === '?' ? p.name : p.name + ': ' + p.typeStr))),
 			ctx.returns ? ctx.returns.typeStr : '?'
 		);
 	}
 
-	if (type.kind === 'record') {
-		ctx.fields = map(type.fields ?? [], (f) => ({
+	if (shape.kind === 'record') {
+		ctx.fields = map(shape.fields ?? [], (f) => ({
 			name: f.name,
 			typeStr: f.type ? typeToString(f.type) : null,
 			description: f.doc?.description ?? null,
 		}));
 	}
 
-	if (type.kind === 'module') {
-		let modUri = dag.resolveSpecifier(type.path);
+	if (shape.kind === 'module') {
+		let modUri = dag.resolveSpecifier(shape.path);
 		let modDoc = null;
 		if (modUri) {
 			if (!dag.exportsOf(modUri)) dag.addFromDisk(modUri);
 			modDoc = dag.moduleDocOf(modUri);
 		}
 		ctx.module = {
-			specifier: type.path,
+			specifier: shape.path,
 			description: modDoc?.description ?? null,
 			members: map(modUri ? (dag.exportsOf(modUri) ?? []) : [], (e) => {
 				let t = exportType(e, modUri);
@@ -178,9 +179,9 @@ function hoverGeneral(node, doc, config) {
 		ctx.unavailable = !platform.symbolAvailable(modUri, ctx.since);
 
 	let templateName = 'hover/' + (
-		type.kind === 'function' ? 'function' :
-		type.kind === 'record'   ? 'record'   :
-		type.kind === 'module'   ? 'module'   :
+		ctx.kind === 'function' ? 'function' :
+		ctx.kind === 'record'   ? 'record'   :
+		ctx.kind === 'module'   ? 'module'   :
 		                           'default'
 	);
 

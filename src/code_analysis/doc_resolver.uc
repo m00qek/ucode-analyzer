@@ -5,6 +5,7 @@ import { globalUri } from 'code_analysis.types.dag_bridge';
 import { localBinding } from 'code_analysis.bindings';
 import { docBearingStatement, precedingDoc } from 'code_analysis.positions';
 import { parseDoc } from 'code_analysis.types.doc_parser';
+import { resolveRef } from 'code_analysis.types.type_utils';
 
 // A module's own export entry for `name`, WITHOUT following re-export chains.
 // Lets hover prefer a wrapper's own JSDoc (e.g. on `export const x = native.y`)
@@ -94,6 +95,8 @@ export function resolveDoc(uri, node, source, scope) {
 		let objType  = inferNode(objNode, source, uri, scope, 0);
 		if (!objType) return { doc: null, modUri: null };
 		if (objType.kind === 'nullable') objType = objType.inner;
+		objType = resolveRef(objType);
+		if (objType?.kind === 'nullable') objType = objType.inner;
 
 		if (objType.kind === 'module') {
 			let r = dag.resolveMember(objType.path, propName);
