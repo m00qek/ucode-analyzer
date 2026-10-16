@@ -22,6 +22,10 @@ let _templateParser = ts.newParser(ts.markup());
 // (e.g. `<a href="{{ url }}">` with no other tag) is skipped, because the scan
 // treats the quotes as a string. Vanishingly rare and unobserved in the corpus.
 function hasCodePositionTag(text) {
+	// Most scripts contain no opener at all; the byte scan below is ~1 µs per
+	// byte (75 ms on fw4.uc), so skip it when no opener exists anywhere.
+	if (index(text, '{%') < 0 && index(text, '{{') < 0 && index(text, '{#') < 0)
+		return false;
 	let n = length(text);
 	let i = 0;
 	while (i < n) {
