@@ -241,7 +241,8 @@ export function extractExports(text, tree) {
 		let seen = {};
 		for (let i = 0; i < length(result); i++) seen[result[i].name] = true;
 		for (let prop in extractObjectProperties(returnObj, declIndex(), text, pos))
-			if (!seen[prop.name]) push(result, prop);
+			// `legacy`: reachable through require() only; importing it fails.
+			if (!seen[prop.name]) { prop.legacy = true; push(result, prop); }
 	}
 
 	return result;

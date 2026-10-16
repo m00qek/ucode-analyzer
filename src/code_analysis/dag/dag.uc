@@ -208,6 +208,24 @@ export function resolveSpecifier(specifier) {
 	return resolveModule(specifier, resolvedLibPaths(), workdir);
 };
 
+// The specifier that imports `uri` (`luci.http` for <lib>/luci/http.uc,
+// `fs` for <self>/declarations/fs.d.uc), or null: the shortest one that
+// resolves back to `uri` from some library path.
+export function specifierOf(uri) {
+	let path = substr(uri, 7);
+	let best = null;
+	for (let lib in resolvedLibPaths()) {
+		if (substr(path, 0, length(lib) + 1) !== lib + '/') continue;
+		let rel = substr(path, length(lib) + 1);
+		let decl = (substr(rel, -5) === '.d.uc');
+		rel = substr(rel, 0, length(rel) - (decl ? 5 : 3));
+		if (decl && substr(rel, 0, 13) === 'declarations/') rel = substr(rel, 13);
+		let spec = replace(rel, /\//g, '.');
+		if (resolveSpecifier(spec) === uri && (best === null || length(spec) < length(best))) best = spec;
+	}
+	return best;
+};
+
 export function resolveSpecifierIn(paths, specifier) {
 	return resolveModule(specifier, paths, '/');
 };
