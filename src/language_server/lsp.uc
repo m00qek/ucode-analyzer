@@ -57,7 +57,7 @@ export function run(config) {
 					documentSymbolProvider: true,
 					documentHighlightProvider: true,
 					renameProvider: { prepareProvider: true },
-					codeActionProvider: { codeActionKinds: ['quickfix'] },
+					codeActionProvider: { codeActionKinds: ['quickfix', 'refactor.rewrite'] },
 					workspaceSymbolProvider: true,
 					inlayHintProvider: true,
 					foldingRangeProvider: true,
@@ -280,7 +280,7 @@ export function run(config) {
 			let doc = documents.get(uri);
 			let ctx = msg.params.context;
 			let diags = (ctx && ctx.diagnostics) ? ctx.diagnostics : [];
-			protocol.respond(msg.id, doc ? codeActionDoc(uri, doc, diags) : null);
+			protocol.respond(msg.id, doc ? codeActionDoc(uri, doc, diags, msg.params.range) : null);
 		},
 	};
 

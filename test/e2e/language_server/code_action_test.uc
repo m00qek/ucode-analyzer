@@ -208,4 +208,23 @@ describe('textDocument/codeAction', () => {
 		assert.match(1, length(resp.result));
 		assert.match('let', resp.result[0].edit.changes[uri][0].newText);
 	});
+
+	it('generate_jsdoc: offers a refactoring at a function with no doc', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///j.uc', languageId: 'ucode', version: 1,
+				text: "function add(a, b) {\n\treturn 1;\n}\n" },
+		}});
+		lsp.send(proc, { jsonrpc: '2.0', id: 7, method: 'textDocument/codeAction', params: {
+			textDocument: { uri: 'file:///j.uc' },
+			range: { start: { line: 0, character: 9 }, end: { line: 0, character: 9 } },
+			context: { diagnostics: [] },
+		}});
+		let resp = lsp.receive(proc);
+		assert.match(7, resp.id);
+		assert.match(['Generate JSDoc'], map(resp.result ?? [], (a) => a.title));
+		assert.match('refactor.rewrite', resp.result[0].kind);
+		assert.match("/**\n * @param {any} a\n * @param {any} b\n * @returns {int}\n */\n",
+			resp.result[0].edit.changes['file:///j.uc'][0].newText);
+	});
 });
+
