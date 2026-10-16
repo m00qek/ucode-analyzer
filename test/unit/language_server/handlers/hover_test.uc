@@ -239,5 +239,25 @@ describe('hover — doc comment tags', () => {
 		let v = hoverText("/** @type {string} */\nexport const NAME = f();\nNAME;\n", 2, 0);
 		assert.match(true, index(v, 'NAME: string') >= 0);
 	});
+
+	it('shows the doc of a local function', () => {
+		let v = hoverText("/** Adds one. */\nfunction inc(x) { return x + 1; }\ninc;\n", 2, 0);
+		assert.match(true, index(v, 'Adds one.') >= 0);
+	});
+
+	it('shows the doc of a local const', () => {
+		let v = hoverText("/** The limit. */\nconst MAX = 5;\nMAX;\n", 2, 0);
+		assert.match(true, index(v, 'The limit.') >= 0);
+	});
+
+	it('shows a parameter\'s @param description where it is used', () => {
+		let v = hoverText("/** @param {int} n - How many. */\nfunction f(n) {\n  return n;\n}\n", 2, 9);
+		assert.match(true, index(v, 'How many.') >= 0);
+	});
+
+	it('does not give a parameter its function\'s description', () => {
+		let v = hoverText("/** Doubles. @param {int} n */\nfunction f(n) {\n  return n;\n}\n", 2, 9);
+		assert.match(-1, index(v, 'Doubles.'));
+	});
 });
 
