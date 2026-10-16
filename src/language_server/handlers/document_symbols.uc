@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, rangeOf } from 'code_analysis.positions';
+import { buildLineTable, rangeOf, isStatementList } from 'code_analysis.positions';
 
 // LSP SymbolKind constants
 let KIND_FUNCTION  = 12;
@@ -12,7 +12,7 @@ let KIND_CONSTANT  = 14;
 // an outline tree; clients that don't still see the top-level entries.
 //
 // Recognized binding sites:
-//   program / statement_block  → recurse into each named child
+//   program / markup / blocks  → recurse into each named child
 //   export_statement           → unwrap the inner declaration
 //   function_declaration       → FUNCTION symbol; body contents become children
 //   lexical_declaration        → VARIABLE/CONSTANT/FUNCTION per declarator;
@@ -23,7 +23,7 @@ function walkSymbols(node, text, lineTable) {
 	let nt = ts.nodeType(node);
 
 	// ── Containers: flatten children into caller's result ──────────────────
-	if (nt === 'program' || nt === 'statement_block' || nt === 'statement_list') {
+	if (isStatementList(nt)) {
 		let result = [];
 		for (let i = 0; i < ts.namedChildCount(node); i++) {
 			let children = walkSymbols(ts.namedChild(node, i), text, lineTable);

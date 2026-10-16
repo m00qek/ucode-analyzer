@@ -10,6 +10,13 @@ export function findAncestor(node, type) {
 	return null;
 };
 
+// True for nodes whose named children are statements: a script's `program`, a
+// template's `markup`, a `{ }` block, or an alt-syntax body.
+export function isStatementList(nodeType) {
+	return nodeType === 'program' || nodeType === 'markup' ||
+	       nodeType === 'statement_block' || nodeType === 'statement_list';
+};
+
 // Walk to the deepest named node that contains offset.
 export function nodeAtOffset(node, offset) {
 	let count = ts.namedChildCount(node);
@@ -64,15 +71,15 @@ export function docBeforeMap(parent, text) {
 };
 
 // The statement-level ancestor of `node` whose leading /** */ documents it, and
-// that statement's enclosing block. Walks up until the parent is a program,
-// statement_block or (alt-syntax body) statement_list. Returns { target, parent } with parent=null when `node` has
-// no enclosing block/program.
+// that statement's enclosing block. Walks up until the parent is a statement
+// list (isStatementList). Returns { target, parent } with parent=null when
+// `node` has none.
 export function docBearingStatement(node) {
 	let target = node;
 	let p = ts.parent(target);
 	while (p) {
 		let pt = ts.nodeType(p);
-		if (pt === 'program' || pt === 'statement_block' || pt === 'statement_list') break;
+		if (isStatementList(pt)) break;
 		target = p;
 		p = ts.parent(target);
 	}

@@ -57,4 +57,10 @@ describe('diagnostics — redeclared variables', () => {
 		let text = "let x = 1;\nfunction f() {\n  let x = 2;\n}\n";
 		assert.match(0, length(redeclaredVars(open(text))));
 	});
+
+	it('errors on a duplicate let at a template\'s top level', () => {
+		let diags = redeclaredVars(open("{% let x = 1; %}\n<p>{{ x }}</p>\n{% let x = 2; %}\n"));
+		assert.match(1, length(diags));
+		assert.match('redeclared-var', diags[0].code);
+	});
 });

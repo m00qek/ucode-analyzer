@@ -218,6 +218,17 @@ function buildText(idxs) {
 	return { text, boundaries };
 }
 
+describe('positions (precedingDoc)', () => {
+	let _p = ts.newParser(ts.markup());
+
+	it('finds the doc of a function declared at a template\'s top level', () => {
+		let text = "{% /** Says hi. */\nfunction f() { return 1; } %}";
+		let r = ts.rootNode(ts.parse(_p, text));
+		let name = pos.nodeAtOffset(r, index(text, 'f()'));
+		assert.match('/** Says hi. */', pos.precedingDoc(name, text));
+	});
+});
+
 describe('positions — properties', () => {
 	prop('offset -> position -> offset is identity at every character boundary',
 		gen.array(gen.int(0, length(PIECES) - 1), { max_len: 14 }),

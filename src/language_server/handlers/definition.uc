@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'code_analysis.positions';
+import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset, isStatementList } from 'code_analysis.positions';
 import { stringLiteralText } from 'code_analysis.ast_text';
 import * as dag from 'code_analysis.dag.dag';
 import * as fs from 'fs';
@@ -93,7 +93,7 @@ function forInDeclares(node, text) {
 function binderIn(scopeNode, name, text) {
 	let nt = ts.nodeType(scopeNode);
 
-	if (nt === 'statement_block' || nt === 'statement_list' || nt === 'program' || nt === 'markup') {
+	if (isStatementList(nt)) {
 		for (let i = 0; i < ts.namedChildCount(scopeNode); i++) {
 			let stmt = ts.namedChild(scopeNode, i);
 			let st = ts.nodeType(stmt);

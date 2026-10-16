@@ -157,4 +157,13 @@ describe('documentSymbols — nested declarations', () => {
 		assert.match(1, length(syms[0].children[0].children));
 		assert.match('c', syms[0].children[0].children[0].name);
 	});
+
+	it('lists the symbols of a template', () => {
+		let text = "{% let title = 'x'; %}\n<h1>{{ title }}</h1>\n{% function row(r) { %}<tr>{% let cls = r; %}</tr>{% } %}\n";
+		documents.open(URI, text, 1);
+
+		let syms = documentSymbols(documents.get(URI));
+		assert.match(['title', 'row'], map(syms, (s) => s.name));
+		assert.match(['cls'], map(syms[1].children ?? [], (s) => s.name));
+	});
 });

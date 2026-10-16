@@ -19,7 +19,6 @@ function isExported(node) {
 	let p = ts.parent(node);
 	while (p) {
 		if (ts.nodeType(p) === 'export_statement') return true;
-		if (ts.nodeType(p) === 'program') break;
 		p = ts.parent(p);
 	}
 	return false;

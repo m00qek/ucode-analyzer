@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { positionToOffset } from 'code_analysis.positions';
+import { positionToOffset, isStatementList } from 'code_analysis.positions';
 import { stringLiteralText } from 'code_analysis.ast_text';
 import { inferNode } from 'code_analysis.types.inferrer';
 import { scopeAtOffset } from 'code_analysis.types.scope_walk';
@@ -99,7 +99,7 @@ function memberContext(root, source, offset) {
 	while (n) {
 		let nt = ts.nodeType(n);
 		if (nt === 'member_expression') return ts.namedChild(n, 0);
-		if (nt === 'program' || nt === 'statement_block' || nt === 'statement_list') break;
+		if (isStatementList(nt)) break;
 		n = ts.parent(n);
 	}
 

@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { rangeOf } from 'code_analysis.positions';
+import { rangeOf, isStatementList } from 'code_analysis.positions';
 
 let SEVERITY_ERROR = 1;
 
@@ -39,7 +39,7 @@ function checkBlock(node, source, lineTable, diags) {
 // Recursively walk the tree; call checkBlock for every scope container.
 function walk(node, source, lineTable, diags) {
 	let nt = ts.nodeType(node);
-	if (nt === 'program' || nt === 'statement_block' || nt === 'statement_list')
+	if (isStatementList(nt))
 		checkBlock(node, source, lineTable, diags);
 
 	for (let i = 0; i < ts.namedChildCount(node); i++)
