@@ -1663,3 +1663,27 @@ describe('inferrer — buildScope flow sensitivity', () => {
 	});
 });
 
+describe('inferrer — builtins whose null depends on the arguments', () => {
+	function typeAfter(text, name) {
+		let tree = parse(text);
+		return scopeGet(scopeFor(text, tree, length(text) - 1), name);
+	}
+
+	it('clock() is never null; clock(true) may be', () => {
+		assert.match('generic', typeAfter("let t = clock();\nt;\n", 't')?.kind);
+		assert.match('nullable', typeAfter("let t = clock(true);\nt;\n", 't')?.kind);
+	});
+
+	it('keys()/values() of a record are never null; of an unknown value may be', () => {
+		assert.match('generic', typeAfter("let o = { a: 1 };\nlet k = keys(o);\nk;\n", 'k')?.kind);
+		assert.match('generic', typeAfter("let o = { a: 1 };\nlet v = values(o);\nv;\n", 'v')?.kind);
+		let text = "function f(x) {\n\tlet k = keys(x);\n\treturn k;\n}\n";
+		assert.match('nullable', scopeGet(scopeFor(text, parse(text), index(text, 'return k')), 'k')?.kind);
+	});
+
+	it('a local named like a builtin is not refined', () => {
+		let t = typeAfter("/** @returns {?int[]} */\nfunction clock() { return null; }\nlet t = clock();\nt;\n", 't');
+		assert.match('nullable', t?.kind);
+	});
+});
+

@@ -3,9 +3,9 @@ import * as dag from 'code_analysis.dag.dag';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import { unify, substitute } from 'code_analysis.types.unifier';
 import { memoGet, memoSet, docMapGet, docMapSet, lineTableFor } from 'code_analysis.memo';
-import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
-import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';
-import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal } from 'code_analysis.types.type_utils';
+import { makeScope, scopeGet, scopeSet, isRootBinding } from 'code_analysis.types.scope';
+import { parseGuard, applyGuard, narrowToNonNull } from 'code_analysis.types.narrowing';
+import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal, resolveRef } from 'code_analysis.types.type_utils';
 import { offsetToPosition, docBeforeMap, docBearingStatement } from 'code_analysis.positions';
 import { stringLiteralText, firstNamed } from 'code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'code_analysis.types.dag_bridge';
@@ -210,6 +210,23 @@ function requireModuleType(node, source, scope) {
 	return length(path) ? { kind: 'module', path } : null;   // "" → nothing to resolve
 }
 
+// Builtins whose declared `?T` is null only for arguments a call site can
+// rule out (per ucode's docs): clock() only for a monotonic clock the system
+// lacks; keys()/values() only for a non-object argument.
+function builtinReturn(name, args, argTypes, ret, source, scope) {
+	if (!isRootBinding(scope, name)) return ret;
+	if (name === 'clock') {
+		let a = args[0];
+		if (!a || ts.nodeType(a) === 'false' || ts.nodeType(a) === 'null')
+			return narrowToNonNull(ret);
+	} else if (name === 'keys' || name === 'values') {
+		let t = argTypes[0] ? resolveRef(argTypes[0]) : null;
+		if (t && (t.kind === 'record' || (t.kind === 'generic' && t.base === 'dict')))
+			return narrowToNonNull(ret);
+	}
+	return ret;
+}
+
 function inferCall(node, source, uri, scope, depth) {
 	let mod = requireModuleType(node, source, scope);
 	if (mod) return mod;
@@ -223,15 +240,21 @@ function inferCall(node, source, uri, scope, depth) {
 
 	let args = argsNode ? ts.namedChildren(argsNode) : [];
 	let bindings = {};
+	let argTypes = [];
 	for (let i = 0; i < length(args); i++) {
 		let arg = args[i];
 		let paramType = (i < length(fnType.params))
 			? (fnType.params[i].type ?? UNKNOWN) : UNKNOWN;
 		let argType = _infer(arg, source, uri, scope, depth + 1);
+		push(argTypes, argType);
 		unify(paramType, argType, bindings, 0);
 	}
-	return substitute(fnType.return, bindings);
+	let ret = substitute(fnType.return, bindings);
+	if (ts.nodeType(fnNode) === 'identifier')
+		ret = builtinReturn(ts.text(fnNode, source), args, argTypes, ret, source, scope);
+	return ret;
 }
+
 
 function inferMember(node, source, uri, scope, depth) {
 	let objNode  = ts.childByField(node, 'object');

@@ -23,6 +23,14 @@ export function scopeGet(scope, name) {
 	return null;
 };
 
+// True when `name` resolves to the root scope — the builtins — rather than a
+// local, import or parameter that shadows it.
+export function isRootBinding(scope, name) {
+	for (let s = scope; s; s = s.parent)
+		if (exists(s.bindings, name)) return s.parent === null;
+	return false;
+};
+
 export function scopeHas(scope, name) {
 	let s = scope;
 	while (s) {
