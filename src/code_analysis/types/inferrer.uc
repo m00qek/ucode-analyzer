@@ -120,7 +120,7 @@ _collectReturns = function(node, source, uri, scope, depth, out) {
 // The return type is always inferred from the body; expectedType.return is
 // never used (only the caller that has a @returns declaration short-circuits
 // before calling inferArrow).
-function inferArrow(node, source, uri, scope, depth, expectedType) {
+function arrowParams(node, source, uri, scope, depth, expectedType) {
 	if (!expectedType)
 		expectedType = callbackExpectedType(node, source, uri, scope, depth);
 
@@ -154,7 +154,11 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 			push(params, { name: ts.text(param, source), type: ptype });
 		}
 	}
+	return params;
+}
 
+function inferArrow(node, source, uri, scope, depth, expectedType) {
+	let params = arrowParams(node, source, uri, scope, depth, expectedType);
 	let childScope = makeScope(scope);
 	for (let i = 0; i < length(params); i++)
 		scopeSet(childScope, params[i].name, params[i].type);
@@ -486,9 +490,21 @@ function inferObject(node, source, uri, scope, depth) {
 	return result;
 }
 
-function inferFunctionExpr(node, source, uri, scope, depth) {
+function docOf(node, source, uri) {
 	let docTxt = precedingDoc(node, source, uri);
-	let doc = docTxt ? parseDoc(docTxt) : null;
+	return docTxt ? parseDoc(docTxt) : null;
+}
+
+// @param annotations, as the expected type: they take priority over
+// callbackExpectedType (which would otherwise override JSDoc).
+function docExpected(doc) {
+	return (doc && length(doc.params) > 0)
+		? { kind: 'function', params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })), return: UNKNOWN }
+		: null;
+}
+
+function inferFunctionExpr(node, source, uri, scope, depth) {
+	let doc = docOf(node, source, uri);
 	// @returns declared: trust it and skip body inference.
 	if (doc && doc.returns && doc.returns.type) {
 		return {
@@ -497,12 +513,7 @@ function inferFunctionExpr(node, source, uri, scope, depth) {
 			return: doc.returns.type,
 		};
 	}
-	// @param annotations present: use them as the expected type so they take
-	// priority over callbackExpectedType (which would otherwise override JSDoc).
-	let expected = (doc && length(doc.params) > 0)
-		? { kind: 'function', params: map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN })), return: UNKNOWN }
-		: null;
-	return inferArrow(node, source, uri, scope, depth, expected);
+	return inferArrow(node, source, uri, scope, depth, docExpected(doc));
 }
 
 function inferReturnStatement(node, source, uri, scope, depth) {
@@ -515,9 +526,7 @@ function inferLexicalDecl(node, source, uri, scope, depth) {
 	return UNKNOWN;
 }
 
-function inferFunctionDecl(node, source, uri, scope, depth) {
-	let docTxt = precedingDoc(node, source, uri);
-	let doc = docTxt ? parseDoc(docTxt) : null;
+function declParams(node, source, doc) {
 	let docParams = (doc && doc.params) ? doc.params : [];
 
 	// Params: from JSDoc @param when annotated, otherwise one UNKNOWN entry per
@@ -543,6 +552,12 @@ function inferFunctionDecl(node, source, uri, scope, depth) {
 			break;
 		}
 	}
+	return params;
+}
+
+function inferFunctionDecl(node, source, uri, scope, depth) {
+	let doc = docOf(node, source, uri);
+	let params = declParams(node, source, doc);
 
 	// Return type: declared via @returns, or infer from all return statements.
 	let ret = (doc && doc.returns && doc.returns.type) ? doc.returns.type : UNKNOWN;
@@ -559,6 +574,23 @@ function inferFunctionDecl(node, source, uri, scope, depth) {
 	}
 	return { kind: 'function', params, return: ret };
 }
+
+// The parameters a function binds, as full inference would type them,
+// without inferring its return type (which walks the whole body).
+export function inferParams(fn, source, uri, scope) {
+	let t = ts.nodeType(fn);
+	if (t === 'function_declaration')
+		return declParams(fn, source, docOf(fn, source, uri));
+	if (t === 'function_expression') {
+		let doc = docOf(fn, source, uri);
+		if (doc && doc.returns && doc.returns.type)
+			return map(doc.params, (p) => ({ name: p.name, type: p.type ?? UNKNOWN }));
+		return arrowParams(fn, source, uri, scope, 0, docExpected(doc));
+	}
+	if (t === 'arrow_function')
+		return arrowParams(fn, source, uri, scope, 0, null);
+	return [];
+};
 
 // ── Dispatch table ─────────────────────────────────────────────────────────
 

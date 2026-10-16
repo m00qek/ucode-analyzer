@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { firstNamed, namedNonComments } from 'code_analysis.ast_text';
-import { inferNode, declaredType } from 'code_analysis.types.inferrer';
+import { inferNode, inferParams, declaredType } from 'code_analysis.types.inferrer';
 import { importScope } from 'code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeHas, scopeFork } from 'code_analysis.types.scope';
 import { UNKNOWN, STR } from 'code_analysis.types.type_utils';
@@ -79,12 +79,8 @@ function advanceScope(stmt, source, uri, scope) {
 
 // Add params to a fresh scope object (mutable — called before any checkpoint).
 function addParams(fn, source, uri, scope) {
-    let fnType = inferNode(fn, source, uri, scope, 0);
-    if (!fnType || fnType.kind !== 'function') return;
-    for (let i = 0; i < length(fnType.params); i++) {
-        let p = fnType.params[i];
+    for (let p in inferParams(fn, source, uri, scope))
         scopeSet(scope, p.name, p.type ?? UNKNOWN);
-    }
 }
 
 // Infer the element type that a for-in loop variable takes from its iterable.
