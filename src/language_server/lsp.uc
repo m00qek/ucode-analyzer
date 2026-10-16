@@ -102,7 +102,7 @@ export function run(config) {
 
 		'textDocument/didOpen': function(msg) {
 			let td = msg.params.textDocument;
-			documents.open(td.uri, td.text, td.version);
+			documents.open(td.uri, td.text, td.version, true);
 			dag.markOpen(td.uri);
 			let doc = documents.get(td.uri);
 			invalidateUri(td.uri);
@@ -116,7 +116,7 @@ export function run(config) {
 
 		'textDocument/didChange': function(msg) {
 			let uri = msg.params.textDocument.uri;
-			documents.change(uri, msg.params.contentChanges, msg.params.textDocument.version);
+			documents.change(uri, msg.params.contentChanges, msg.params.textDocument.version, true);
 			let doc = documents.get(uri);
 			if (!doc) return;
 			invalidateUri(uri);

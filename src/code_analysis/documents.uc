@@ -5,7 +5,9 @@ import { buildScopeMap } from 'code_analysis.types.scope_walk';
 
 let _documents = {};
 
-export function open(uri, text, version) {
+// `deferScope`: leave scopeMap null for a caller that updates the DAG and
+// then calls refreshScopeMap, so the map is built once, on fresh imports.
+export function open(uri, text, version, deferScope) {
 	let tree = mode.parse(text);
 	_documents[uri] = {
 		uri,
@@ -13,11 +15,11 @@ export function open(uri, text, version) {
 		version,
 		tree,
 		lineTable: buildLineTable(text),
-		scopeMap: buildScopeMap(uri, text, tree),
+		scopeMap: deferScope ? null : buildScopeMap(uri, text, tree),
 	};
 };
 
-export function change(uri, changes, version) {
+export function change(uri, changes, version, deferScope) {
 	let doc = _documents[uri];
 
 	if (!doc || !length(changes))
@@ -32,7 +34,7 @@ export function change(uri, changes, version) {
 		version,
 		tree,
 		lineTable: buildLineTable(text),
-		scopeMap: buildScopeMap(uri, text, tree),
+		scopeMap: deferScope ? null : buildScopeMap(uri, text, tree),
 	};
 };
 
