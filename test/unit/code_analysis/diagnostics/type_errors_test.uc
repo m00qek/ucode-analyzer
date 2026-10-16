@@ -328,6 +328,22 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 		assert.match(true, index(d.message, 'may be null') >= 0);
 	});
 
+	it('flags indexing a value that may be null', () => {
+		let d = nullDiags("/** @param {?array} a */\nfunction f(a) { return a[0]; }\n");
+		assert.match(['may-be-null'], map(d, (x) => x.code));
+	});
+
+	it('flags indexing a value that is null, read or write', () => {
+		assert.match(['null-access'], map(nullDiags("let a = null;\na[0];\n"), (x) => x.code));
+		assert.match(['null-access'], map(nullDiags("let a = null;\na[0] = 1;\n"), (x) => x.code));
+	});
+
+	it('does not flag ?.[ or an index after a null guard', () => {
+		assert.match(0, length(nullDiags("/** @param {?array} a */\nfunction f(a) { return a?.[0]; }\n")));
+		assert.match(0, length(nullDiags("/** @param {?array} a */\nfunction f(a) { if (!a) return; return a[0]; }\n")));
+		assert.match(0, length(nullDiags("/** @param {?array} a */\nfunction f(a) { return a && a[0]; }\n")));
+	});
+
 	it("escalates a possibly-null access to an error under 'use strict'", () => {
 		let d = nullDiags("'use strict';\n/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
 		assert.match(true, d !== null);

@@ -155,6 +155,43 @@ function unknownFieldOf(type, propName) {
 	return propName;
 }
 
+// Report dereferencing `obj` (`obj.p` or `obj[i]`) when its type is null or
+// may be null; `?.` is the null-safe form. Returns whether it reported.
+function nullDiag(obj, objType, optChain, source, lineTable, diags, strict) {
+	if (optChain) return false;
+	if (isDefinitelyNull(objType)) {
+		// The value can only ever be null — dereferencing it always fails.
+		push(diags, {
+			range:    rangeOf(source, lineTable, obj),
+			severity: SEVERITY_ERROR,
+			source:   'ucode-ls',
+			code:     'null-access',
+			message:  sprintf("'%s' is null", ts.text(obj, source)),
+		});
+		return true;
+	}
+	if (isNullLike(objType)) {
+		// `T | null`: null is only one possibility, so this is a warning by
+		// default. Under `'use strict';` it is escalated to an error.
+		push(diags, {
+			range:    rangeOf(source, lineTable, obj),
+			severity: strict ? SEVERITY_ERROR : SEVERITY_WARNING,
+			source:   'ucode-ls',
+			code:     'may-be-null',
+			message:  sprintf("'%s' may be null", ts.text(obj, source)),
+		});
+		return true;
+	}
+	return false;
+}
+
+function objectType(obj, source, uri, scopeMap) {
+	let scope = scopeAtOffset(scopeMap, ts.startByte(obj));
+	return ts.nodeType(obj) === 'identifier'
+		? (scopeGet(scope, ts.text(obj, source)) ?? UNKNOWN)
+		: inferNode(obj, source, uri, scope, 0);
+}
+
 let _walk;
 
 _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
@@ -196,30 +233,9 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 		// expected here and must not be flagged. Property checks still apply.
 		let optChain = ts.childByField(node, 'optional_chain') !== null;
 		if (obj) {
-			let scope = scopeAtOffset(scopeMap, ts.startByte(obj));
-			let objType = ts.nodeType(obj) === 'identifier'
-				? (scopeGet(scope, ts.text(obj, source)) ?? UNKNOWN)
-				: inferNode(obj, source, uri, scope, 0);
-			if (!optChain && isDefinitelyNull(objType)) {
-				// The value can only ever be null — dereferencing it always fails.
-				push(diags, {
-					range:    rangeOf(source, lineTable, obj),
-					severity: SEVERITY_ERROR,
-					source:   'ucode-ls',
-					code:     'null-access',
-					message:  sprintf("'%s' is null", ts.text(obj, source)),
-				});
-			} else if (!optChain && isNullLike(objType)) {
-				// `T | null`: null is only one possibility, so this is a warning by
-				// default. Under `'use strict';` it is escalated to an error.
-				push(diags, {
-					range:    rangeOf(source, lineTable, obj),
-					severity: strict ? SEVERITY_ERROR : SEVERITY_WARNING,
-					source:   'ucode-ls',
-					code:     'may-be-null',
-					message:  sprintf("'%s' may be null", ts.text(obj, source)),
-				});
-			} else if (prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node) && !isDeleteTarget(node)
+			let objType = objectType(obj, source, uri, scopeMap);
+			if (!nullDiag(obj, objType, optChain, source, lineTable, diags, strict)
+			    && prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node) && !isDeleteTarget(node)
 			           && !(ts.nodeType(obj) === 'identifier' && _written[ts.text(obj, source) + '.' + ts.text(prop, source)])) {
 				let field = unknownFieldOf(objType, ts.text(prop, source));
 				if (field !== null) {
@@ -235,6 +251,19 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 			// Recurse into the object to catch errors nested within it.
 			if (ts.nodeType(obj) !== 'identifier') _walk(obj, source, uri, scopeMap, lineTable, diags, strict);
 		}
+		return;
+	}
+
+	// `obj[i]` fails on null like `obj.p` (read and write); `obj?.[i]` is safe.
+	if (nt === 'subscript_expression') {
+		let obj = ts.childByField(node, 'object');
+		if (obj) {
+			nullDiag(obj, objectType(obj, source, uri, scopeMap),
+			         ts.childByField(node, 'optional_chain') !== null, source, lineTable, diags, strict);
+			if (ts.nodeType(obj) !== 'identifier') _walk(obj, source, uri, scopeMap, lineTable, diags, strict);
+		}
+		let idx = ts.childByField(node, 'index');
+		if (idx) _walk(idx, source, uri, scopeMap, lineTable, diags, strict);
 		return;
 	}
 
