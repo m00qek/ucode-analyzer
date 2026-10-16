@@ -467,8 +467,12 @@ export function buildScopeMap(uri, source, tree) {
     let n = ts.namedChildCount(root);
     for (let i = 0; i < n; i++)
         scope = stepStatement(ts.namedChild(root, i), source, uri, scope, map);
-    // Emit a final checkpoint so lookups past the last statement see its declarations.
-    emit(map, ts.endByte(root), scope);
+    // Emit a final checkpoint so lookups past the last statement see its declarations
+    // — unless that statement runs to the end with an error (blocks left open at
+    // EOF, closed by MISSING `}`): the end of the file is still inside its blocks.
+    let last = n ? ts.namedChild(root, n - 1) : null;
+    if (!last || !ts.hasError(last) || ts.endByte(last) < ts.endByte(root))
+        emit(map, ts.endByte(root), scope);
     return map;
 };
 
