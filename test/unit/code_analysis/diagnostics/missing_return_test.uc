@@ -180,4 +180,36 @@ describe('diagnostics — missing return', () => {
 		let text = DOC + "function f(x): if (x): return 1; endif endfunction\n";
 		assert.match(1, length(missingReturn(open(text))));
 	});
+
+	it('no warning when a comment follows the final return', () => {
+		let text = "/** @returns {int} */\nfunction f() {\n  return 1; // done\n}\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('no warning when a doc comment follows the final return', () => {
+		let text = "/** @returns {int} */\nfunction f() {\n  return 1;\n  /** trailing */\n}\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('no warning when a comment sits between if and its branches', () => {
+		let text = "/** @returns {int} */\nfunction f(x) {\n  if (x) /* yes */ { return 1; } else /* no */ { return 2; }\n}\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('no warning when a switch clause ends in a comment', () => {
+		let text = "/** @returns {int} */\nfunction f(x) {\n  switch (x) {\n  case 1: return 1; // one\n  default: return 2; // other\n  }\n}\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('no warning for an infinite loop with a commented condition', () => {
+		let text = "/** @returns {int} */\nfunction f() {\n  while (/* forever */ true) {}\n}\n";
+		assert.match(0, length(missingReturn(open(text))));
+	});
+
+	it('points at the function name after a comment', () => {
+		let text = "/** @returns {int} */\nfunction /* c */ f() {\n  let x = 1;\n}\n";
+		let diags = missingReturn(open(text));
+		assert.match(1, length(diags));
+		assert.match(17, diags[0].range.start.character);
+	});
 });

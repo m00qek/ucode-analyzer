@@ -1,5 +1,16 @@
 import * as ts from 'tree_sitter';
 
+// Comments are named nodes and may sit between any two children.
+export function isComment(node) {
+	let t = ts.nodeType(node);
+	return t === 'comment' || t === 'doc_comment';
+};
+
+// `node`'s named children without comments.
+export function namedNonComments(node) {
+	return filter(ts.namedChildren(node), (c) => !isComment(c));
+};
+
 // The content of a string literal node — the concatenated text of its
 // string_fragment children, without the surrounding quotes. An empty literal
 // ('' / "") has no fragment child and yields "".

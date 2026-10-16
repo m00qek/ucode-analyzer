@@ -4,7 +4,7 @@ import { parseDoc } from 'code_analysis.types.doc_parser';
 import * as type_registry from 'code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBefore, docBeforeMap } from 'code_analysis.positions';
 import { topLevelStatements, importStmtSpecifier, importBindings, importRemoteName } from 'code_analysis.mode';
-import { stringLiteralText } from 'code_analysis.ast_text';
+import { stringLiteralText, namedNonComments } from 'code_analysis.ast_text';
 
 
 function dotToSlash(s) {
@@ -157,8 +157,8 @@ export function extractExports(text, tree) {
 		if (stmtType === 'return_statement') {
 			if (!sawReturn) {
 				sawReturn = true;
-				for (let val in ts.namedChildren(stmt))
-					if (ts.nodeType(val) !== 'comment') { if (ts.nodeType(val) === 'object') returnObj = val; break; }
+				let val = namedNonComments(stmt)[0];
+				if (val && ts.nodeType(val) === 'object') returnObj = val;
 			}
 			continue;
 		}
@@ -169,7 +169,7 @@ export function extractExports(text, tree) {
 
 		let value = ts.childByField(stmt, 'value');
 		while (value && ts.nodeType(value) === 'parenthesized_expression')
-			value = filter(ts.namedChildren(value), (c) => ts.nodeType(c) !== 'comment')[0];
+			value = namedNonComments(value)[0];
 		if (value) {
 			let t = ts.nodeType(value);
 			let refs = initRefs(value);

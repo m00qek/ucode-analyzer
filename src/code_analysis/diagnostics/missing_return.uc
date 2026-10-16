@@ -1,6 +1,7 @@
 import * as ts from 'tree_sitter';
 import { rangeOf, precedingDoc } from 'code_analysis.positions';
 import { parseDoc } from 'code_analysis.types.doc_parser';
+import { namedNonComments } from 'code_analysis.ast_text';
 
 let SEVERITY_WARNING = 2;
 
@@ -43,7 +44,7 @@ function isInfiniteLoop(node, source) {
 	if (nt === 'while_statement') {
 		let cond = ts.childByField(node, 'condition');
 		// while's condition is wrapped in a parenthesized_expression.
-		return isConstTruthy(cond ? (ts.namedChild(cond, 0) ?? cond) : null, source);
+		return isConstTruthy(cond ? (namedNonComments(cond)[0] ?? cond) : null, source);
 	}
 	if (nt === 'for_statement') {
 		// C-style for; an absent/empty condition clause means `for(;;)`.
@@ -65,25 +66,21 @@ let alwaysReturns;
 // the next clause's fate; a `break` exits the switch (does not return). Scanning
 // clauses back-to-front resolves the fall-through: nextReturns seeds false (past
 // the last clause control leaves the switch).
-//   switch_body
-//     switch_case      namedChild(0)=value, rest=body statements
-//     switch_default   all namedChildren are body statements
+// A clause's last statement is its last non-comment child other than the case
+// `value`.
 function switchAlwaysReturns(node, source) {
-	let body = null;
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		if (ts.nodeType(ts.namedChild(node, i)) === 'switch_body') { body = ts.namedChild(node, i); break; }
+	let body = ts.childByField(node, 'body');
 	if (!body) return false;
 
 	let clauses = [];
 	let hasDefault = false;
-	for (let i = 0; i < ts.namedChildCount(body); i++) {
-		let c  = ts.namedChild(body, i);
+	for (let c in ts.namedChildren(body)) {
 		let ct = ts.nodeType(c);
 		if (ct !== 'switch_case' && ct !== 'switch_default') continue;
 		if (ct === 'switch_default') hasDefault = true;
-		let first = (ct === 'switch_case') ? 1 : 0;   // skip the case value expression
-		let last  = ts.namedChildCount(c) - 1;
-		push(clauses, last >= first ? ts.namedChild(c, last) : null);
+		let value = ts.childByField(c, 'value');
+		let stmts = filter(namedNonComments(c), (s) => !value || ts.startByte(s) !== ts.startByte(value));
+		push(clauses, length(stmts) ? stmts[-1] : null);
 	}
 	if (!hasDefault) return false;
 
@@ -102,11 +99,8 @@ function switchAlwaysReturns(node, source) {
 }
 
 // AST shape (tree-sitter-ucode):
-//   if_statement
-//     namedChild(0): parenthesized_expression  ← condition
-//     namedChild(1): statement_block            ← consequent
-//     namedChild(2): else_clause                ← optional
-//       namedChild(0): statement_block | if_statement
+//   if_statement: condition, consequence, alternative (else_clause, optional)
+//     else_clause: its one statement (a block or an if_statement)
 //   if_alt_statement (`if (c): … elif (c): … else … endif`)
 //     consequence: statement_list, elif_clause*: { consequence: statement_list },
 //     alternative: else_alt_clause { statement_list } — every list is absent
@@ -117,10 +111,10 @@ alwaysReturns = function(node, source) {
 	if (nt === 'return_statement') return true;
 	if (nt === 'expression_statement')
 		return isNoReturnCall(ts.namedChild(node, 0), source);
-	if (nt === 'else_clause') return alwaysReturns(ts.namedChild(node, 0), source);
+	if (nt === 'else_clause') return alwaysReturns(namedNonComments(node)[0], source);
 	if (nt === 'statement_block' || nt === 'statement_list') {
-		let n = ts.namedChildCount(node);
-		return n > 0 && alwaysReturns(ts.namedChild(node, n - 1), source);
+		let stmts = namedNonComments(node);
+		return length(stmts) > 0 && alwaysReturns(stmts[-1], source);
 	}
 	if (nt === 'if_alt_statement') {
 		let alt = ts.childByField(node, 'alternative');
@@ -130,13 +124,12 @@ alwaysReturns = function(node, source) {
 			if (ts.nodeType(c) === 'elif_clause' &&
 			    !alwaysReturns(ts.childByField(c, 'consequence'), source)) return false;
 		}
-		return alwaysReturns(ts.namedChild(alt, 0), source);
+		return alwaysReturns(namedNonComments(alt)[0], source);
 	}
 	if (nt === 'if_statement') {
-		if (ts.namedChildCount(node) < 3) return false;
-		let cons = ts.namedChild(node, 1);
-		let alt  = ts.namedChild(node, 2);
-		return alwaysReturns(cons, source) && alwaysReturns(alt, source);
+		let alt = ts.childByField(node, 'alternative');
+		return !!alt && alwaysReturns(ts.childByField(node, 'consequence'), source) &&
+		       alwaysReturns(alt, source);
 	}
 	// try/catch returns only if the normal path AND the catch path both return.
 	// (ucode has no `finally`; a try must have a catch.)
@@ -167,8 +160,7 @@ function checkFunction(node, source, lineTable, diags) {
 
 	// Point the diagnostic at the function name (function_declaration) or the
 	// opening keyword token (function_expression / arrow_function).
-	let target = ts.namedChild(node, 0);
-	if (!target || ts.nodeType(target) !== 'identifier') target = node;
+	let target = ts.childByField(node, 'name') ?? node;
 
 	push(diags, {
 		range:    rangeOf(source, lineTable, target),
