@@ -172,8 +172,11 @@ export function positionToOffset(text, lineTable, position) {
 	return i;
 };
 
-// Byte offset → LSP { line, character } (character in UTF-16 units).
+// Byte offset → LSP { line, character } (character in UTF-16 units). An offset
+// past the end of the text (a node of the closers mode.parse() may append)
+// clamps to the end.
 export function offsetToPosition(text, lineTable, offset) {
+	offset = min(offset, length(text));
 	let lo = 0;
 	let hi = length(lineTable) - 1;
 

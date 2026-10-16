@@ -75,6 +75,18 @@ describe('textDocument/diagnostic', () => {
 		assert.match(1, diags[0].severity);
 	});
 
+	// tree-sitter parses this small file as one ERROR; the server re-parses it
+	// with the closers appended and reports them, not the whole file, as missing.
+	it('reports each block left open at the end of a small file as a missing }', () => {
+		let diags = diagnose('file:///t.uc', "function f(a) {\n\tif (a) {\n\t\tf(a);\n");
+		let eof = { line: 3, character: 0 };
+		assert.match([
+			{ message: "Syntax error: missing '}'", range: { start: eof, end: eof } },
+			{ message: "Syntax error: missing '}'", range: { start: eof, end: eof } },
+		], map(filter(diags, (d) => d.code === 'syntax-error'),
+			(d) => ({ message: d.message, range: d.range })));
+	});
+
 	it('reports not-a-function for @param {string} annotated param when called', () => {
 		let diags = diagnose('file:///t.uc',
 			"/**\n * @param {string} name\n */\nfunction greet(name) { name(); }\ngreet('x');\n");

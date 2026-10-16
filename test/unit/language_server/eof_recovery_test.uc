@@ -9,9 +9,12 @@ import { definition } from 'language_server.handlers.definition';
 import { completion } from 'language_server.handlers.completion';
 import { foldingRanges } from 'language_server.handlers.folding_range';
 
-// Blocks left open at the end of the file, which tree-sitter closes with
-// MISSING `}`s ('large open': the blocks after five complete statements).
-// Every feature must behave as it does on the closed file.
+// Blocks left open at the end of the file. tree-sitter closes each with a
+// MISSING `}`, except in a SMALL file: there one ERROR over the whole file
+// costs it less, so 'tiny open' parses as a single ERROR node where 'large
+// open' (the same blocks after five complete statements) gets
+// program > function_declaration > … > (MISSING "}"). Every feature must
+// behave on both as it does on the closed file.
 
 let URI = 'file:///eof.uc';
 
@@ -22,6 +25,7 @@ let PREFIX = "let p1 = 1;\nlet p2 = 2;\nlet p3 = 3;\nlet p4 = 4;\nlet p5 = 5;\n"
 let VARIANTS = [
 	{ name: 'closed',     text: BODY + "\t}\n}\n", shift: 0, open: false },
 	{ name: 'large open', text: PREFIX + BODY,     shift: 5, open: true  },
+	{ name: 'tiny open',  text: BODY,              shift: 0, open: true  },
 ];
 
 let _config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
@@ -115,3 +119,33 @@ function variantSuite(v) {
 
 for (let v in VARIANTS)
 	variantSuite(v);
+
+describe('blocks open at EOF — tiny file, other cases', () => {
+	it('reports the same other diagnostics as the closed file, at the same ranges', () => {
+		let closed = otherDiags(diagnosticsFor(URI, open(VARIANTS[0].text)));
+		documents.close(URI);
+		invalidateUri(URI);
+		let tiny = otherDiags(diagnosticsFor(URI, open(VARIANTS[2].text)));
+		assert.match(closed, tiny);
+	});
+
+	it('reports a missing end keyword for an open alt-syntax body', () => {
+		let text = "function f(a) {\n\tlet x = 1;\n\tif (a):\n\t\tlet y = x;\n";
+		let doc = open(text);
+		assertMissingAtEof(diagnosticsFor(URI, doc), { line: 4, character: 0 }, ['endif', '}']);
+		assert.match(['f'], map(documentSymbols(doc), (x) => x.name));
+	});
+
+	it('recovers a template that ends inside an open {% tag', () => {
+		let text = "{%\nfunction f(a) {\n\tlet x = 1;\n\tif (a) {\n\t\tlet y = x;\n";
+		let eof = { line: 5, character: 0 };
+		assertMissingAtEof(diagnosticsFor(URI, open(text)), eof, ['}', '}']);
+		let labels = labelsAt(text, eof);
+		assert.match([true, true], [index(labels, 'a') >= 0, index(labels, 'x') >= 0]);
+	});
+
+	it('ignores braces inside strings, comments and regexes', () => {
+		let text = "function f(a) {\n\tif (a) {\n\t\tlet s = '{';\n\t\t// {\n\t\tlet r = /{/;\n";
+		assertMissingAtEof(diagnosticsFor(URI, open(text)), { line: 5, character: 0 }, ['}', '}']);
+	});
+});

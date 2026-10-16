@@ -77,6 +77,66 @@ export function isTemplate(text) {
 	return hasCodePositionTag(text);
 };
 
+// ── Blocks left open at the end of the file ─────────────────────────────────
+// tree-sitter recovers a block left open at EOF by inserting a MISSING `}`, but
+// each insertion has a fixed cost while an ERROR wrapping the file costs more as
+// the file grows. So in a small file with two or more open blocks the whole file
+// becomes one ERROR: no function, no scopes, no outline. parse() then appends
+// the missing closers and parses again; syntaxErrors() reports the appended
+// closers (appendedClosers) as missing, as it does MISSING nodes.
+
+const CLOSER_OF = { '{': '}', '(': ')', '[': ']' };
+
+// An alt-syntax keyword whose `:` opens a body closed by its `end…` keyword.
+const ALT_END = { 'if': 'endif', 'for': 'endfor', 'while': 'endwhile', 'function': 'endfunction' };
+
+// Push the closers an ERROR node's tokens leave open onto `stack`. Named
+// children are complete constructs, already balanced; only the ERROR's own
+// tokens (and those of nested ERRORs) open or close. Strings, comments, regexes
+// and template literals are named nodes, so their brackets never count.
+function openClosers(node, stack, alt) {
+	for (let i = 0; i < ts.childCount(node); i++) {
+		let c = ts.child(node, i);
+		let t = ts.nodeType(c);
+		if (t === 'ERROR')
+			openClosers(c, stack, alt);
+		else if (ts.isNamed(c))
+			continue;
+		else if (CLOSER_OF[t]) {
+			push(stack, CLOSER_OF[t]);
+			alt.closer = null;
+		}
+		else if (length(stack) && t === stack[-1])
+			pop(stack);
+		else if (ALT_END[t]) {
+			alt.closer = ALT_END[t];
+			alt.depth = length(stack);
+		}
+		else if (t === ':' && alt.closer && alt.depth === length(stack)) {
+			push(stack, alt.closer);
+			alt.closer = null;
+		}
+		else if (t === ';')
+			alt.closer = null;
+	}
+}
+
+// The closers missing at the end of the file, innermost first, when an ERROR
+// (the root itself, or the root's last child) runs to the end; else null.
+function missingClosers(tree) {
+	let root = ts.rootNode(tree);
+	if (!ts.hasError(root)) return null;
+	let err = root;
+	if (ts.nodeType(root) !== 'ERROR') {
+		let n = ts.childCount(root);
+		err = n ? ts.child(root, n - 1) : null;
+		if (!err || ts.nodeType(err) !== 'ERROR') return null;
+	}
+	let stack = [];
+	openClosers(err, stack, { closer: null, depth: 0 });
+	return length(stack) ? reverse(stack) : null;
+}
+
 // Parse source with the grammar matching its detected mode. Returns a tree whose
 // root is 'markup' for a template or 'program' for a script. Both grammars share
 // one rule set: a template is ucode's statement stream, in which the text between
@@ -84,8 +144,37 @@ export function isTemplate(text) {
 // template's code carries the node types — and the nesting — of a script:
 // `{% if (c) { %}…{% } %}` is an ordinary if_statement whose statement_block
 // holds the text, and downstream analysis applies unchanged.
+//
+// When blocks left open at EOF turn the file into one ERROR (see above), the
+// tree returned is that of the text with the missing closers appended, so its
+// last nodes end past length(text). The `\n` ends a trailing line comment; the
+// spaces keep `} }` from lexing as a template's `}}`.
 export function parse(text) {
-	return ts.parse(isTemplate(text) ? _templateParser : _scriptParser, text);
+	let parser = isTemplate(text) ? _templateParser : _scriptParser;
+	let tree = ts.parse(parser, text);
+	let closers = missingClosers(tree);
+	if (!closers) return tree;
+	let closed = ts.parse(parser, text + "\n" + join(' ', closers));
+	return ts.nodeType(ts.rootNode(closed)) === 'ERROR' ? tree : closed;
+};
+
+function collectAppended(node, textEnd, out) {
+	for (let i = 0; i < ts.childCount(node); i++) {
+		let c = ts.child(node, i);
+		if (ts.endByte(c) <= textEnd) continue;
+		if (ts.childCount(c) > 0)
+			collectAppended(c, textEnd, out);
+		else if (ts.startByte(c) >= textEnd && !ts.isMissing(c))
+			push(out, c);
+	}
+}
+
+// The closer tokens parse() appended past the end of `text`, innermost first;
+// none for a tree parsed from `text` alone.
+export function appendedClosers(tree, text) {
+	let out = [];
+	collectAppended(ts.rootNode(tree), length(text), out);
+	return out;
 };
 
 // The `{%` / `%}` delimiters (with their trim `-` and lstrip `+` variants) that a
