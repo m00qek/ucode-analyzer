@@ -2,9 +2,26 @@ import * as ts from 'tree_sitter';
 import { firstNamed, namedNonComments } from 'code_analysis.ast_text';
 import { inferNode, inferParams, declaredType } from 'code_analysis.types.inferrer';
 import { importScope } from 'code_analysis.types.dag_bridge';
-import { makeScope, scopeSet, scopeHas, scopeFork } from 'code_analysis.types.scope';
-import { UNKNOWN, STR } from 'code_analysis.types.type_utils';
+import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork } from 'code_analysis.types.scope';
+import { UNKNOWN, STR, unionOf } from 'code_analysis.types.type_utils';
 import { parseGuard, applyGuard } from 'code_analysis.types.narrowing';
+
+// Binary search: return the scope for the largest checkpoint.offset <= offset.
+export function scopeAtOffset(map, offset) {
+    let lo = 0;
+    let hi = length(map) - 1;
+    let result = length(map) > 0 ? map[0].scope : makeScope(null);
+    while (lo <= hi) {
+        let mid = int((lo + hi) / 2);
+        if (map[mid].offset <= offset) {
+            result = map[mid].scope;
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return result;
+};
 
 // Emit a (offset, scope) checkpoint into the sorted map.
 function emit(map, offset, scope) {
@@ -83,6 +100,22 @@ function addParams(fn, source, uri, scope) {
         scopeSet(scope, p.name, p.type ?? UNKNOWN);
 }
 
+// `for (k, v in it)`: the key is an index for a list, a string for a dict.
+function keyTypeOf(iterType) {
+    if (iterType.kind === 'nullable') iterType = iterType.inner;
+    if (iterType.kind === 'generic' && iterType.base === 'list') return { kind: 'primitive', name: 'int' };
+    if (iterType.kind === 'record' || (iterType.kind === 'generic' && iterType.base === 'dict')) return STR;
+    return UNKNOWN;
+}
+
+// `for (k, v in it)`: the value is a list item or a dict value.
+function valueTypeOf(iterType) {
+    if (iterType.kind === 'nullable') iterType = iterType.inner;
+    if (iterType.kind === 'generic' && length(iterType.params) > 0)
+        return iterType.base === 'dict' ? (iterType.params[-1] ?? UNKNOWN) : iterType.params[0];
+    return UNKNOWN;
+}
+
 // Infer the element type that a for-in loop variable takes from its iterable.
 function elemTypeOf(iterType) {
     if (iterType.kind === 'nullable') iterType = iterType.inner;
@@ -134,6 +167,172 @@ function applyGuardClause(stmt, source, scope) {
     return narrowed;
 }
 
+// ── Assignment widening ───────────────────────────────────────────────────
+// After a compound statement, a variable it assigns has the type of whichever
+// path reached the end: `let x = null; if (c) x = {};` leaves x `null | {}`.
+
+// One pass for both: pattern 0 is an assignment, the others declarations.
+let BINDINGS = `
+(assignment_expression left: (identifier) @name right: (_) @rhs)
+(variable_declarator name: (identifier) @name)
+(for_in_statement variable: (identifier) @name)`;
+let _queries = {};
+
+function query(lang) {
+    _queries[lang] ??= ts.newQuery(lang === 'markup' ? ts.markup() : ts.ucode(), BINDINGS);
+    return _queries[lang];
+}
+
+const FUNCTION_TYPES = { function_declaration: true, function_expression: true, arrow_function: true };
+
+// Every `name = …` and every declared name of the tree being mapped, sorted by
+// start, collected once: { start, name, rhs, fnStart } with fnStart the start
+// of the innermost enclosing function (-1 at top level).
+let _assigns = [], _decls = [];
+
+function collectBindings(root, source) {
+    let lang = ts.nodeType(root) === 'markup' ? 'markup' : 'ucode';
+    _assigns = [];
+    _decls = [];
+    for (let m in ts.queryMatches(query(lang), root, source)) {
+        let c = {};
+        for (let cap in m.captures) c[cap.name] = cap.node;
+        let entry = { start: ts.startByte(c.name), name: ts.text(c.name, source) };
+        if (m.pattern !== 0) { push(_decls, entry); continue; }
+        entry.rhs = c.rhs;
+        entry.fnStart = -1;
+        for (let p = ts.parent(c.name); p; p = ts.parent(p))
+            if (FUNCTION_TYPES[ts.nodeType(p)]) { entry.fnStart = ts.startByte(p); break; }
+        push(_assigns, entry);
+    }
+}
+
+// Index of the first entry of a start-sorted list at or after `start`.
+function lowerBound(list, start) {
+    let lo = 0, hi = length(list);
+    while (lo < hi) {
+        let mid = (lo + hi) >> 1;
+        if (list[mid].start < start) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+}
+
+// { name: [rhs nodes] } for `name = …` inside stmt, outside functions nested
+// in it, for names stmt does not declare itself.
+function assignmentsIn(stmt, source) {
+    let s = ts.startByte(stmt), e = ts.endByte(stmt);
+    let out = {};
+    for (let i = lowerBound(_assigns, s); i < length(_assigns) && _assigns[i].start < e; i++) {
+        let a = _assigns[i];
+        if (a.fnStart >= s) continue;   // inside a function nested in stmt
+        out[a.name] ??= [];
+        push(out[a.name], a.rhs);
+    }
+    if (length(out))
+        for (let i = lowerBound(_decls, s); i < length(_decls) && _decls[i].start < e; i++)
+            delete out[_decls[i].name];
+    return out;
+}
+
+function rhsType(rhs, source, uri, smap) {
+    return inferNode(rhs, source, uri, scopeAtOffset(smap, ts.startByte(rhs)), 0);
+}
+
+// The union of types, or UNKNOWN when any is unknown (stay silent, not guess).
+function joinTypes(types) {
+    let flat = [];
+    for (let t in types) {
+        if (!t || t.kind === 'unknown') return UNKNOWN;
+        if (t.kind === 'union') push(flat, ...t.members); else push(flat, t);
+    }
+    return unionOf(flat);
+}
+
+function entryType(scope, name, guard, positive) {
+    if (!guard) return scopeGet(scope, name) ?? UNKNOWN;
+    let s = makeScope(scope);
+    applyGuard(s, guard, positive);
+    return scopeGet(s, name) ?? UNKNOWN;
+}
+
+// branchExit and ifExit recurse into each other (ucode does not hoist).
+let ifExit;
+
+// Type of `name` leaving a branch entered with `t`, or null when the branch
+// cannot fall out (ends in return/break/…). Direct assignments in the
+// branch's own statements are tracked in order; any deeper one widens.
+let branchExit;
+branchExit = function(branch, name, t, source, uri, smap) {
+    let bt = ts.nodeType(branch);
+    if (bt === 'if_statement') return ifExit(branch, name, t, source, uri, smap);
+    let stmts = (bt === 'statement_block' || bt === 'statement_list') ? namedNonComments(branch) : [branch];
+    if (length(stmts) && endsInTerminator(stmts[-1], source)) return null;
+    for (let st in stmts) {
+        let e = (ts.nodeType(st) === 'expression_statement') ? firstNamed(st) : null;
+        if (e && ts.nodeType(e) === 'assignment_expression') {
+            let l = ts.childByField(e, 'left');
+            if (l && ts.nodeType(l) === 'identifier' && ts.text(l, source) === name) {
+                t = rhsType(ts.childByField(e, 'right'), source, uri, smap);
+                continue;
+            }
+        }
+        if (ts.nodeType(st) === 'if_statement') {
+            t = ifExit(st, name, t, source, uri, smap);
+            if (t === null) return null;   // every branch of it ends the flow
+            continue;
+        }
+        let deeper = assignmentsIn(st, source)[name];
+        if (deeper) t = joinTypes([t, ...map(deeper, (r) => rhsType(r, source, uri, smap))]);
+    }
+    return t;
+};
+
+// Type of `name` after an if/else chain entered with `t`; null when every
+// branch ends the flow.
+ifExit = function(node, name, t, source, uri, smap) {
+    let cond  = firstNamed(ts.childByField(node, 'condition'));
+    let guard = cond ? parseGuard(cond, source) : null;
+    let exits = [];
+    let scopeT = makeScope(null);
+    scopeSet(scopeT, name, t);
+    let cons = ts.childByField(node, 'consequence');
+    let e1 = cons ? branchExit(cons, name, entryType(scopeT, name, guard, true), source, uri, smap) : null;
+    if (e1 !== null) push(exits, e1);
+    let alt = ts.childByField(node, 'alternative');
+    let falseT = entryType(scopeT, name, guard, false);
+    if (alt) {
+        let altBody = firstNamed(alt);
+        let e2 = altBody ? branchExit(altBody, name, falseT, source, uri, smap) : falseT;
+        if (e2 !== null) push(exits, e2);
+    } else {
+        push(exits, falseT);
+    }
+    return length(exits) ? joinTypes(exits) : null;
+};
+
+const LOOP_LIKE = {
+    while_statement: true, for_statement: true, for_in_statement: true,
+    for_alt_statement: true, for_in_alt_statement: true, while_alt_statement: true,
+    if_alt_statement: true, switch_statement: true, try_statement: true,
+};
+
+// The scope after a compound statement, with every outer variable it assigns
+// widened to the types that can reach its end.
+function widenAssigned(stmt, before, after, source, uri, smap) {
+    let st = ts.nodeType(stmt);
+    if (st !== 'if_statement' && !LOOP_LIKE[st]) return after;
+    let assigned = assignmentsIn(stmt, source);
+    for (let name, rhss in assigned) {
+        if (!scopeHas(before, name)) continue;
+        let t0 = scopeGet(before, name) ?? UNKNOWN;
+        let t = (st === 'if_statement')
+            ? ifExit(stmt, name, t0, source, uri, smap)
+            : joinTypes([t0, ...map(rhss, (r) => rhsType(r, source, uri, smap))]);
+        if (t !== null) after = scopeFork(after, name, t);
+    }
+    return after;
+}
+
 // Forward declaration so handler functions can call walkNode.
 let walkNode;
 
@@ -147,12 +346,15 @@ let walkNode;
 // carry no declarations and walk as no-ops.
 function stepStatement(stmt, source, uri, scope, map) {
     emit(map, ts.startByte(stmt), scope);
+    let inner = length(map);
     walkNode(stmt, source, uri, scope, map);
+    inner = length(map) > inner;
     let next = applyGuardClause(stmt, source, advanceScope(stmt, source, uri, scope));
+    next = widenAssigned(stmt, scope, next, source, uri, map);
     // Past the statement's end (a blank line before the next one) its
-    // declarations are in scope. Not when it is left open at EOF: the end of
-    // the file is still inside its blocks.
-    if (next !== scope && !(ts.hasError(stmt) && ts.endByte(stmt) >= length(source)))
+    // declarations are in scope and its blocks' are not. Not when it is left
+    // open at EOF: the end of the file is still inside its blocks.
+    if ((next !== scope || inner) && !(ts.hasError(stmt) && ts.endByte(stmt) >= length(source)))
         emit(map, ts.endByte(stmt), next);
     return next;
 }
@@ -200,11 +402,17 @@ function walkForIn(node, source, uri, scope, map) {
     let body  = ts.childByField(node, 'body');
     if (right) walkNode(right, source, uri, scope, map);
     let loopScope = makeScope(scope);
-    if (left && ts.nodeType(left) === 'identifier') {
-        let iterType = right ? inferNode(right, source, uri, scope, 0) : UNKNOWN;
-        scopeSet(loopScope, ts.text(left, source), elemTypeOf(iterType));
+    let value = ts.childByField(node, 'value');
+    let iterType = right ? inferNode(right, source, uri, scope, 0) : UNKNOWN;
+    if (left && ts.nodeType(left) === 'identifier')
+        scopeSet(loopScope, ts.text(left, source), value ? keyTypeOf(iterType) : elemTypeOf(iterType));
+    // `for (k, v in o)`: v is the element (list item or dict value).
+    if (value && ts.nodeType(value) === 'identifier')
+        scopeSet(loopScope, ts.text(value, source), valueTypeOf(iterType));
+    if (body) {
+        emit(map, ts.startByte(body), loopScope);
+        walkNode(body, source, uri, loopScope, map);
     }
-    if (body) walkNode(body, source, uri, loopScope, map);
 }
 
 function walkForStmt(node, source, uri, scope, map) {
@@ -226,9 +434,12 @@ function walkForStmt(node, source, uri, scope, map) {
             }
         }
     }
-    if (cond) walkNode(cond, source, uri, forScope, map);
-    if (incr) walkNode(incr, source, uri, forScope, map);
-    if (body) walkNode(body, source, uri, forScope, map);
+    // The increment runs only after a true condition, which the scope cannot
+    // express (`l = f.read()` with `l` derived from `f?.read()`): its offsets
+    // keep the scope before the loop, as they always did.
+    if (cond) { emit(map, ts.startByte(cond), forScope); walkNode(cond, source, uri, forScope, map); }
+    if (incr) { emit(map, ts.startByte(incr), scope); walkNode(incr, source, uri, forScope, map); }
+    if (body) { emit(map, ts.startByte(body), forScope); walkNode(body, source, uri, forScope, map); }
 }
 
 // ── colon / end… (alt-syntax) forms: `for (…): … endfor` and friends ────────────
@@ -553,6 +764,8 @@ export function buildScopeMap(uri, source, tree) {
     let outer = [_marks, _pos];
     _marks = ts.descendantOffsets(root, SCOPE_TYPES);
     _pos = 0;
+    let outerBindings = [_assigns, _decls];
+    collectBindings(root, source);
     emit(map, 0, scope);
     let n = ts.namedChildCount(root);
     for (let i = 0; i < n; i++)
@@ -565,22 +778,8 @@ export function buildScopeMap(uri, source, tree) {
         emit(map, ts.endByte(root), scope);
     _marks = outer[0];
     _pos = outer[1];
+    _assigns = outerBindings[0];
+    _decls = outerBindings[1];
     return map;
 };
 
-// Binary search: return the scope for the largest checkpoint.offset <= offset.
-export function scopeAtOffset(map, offset) {
-    let lo = 0;
-    let hi = length(map) - 1;
-    let result = length(map) > 0 ? map[0].scope : makeScope(null);
-    while (lo <= hi) {
-        let mid = int((lo + hi) / 2);
-        if (map[mid].offset <= offset) {
-            result = map[mid].scope;
-            lo = mid + 1;
-        } else {
-            hi = mid - 1;
-        }
-    }
-    return result;
-};

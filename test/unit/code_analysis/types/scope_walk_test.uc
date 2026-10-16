@@ -124,6 +124,88 @@ describe('buildScopeMap between statements', () => {
 	});
 });
 
+describe('buildScopeMap loops', () => {
+	it('a braceless for-in body sees the loop variable', () => {
+		let src = "for (let v in [1, 2]) print(v);\n";
+		assert.match('int', scopeGet(scopeAt(src, 'print'), 'v')?.name);
+	});
+
+	it('for (k, v in …) binds both', () => {
+		let src = "for (let k, v in { a: 1 }) print(k, v);\n";
+		let scope = scopeAt(src, 'print');
+		assert.match('string', scopeGet(scope, 'k')?.name);
+		assert.match(true, scopeGet(scope, 'v') !== null);
+		let lsrc = "for (let i, v in ['a']) print(i, v);\n";
+		assert.match(['int', 'string'], map(['i', 'v'], (n) => scopeGet(scopeAt(lsrc, 'print'), n)?.name));
+	});
+
+	it('a C-style for condition and body see the loop variable; the increment keeps the outer scope', () => {
+		let src = "for (let i = 0; i < 3; i++) print(i);\n";
+		assert.match('int', scopeGet(scopeAt(src, 'i < 3'), 'i')?.name);
+		assert.match('int', scopeGet(scopeAt(src, 'print'), 'i')?.name);
+		assert.match(null, scopeGet(scopeAt(src, 'i++'), 'i'));
+	});
+
+	it('the gap after a loop does not see its variable', () => {
+		let src = "for (let v in [1]) {\n\tprint(v);\n}\n\nprint(2);\n";
+		assert.match(null, scopeGet(scopeAt(src, '\n\nprint(2)'), 'v'));
+	});
+});
+
+describe('buildScopeMap assignment widening', () => {
+	function xAt(src, name) {
+		return scopeGet(scopeAt(src, 'return'), name ?? 'x');
+	}
+	let NUL = { kind: 'primitive', name: 'null' };
+
+	it('an if without else widens to both paths', () => {
+		let t = xAt("function f(c) {\n\tlet x = null;\n\tif (c) x = { a: 1 };\n\treturn x;\n}\n");
+		assert.match('union', t?.kind);
+		assert.match(['null', 'record'], sort(map(t.members, (m) => m.kind === 'primitive' ? m.name : m.kind)));
+	});
+
+	it('the same through a block', () => {
+		assert.match('union', xAt("function f(c) {\n\tlet x = null;\n\tif (c) { x = { a: 1 }; }\n\treturn x;\n}\n")?.kind);
+	});
+
+	it('if/else assigning on both paths drops the old type', () => {
+		assert.match('record', xAt("function f(c) {\n\tlet x = null;\n\tif (c) x = { a: 1 }; else x = { a: 2 };\n\treturn x;\n}\n")?.kind);
+	});
+
+	it('a branch that returns does not reach the end', () => {
+		let src = "function f(c) {\n\tlet x = null;\n\tif (c) { x = 1; return 1; }\n\treturn x;\n}\n";
+		assert.match(NUL, scopeGet(scopeAt(src, 'return x'), 'x'));
+	});
+
+	it('if (!x) x = … leaves x non-null', () => {
+		let src = "/** @param {?string} x */\nfunction f(x) {\n\tif (!x) x = 'd';\n\treturn x;\n}\n";
+		assert.match('string', xAt(src)?.name);
+	});
+
+	it('an else-if chain joins every branch', () => {
+		let t = xAt("function f(c, d) {\n\tlet x = 1;\n\tif (c) x = 's';\n\telse if (d) x = true;\n\treturn x;\n}\n");
+		assert.match('union', t?.kind);
+		assert.match(3, length(t.members));
+	});
+
+	it('a loop widens with the type before it', () => {
+		let t = xAt("function f(xs) {\n\tlet x = null;\n\tfor (let v in [1, 2]) x = v;\n\treturn x;\n}\n");
+		assert.match('union', t?.kind);
+	});
+
+	it('an assignment in a nested function does not widen', () => {
+		assert.match(NUL, xAt("function f(c) {\n\tlet x = null;\n\tif (c) { let g = () => { x = 1; }; }\n\treturn x;\n}\n"));
+	});
+
+	it('a branch that redeclares the name does not widen the outer one', () => {
+		assert.match(NUL, xAt("function f(c) {\n\tlet x = null;\n\tif (c) { let x = 1; x = 2; }\n\treturn x;\n}\n"));
+	});
+
+	it('an unknown assigned type makes the result unknown', () => {
+		assert.match('unknown', xAt("function f(c, g) {\n\tlet x = null;\n\tif (c) x = g();\n\treturn x;\n}\n")?.kind);
+	});
+});
+
 describe('buildScopeMap switch', () => {
 	let P = '/** @param {?array} m */\nfunction f(m, k) {\n';
 
