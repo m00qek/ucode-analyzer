@@ -272,6 +272,18 @@ export function childrenByField(node, name) {
 };
 
 /**
+ * Return the start bytes of every descendant of node (node included) whose
+ * type is in `types`, in document order, without visiting them from ucode.
+ * @param {Node} node
+ * @param {string[]} types
+ * @returns {int[]}
+ */
+export function descendantOffsets(node, types) {
+	expect(type(types) === 'array', 'descendantOffsets() expects an array of type names');
+	return native.ts_node_descendant_offsets(node, types);
+};
+
+/**
  * Return the smallest descendant of node (named or anonymous) containing the
  * byte at offset, or node itself when no child does.
  * @param {Node} node

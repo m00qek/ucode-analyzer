@@ -416,6 +416,38 @@ function walkBinary(node, source, uri, scope, map) {
     }
 }
 
+// The node types walkNode handles itself; everything else only recurses, so a
+// subtree holding none of them emits nothing and is skipped. Keep in sync
+// with walkNode's dispatch.
+const SCOPE_TYPES = [
+    'statement_block', 'statement_list', 'if_statement', 'for_in_statement',
+    'for_statement', 'for_in_alt_statement', 'for_alt_statement',
+    'while_alt_statement', 'if_alt_statement', 'while_statement',
+    'try_statement', 'function_declaration', 'function_expression',
+    'arrow_function', 'ternary_expression', 'binary_expression',
+];
+
+// Start bytes of the SCOPE_TYPES nodes in the tree being mapped, sorted; null
+// outside buildScopeMap (then nothing is skipped). _pos is the first mark at
+// or after the last queried start: the walk queries in source order, so it
+// moves forward; a query behind it falls back to a binary search.
+let _marks = null, _pos = 0;
+
+// Does [start, end) hold the start of a SCOPE_TYPES node?
+function holdsMark(start, end) {
+    if (_pos > 0 && _marks[_pos - 1] >= start) {
+        let lo = 0, hi = _pos;
+        while (lo < hi) {
+            let mid = (lo + hi) >> 1;
+            if (_marks[mid] < start) lo = mid + 1; else hi = mid;
+        }
+        _pos = lo;
+    }
+    let n = length(_marks);
+    while (_pos < n && _marks[_pos] < start) _pos++;
+    return _pos < n && _marks[_pos] < end;
+}
+
 walkNode = function(node, source, uri, scope, map) {
     let nt = ts.nodeType(node);
     if (nt === 'statement_block') {
@@ -453,8 +485,9 @@ walkNode = function(node, source, uri, scope, map) {
     } else if (nt === 'binary_expression') {
         walkBinary(node, source, uri, scope, map);
     } else {
-        for (let i = 0; i < ts.namedChildCount(node); i++)
-            walkNode(ts.namedChild(node, i), source, uri, scope, map);
+        for (let c in ts.namedChildren(node))
+            if (!_marks || holdsMark(ts.startByte(c), ts.endByte(c)))
+                walkNode(c, source, uri, scope, map);
     }
 };
 
@@ -465,6 +498,9 @@ export function buildScopeMap(uri, source, tree) {
     let root  = ts.rootNode(tree);
     let scope = importScope(uri);
     let map   = [];
+    let outer = [_marks, _pos];
+    _marks = ts.descendantOffsets(root, SCOPE_TYPES);
+    _pos = 0;
     emit(map, 0, scope);
     let n = ts.namedChildCount(root);
     for (let i = 0; i < n; i++)
@@ -475,6 +511,8 @@ export function buildScopeMap(uri, source, tree) {
     let last = n ? ts.namedChild(root, n - 1) : null;
     if (!last || !ts.hasError(last) || ts.endByte(last) < ts.endByte(root))
         emit(map, ts.endByte(root), scope);
+    _marks = outer[0];
+    _pos = outer[1];
     return map;
 };
 

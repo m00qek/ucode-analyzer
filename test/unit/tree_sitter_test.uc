@@ -165,6 +165,18 @@ describe('ts (child lists and descendant lookup)', () => {
 		}
 	});
 
+	it('descendantOffsets lists the starts of matching descendants in order', () => {
+		let want = [];
+		eachNode(root, (n) => {
+			let t = ts.nodeType(n);
+			if (t === 'identifier' || t === 'statement_block') push(want, ts.startByte(n));
+		});
+		assert.match(want, ts.descendantOffsets(root, ['identifier', 'statement_block']));
+		assert.match([], ts.descendantOffsets(root, ['no_such_type']));
+		let fn = ts.namedChild(root, 1);
+		assert.match([ts.startByte(fn)], ts.descendantOffsets(fn, ['function_declaration']));
+	});
+
 	it('childrenByField returns the named children under a field', () => {
 		let d = "/** @type {Map<string, int>} */";
 		let droot = ts.rootNode(ts.parse(ts.newParser(ts.ucdocs()), d));

@@ -17,6 +17,8 @@
 #include <tree_sitter/tree-sitter-ucode-markup.h>
 #include <tree_sitter/tree-sitter-ucode.h>
 
+#include <string.h>
+
 #include <ucode/lib.h>
 #include <ucode/module.h>
 
@@ -423,6 +425,70 @@ static uc_value_t *descendant_at(uc_vm_t *vm, size_t nargs, bool named) {
                                                              offset + 1));
 }
 
+/*
+ * The start bytes of every descendant of `node` (itself included) whose type
+ * is one of `types`, in document order (a preorder walk, so non-decreasing).
+ * Offsets rather than nodes: a caller can test "does this subtree hold any of
+ * these?" with a binary search instead of visiting it.
+ */
+static uc_value_t *uc_ts_node_descendant_offsets(uc_vm_t *vm, size_t nargs) {
+  uc_ts_node_t *node = node_arg(vm, nargs, 0);
+  uc_value_t *typesval = uc_fn_arg(1);
+  uc_value_t *result, *item;
+  TSTreeCursor cursor;
+  TSNode current;
+  const char *type, *want;
+  size_t i, ntypes;
+  bool descend = true;
+
+  if (!node)
+    return NULL;
+
+  if (ucv_type(typesval) != UC_ARRAY) {
+    uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting an array of types");
+    return NULL;
+  }
+
+  ntypes = ucv_array_length(typesval);
+  result = ucv_array_new(vm);
+  cursor = ts_tree_cursor_new(node->node);
+
+  for (;;) {
+    if (descend) {
+      current = ts_tree_cursor_current_node(&cursor);
+      type = ts_node_type(current);
+
+      for (i = 0; i < ntypes; i++) {
+        item = ucv_array_get(typesval, i);
+        want = ucv_string_get(item);
+
+        if (want && !strcmp(type, want)) {
+          ucv_array_push(result, ucv_int64_new(ts_node_start_byte(current)));
+          break;
+        }
+      }
+
+      if (ts_tree_cursor_goto_first_child(&cursor))
+        continue;
+    }
+
+    /* The cursor's root is `node`: it has no siblings or parent to visit. */
+    if (ts_tree_cursor_goto_next_sibling(&cursor)) {
+      descend = true;
+      continue;
+    }
+
+    if (!ts_tree_cursor_goto_parent(&cursor))
+      break;
+
+    descend = false;
+  }
+
+  ts_tree_cursor_delete(&cursor);
+
+  return result;
+}
+
 static uc_value_t *uc_ts_node_descendant_at(uc_vm_t *vm, size_t nargs) {
   return descendant_at(vm, nargs, false);
 }
@@ -608,6 +674,7 @@ static const uc_function_list_t global_fns[] = {
     {"ts_node_named_children", uc_ts_node_named_children},
     {"ts_node_children_by_field", uc_ts_node_children_by_field},
     {"ts_node_descendant_at", uc_ts_node_descendant_at},
+    {"ts_node_descendant_offsets", uc_ts_node_descendant_offsets},
     {"ts_node_named_descendant_at", uc_ts_node_named_descendant_at},
     {"ts_query_new", uc_ts_query_new},
     {"ts_query_pattern_count", uc_ts_query_pattern_count},
