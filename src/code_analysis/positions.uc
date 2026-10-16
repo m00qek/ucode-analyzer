@@ -31,12 +31,10 @@ export function docBefore(stmt, parent, text) {
 	for (let i = 0; i < length(children); i++) {
 		let c = children[i];
 		if (ts.startByte(c) >= stmtStart) break;
-		if (ts.nodeType(c) === 'comment') {
-			let txt = ts.text(c, text);
-			found = (substr(txt, 0, 3) === '/**') ? txt : null;
-		} else if (ts.isNamed(c)) {
+		if (ts.nodeType(c) === 'doc_comment')
+			found = ts.text(c, text);
+		else if (ts.isNamed(c))
 			found = null;
-		}
 	}
 	return found;
 };
@@ -53,9 +51,10 @@ export function docBeforeMap(parent, text) {
 	let pending = null;
 	for (let c in ts.children(parent)) {
 		let ct = ts.nodeType(c);
-		if (ct === 'comment') {
-			let txt = ts.text(c, text);
-			pending = (substr(txt, 0, 3) === '/**') ? txt : null;
+		if (ct === 'doc_comment') {
+			pending = ts.text(c, text);
+		} else if (ct === 'comment') {
+			pending = null;
 		} else if (ts.isNamed(c)) {
 			map[ts.startByte(c)] = pending;
 			pending = null;
@@ -95,8 +94,8 @@ export function docNodeBefore(stmt, parent, text) {
 	let found = null;
 	for (let c in ts.children(parent)) {
 		if (ts.startByte(c) >= stmtStart) break;
-		if (ts.nodeType(c) === 'comment')
-			found = (substr(ts.text(c, text), 0, 3) === '/**') ? c : null;
+		if (ts.nodeType(c) === 'doc_comment')
+			found = c;
 		else if (ts.isNamed(c))
 			found = null;
 	}

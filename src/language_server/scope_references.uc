@@ -57,7 +57,7 @@ function bindForInVar(block, scope, source, targetName, out) {
 	let parent = ts.parent(block);
 	if (!parent || (ts.nodeType(parent) !== 'for_in_statement' &&
 	                ts.nodeType(parent) !== 'for_in_alt_statement')) return;
-	let left = ts.childByField(parent, 'left');
+	let left = ts.childByField(parent, 'variable') ?? ts.childByField(parent, 'key');
 	if (!left) return;
 	if (ts.nodeType(left) === 'identifier') {
 		// for (x in arr) — bare identifier (re-use of existing variable)
@@ -192,7 +192,7 @@ function walk(node, scope, source, targetName, out) {
 
 	// ── For-in: walk iterable in current scope, body handles the binding ────
 	if (nt === 'for_in_statement') {
-		let right = ts.childByField(node, 'right');
+		let right = ts.childByField(node, 'object');
 		if (right) walk(right, scope, source, targetName, out);
 		let body = ts.childByField(node, 'body');
 		if (body) {

@@ -195,14 +195,14 @@ export function extractExports(text, tree) {
 			for (let j = 0; j < ts.namedChildCount(decl); j++) {
 				let spec = ts.namedChild(decl, j);
 				if (ts.nodeType(spec) !== 'export_specifier') continue;
-				// last named child is the exported name (handles both `{ name }` and `{ local as name }`)
-				let count = ts.namedChildCount(spec);
-				let nameNode = ts.namedChild(spec, count - 1);
-				if (!nameNode || ts.nodeType(nameNode) !== 'identifier') continue;
+				// The exported name is the alias (`{ local as name }`), else the name
+				// itself; `default` (`{ local as default }`) is a named node too.
+				let localNameNode = ts.childByField(spec, 'name');
+				let nameNode = ts.childByField(spec, 'alias') ?? localNameNode;
+				let nt = nameNode ? ts.nodeType(nameNode) : null;
+				if (nt !== 'identifier' && nt !== 'default') continue;
 				let name = ts.text(nameNode, text);
-				// For `{ local as alias }` the local (original) name is the first child; use it
-				// for the declaration lookup so kind/doc reflect the actual local binding.
-				let localNameNode = (count > 1) ? ts.namedChild(spec, 0) : nameNode;
+				// Look up the local binding, so kind/doc reflect the actual declaration.
 				let localName = localNameNode ? ts.text(localNameNode, text) : name;
 				let info = localDeclInfo(declIndex(), localName);
 				let position = (info.startByte !== null) ? pos(info.startByte) : null;
@@ -309,10 +309,10 @@ export function extractModuleDoc(text, tree) {
 	let children = ts.namedChildren(root);
 	for (let i = 0; i < length(children); i++) {
 		let c = children[i];
-		if (ts.nodeType(c) !== 'comment') break;
-		let txt = ts.text(c, text);
-		if (substr(txt, 0, 3) !== '/**') continue;
-		let doc = parseDoc(txt);
+		let ct = ts.nodeType(c);
+		if (ct !== 'comment' && ct !== 'doc_comment') break;
+		if (ct !== 'doc_comment') continue;
+		let doc = parseDoc(ts.text(c, text));
 		if (doc.description) return doc;
 		break;
 	}
@@ -327,10 +327,8 @@ export function extractTypedefs(uri, text, tree) {
 	let children = ts.namedChildren(root);
 	for (let i = 0; i < length(children); i++) {
 		let c = children[i];
-		if (ts.nodeType(c) !== 'comment') continue;
-		let txt = ts.text(c, text);
-		if (substr(txt, 0, 3) !== '/**') continue;
-		let doc = parseDoc(txt);
+		if (ts.nodeType(c) !== 'doc_comment') continue;
+		let doc = parseDoc(ts.text(c, text));
 		if (doc.typedef && doc.typedef.name && doc.typedef.type)
 			type_registry.register(doc.typedef.name, doc.typedef.type, uri, doc.template);
 	}

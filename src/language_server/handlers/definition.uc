@@ -130,8 +130,8 @@ function binderIn(scopeNode, name, text) {
 		// `for (x in y)` (no let/const) assigns to a binding declared elsewhere,
 		// so this node does not bind `name` — let the real declaration win.
 		if (!forInDeclares(scopeNode, text)) return null;
-		// `for (let k, v in obj)` binds both the key (`left`) and value (`value`).
-		for (let f in ['left', 'value']) {
+		// `for (let x in obj)` binds `variable`; `for (let k, v in obj)` binds `key` and `value`.
+		for (let f in ['variable', 'key', 'value']) {
 			let v = ts.childByField(scopeNode, f);
 			if (v && ts.nodeType(v) === 'identifier' && ts.text(v, text) === name) return v;
 		}

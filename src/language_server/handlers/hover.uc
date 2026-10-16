@@ -120,15 +120,16 @@ function hoverParam(node, formalParams, doc, config) {
 
 // ── Case 2: for-in loop variable at its declaration site ───────────────────
 //
-// The loop variable (the `left` field of for_in_statement) only enters scope
-// inside the body block, so looking it up in the scope at startByte(forIn)
-// won't find it.  Infer the iterable's element type directly from the `right` field.
+// The loop variable (the `variable` or `key` field of for_in_statement) only
+// enters scope inside the body block, so looking it up in the scope at
+// startByte(forIn) won't find it.  Infer the iterable's element type directly
+// from the `object` field.
 function hoverForInVar(node, forIn, doc, config) {
-	let left = ts.childByField(forIn, 'left');
+	let left = ts.childByField(forIn, 'variable') ?? ts.childByField(forIn, 'key');
 	if (!left || ts.startByte(left) !== ts.startByte(node)) return null;
 
 	let scope    = scopeAtOffset(doc.scopeMap, ts.startByte(forIn));
-	let right    = ts.childByField(forIn, 'right');
+	let right    = ts.childByField(forIn, 'object');
 	let elemType = UNKNOWN;
 	if (right) {
 		let iterType = inferNode(right, doc.text, doc.uri, scope, 0);
@@ -210,9 +211,9 @@ export function hover(doc, position, config) {
 			return hoverParam(node, parent, doc, config);
 
 		// Only the loop variable(s) need the dedicated element-type path; the
-		// iterable (`right`) and anything else in the header get a normal hover.
+		// iterable (`object`) and anything else in the header get a normal hover.
 		if (parentType === 'for_in_statement') {
-			let left  = ts.childByField(parent, 'left');
+			let left  = ts.childByField(parent, 'variable') ?? ts.childByField(parent, 'key');
 			let value = ts.childByField(parent, 'value');
 			let ns    = ts.startByte(node);
 			if ((left && ts.startByte(left) === ns) || (value && ts.startByte(value) === ns))

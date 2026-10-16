@@ -193,8 +193,8 @@ function walkIfStmt(node, source, uri, scope, map) {
 }
 
 function walkForIn(node, source, uri, scope, map) {
-    let right = ts.childByField(node, 'right');
-    let left  = ts.childByField(node, 'left');
+    let right = ts.childByField(node, 'object');
+    let left  = ts.childByField(node, 'variable') ?? ts.childByField(node, 'key');
     let body  = ts.childByField(node, 'body');
     if (right) walkNode(right, source, uri, scope, map);
     let loopScope = makeScope(scope);
@@ -249,8 +249,8 @@ function walkStatementList(list, source, uri, scope, map) {
 
 // {% for (x in xs): %} … {% endfor %} — mirror walkForIn's loop-var binding.
 function walkForInAlt(node, source, uri, scope, map) {
-    let right = ts.childByField(node, 'right');
-    let left  = ts.childByField(node, 'left');
+    let right = ts.childByField(node, 'object');
+    let left  = ts.childByField(node, 'variable') ?? ts.childByField(node, 'key');
     if (right) walkNode(right, source, uri, scope, map);
     let loopScope = makeScope(scope);
     if (left && ts.nodeType(left) === 'identifier') {

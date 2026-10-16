@@ -209,6 +209,14 @@ describe('indexer.extractExports', () => {
 		assert.match({ line: 0, character: 9 }, exps[0].position);
 	});
 
+	it('names an export-clause default export `default`', () => {
+		let text = 'function greet() {}\nexport { greet as default };';
+		let exps = extractExports(text, parse(text));
+		assert.match(1, length(exps));
+		assert.match('default', exps[0].name);
+		assert.match('function', exps[0].kind);
+	});
+
 	// ── legacy module pattern: top-level `return { ... }` (ucode require shape) ──
 	it('surfaces top-level return-object fields as exports', () => {
 		let text = "return {\n\tread_state: function() { return 1; },\n\tversion: 2\n};\n";

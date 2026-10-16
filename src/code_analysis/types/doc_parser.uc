@@ -31,18 +31,9 @@ const OPAQUE_BUILTINS = {
 	object: true, array: true, regexp: true, resource: true,
 };
 
-// Forward declaration: flattenUnion and parseTypeNode are mutually recursive,
-// and ucode does not hoist function declarations.
+// Declared first: ucode cannot refer to a `let` from its own initializer, and
+// parseTypeNode is recursive.
 let parseTypeNode;
-
-function flattenUnion(node, source, tparams, out) {
-	if (ts.nodeType(node) === 'union_type') {
-		flattenUnion(ts.namedChild(node, 0), source, tparams, out);
-		flattenUnion(ts.namedChild(node, 1), source, tparams, out);
-	} else {
-		push(out, parseTypeNode(node, source, tparams));
-	}
-}
 
 parseTypeNode = function(node, source, tparams) {
 	let kind = ts.nodeType(node);
@@ -132,9 +123,11 @@ parseTypeNode = function(node, source, tparams) {
 		};
 	}
 
+	// One flat node however many members (`a | b | c`).
 	if (kind === 'union_type') {
 		let members = [];
-		flattenUnion(node, source, tparams, members);
+		for (let i = 0; i < ts.namedChildCount(node); i++)
+			push(members, parseTypeNode(ts.namedChild(node, i), source, tparams));
 		return { kind: 'union', members };
 	}
 

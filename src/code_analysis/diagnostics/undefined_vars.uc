@@ -28,7 +28,7 @@ function bindForInVar(block, scope, source) {
 	let parent = ts.parent(block);
 	if (!parent || (ts.nodeType(parent) !== 'for_in_statement' &&
 	                ts.nodeType(parent) !== 'for_in_alt_statement')) return;
-	let left = ts.childByField(parent, 'left');
+	let left = ts.childByField(parent, 'variable') ?? ts.childByField(parent, 'key');
 	if (!left) return;
 	if (ts.nodeType(left) === 'identifier') {
 		bind(scope, ts.text(left, source));
@@ -185,7 +185,7 @@ function walk(node, scope, source, globals, lineTable, out) {
 	}
 
 	if (nt === 'for_in_statement' || nt === 'for_in_alt_statement') {
-		let right = ts.childByField(node, 'right');
+		let right = ts.childByField(node, 'object');
 		if (right) walk(right, scope, source, globals, lineTable, out);
 		let body = ts.childByField(node, 'body');
 		if (body) {

@@ -21,7 +21,8 @@ function walk(node, source, lineTable, out) {
 			// Comments are extra nodes, not code: a trailing `return x; // note`
 			// must not be reported as unreachable, and a comment never terminates
 			// or revives a block. Skip without touching hitTerminator.
-			if (ts.nodeType(stmt) === 'comment')
+			let st = ts.nodeType(stmt);
+			if (st === 'comment' || st === 'doc_comment')
 				continue;
 			if (hitTerminator) {
 				push(out, {

@@ -105,10 +105,10 @@ _walk = function(node, scope, source, lineTable, diags) {
 	if (nt === 'for_in_statement') {
 		let inner = makeScope(scope);
 		// for (let x in ...) — x is a new let binding, not const
-		let left = ts.childByField(node, 'left');
+		let left = ts.childByField(node, 'variable') ?? ts.childByField(node, 'key');
 		if (left && ts.nodeType(left) === 'identifier')
 			inner.decls[ts.text(left, source)] = { kind: 'let' };
-		let right = ts.childByField(node, 'right');
+		let right = ts.childByField(node, 'object');
 		if (right) _walk(right, scope, source, lineTable, diags);
 		let body = ts.childByField(node, 'body');
 		if (body) _walk(body, inner, source, lineTable, diags);

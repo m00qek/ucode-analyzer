@@ -184,6 +184,12 @@ describe('parseDoc — type forms', () => {
 		assert.match(union_(prim('string'), prim('int'), prim('null')), doc.returns.type);
 	});
 
+	it('parses bare list and dict', () => {
+		let doc = parseDoc("/** @param {list} a\n * @returns {dict} */");
+		assert.match(list_({ kind: 'unknown' }), doc.params[0].type);
+		assert.match(dict_({ kind: 'unknown' }), doc.returns.type);
+	});
+
 	it('parses nullable type', () => {
 		let doc = parseDoc("/** @returns {?string} */");
 		assert.match(nullable(prim('string')), doc.returns.type);

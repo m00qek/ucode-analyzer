@@ -214,7 +214,7 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 	}
 
 	if (nt === 'for_in_statement') {
-		let right = ts.childByField(node, 'right');
+		let right = ts.childByField(node, 'object');
 		if (right) {
 			let scope = scopeAtOffset(scopeMap, ts.startByte(right));
 			let iterType = inferNode(right, source, uri, scope, 0);
