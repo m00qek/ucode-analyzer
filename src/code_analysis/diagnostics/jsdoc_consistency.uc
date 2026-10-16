@@ -13,8 +13,9 @@
 // yield a root that must be a real parameter. Only the documented-but-absent case
 // is reported; a missing @param (incomplete docs) is not flagged.
 //
-// Scope: function_declaration (covers the hand-written declaration stubs and most
-// user functions). Assigned function expressions and object methods are a possible
+// Scope: function declarations, and a function expression or arrow that is the
+// whole initializer of a single-declarator let/const (`const f = function(…)`);
+// with several declarators the doc is ambiguous. Object methods are a possible
 // follow-up.
 
 import * as ts from 'tree_sitter';
@@ -28,6 +29,8 @@ let SEVERITY_WARNING = 2;
 // identifier of a `...rest` element).
 function formalParamNames(fn, source) {
 	let names = {};
+	let bare = ts.childByField(fn, 'parameter');   // `x => …`
+	if (bare && ts.nodeType(bare) === 'identifier') names[ts.text(bare, source)] = true;
 	let params = ts.childByField(fn, 'parameters');
 	if (!params) return names;
 	for (let i = 0; i < ts.namedChildCount(params); i++) {
@@ -70,11 +73,24 @@ function checkFn(fn, source, lineTable, out) {
 	}
 }
 
+// A function expression or arrow that a /** */ documents on its own: the value
+// of the only declarator of a let/const.
+function isAssignedFn(node) {
+	let t = ts.nodeType(node);
+	if (t !== 'function_expression' && t !== 'arrow_function') return false;
+	let vd = ts.parent(node);
+	if (!vd || ts.nodeType(vd) !== 'variable_declarator') return false;
+	let value = ts.childByField(vd, 'value');
+	if (!value || ts.startByte(value) !== ts.startByte(node)) return false;
+	let decl = ts.parent(vd);
+	return length(filter(ts.namedChildren(decl), (c) => ts.nodeType(c) === 'variable_declarator')) === 1;
+}
+
 function walk(node, source, lineTable, out) {
-	if (ts.nodeType(node) === 'function_declaration')
+	if (ts.nodeType(node) === 'function_declaration' || isAssignedFn(node))
 		checkFn(node, source, lineTable, out);
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		walk(ts.namedChild(node, i), source, lineTable, out);
+	for (let c in ts.namedChildren(node))
+		walk(c, source, lineTable, out);
 }
 
 export function jsdocConsistency(doc) {

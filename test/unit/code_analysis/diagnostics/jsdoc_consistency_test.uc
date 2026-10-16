@@ -73,4 +73,32 @@ describe('diagnostics — jsdoc consistency: no false positives', () => {
 		// `first` is not the rest parameter `args`, so it is a genuine mismatch.
 		assert.match(1, count("/** @param {int} first */\nfunction f(...args) {}\n", 'jsdoc-param-mismatch'));
 	});
+
+	it('flags a mismatch on a const-assigned function expression', () => {
+		assert.match(1, count("/** @param {int} y */\nconst f = function(x) {};\n", 'jsdoc-param-mismatch'));
+		assert.match(0, count("/** @param {int} x */\nconst f = function(x) {};\n", 'jsdoc-param-mismatch'));
+	});
+
+	it('flags a mismatch on an assigned arrow function', () => {
+		assert.match(1, count("/** @param {int} y */\nlet f = (x) => x;\n", 'jsdoc-param-mismatch'));
+		assert.match(0, count("/** @param {int} x */\nlet f = (x, ...r) => x;\n", 'jsdoc-param-mismatch'));
+	});
+
+	it('accepts the bare parameter of `x => …`', () => {
+		assert.match(0, count("/** @param {int} x */\nlet f = x => x;\n", 'jsdoc-param-mismatch'));
+		assert.match(1, count("/** @param {int} y */\nlet f = x => x;\n", 'jsdoc-param-mismatch'));
+	});
+
+	it('works through an exported const', () => {
+		assert.match(1, count("/** @param {int} y */\nexport const f = function(x) {};\n", 'jsdoc-param-mismatch'));
+	});
+
+	it('skips a declaration with several declarators (the doc is ambiguous)', () => {
+		assert.match(0, count("/** @param {int} x */\nconst f = function(x) {}, g = function(y) {};\n", 'jsdoc-param-mismatch'));
+	});
+
+	it('skips a function expression that is not the initializer itself', () => {
+		assert.match(0, count("/** @param {int} y */\nconst f = wrap(function(x) {});\n", 'jsdoc-param-mismatch'));
+	});
 });
+
