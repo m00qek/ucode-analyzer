@@ -212,13 +212,29 @@ function requireModuleType(node, source, scope) {
 
 // Builtins whose declared `?T` is null only for arguments a call site can
 // rule out (per ucode's docs): clock() only for a monotonic clock the system
-// lacks; keys()/values() only for a non-object argument.
+// lacks; keys()/values() only for a non-object argument; proto(val, p)
+// returns val (it throws rather than return null), only proto(val) can be null.
 function builtinReturn(name, args, argTypes, ret, source, scope) {
 	if (!isRootBinding(scope, name)) return ret;
 	if (name === 'clock') {
 		let a = args[0];
 		if (!a || ts.nodeType(a) === 'false' || ts.nodeType(a) === 'null')
 			return narrowToNonNull(ret);
+	} else if (name === 'proto' && length(args) >= 2) {
+		// val, which now also reads p's fields (own fields win); with an
+		// unknown p its extra fields are unknown, so it is open.
+		let t = argTypes[0] ? resolveRef(argTypes[0]) : null;
+		if (!t || t.kind === 'unknown') return narrowToNonNull(ret);
+		if (t.kind !== 'record') return narrowToNonNull(t);
+		let p = argTypes[1] ? resolveRef(argTypes[1]) : null;
+		let fields = [...(t.fields ?? [])];
+		if (p && p.kind === 'record' && !p.open) {
+			let own = {};
+			for (let f in fields) own[f.name] = true;
+			for (let f in (p.fields ?? [])) if (!own[f.name]) push(fields, f);
+			return { ...t, fields };
+		}
+		return { ...t, fields, open: true };
 	} else if (name === 'keys' || name === 'values') {
 		let t = argTypes[0] ? resolveRef(argTypes[0]) : null;
 		if (t && (t.kind === 'record' || (t.kind === 'generic' && t.base === 'dict')))

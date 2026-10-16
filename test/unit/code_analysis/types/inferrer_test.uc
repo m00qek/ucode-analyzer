@@ -1681,6 +1681,13 @@ describe('inferrer — builtins whose null depends on the arguments', () => {
 		assert.match('nullable', scopeGet(scopeFor(text, parse(text), index(text, 'return k')), 'k')?.kind);
 	});
 
+	it('proto(val, p) is val with p\'s fields; proto(val) may be null', () => {
+		let o = typeAfter("let C = { m: function() {} };\nlet o = proto({ a: 1 }, C);\no;\n", 'o');
+		assert.match(['a', 'm'], map(o?.fields ?? [], (f) => f.name));
+		assert.match(true, typeAfter("function f(P) {\n\tlet o = proto({ a: 1 }, P);\n\treturn o;\n}\nlet q = proto({ a: 1 }, g());\nq;\n", 'q')?.open);
+		assert.match('nullable', typeAfter("let o = proto({ a: 1 });\no;\n", 'o')?.kind);
+	});
+
 	it('a local named like a builtin is not refined', () => {
 		let t = typeAfter("/** @returns {?int[]} */\nfunction clock() { return null; }\nlet t = clock();\nt;\n", 't');
 		assert.match('nullable', t?.kind);
