@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import { parseDoc } from 'code_analysis.types.doc_parser';
 import * as type_registry from 'code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBefore, docBeforeMap } from 'code_analysis.positions';
-import { topLevelStatements, importStmtSpecifier, importBindings } from 'code_analysis.mode';
+import { topLevelStatements, importStmtSpecifier, importBindings, importRemoteName } from 'code_analysis.mode';
+import { stringLiteralText } from 'code_analysis.ast_text';
 
 
 function dotToSlash(s) {
@@ -26,7 +27,7 @@ function buildDeclIndex(root, text) {
 	for (let stmt in topLevelStatements(root)) {
 		let nt = ts.nodeType(stmt);
 		if (nt === 'function_declaration') {
-			let nameNode = ts.namedChild(stmt, 0);
+			let nameNode = ts.childByField(stmt, 'name');
 			if (!nameNode) continue;
 			let name = ts.text(nameNode, text);
 			if (exists(index, name)) continue;
@@ -36,7 +37,7 @@ function buildDeclIndex(root, text) {
 			for (let j = 0; j < ts.namedChildCount(stmt); j++) {
 				let vd = ts.namedChild(stmt, j);
 				if (ts.nodeType(vd) !== 'variable_declarator') continue;
-				let nameNode = ts.namedChild(vd, 0);
+				let nameNode = ts.childByField(vd, 'name');
 				if (!nameNode) continue;
 				let name = ts.text(nameNode, text);
 				if (exists(index, name)) continue;
@@ -126,6 +127,25 @@ export function extractExports(text, tree) {
 		return _declIndex;
 	}
 
+	// What an exported value refers to: `alias.member` (re-export), a local
+	// name, or an object literal's properties.
+	function initRefs(init) {
+		let refs = { memberRef: null, localRef: null, properties: null };
+		let t = init ? ts.nodeType(init) : null;
+		if (t === 'member_expression') {
+			let obj  = ts.childByField(init, 'object');
+			let prop = ts.childByField(init, 'property');
+			if (obj && ts.nodeType(obj) === 'identifier' &&
+			    prop && ts.nodeType(prop) === 'property_identifier')
+				refs.memberRef = { alias: ts.text(obj, text), member: ts.text(prop, text) };
+		} else if (t === 'identifier') {
+			refs.localRef = ts.text(init, text);
+		} else if (t === 'object') {
+			refs.properties = extractObjectProperties(init, declIndex(), text, pos);
+		}
+		return refs;
+	}
+
 	// The first top-level `return {…}` is the legacy module export object (see
 	// note below). Captured during the single statement pass and processed after
 	// the ES exports so those take precedence.
@@ -137,23 +157,36 @@ export function extractExports(text, tree) {
 		if (stmtType === 'return_statement') {
 			if (!sawReturn) {
 				sawReturn = true;
-				let val = ts.namedChild(stmt, 0);
-				if (val && ts.nodeType(val) === 'object') returnObj = val;
+				for (let val in ts.namedChildren(stmt))
+					if (ts.nodeType(val) !== 'comment') { if (ts.nodeType(val) === 'object') returnObj = val; break; }
 			}
 			continue;
 		}
 		if (stmtType !== 'export_statement') continue;
 
-		let decl = ts.namedChild(stmt, 0);
+		let docText = docBefore(stmt, root, text);
+		let doc = docText ? parseDoc(docText) : null;
+
+		let value = ts.childByField(stmt, 'value');
+		while (value && ts.nodeType(value) === 'parenthesized_expression')
+			value = filter(ts.namedChildren(value), (c) => ts.nodeType(c) !== 'comment')[0];
+		if (value) {
+			let t = ts.nodeType(value);
+			let refs = initRefs(value);
+			let isFn = (t === 'function_expression' || t === 'arrow_function');
+			push(result, { name: 'default', kind: isFn ? 'function' : 'const', doc,
+			               memberRef: refs.memberRef, localRef: refs.localRef, properties: refs.properties,
+			               position: pos(ts.startByte(value)) });
+			continue;
+		}
+
+		let decl = ts.childByField(stmt, 'declaration') ?? ts.childByField(stmt, 'clause');
 		if (!decl) continue;
 
 		let declType = ts.nodeType(decl);
 
-		let docText = docBefore(stmt, root, text);
-		let doc = docText ? parseDoc(docText) : null;
-
 		if (declType === 'function_declaration') {
-			let nameNode = ts.namedChild(decl, 0);
+			let nameNode = ts.childByField(decl, 'name');
 			if (nameNode && ts.nodeType(nameNode) === 'identifier')
 				push(result, { name: ts.text(nameNode, text), kind: 'function', doc,
 				               position: pos(ts.startByte(nameNode)) });
@@ -170,25 +203,11 @@ export function extractExports(text, tree) {
 			for (let j = 0; j < ts.namedChildCount(decl); j++) {
 				let varDecl = ts.namedChild(decl, j);
 				if (ts.nodeType(varDecl) !== 'variable_declarator') continue;
-				let nameNode = ts.namedChild(varDecl, 0);
+				let nameNode = ts.childByField(varDecl, 'name');
 				if (!nameNode || ts.nodeType(nameNode) !== 'identifier') continue;
-				let init = ts.childByField(varDecl, 'value');
-				let memberRef  = null;
-				let localRef   = null;
-				let properties = null;
-				if (init && ts.nodeType(init) === 'member_expression') {
-					let obj  = ts.namedChild(init, 0);
-					let prop = ts.namedChild(init, 1);
-					if (obj  && ts.nodeType(obj) === 'identifier' &&
-					    prop && (ts.nodeType(prop) === 'property_identifier' ||
-					             ts.nodeType(prop) === 'identifier'))
-						memberRef = { alias: ts.text(obj, text), member: ts.text(prop, text) };
-				} else if (init && ts.nodeType(init) === 'identifier') {
-					localRef = ts.text(init, text);
-				} else if (init && ts.nodeType(init) === 'object') {
-					properties = extractObjectProperties(init, declIndex(), text, pos);
-				}
-				push(result, { name: ts.text(nameNode, text), kind, doc, memberRef, localRef, properties,
+				let refs = initRefs(ts.childByField(varDecl, 'value'));
+				push(result, { name: ts.text(nameNode, text), kind, doc,
+				               memberRef: refs.memberRef, localRef: refs.localRef, properties: refs.properties,
 				               position: pos(ts.startByte(nameNode)) });
 			}
 		} else if (declType === 'export_clause') {
@@ -200,8 +219,8 @@ export function extractExports(text, tree) {
 				let localNameNode = ts.childByField(spec, 'name');
 				let nameNode = ts.childByField(spec, 'alias') ?? localNameNode;
 				let nt = nameNode ? ts.nodeType(nameNode) : null;
-				if (nt !== 'identifier' && nt !== 'default') continue;
-				let name = ts.text(nameNode, text);
+				if (nt !== 'identifier' && nt !== 'default' && nt !== 'string') continue;
+				let name = (nt === 'string') ? stringLiteralText(nameNode, text) : ts.text(nameNode, text);
 				// Look up the local binding, so kind/doc reflect the actual declaration.
 				let localName = localNameNode ? ts.text(localNameNode, text) : name;
 				let info = localDeclInfo(declIndex(), localName);
@@ -240,16 +259,15 @@ export function extractImports(text, tree) {
 
 		let b = importBindings(stmt);
 
-		if (b.namespaceAlias) {
-			let alias = (ts.nodeType(b.namespaceAlias) === 'identifier')
-				? ts.text(b.namespaceAlias, text) : null;
-			push(result, { specifier, symbols: ['*'], alias, resolvedUri: null });
+		if (b.namespaceAlias)
+			push(result, { specifier, symbols: ['*'], alias: ts.text(b.namespaceAlias, text),
+			               resolvedUri: null });
 
-		} else if (length(b.specifiers) > 0) {
+		if (length(b.specifiers) > 0) {
 			let symbols = [];
 			let renames = {};
 			for (let s in b.specifiers) {
-				let remoteName = ts.text(s.remoteNode, text);
+				let remoteName = importRemoteName(s, text);
 				let localName  = ts.text(s.localNode, text);
 				push(symbols, localName);
 				if (localName !== remoteName) renames[localName] = remoteName;

@@ -47,11 +47,10 @@ export function unknownImportSymbols(uri, doc) {
 		if (!exported) continue;
 
 		for (let s in specs) {
-			if (!s.remoteNode) continue;
-			let remoteName = ts.text(s.remoteNode, doc.text);
+			let remoteName = mode.importRemoteName(s, doc.text);
 			if (!exists(exported, remoteName))
 				push(diags, {
-					range:    rangeOf(doc.text, lineTable, s.remoteNode),
+					range:    rangeOf(doc.text, lineTable, s.remoteNode ?? s.localNode),
 					severity: SEVERITY_ERROR,
 					source:   'ucode-ls',
 					code:     'unknown-import-symbol',

@@ -23,9 +23,9 @@ function importSpecNodes(root, text, specifier, remoteName) {
 		if (ts.nodeType(stmt) !== 'import_statement') continue;
 		if (mode.importStmtSpecifier(stmt, text) !== specifier) continue;
 		for (let s in mode.importBindings(stmt).specifiers) {
-			if (!s.remoteNode || ts.text(s.remoteNode, text) !== remoteName) continue;
+			if (!s.remoteNode || mode.importRemoteName(s, text) !== remoteName) continue;
 			// Aliased when the local binding is a different node than the remote name.
-			let aliased = s.localNode && ts.startByte(s.localNode) !== ts.startByte(s.remoteNode);
+			let aliased = ts.startByte(s.localNode) !== ts.startByte(s.remoteNode);
 			return { localNode: s.localNode, remoteNode: aliased ? s.remoteNode : null };
 		}
 	}

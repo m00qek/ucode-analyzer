@@ -217,6 +217,39 @@ describe('indexer.extractExports', () => {
 		assert.match('function', exps[0].kind);
 	});
 
+	it('names an `export default` value `default`', () => {
+		let text = "export default { k: 2 };\n";
+		let exps = extractExports(text, parse(text));
+		assert.match(1, length(exps));
+		assert.match('default', exps[0].name);
+		assert.match(['k'], map(exps[0].properties, (p) => p.name));
+	});
+
+	it('types an `export default` function expression as a function', () => {
+		let text = "export default (function(a) { return a; });\n";
+		let exps = extractExports(text, parse(text));
+		assert.match('default', exps[0].name);
+		assert.match('function', exps[0].kind);
+	});
+
+	it('names a quoted export-clause alias without its quotes', () => {
+		let text = "let a = 1;\nexport { a as \"b-c\" };\n";
+		let exps = extractExports(text, parse(text));
+		assert.match(['b-c'], map(exps, (e) => e.name));
+	});
+
+	it('extracts memberRef through optional chaining', () => {
+		let text = "import * as m from 'x';\nexport const c = m?.b;\n";
+		let exps = extractExports(text, parse(text));
+		assert.match({ alias: 'm', member: 'b' }, exps[0].memberRef);
+	});
+
+	it('reads an export after a comment', () => {
+		let text = "export /* c */ function f() {};\n";
+		let exps = extractExports(text, parse(text));
+		assert.match(['f'], map(exps, (e) => e.name));
+	});
+
 	// ── legacy module pattern: top-level `return { ... }` (ucode require shape) ──
 	it('surfaces top-level return-object fields as exports', () => {
 		let text = "return {\n\tread_state: function() { return 1; },\n\tversion: 2\n};\n";
@@ -306,6 +339,22 @@ describe('indexer.extractImports', () => {
 		assert.match(['foo', 'bar'], imps[0].symbols);
 		assert.match(null, imps[0].alias);
 		assert.match(null, imps[0].resolvedUri);
+	});
+
+	it('extracts a default import as a rename of `default`', () => {
+		let text = "import x, { y } from 'mod.name';";
+		let imps = extractImports(text, parse(text));
+		assert.match(1, length(imps));
+		assert.match(['x', 'y'], imps[0].symbols);
+		assert.match({ x: 'default' }, imps[0].renames);
+	});
+
+	it('extracts a default import next to a namespace import', () => {
+		let text = "import x, * as ns from 'mod.name';";
+		let imps = extractImports(text, parse(text));
+		assert.match(2, length(imps));
+		assert.match('ns', imps[0].alias);
+		assert.match(['x'], imps[1].symbols);
 	});
 
 	it('extracts namespace import', () => {

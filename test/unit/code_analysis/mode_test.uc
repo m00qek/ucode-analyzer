@@ -1,7 +1,8 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
 import { isTemplate, parse, topLevelStatements,
-         importStmtSpecifier, importBindings, importBindingNodes } from 'code_analysis.mode';
+         importStmtSpecifier, importBindings, importBindingNodes,
+         importRemoteName } from 'code_analysis.mode';
 
 // The first top-level import_statement in `text`.
 function firstImport(text) {
@@ -163,5 +164,25 @@ describe('mode — import structure', () => {
 		assert.match('a', names[0]);
 		assert.match('c', names[1]);   // the local alias, not the remote `b`
 		assert.match('fs', map(importBindingNodes(firstImport(N)), (n) => ts.text(n, N))[0]);
+	});
+
+	it('importBindings binds a default import under the remote name `default`', () => {
+		let D = "import x, { y } from 'm';\n";
+		let b = importBindings(firstImport(D));
+		assert.match(['x', 'y'], map(b.specifiers, (s) => ts.text(s.localNode, D)));
+		assert.match(['default', 'y'], map(b.specifiers, (s) => importRemoteName(s, D)));
+		assert.match(['x', 'y'], map(importBindingNodes(firstImport(D)), (n) => ts.text(n, D)));
+	});
+
+	it('importRemoteName unquotes a string name and reads `default`', () => {
+		let Q = "import { \"b-c\" as d, default as e } from 'm';\n";
+		let b = importBindings(firstImport(Q));
+		assert.match(['b-c', 'default'], map(b.specifiers, (s) => importRemoteName(s, Q)));
+		assert.match(['d', 'e'], map(b.specifiers, (s) => ts.text(s.localNode, Q)));
+	});
+
+	it('importBindings skips a comment inside the braces', () => {
+		let C = "import { /* c */ a } from 'm';\n";
+		assert.match(['a'], map(importBindingNodes(firstImport(C)), (n) => ts.text(n, C)));
 	});
 });

@@ -238,4 +238,10 @@ describe('diagnostics — undefined variables', () => {
 		assert.match(false, index(names, "'k' is not defined") >= 0);
 		assert.match(false, index(names, "'v' is not defined") >= 0);
 	});
+
+	it('treats a default import as defined', () => {
+		let text = "import x from 'fs';\nx;\n";
+		documents.open(URI, text, 1);
+		assert.match(0, length(undefinedVars(documents.get(URI))));
+	});
 });

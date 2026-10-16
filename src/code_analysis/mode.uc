@@ -205,46 +205,51 @@ export function topLevelStatements(root) {
 
 // The module specifier string of an import_statement (the '…' part), or null.
 export function importStmtSpecifier(stmt, text) {
-	for (let i = 0; i < ts.childCount(stmt); i++) {
-		let child = ts.child(stmt, i);
-		if (ts.nodeType(child) !== 'string') continue;
-		let spec = stringLiteralText(child, text);
-		return length(spec) ? spec : null;
-	}
-	return null;
+	let src = ts.childByField(stmt, 'source');
+	if (!src || ts.nodeType(src) !== 'string') return null;
+	let spec = stringLiteralText(src, text);
+	return length(spec) ? spec : null;
 };
 
 // Decompose an import_statement's binding structure:
 //   { namespaceAlias: node|null,                // the `x` of `import * as x`
-//     specifiers: [{ remoteNode, localNode }] }  // one per `{ a }` / `{ a as b }`
-// localNode === remoteNode for a plain `{ a }`; they differ for `{ a as b }`
-// (the local binding is the specifier's last named child).
+//     specifiers: [{ remoteNode, localNode }] }  // `import x`, `{ a }`, `{ a as b }`
+// localNode === remoteNode for a plain `{ a }`. A default import (`import x`)
+// has remoteNode null; importRemoteName reads it as `default`.
 export function importBindings(stmt) {
 	let namespaceAlias = null;
 	let specifiers = [];
-	for (let i = 0; i < ts.namedChildCount(stmt); i++) {
-		let clause = ts.namedChild(stmt, i);
-		if (ts.nodeType(clause) !== 'import_clause') continue;
-		for (let j = 0; j < ts.namedChildCount(clause); j++) {
-			let part = ts.namedChild(clause, j);
-			let pnt = ts.nodeType(part);
-			if (pnt === 'namespace_import') {
-				namespaceAlias = ts.namedChild(part, 0);
-			} else if (pnt === 'named_imports') {
-				for (let k = 0; k < ts.namedChildCount(part); k++) {
-					let spec = ts.namedChild(part, k);
-					if (ts.nodeType(spec) !== 'import_specifier') continue;
-					let count = ts.namedChildCount(spec);
-					if (count === 0) continue;
-					push(specifiers, {
-						remoteNode: ts.namedChild(spec, 0),
-						localNode:  ts.namedChild(spec, count - 1),
-					});
-				}
-			}
+	let clause = ts.childByField(stmt, 'clause');
+	if (!clause) return { namespaceAlias, specifiers };
+
+	let def = ts.childByField(clause, 'default');
+	if (def) push(specifiers, { remoteNode: null, localNode: def });
+
+	let ns = ts.childByField(clause, 'namespace');
+	if (ns) {
+		for (let i = 0; i < ts.namedChildCount(ns); i++) {
+			let id = ts.namedChild(ns, i);
+			if (ts.nodeType(id) === 'identifier') { namespaceAlias = id; break; }
 		}
 	}
+
+	let named = ts.childByField(clause, 'named');
+	for (let i = 0; named && i < ts.namedChildCount(named); i++) {
+		let spec = ts.namedChild(named, i);
+		if (ts.nodeType(spec) !== 'import_specifier') continue;
+		let remote = ts.childByField(spec, 'name');
+		if (!remote) continue;
+		push(specifiers, { remoteNode: remote, localNode: ts.childByField(spec, 'alias') ?? remote });
+	}
 	return { namespaceAlias, specifiers };
+};
+
+// The exported name a specifier imports: `default` for a default import or
+// `{ default as x }`, a quoted name without its quotes.
+export function importRemoteName(spec, text) {
+	let n = spec.remoteNode;
+	if (!n) return 'default';
+	return ts.nodeType(n) === 'string' ? stringLiteralText(n, text) : ts.text(n, text);
 };
 
 // The local binding identifier nodes an import introduces into scope: the

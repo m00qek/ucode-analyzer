@@ -8,6 +8,7 @@ let URI       = 'file:///test.uc';
 let TS_URI    = 'file:///app/src/tree_sitter.uc';
 let GREET_URI = 'file:///app/test/fixtures/greet.uc';
 let TPL_URI   = 'file:///app/test/fixtures/template_lib.uc';
+let DE_URI    = 'file:///app/test/fixtures/default_export.uc';
 
 let _config = {
 	workspaceDir: '/app',
@@ -20,6 +21,7 @@ afterEach(() => {
 	dag.remove(TS_URI);
 	dag.remove(GREET_URI);
 	dag.remove(TPL_URI);
+	dag.remove(DE_URI);
 	invalidateUri(URI);
 });
 
@@ -188,6 +190,26 @@ describe('definition — named imports (export clause)', () => {
 		assert.match(1, length(exps));
 		assert.match('greet', exps[0].name);
 		assert.match('function', exps[0].kind);
+	});
+});
+
+describe('definition — cross-file default import', () => {
+	beforeEach(() => {
+		dag.init(_config);
+		dag.addFromDisk(DE_URI);
+	});
+
+	it('jumps from a default-imported name to the `export default` value', () => {
+		// fixtures/default_export.uc line 1: export default { k: 2 };
+		let text = "import x from 'fixtures.default_export';\nx;\n";
+		documents.open(URI, text, 1);
+		dag.add(URI, text, documents.get(URI).tree);
+
+		let result = definition(URI, documents.get(URI), { line: 1, character: 0 });
+
+		assert.match(DE_URI, result.uri);
+		assert.match(1, result.range.start.line);
+		assert.match(15, result.range.start.character);  // the `{` after 'export default '
 	});
 });
 
