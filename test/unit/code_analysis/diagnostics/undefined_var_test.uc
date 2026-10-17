@@ -90,6 +90,12 @@ describe('diagnostics — undefined variables', () => {
 		assert.match(not(contains(["'item' is not defined"])), names);
 	});
 
+	it('warns for `for (x in …)` on an undeclared x, as for `x = …`', () => {
+		documents.open(URI, "for (ghost in [1]) ghost;\n", 1);
+		assert.match(["'ghost' is not defined", "'ghost' is not defined"],
+			map(undefinedVars(documents.get(URI)), (d) => d.message));
+	});
+
 	it('does not warn for a namespace import alias', () => {
 		let text = "import * as ts from 'parser';\nts.parse;\n";
 		documents.open(URI, text, 1);

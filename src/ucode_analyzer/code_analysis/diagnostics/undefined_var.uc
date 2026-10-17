@@ -1,10 +1,8 @@
 import * as ts from 'tree_sitter';
-import { namedNonComments, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
-import * as mode from 'ucode_analyzer.code_analysis.mode';
+import { eachName, declarationOf } from 'ucode_analyzer.code_analysis.bindings';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { globalUri } from 'ucode_analyzer.code_analysis.types.dag_bridge';
-import { makeScope, scopeHas, scopeSet } from 'ucode_analyzer.code_analysis.types.scope';
 import { matchPattern } from 'ucode_analyzer.code_analysis.glob';
 import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 import { toPath } from 'ucode_analyzer.code_analysis.uri';
@@ -46,205 +44,6 @@ function runtimeGlobals(uri) {
 	return out;
 }
 
-function bind(scope, name) { scopeSet(scope, name, true); }
-
-// Bind a function's parameters into scope.
-function bindParams(fn, scope, source) {
-	for (let p in paramNodes(fn))
-		bind(scope, ts.text(p.node, source));
-}
-
-
-function bindForInVar(block, scope, source) {
-	let parent = ts.parent(block);
-	if (!parent || (ts.nodeType(parent) !== 'for_in_statement' &&
-	                ts.nodeType(parent) !== 'for_in_alt_statement')) return;
-	let left = ts.childByField(parent, 'variable') ?? ts.childByField(parent, 'key');
-	if (!left) return;
-	if (ts.nodeType(left) === 'identifier') {
-		bind(scope, ts.text(left, source));
-	} else if (ts.nodeType(left) === 'lexical_declaration') {
-		for (let vd in declarators(left)) {
-			let nm = ts.childByField(vd, 'name');
-			if (nm) bind(scope, ts.text(nm, source));
-		}
-	}
-	// Bind the optional value variable in `for (let k, v in obj)`.
-	let value = ts.childByField(parent, 'value');
-	if (value && ts.nodeType(value) === 'identifier') bind(scope, ts.text(value, source));
-}
-
-function bindForVar(block, scope, source) {
-	let parent = ts.parent(block);
-	if (!parent || (ts.nodeType(parent) !== 'for_statement' &&
-	                ts.nodeType(parent) !== 'for_alt_statement')) return;
-	let init = ts.childByField(parent, 'initializer');
-	if (!init || ts.nodeType(init) !== 'lexical_declaration') return;
-	for (let vd in declarators(init)) {
-		let nm = ts.childByField(vd, 'name');
-		if (nm) bind(scope, ts.text(nm, source));
-	}
-}
-
-function bindCatchVar(block, scope, source) {
-	let parent = ts.parent(block);
-	if (!parent || ts.nodeType(parent) !== 'catch_clause') return;
-	let param = ts.childByField(parent, 'parameter');
-	if (param && ts.nodeType(param) === 'identifier') bind(scope, ts.text(param, source));
-}
-
-
-function bindImports(node, scope, source) {
-	for (let n in mode.importBindingNodes(node))
-		bind(scope, ts.text(n, source));
-}
-
-
-function walk(node, scope, source, globals, lineTable, out) {
-	let nt = ts.nodeType(node);
-
-	if (nt === 'identifier') {
-		let name = ts.text(node, source);
-		if (!scopeHas(scope, name) && !exists(globals, name))
-			push(out, diagnostic(rangeOf(source, lineTable, node), Severity.WARNING, 'undefined-var',
-				sprintf("'%s' is not defined", name)));
-		return;
-	}
-
-	// Shorthand property { x } — x is a variable reference.
-	if (nt === 'shorthand_property_identifier') {
-		let name = ts.text(node, source);
-		if (!scopeHas(scope, name) && !exists(globals, name))
-			push(out, diagnostic(rangeOf(source, lineTable, node), Severity.WARNING, 'undefined-var',
-				sprintf("'%s' is not defined", name)));
-		return;
-	}
-
-	if (nt === 'import_statement') {
-		bindImports(node, scope, source);
-		return;
-	}
-
-	if (nt === 'lexical_declaration') {
-		for (let vd in declarators(node)) {
-			let nameNode = ts.childByField(vd, 'name');
-			if (nameNode) bind(scope, ts.text(nameNode, source));
-			let val = ts.childByField(vd, 'value');
-			if (val) walk(val, scope, source, globals, lineTable, out);
-		}
-		return;
-	}
-
-	if (nt === 'function_declaration') {
-		let nameNode = ts.childByField(node, 'name');
-		if (nameNode) bind(scope, ts.text(nameNode, source));
-		let inner = makeScope(scope);
-		bindParams(node, inner, source);
-		let body = ts.childByField(node, 'body');
-		if (body) walk(body, inner, source, globals, lineTable, out);
-		return;
-	}
-
-	if (nt === 'export_statement') {
-		for (let inner in namedNonComments(node)) walk(inner, scope, source, globals, lineTable, out);
-		return;
-	}
-
-	// Only the `name` field is a variable reference; `alias` is the exported name.
-	if (nt === 'export_specifier') {
-		let nameNode = ts.childByField(node, 'name');
-		if (nameNode) walk(nameNode, scope, source, globals, lineTable, out);
-		return;
-	}
-
-	if (nt === 'function_expression' || nt === 'arrow_function') {
-		let inner = makeScope(scope);
-		// Named function_expression: bind its own name so recursive calls inside don't warn.
-		if (nt === 'function_expression') {
-			let nameNode = ts.childByField(node, 'name');
-			if (nameNode && ts.nodeType(nameNode) === 'identifier')
-				bind(inner, ts.text(nameNode, source));
-		}
-		bindParams(node, inner, source);
-		let body = ts.childByField(node, 'body');
-		if (body) walk(body, inner, source, globals, lineTable, out);
-		return;
-	}
-
-	// Do not walk the catch parameter — it is a declaration site, not a ref.
-	if (nt === 'catch_clause') {
-		let body = ts.childByField(node, 'body');
-		if (body) walk(body, scope, source, globals, lineTable, out);
-		return;
-	}
-
-	// A brace block, or the statement_list of an alt-syntax body.
-	if (nt === 'statement_block' || nt === 'statement_list') {
-		let inner = makeScope(scope);
-		bindForInVar(node, inner, source);
-		bindForVar(node, inner, source);
-		bindCatchVar(node, inner, source);
-		for (let i = 0; i < ts.namedChildCount(node); i++)
-			walk(ts.namedChild(node, i), inner, source, globals, lineTable, out);
-		return;
-	}
-
-	if (nt === 'for_in_statement' || nt === 'for_in_alt_statement') {
-		let right = ts.childByField(node, 'object');
-		if (right) walk(right, scope, source, globals, lineTable, out);
-		let body = ts.childByField(node, 'body');
-		if (body) {
-			let bt = ts.nodeType(body);
-			if (bt === 'statement_block' || bt === 'statement_list') {
-				// The block handler calls bindForInVar automatically.
-				walk(body, scope, source, globals, lineTable, out);
-			} else {
-				// No-brace body: bind loop var into an explicit inner scope.
-				let inner = makeScope(scope);
-				bindForInVar(body, inner, source);
-				walk(body, inner, source, globals, lineTable, out);
-			}
-		}
-		return;
-	}
-
-	if (nt === 'for_statement' || nt === 'for_alt_statement') {
-		// Bind the loop vars into an inner scope so condition/increment can
-		// reference them. Each initializer sees the declarators before it
-		// (`for (let i = 0, x = xs[i]; …)`).
-		let inner = makeScope(scope);
-		let init = ts.childByField(node, 'initializer');
-		if (init && ts.nodeType(init) === 'lexical_declaration') {
-			for (let vd in declarators(init)) {
-				let val = ts.childByField(vd, 'value');
-				if (val) walk(val, inner, source, globals, lineTable, out);
-				let nm = ts.childByField(vd, 'name');
-				if (nm && ts.nodeType(nm) === 'identifier') bind(inner, ts.text(nm, source));
-			}
-		} else if (init) {
-			walk(init, scope, source, globals, lineTable, out);
-		}
-		let cond = ts.childByField(node, 'condition');
-		if (cond) walk(cond, inner, source, globals, lineTable, out);
-		let inc = ts.childByField(node, 'increment');
-		if (inc) walk(inc, inner, source, globals, lineTable, out);
-		let body = ts.childByField(node, 'body');
-		if (body) walk(body, inner, source, globals, lineTable, out);
-		return;
-	}
-
-	// Property name is not a variable reference; only the object side is.
-	if (nt === 'member_expression') {
-		let obj = ts.childByField(node, 'object');
-		if (obj) walk(obj, scope, source, globals, lineTable, out);
-		return;
-	}
-
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		walk(ts.namedChild(node, i), scope, source, globals, lineTable, out);
-}
-
-
 export function undefinedVars(doc) {
 	// Collect builtin names from the stdlib declaration module.
 	// If the stdlib has not been initialized (tests, partial environments), skip
@@ -259,9 +58,15 @@ export function undefinedVars(doc) {
 	for (let i = 0; i < length(exps); i++) globals[exps[i].name] = true;
 	for (let n in runtimeGlobals(doc.uri)) globals[n] = true;
 
-	let source    = doc.text;
-	let lineTable = doc.lineTable;
-	let diags     = [];
-	walk(ts.rootNode(doc.tree), makeScope(null), source, globals, lineTable, diags);
+	let source = doc.text;
+	let diags  = [];
+	eachName(ts.rootNode(doc.tree), source, {
+		declare: () => null,
+		use: (node, name, scope) => {
+			if (declarationOf(scope, name) < 0 && !exists(globals, name))
+				push(diags, diagnostic(rangeOf(source, doc.lineTable, node), Severity.WARNING, 'undefined-var',
+					sprintf("'%s' is not defined", name)));
+		},
+	});
 	return diags;
 };

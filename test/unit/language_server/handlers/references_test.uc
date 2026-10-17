@@ -73,6 +73,46 @@ describe('references', () => {
 	});
 });
 
+describe('references — binding forms', () => {
+	// Each: the references of the outer name at $0 are $1–$2 and $3–$4 (and $5–$6).
+	function outer(marked) {
+		let src = cursors(marked);
+		let want = [ span(src, 1, 2), span(src, 3, 4) ];
+		if (src.at[5]) push(want, span(src, 5, 6));
+		return [ any_order(want), ranges(refsAt(src)) ];
+	}
+
+	it('a catch parameter is its own name', () => {
+		let r = outer("let $0$1e$2 = 1;\ntry { f(); } catch (e) { e; }\n$3e$4;\n");
+		assert.match(r[0], r[1]);
+	});
+
+	it('an export alias is not a use', () => {
+		let r = outer("let $0$1b$2 = 1;\nlet a = 2;\nexport { a as b };\n$3b$4;\n");
+		assert.match(r[0], r[1]);
+	});
+
+	it('the loop variable of an alt-syntax for-in is its own name', () => {
+		let r = outer("{% let $0$1x$2 = [1]; for (let x in $3x$4): %}{{ x }}{% endfor %}\n");
+		assert.match(r[0], r[1]);
+	});
+
+	it('a for initializer sees the declarators before it', () => {
+		let r = outer("let $0$1i$2 = 9;\nfor (let i = 0, j = i; i < 1; i++) j;\n$3i$4;\n");
+		assert.match(r[0], r[1]);
+	});
+
+	it('a named function expression sees its own name', () => {
+		let r = outer("let $0$1g$2 = 1;\nlet f = function g() { return g; };\n$3g$4;\n");
+		assert.match(r[0], r[1]);
+	});
+
+	it('`for (x in …)` without let assigns the outer x', () => {
+		let r = outer("let $0$1x$2;\nfor ($3x$4 in [1]) $5x$6;\n");
+		assert.match(r[0], r[1]);
+	});
+});
+
 describe('references — scope awareness', () => {
 	it('does not cross function-scope boundaries for parameters with the same name', () => {
 		// Two functions both have a parameter called `x`.
