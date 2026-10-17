@@ -19,7 +19,7 @@
 // follow-up.
 
 import * as ts from 'tree_sitter';
-import { firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
+import { paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import { precedingDocNode, offsetToPosition } from 'ucode_analyzer.code_analysis.positions';
 import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
@@ -28,21 +28,8 @@ import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 // identifier of a `...rest` element).
 function formalParamNames(fn, source) {
 	let names = {};
-	let bare = ts.childByField(fn, 'parameter');   // `x => …`
-	if (bare && ts.nodeType(bare) === 'identifier') names[ts.text(bare, source)] = true;
-	let params = ts.childByField(fn, 'parameters');
-	if (!params) return names;
-	for (let i = 0; i < ts.namedChildCount(params); i++) {
-		let p = ts.namedChild(params, i);
-		let pt = ts.nodeType(p);
-		if (pt === 'identifier') {
-			names[ts.text(p, source)] = true;
-		} else if (pt === 'rest_element') {
-			let inner = firstNamed(p);
-			if (inner && ts.nodeType(inner) === 'identifier')
-				names[ts.text(inner, source)] = true;
-		}
-	}
+	for (let p in paramNodes(fn))
+		names[ts.text(p.node, source)] = true;
 	return names;
 }
 

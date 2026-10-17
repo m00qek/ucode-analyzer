@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
+import { namedNonComments, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 
 // Lightweight scope used only for tracking declaration byte-offsets.
@@ -35,22 +35,8 @@ function bind(scope, source, nameNode, targetName, out) {
 // Add formal parameters of a function/arrow node to scope, collecting
 // any parameter identifier whose name matches targetName into out.
 function collectParams(fnNode, scope, source, targetName, out) {
-	for (let i = 0; i < ts.namedChildCount(fnNode); i++) {
-		let child = ts.namedChild(fnNode, i);
-		if (ts.nodeType(child) !== 'formal_parameters') continue;
-		for (let j = 0; j < ts.namedChildCount(child); j++) {
-			let param = ts.namedChild(child, j);
-			let pnt = ts.nodeType(param);
-			if (pnt === 'identifier') {
-				bind(scope, source, param, targetName, out);
-			} else if (pnt === 'rest_element') {
-				let inner = firstNamed(param);
-				if (inner && ts.nodeType(inner) === 'identifier')
-					bind(scope, source, inner, targetName, out);
-			}
-		}
-		return;
-	}
+	for (let p in paramNodes(fnNode))
+		bind(scope, source, p.node, targetName, out);
 }
 
 // If block is the body of a for-in statement, bind the loop variable.

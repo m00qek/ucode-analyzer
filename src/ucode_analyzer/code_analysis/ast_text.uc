@@ -11,12 +11,6 @@ export function namedNonComments(node) {
 	return filter(ts.namedChildren(node), (c) => !isComment(c));
 };
 
-// The variable_declarators of a lexical_declaration (or a for initializer),
-// without the commas and comments between them.
-export function declarators(decl) {
-	return filter(ts.namedChildren(decl), (c) => ts.nodeType(c) === 'variable_declarator');
-};
-
 // The first non-comment named child, for nodes without fields: parentheses,
 // expression statements, `else`, spread and rest elements, `return`.
 export function firstNamed(node) {
@@ -26,6 +20,29 @@ export function firstNamed(node) {
 		if (!isComment(c)) return c;
 	}
 	return null;
+};
+
+// The identifiers a function binds as parameters, as [{ node, rest }]: its
+// formal parameters (`...r` included), or the bare one of `x => …`.
+export function paramNodes(fn) {
+	let formal = ts.childByField(fn, 'parameters');
+	if (!formal) {
+		let p = ts.childByField(fn, 'parameter');
+		return (p && ts.nodeType(p) === 'identifier') ? [{ node: p, rest: false }] : [];
+	}
+	let out = [];
+	for (let p in ts.namedChildren(formal)) {
+		let rest = ts.nodeType(p) === 'rest_element';
+		if (rest) p = firstNamed(p);
+		if (p && ts.nodeType(p) === 'identifier') push(out, { node: p, rest });
+	}
+	return out;
+};
+
+// The variable_declarators of a lexical_declaration (or a for initializer),
+// without the commas and comments between them.
+export function declarators(decl) {
+	return filter(ts.namedChildren(decl), (c) => ts.nodeType(c) === 'variable_declarator');
 };
 
 // The content of a string literal node — the concatenated text of its

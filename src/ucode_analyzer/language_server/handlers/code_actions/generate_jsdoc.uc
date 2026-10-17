@@ -3,7 +3,7 @@ import { positionToOffset, offsetToPosition, docBearingStatement, precedingDoc }
 import { inferNode, inferParams } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
-import { firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
+import { paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 
 // On a function's first line, when it has no doc comment: insert a /** */
 // with an @param per parameter and an @returns, typed by inference ({any}
@@ -58,9 +58,8 @@ export function actionsFor(uri, doc, range) {
 	let scope = scopeAtOffset(doc.scopeMap, ts.startByte(fn));
 	// `...r` is `{...T}` (T the element type), the JSDoc rest form.
 	let rest = {};
-	let formals = ts.childByField(fn, 'parameters');
-	for (let c in (formals ? ts.namedChildren(formals) : []))
-		if (ts.nodeType(c) === 'rest_element') rest[ts.text(firstNamed(c), doc.text)] = true;
+	for (let p in paramNodes(fn))
+		if (p.rest) rest[ts.text(p.node, doc.text)] = true;
 	let lines = [];
 	for (let p in inferParams(fn, doc.text, uri, scope)) {
 		let t = p.type;

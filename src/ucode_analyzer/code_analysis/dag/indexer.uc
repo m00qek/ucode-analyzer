@@ -4,7 +4,7 @@ import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBeforeMap } from 'ucode_analyzer.code_analysis.positions';
 import { topLevelStatements, importStmtSpecifier, importBindings, importRemoteName } from 'ucode_analyzer.code_analysis.mode';
-import { stringLiteralText, namedNonComments, firstNamed, declarators } from 'ucode_analyzer.code_analysis.ast_text';
+import { stringLiteralText, namedNonComments, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 
 
 function dotToSlash(s) {
@@ -22,19 +22,7 @@ function paramsOf(fn, text) {
 	let t = fn ? ts.nodeType(fn) : null;
 	if (t !== 'function_declaration' && t !== 'function_expression' && t !== 'arrow_function')
 		return null;
-	let formal = ts.childByField(fn, 'parameters');
-	if (!formal) {
-		let p = ts.childByField(fn, 'parameter');   // `x => …`
-		return (p && ts.nodeType(p) === 'identifier') ? [{ name: ts.text(p, text), rest: false }] : [];
-	}
-	let out = [];
-	for (let p in ts.namedChildren(formal)) {
-		let pt = ts.nodeType(p);
-		if (pt === 'rest_element') p = firstNamed(p);
-		if (p && ts.nodeType(p) === 'identifier')
-			push(out, { name: ts.text(p, text), rest: pt === 'rest_element' });
-	}
-	return out;
+	return map(paramNodes(fn), (p) => ({ name: ts.text(p.node, text), rest: p.rest }));
 }
 
 // The type of a number, string or boolean literal (as the inferrer types it),

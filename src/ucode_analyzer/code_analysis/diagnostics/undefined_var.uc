@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
+import { namedNonComments, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -48,18 +48,10 @@ function runtimeGlobals(uri) {
 
 function bind(scope, name) { scopeSet(scope, name, true); }
 
-// Bind all identifier parameters from a formal_parameters node into scope.
-function bindFormalParams(paramsNode, scope, source) {
-	for (let i = 0; i < ts.namedChildCount(paramsNode); i++) {
-		let p = ts.namedChild(paramsNode, i);
-		if (ts.nodeType(p) === 'identifier') {
-			bind(scope, ts.text(p, source));
-		} else if (ts.nodeType(p) === 'rest_element') {
-			let inner = firstNamed(p);
-			if (inner && ts.nodeType(inner) === 'identifier')
-				bind(scope, ts.text(inner, source));
-		}
-	}
+// Bind a function's parameters into scope.
+function bindParams(fn, scope, source) {
+	for (let p in paramNodes(fn))
+		bind(scope, ts.text(p.node, source));
 }
 
 
@@ -147,8 +139,7 @@ function walk(node, scope, source, globals, lineTable, out) {
 		let nameNode = ts.childByField(node, 'name');
 		if (nameNode) bind(scope, ts.text(nameNode, source));
 		let inner = makeScope(scope);
-		let params = ts.childByField(node, 'parameters');
-		if (params) bindFormalParams(params, inner, source);
+		bindParams(node, inner, source);
 		let body = ts.childByField(node, 'body');
 		if (body) walk(body, inner, source, globals, lineTable, out);
 		return;
@@ -174,15 +165,7 @@ function walk(node, scope, source, globals, lineTable, out) {
 			if (nameNode && ts.nodeType(nameNode) === 'identifier')
 				bind(inner, ts.text(nameNode, source));
 		}
-		// Field access: `parameters` → formal_parameters for multi-param (works for
-		// named/anonymous function_expression). `parameter` → bare ident for `x => expr`.
-		let params = ts.childByField(node, 'parameters');
-		if (params) {
-			bindFormalParams(params, inner, source);
-		} else {
-			let param = ts.childByField(node, 'parameter');
-			if (param && ts.nodeType(param) === 'identifier') bind(inner, ts.text(param, source));
-		}
+		bindParams(node, inner, source);
 		let body = ts.childByField(node, 'body');
 		if (body) walk(body, inner, source, globals, lineTable, out);
 		return;

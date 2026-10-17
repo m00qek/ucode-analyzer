@@ -7,7 +7,7 @@ import { makeScope, scopeGet, scopeSet, isRootBinding } from 'ucode_analyzer.cod
 import { parseGuard, applyGuard, narrowToNonNull } from 'ucode_analyzer.code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal, resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
 import { offsetToPosition, docBeforeMap, docBearingStatement } from 'ucode_analyzer.code_analysis.positions';
-import { stringLiteralText, firstNamed, declarators } from 'ucode_analyzer.code_analysis.ast_text';
+import { stringLiteralText, firstNamed, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
@@ -156,31 +156,13 @@ function arrowParams(node, source, uri, scope, depth, expectedType) {
 		? expectedType.params : [];
 
 	let params = [];
-	// Use field access so named function_expression (first named child is the
-	// function name, not formal_parameters) binds params correctly.
-	let formalParams = ts.childByField(node, 'parameters');
-	if (formalParams) {
-		for (let i = 0; i < ts.namedChildCount(formalParams); i++) {
-			let pnode = ts.namedChild(formalParams, i);
-			if (ts.nodeType(pnode) === 'rest_element') {
-				let inner = firstNamed(pnode);
-				if (inner && ts.nodeType(inner) === 'identifier')
-					push(params, { name: ts.text(inner, source), type: { kind: 'generic', base: 'list', params: [UNKNOWN] } });
-				continue;
-			}
-			if (ts.nodeType(pnode) !== 'identifier') continue;
-			let ptype = (i < length(expectedParams))
-				? (expectedParams[i].type ?? UNKNOWN) : UNKNOWN;
-			push(params, { name: ts.text(pnode, source), type: ptype });
-		}
-	} else {
-		// Single-param arrow `x => ...` — bare identifier in `parameter` field.
-		let param = ts.childByField(node, 'parameter');
-		if (param && ts.nodeType(param) === 'identifier') {
-			let ptype = length(expectedParams) > 0
-				? (expectedParams[0].type ?? UNKNOWN) : UNKNOWN;
-			push(params, { name: ts.text(param, source), type: ptype });
-		}
+	let nodes = paramNodes(node);
+	for (let k = 0; k < length(nodes); k++) {
+		let name = ts.text(nodes[k].node, source);
+		if (nodes[k].rest)
+			push(params, { name, type: { kind: 'generic', base: 'list', params: [UNKNOWN] } });
+		else
+			push(params, { name, type: (k < length(expectedParams)) ? (expectedParams[k].type ?? UNKNOWN) : UNKNOWN });
 	}
 	return params;
 }
@@ -598,22 +580,8 @@ function declParams(node, source, doc) {
 	if (length(docParams) > 0) {
 		params = map(docParams, (p) => ({ name: p.name, type: p.type ?? UNKNOWN }));
 	} else {
-		for (let i = 0; i < ts.namedChildCount(node); i++) {
-			let child = ts.namedChild(node, i);
-			if (ts.nodeType(child) !== 'formal_parameters') continue;
-			for (let j = 0; j < ts.namedChildCount(child); j++) {
-				let p = ts.namedChild(child, j);
-				if (ts.nodeType(p) === 'rest_element') {
-					let inner = firstNamed(p);
-					if (inner && ts.nodeType(inner) === 'identifier')
-						push(params, { name: ts.text(inner, source), type: { kind: 'generic', base: 'list', params: [UNKNOWN] } });
-					continue;
-				}
-				if (ts.nodeType(p) !== 'identifier') continue;
-				push(params, { name: ts.text(p, source), type: UNKNOWN });
-			}
-			break;
-		}
+		for (let p in paramNodes(node))
+			push(params, { name: ts.text(p.node, source), type: p.rest ? { kind: 'generic', base: 'list', params: [UNKNOWN] } : UNKNOWN });
 	}
 	return params;
 }

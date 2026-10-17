@@ -84,6 +84,11 @@ describe('references — scope awareness', () => {
 		assert.match(any_order([ span(src, 1, 2), span(src, 3, 4) ]), ranges(locs));
 	});
 
+	it('keeps the bare parameter of an arrow function apart from an outer name', () => {
+		let src = cursors("let $0$1x$2 = 1;\nlet f = x => x + 1;\n$3x$4;\n");
+		assert.match(any_order([ span(src, 1, 2), span(src, 3, 4) ]), ranges(refsAt(src)));
+	});
+
 	it('does not mix outer and inner let bindings with the same name', () => {
 		// Outer x and inner x (shadowed) are separate bindings.
 		let src = cursors("let $0x = 1;\nfunction foo() {\n  let $1x = 2;\n  return x;\n}\nx;\n");

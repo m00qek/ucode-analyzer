@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
+import { namedNonComments, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
@@ -16,24 +16,8 @@ function declEntry(scope, name) {
 
 // Add formal parameter names to scope as 'let'-like bindings.
 function addParams(node, source, scope) {
-	let formalParams = ts.childByField(node, 'parameters');
-	if (formalParams) {
-		for (let i = 0; i < ts.namedChildCount(formalParams); i++) {
-			let p = ts.namedChild(formalParams, i);
-			if (ts.nodeType(p) === 'rest_element') {
-				let inner = firstNamed(p);
-				if (inner && ts.nodeType(inner) === 'identifier')
-					scope.decls[ts.text(inner, source)] = { kind: 'let' };
-			} else if (ts.nodeType(p) === 'identifier') {
-				scope.decls[ts.text(p, source)] = { kind: 'let' };
-			}
-		}
-	} else {
-		// Single-param arrow: parameter field
-		let param = ts.childByField(node, 'parameter');
-		if (param && ts.nodeType(param) === 'identifier')
-			scope.decls[ts.text(param, source)] = { kind: 'let' };
-	}
+	for (let p in paramNodes(node))
+		scope.decls[ts.text(p.node, source)] = { kind: 'let' };
 }
 
 // The quick fix turns the declaration's `const` into `let`: data carries
