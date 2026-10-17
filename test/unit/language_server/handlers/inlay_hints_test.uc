@@ -1,8 +1,9 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, any_order } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { inlayHints } from 'ucode_analyzer.language_server.handlers.inlay_hints';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { cursors } from 'cursor';
 import * as fixture from 'fixture';
 
@@ -117,10 +118,13 @@ describe('inlayHints — parameter name hints', () => {
 		assert.match([], inlayHints(doc, fullRange()));
 	});
 
-	it('emits no hints for a call to a builtin', () => {
-		// Current behaviour: no parameter names and no type hint for x, though
-		// global.d.uc documents split(str, sep, limit) as returning Array<string>.
-		let doc = open("let x = split('a,b', ',');\n");
-		assert.match([], inlayHints(doc, fullRange()));
+	it('types and names the parameters of a call to a builtin', () => {
+		// With the builtins of global.d.uc loaded, as the server loads them.
+		let globalUri = dag.resolveSpecifier('global');
+		dag.addFromDisk(globalUri);
+		initBuiltinsFromDag(globalUri);
+		let src = cursors("let x$0 = split($1'a,b', $2',');\n");
+		assert.match(any_order([ typeHint(src.at[0], ': list<string>'), paramHint(src.at[1], 'str:'), paramHint(src.at[2], 'sep:') ]),
+			inlayHints(open(src.text), fullRange()));
 	});
 });
