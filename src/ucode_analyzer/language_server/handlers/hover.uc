@@ -168,12 +168,15 @@ function hoverGeneral(node, doc, config) {
 		}
 	}
 	if (type && type.kind === 'nullable') type = type.inner;
-	if (type.kind === 'unknown') return null;
+	if (type.kind === 'unknown' && ts.nodeType(node) !== 'identifier' && ts.nodeType(node) !== 'property_identifier')
+		return null;
 
 	let label    = ts.text(node, doc.text);
 	let resolved = resolveDoc(doc.uri, node, doc.text, scope);
 	let expDoc   = resolved.doc;
 	let modUri   = resolved.modUri;
+	// A name of unknown type still shows its documentation, if it has any.
+	if (type.kind === 'unknown' && !expDoc?.description) return null;
 
 	let ctx = buildHoverCtx(label, type, expDoc);
 	ctx.since = expDoc?.since ?? null;

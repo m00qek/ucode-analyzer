@@ -4,7 +4,7 @@ import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBeforeMap } from 'ucode_analyzer.code_analysis.positions';
 import { topLevelStatements, importStmtSpecifier, importBindings, importRemoteName } from 'ucode_analyzer.code_analysis.mode';
-import { stringLiteralText, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
+import { stringLiteralText, namedNonComments, firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
 
 
 function dotToSlash(s) {
@@ -16,7 +16,48 @@ function dotToSlash(s) {
 	return out;
 }
 
-// Build a { name -> { kind, doc, startByte } } index of every top-level
+// The parameters of a function node as [{ name, rest }], or null when the node
+// is not a function. They type an export whose doc comment names none.
+function paramsOf(fn, text) {
+	let t = fn ? ts.nodeType(fn) : null;
+	if (t !== 'function_declaration' && t !== 'function_expression' && t !== 'arrow_function')
+		return null;
+	let formal = ts.childByField(fn, 'parameters');
+	if (!formal) {
+		let p = ts.childByField(fn, 'parameter');   // `x => …`
+		return (p && ts.nodeType(p) === 'identifier') ? [{ name: ts.text(p, text), rest: false }] : [];
+	}
+	let out = [];
+	for (let p in ts.namedChildren(formal)) {
+		let pt = ts.nodeType(p);
+		if (pt === 'rest_element') p = firstNamed(p);
+		if (p && ts.nodeType(p) === 'identifier')
+			push(out, { name: ts.text(p, text), rest: pt === 'rest_element' });
+	}
+	return out;
+}
+
+// The type of a number, string or boolean literal (as the inferrer types it),
+// or null. Only for consts: a `let` the module reassigns would be mistyped.
+function literalType(node, text) {
+	let t = node ? ts.nodeType(node) : null;
+	if (t === 'string' || t === 'template_string') return { kind: 'primitive', name: 'string' };
+	if (t === 'true' || t === 'false') return { kind: 'primitive', name: 'boolean' };
+	if (t !== 'number') return null;
+	let digits = ts.text(node, text);
+	let float = !match(digits, /^0[xXbBoO]/) && match(digits, /[.eE]/);
+	return { kind: 'primitive', name: float ? 'float' : 'int' };
+}
+
+function isConstDecl(decl) {
+	for (let j = 0; j < ts.childCount(decl); j++) {
+		let child = ts.child(decl, j);
+		if (!ts.isNamed(child) && ts.nodeType(child) === 'const') return true;
+	}
+	return false;
+}
+
+// Build a { name -> { kind, doc, startByte, params, valueType } } index of every top-level
 // declaration in one pass. Callers that need to resolve many names (an
 // export_clause, or a legacy return object's identifier fields) share one
 // index instead of re-walking the tree per name — that re-walk was O(fields²)
@@ -33,8 +74,10 @@ function buildDeclIndex(root, text, docOf) {
 			let name = ts.text(nameNode, text);
 			if (exists(index, name)) continue;
 			let docText = docOf(stmt);
-			index[name] = { kind: 'function', doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
+			index[name] = { kind: 'function', doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode),
+			                params: paramsOf(stmt, text), valueType: null };
 		} else if (nt === 'lexical_declaration') {
+			let isConst = isConstDecl(stmt);
 			for (let j = 0; j < ts.namedChildCount(stmt); j++) {
 				let vd = ts.namedChild(stmt, j);
 				if (ts.nodeType(vd) !== 'variable_declarator') continue;
@@ -46,18 +89,20 @@ function buildDeclIndex(root, text, docOf) {
 				let it = init ? ts.nodeType(init) : null;
 				let kind = (it === 'arrow_function' || it === 'function_expression') ? 'function' : 'let';
 				let docText = docOf(stmt);
-				index[name] = { kind, doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
+				index[name] = { kind, doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode),
+				                params: paramsOf(init, text), valueType: isConst ? literalType(init, text) : null };
 			}
 		}
 	}
 	return index;
 }
 
-// Return { kind, doc, startByte } for the local declaration of name, from a
-// prebuilt declIndex. startByte is the byte offset of the name identifier node,
-// or null if the name has no top-level declaration.
+// Return { kind, doc, startByte, params, valueType } for the local declaration
+// of name, from a prebuilt declIndex. startByte is the byte offset of the name
+// identifier node, or null if the name has no top-level declaration.
 function localDeclInfo(index, name) {
-	return exists(index, name) ? index[name] : { kind: 'let', doc: null, startByte: null };
+	return exists(index, name) ? index[name]
+		: { kind: 'let', doc: null, startByte: null, params: null, valueType: null };
 }
 
 // Walk an object literal and return property descriptors { name, kind, doc, properties }.
@@ -74,6 +119,7 @@ function extractObjectProperties(objectNode, index, text, pos) {
 			let name = ts.text(pair, text);
 			let info = localDeclInfo(index, name);
 			push(props, { name, kind: info.kind, doc: info.doc, properties: null,
+			              params: info.params, valueType: info.valueType,
 			              position: pos ? pos(ts.startByte(pair)) : null });
 			continue;
 		}
@@ -85,17 +131,20 @@ function extractObjectProperties(objectNode, index, text, pos) {
 		let name = ts.text(keyNode, text);
 		let valNode = ts.childByField(pair, 'value');
 		let vtype = valNode ? ts.nodeType(valNode) : null;
-		let kind, doc, properties;
+		let kind, doc, properties, params = null, valueType = null;
 		if (vtype === 'function_expression' || vtype === 'arrow_function') {
 			kind       = 'function';
 			let docText = docMap[ts.startByte(pair)];
 			doc        = docText ? parseDoc(docText) : null;
 			properties = null;
+			params     = paramsOf(valNode, text);
 		} else if (vtype === 'identifier') {
 			let info   = localDeclInfo(index, ts.text(valNode, text));
 			kind       = info.kind;
 			doc        = info.doc;
 			properties = null;
+			params     = info.params;
+			valueType  = info.valueType;
 		} else if (vtype === 'object') {
 			kind       = 'object';
 			doc        = null;
@@ -105,7 +154,8 @@ function extractObjectProperties(objectNode, index, text, pos) {
 			doc        = null;
 			properties = null;
 		}
-		push(props, { name, kind, doc, properties, position: pos ? pos(ts.startByte(keyNode)) : null });
+		push(props, { name, kind, doc, properties, params, valueType,
+		              position: pos ? pos(ts.startByte(keyNode)) : null });
 	}
 	return props;
 }
@@ -185,6 +235,7 @@ export function extractExports(text, tree) {
 			let isFn = (t === 'function_expression' || t === 'arrow_function');
 			push(result, { name: 'default', kind: isFn ? 'function' : 'const', doc,
 			               memberRef: refs.memberRef, localRef: refs.localRef, properties: refs.properties,
+			               params: paramsOf(value, text), valueType: literalType(value, text),
 			               position: pos(ts.startByte(value)) });
 			continue;
 		}
@@ -198,25 +249,21 @@ export function extractExports(text, tree) {
 			let nameNode = ts.childByField(decl, 'name');
 			if (nameNode && ts.nodeType(nameNode) === 'identifier')
 				push(result, { name: ts.text(nameNode, text), kind: 'function', doc,
-				               position: pos(ts.startByte(nameNode)) });
+				               params: paramsOf(decl, text), position: pos(ts.startByte(nameNode)) });
 
 		} else if (declType === 'lexical_declaration') {
-			let kind = 'let';
-			for (let j = 0; j < ts.childCount(decl); j++) {
-				let child = ts.child(decl, j);
-				if (!ts.isNamed(child) && ts.nodeType(child) === 'const') {
-					kind = 'const';
-					break;
-				}
-			}
+			let kind = isConstDecl(decl) ? 'const' : 'let';
 			for (let j = 0; j < ts.namedChildCount(decl); j++) {
 				let varDecl = ts.namedChild(decl, j);
 				if (ts.nodeType(varDecl) !== 'variable_declarator') continue;
 				let nameNode = ts.childByField(varDecl, 'name');
 				if (!nameNode || ts.nodeType(nameNode) !== 'identifier') continue;
-				let refs = initRefs(ts.childByField(varDecl, 'value'));
+				let value = ts.childByField(varDecl, 'value');
+				let refs = initRefs(value);
 				push(result, { name: ts.text(nameNode, text), kind, doc,
 				               memberRef: refs.memberRef, localRef: refs.localRef, properties: refs.properties,
+				               params: paramsOf(value, text),
+				               valueType: kind === 'const' ? literalType(value, text) : null,
 				               position: pos(ts.startByte(nameNode)) });
 			}
 		} else if (declType === 'export_clause') {
@@ -234,7 +281,8 @@ export function extractExports(text, tree) {
 				let localName = localNameNode ? ts.text(localNameNode, text) : name;
 				let info = localDeclInfo(declIndex(), localName);
 				let position = (info.startByte !== null) ? pos(info.startByte) : null;
-				push(result, { name, kind: info.kind, doc: info.doc, position });
+				push(result, { name, kind: info.kind, doc: info.doc, params: info.params,
+				               valueType: info.valueType, position });
 			}
 		}
 	}

@@ -13,15 +13,22 @@ let _globalUri    = null;
 
 // ── DAG export → Type ──────────────────────────────────────────────────────
 
+const REST = { kind: 'generic', base: 'list', params: [UNKNOWN] };
+
+// An export's type, from its doc comment; where the doc says nothing, from
+// what the indexer read off the declaration (parameter names, a const's
+// literal type).
 export function exportType(exp, sourceUri) {
 	if (exp._moduleSpecifier) return { kind: 'module', path: exp._moduleSpecifier };
 	if (exp.doc?.type) return exp.doc.type;
-	if (exp.kind === 'function' || (exp.doc && (length(exp.doc.params) > 0 || exp.doc.returns))) {
-		if (!exp.doc) return { kind: 'function', params: [], return: UNKNOWN };
+	if (exp.kind === 'function' || exp.params || (exp.doc && (length(exp.doc.params) > 0 || exp.doc.returns))) {
+		let docParams = filter(exp.doc?.params ?? [], (p) => !match(p.name, /\./));
 		return {
 			kind: 'function',
-			params: map(filter(exp.doc.params, (p) => !match(p.name, /\./)), (p) => ({ name: p.name, type: p.type ?? UNKNOWN })),
-			return: (exp.doc.returns ? exp.doc.returns.type : null) ?? UNKNOWN,
+			params: length(docParams)
+				? map(docParams, (p) => ({ name: p.name, type: p.type ?? UNKNOWN }))
+				: map(exp.params ?? [], (p) => p.rest ? { name: p.name, type: REST, rest: true } : { name: p.name, type: UNKNOWN }),
+			return: exp.doc?.returns?.type ?? UNKNOWN,
 		};
 	}
 	if (exp.properties) {
@@ -32,8 +39,7 @@ export function exportType(exp, sourceUri) {
 		}
 		return { kind: 'record', fields, sourceUri };
 	}
-	if (!exp.doc) return UNKNOWN;
-	return (exp.doc.returns ? exp.doc.returns.type : null) ?? UNKNOWN;
+	return exp.doc?.returns?.type ?? exp.valueType ?? UNKNOWN;
 };
 
 // ── Imported-name resolution ───────────────────────────────────────────────

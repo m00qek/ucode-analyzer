@@ -131,3 +131,12 @@ describe('signatureHelp', () => {
 		assert.match(contains('int'), result.signatures[0].label);
 	});
 });
+
+describe('signatureHelp — imports whose docs carry no tags', () => {
+	it('names the parameters of an imported function without @param tags', () => {
+		dag.addFromDisk(fixture.uri('settings.uc'));
+		let result = sigAt("import { joinNames } from 'settings';\njoinNames('a',$0 'b');\n");
+		assert.match('joinNames(first: ?, second: ?)', result.signatures[0].label);
+		assert.match(1, result.activeParameter);
+	});
+});

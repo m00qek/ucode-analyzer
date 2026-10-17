@@ -25,6 +25,8 @@ function hoverAt(marked, config) {
 // Open the marked text with its imports in the DAG and hover at $0.
 function hoverImporting(marked, config) {
 	dag.addFromDisk(PARSER_URI);
+	dag.addFromDisk(fixture.uri('settings.uc'));
+	dag.addFromDisk(fixture.uri('legacy_mod.uc'));
 	let src = cursors(marked);
 	let doc = documents.open(URI, src.text, 1);
 	dag.add(URI, doc.text, doc.tree);
@@ -217,3 +219,43 @@ describe('hover — doc comment tags', () => {
 	});
 });
 
+describe('hover — imports whose docs carry no tags', () => {
+	function value(marked) {
+		let r = hoverImporting(marked, _config);
+		dag.remove(URI);
+		return r?.contents?.value ?? '';
+	}
+
+	it('types an imported const from its literal and shows its doc', () => {
+		let v = value("import { VERSION } from 'settings';\n$0VERSION;\n");
+		assert.match(contains('VERSION: int'), v);
+		assert.match(contains('The protocol version.'), v);
+	});
+
+	it('shows the doc of an imported const of unknown type', () => {
+		let v = value("import { TIMEOUT } from 'settings';\n$0TIMEOUT;\n");
+		assert.match(contains('TIMEOUT: ?'), v);
+		assert.match(contains('The timeout, in seconds.'), v);
+	});
+
+	it('names the parameters of an imported function without @param tags', () => {
+		let v = value("import { joinNames } from 'settings';\n$0joinNames;\n");
+		assert.match(contains('function joinNames(first, second)'), v);
+		assert.match(contains('Joins two names.'), v);
+	});
+
+	it('types an exported const bound to a function, rest parameter included', () => {
+		assert.match(contains('function pick(list, ...rest'), value("import { pick } from 'settings';\n$0pick;\n"));
+		let v = value("import * as p from 'parser';\np.$0rootNode;\n");
+		assert.match(contains('function rootNode(tree)'), v);
+		assert.match(contains('The root node of a tree.'), v);
+	});
+
+	it('names the parameters of a legacy module member', () => {
+		assert.match(contains('function greet(name)'), value("let m = require('legacy_mod');\nm.$0greet;\n"));
+	});
+
+	it('still shows nothing for an undocumented local of unknown type', () => {
+		assert.match(null, hoverAt("let x = int('3');\n$0x;\n", _config));
+	});
+});
