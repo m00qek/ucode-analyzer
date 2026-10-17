@@ -15,7 +15,6 @@ RUN wget -qO /etc/apk/keys/packages.ucode.dev.pem \
     echo "https://m00qek.github.io/packages.ucode.dev/25.12" \
         >> /etc/apk/repositories.d/customfeeds.list && \
     apk update && \
-    apk add ucode-utest ucode-docopt && \
-    mkdir -p /usr/lib/ucode/ucode_language_server
+    apk add ucode-utest ucode-docopt
 
 WORKDIR /app

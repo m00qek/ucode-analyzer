@@ -98,7 +98,9 @@ vim.lsp.config("ucode_analyzer", {
     }, dispatchers)
   end,
   filetypes = { "ucode", "ucode_markup" },
-  root_markers = { ".git", "*.uc" },
+  -- The nearest project config, else the repository: a folder of .uc files
+  -- is not a workspace root.
+  root_markers = { ".lsp", ".git" },
 })
 vim.lsp.enable("ucode_analyzer")
 ```
