@@ -17,6 +17,15 @@ export function removeUri(uri) {
 			delete _registry[name];
 };
 
+// The typedefs that uri declares, by name.
+export function definedIn(uri) {
+	let out = {};
+	for (let name, entry in _registry)
+		if (entry.sourceUri === uri)
+			out[name] = { type: entry.type, params: entry.params };
+	return out;
+};
+
 export function allNames() {
 	return keys(_registry);
 };

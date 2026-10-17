@@ -149,6 +149,27 @@ describe('dag edges', () => {
 		assert.match(false, index(dag.reverseDeps(TS_URI), URI_A) >= 0);
 	});
 
+	it('does not cascade when the interface is unchanged', () => {
+		// tree_sitter.uc exists on disk, so the import resolves to it.
+		let lib = "/**\n * @returns {string}\n */\nexport function foo() { return 'x'; };\n";
+		let importer = "import { foo } from 'tree_sitter';\n";
+		dag.add(TS_URI, lib, parse(lib));
+		dag.add(URI_A, importer, parse(importer));
+		dag.markOpen(URI_A);
+		let open = { [URI_A]: { text: importer, tree: parse(importer) } };
+
+		let body = "/**\n * @returns {string}\n */\nexport function foo() { let s = 'y'; return s; };\n";
+		assert.match([], dag.update(TS_URI, body, parse(body), open));
+		// Positions move with an edit above the export; importers do not keep them.
+		let moved = "// a comment\n\n" + body;
+		assert.match([], dag.update(TS_URI, moved, parse(moved), open));
+		assert.match(5, dag.exportsOf(TS_URI)[0].position.line);
+
+		let retyped = "/**\n * @returns {int}\n */\nexport function foo() { return 1; };\n";
+		assert.match([URI_A], dag.update(TS_URI, retyped, parse(retyped), open));
+		dag.markClosed(URI_A);
+	});
+
 	it('cascade re-indexes reverse deps on update', () => {
 		let text_b_v1 = "import * as ts from 'tree_sitter';\nexport function b_export() {};";
 		let text_b_v2 = "export function b_new_export() {};";

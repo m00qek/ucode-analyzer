@@ -70,6 +70,26 @@ function indexNode(uri, text, tree) {
 	extractTypedefs(uri, text, tree);
 }
 
+// A value without its `position` keys, at any depth.
+function withoutPositions(v) {
+	if (type(v) === 'array') return map(v, withoutPositions);
+	if (type(v) !== 'object') return v;
+	let out = {};
+	for (let k, x in v)
+		if (k !== 'position') out[k] = withoutPositions(x);
+	return out;
+}
+
+// What importers see of a file, as a comparable string. Export positions are
+// left out: an edit above an export moves them, and importers read them from
+// the DAG when they need them rather than keeping copies.
+function interfaceOf(uri) {
+	let node = _nodes[uri];
+	if (!node) return null;
+	return sprintf('%J', [withoutPositions(node.exports), node.imports, node.moduleDoc,
+		node.versions, type_registry.definedIn(uri)]);
+}
+
 function readAndParse(path) {
 	let f = fs.open(path, 'r');
 	if (!f) return null;
@@ -110,9 +130,14 @@ export function addFromDisk(uri) {
 // Re-index a file with the given content, then cascade through reverse deps.
 // openDocs is an optional map of uri -> {text, tree} for currently open files;
 // when provided, open dependents are re-indexed from memory instead of skipped.
-// Returns the list of dependent URIs that were re-indexed (excluding uri itself).
+// Returns the list of dependent URIs that were re-indexed (excluding uri itself):
+// none when the file's interface is unchanged (an edit inside a function body,
+// a comment), since nothing an importer sees has moved.
 export function update(uri, text, tree, openDocs) {
+	let before = interfaceOf(uri);
 	indexNode(uri, text, tree);
+	if (before !== null && interfaceOf(uri) === before)
+		return [];
 
 	let visited = {};
 	let queue = [];

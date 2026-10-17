@@ -64,6 +64,19 @@ describe('importers of a changed file', () => {
 		assert.match(true, index(hoverS(), 'function') >= 0);
 	});
 
+	it('keep their diagnostics when only a function body changes', () => {
+		open(LIB, LIB_V1);
+		open(B, IMPORTER);
+		let before = lsp.documentDiagnostics(proc, B);
+
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
+			textDocument: { uri: LIB, version: 2 },
+			contentChanges: [{ text: replace(LIB_V1, "return 'x';", "let y = 'y'; return y;") }],
+		}});
+
+		assert.match('unchanged', lsp.documentDiagnostics(proc, B, before.resultId).kind);
+	});
+
 	it('see an edit to the imported file on disk', () => {
 		open(B, IMPORTER);
 		let before = lsp.documentDiagnostics(proc, B);
