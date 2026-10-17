@@ -196,6 +196,13 @@ describe('diagnostics — type errors: unknown-property', () => {
 			unknownProps(src.text));
 	});
 
+	it('knows the fields of a caught exception', () => {
+		// die({ code: 1 }) puts the value in e.message: e.code is null.
+		let src = cursors("try { die({ code: 1 }); } catch (e) { print(e.type, e.message, e.stacktrace, e.$0code$1); }\n");
+		assert.match([diag(src, 2, 'unknown-property', "Property 'code' does not exist on this type")],
+			unknownProps(src.text));
+	});
+
 	it('no warning for delete of a possibly-absent property', () => {
 		assert.match(0, length(unknownProps("let o = { a: 1 };\ndelete o.b;\n")));
 	});

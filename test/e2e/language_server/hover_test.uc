@@ -331,10 +331,13 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(typed('xs: list<int>'), resp.result);   // used to be null (routed to the loop-var path)
 	});
 
-	it('catch variable hover shows string type', () => {
+	it('catch variable hover shows the exception object', () => {
 		let resp = hoverAt("try { } catch(e) {\n    $0e;\n}\n");
 		assert.match(1, resp.id);
-		assert.match(typed('e: string'), resp.result);
+		assert.match(markdown([
+			'```ucode', 'e: { type, message, stacktrace }', '```', '',
+			'**Members:**', '- `type`: `string`', '- `message`: `?`', '- `stacktrace`: `list<?>`', '',
+		]), resp.result);
 	});
 
 	it('type() narrowing: variable shows narrowed type inside if-branch', () => {

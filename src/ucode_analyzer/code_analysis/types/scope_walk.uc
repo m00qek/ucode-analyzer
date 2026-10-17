@@ -593,6 +593,14 @@ function walkIfAlt(node, source, uri, scope, map) {
     }
 }
 
+// What `catch (e)` binds: the exception object, whatever die() was given as
+// its message (it prints as that message).
+const EXCEPTION = { kind: 'record', fields: [
+    { name: 'type',       type: STR },
+    { name: 'message',    type: UNKNOWN },
+    { name: 'stacktrace', type: { kind: 'generic', base: 'list', params: [UNKNOWN] } },
+] };
+
 function walkTry(node, source, uri, scope, map) {
     let body    = ts.childByField(node, 'body');
     let handler = ts.childByField(node, 'handler');
@@ -602,7 +610,7 @@ function walkTry(node, source, uri, scope, map) {
         let catchBody = ts.childByField(handler, 'body');
         let catchScope = makeScope(scope);
         if (param && ts.nodeType(param) === 'identifier')
-            scopeSet(catchScope, ts.text(param, source), STR);
+            scopeSet(catchScope, ts.text(param, source), EXCEPTION);
         if (catchBody) walkBlock(catchBody, source, uri, catchScope, map);
     }
 }

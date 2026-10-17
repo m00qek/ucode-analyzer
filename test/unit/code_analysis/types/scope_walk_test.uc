@@ -8,6 +8,9 @@ import { scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 import * as fixture from 'fixture';
 
+// What `catch (e)` binds.
+const EXCEPTION = { kind: 'record', fields: [ { name: 'type', type: { kind: 'primitive', name: 'string' } }, { name: 'message', type: { kind: 'unknown' } }, { name: 'stacktrace', type: { kind: 'generic', base: 'list', params: [ { kind: 'unknown' } ] } } ] };
+
 let _parser = ts.newParser(ts.ucode());
 
 function parse(text) {
@@ -433,8 +436,8 @@ describe('buildScopeMap catch variable', () => {
 	it('catch parameter visible inside catch body', () => {
 		let src = 'try {\n  let x = 1;\n} catch (e) {\n  let y = e;\n}\n';
 		let scope = scopeAt(src, 'let y');
-		// catch param is always typed as string (error message).
-		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'e'));
+		// the exception object: { type, message, stacktrace }
+		assert.match(EXCEPTION, scopeGet(scope, 'e'));
 	});
 
 	it('catch parameter not visible outside', () => {
@@ -629,10 +632,10 @@ describe('buildScopeMap template brace-form if/elif/else narrowing', () => {
 // ── template mode: brace-spanning try/catch ({% try { %}…{% } catch (e) { %}) ────
 
 describe('buildScopeMap template brace-spanning try/catch', () => {
-	it('the catch parameter is visible as a string inside the catch body', () => {
+	it('the catch parameter is visible as the exception inside the catch body', () => {
 		let src = "{% try { %}\nx\n{% } catch (e) { %}\n{{ e }}\n{% } %}\n";
 		let scope = scopeAtTpl(src, '{{ e');
-		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'e'));
+		assert.match(EXCEPTION, scopeGet(scope, 'e'));
 	});
 
 	it('an outer declaration is visible inside the try body', () => {

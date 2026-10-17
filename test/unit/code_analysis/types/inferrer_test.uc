@@ -1028,9 +1028,9 @@ describe('inferrer — buildScope: catch clause variable', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, offset);
 
-		// Current behaviour: typed string. At runtime it is an object
-		// { type, message, stacktrace } (that prints as its message).
-		assert.match(prim('string'), scopeGet(scope, 'e'));
+		// The exception object { type, message, stacktrace }, which prints as its
+		// message.
+		assert.match([ 'type', 'message', 'stacktrace' ], map(scopeGet(scope, 'e').fields, (f) => f.name));
 	});
 
 	it('catch parameter is not in scope after the catch block', () => {
