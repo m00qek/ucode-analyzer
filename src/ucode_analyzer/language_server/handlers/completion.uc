@@ -8,6 +8,7 @@ import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import * as platform from 'ucode_analyzer.language_server.platform';
 import { CompletionItemKind } from 'ucode_analyzer.code_analysis.lsp_types';
+import { exportType } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 
 // LSP CompletionItemKind constants
 
@@ -65,12 +66,10 @@ function fnSnippet(label, fnType, docParams) {
 	return label + '(' + join(', ', parts) + ')';
 }
 
-// Format a type for a completion item's detail field.
-function detail(exp) {
-	if (!exp.doc) return null;
-	if (exp.doc.returns && exp.doc.returns.type)
-		return typeToString(exp.doc.returns.type);
-	return null;
+// An export's type for a completion item's detail field, as locals show
+// theirs (a function's whole signature), or null when unknown.
+function detail(type) {
+	return (type.kind === 'unknown') ? null : typeToString(type);
 }
 
 // Return the object-side node of the member_expression at offset, or null.
@@ -112,8 +111,9 @@ function memberContext(root, source, offset) {
 // Completion items for all exports of a resolved module URI.
 // Lazy-indexes the module if not yet in the DAG.
 // Hides the entire module if not installed; hides individual symbols not yet
-// available in the installed version (based on @since).
-function exportsOfModule(resolvedUri) {
+// available in the installed version (based on @since). Inside an import
+// clause (`inImport`) an item is the name alone, not a call.
+function exportsOfModule(resolvedUri, inImport) {
 	if (!dag.exportsOf(resolvedUri)) dag.addFromDisk(resolvedUri);
 	let exps = dag.exportsOf(resolvedUri);
 	if (!exps) return [];
@@ -123,15 +123,16 @@ function exportsOfModule(resolvedUri) {
 		let exp = exps[i];
 		if (!platform.symbolAvailable(resolvedUri, exp.doc?.since)) continue;
 		let r = dag.resolveExport(resolvedUri, exp.name) ?? exp;
-		let isFn = (r.kind === 'function');
+		let t = exportType(r, resolvedUri);
+		let isFn = (t.kind === 'function');
 		let item = {
 			label:         exp.name,
 			kind:          isFn ? CompletionItemKind.FUNCTION : CompletionItemKind.VARIABLE,
-			detail:        detail(r),
+			detail:        detail(t),
 			documentation: (r.doc && r.doc.description) ? r.doc.description : null,
 		};
-		if (isFn) {
-			item.insertText       = fnSnippet(exp.name, null, r.doc?.params);
+		if (isFn && !inImport) {
+			item.insertText       = fnSnippet(exp.name, t, null);
 			item.insertTextFormat = 2;
 		}
 		if (r.doc && r.doc.deprecated) item.tags = [1];
@@ -221,15 +222,16 @@ function importedItems(uri) {
 				}
 				if (localName === null) continue;
 				let r = dag.resolveExport(imp.resolvedUri, exp.name) ?? exp;
-				let isFn = (r.kind === 'function');
+				let t = exportType(r, imp.resolvedUri);
+				let isFn = (t.kind === 'function');
 				let item = {
 					label:         localName,
 					kind:          isFn ? CompletionItemKind.FUNCTION : CompletionItemKind.VARIABLE,
-					detail:        detail(r),
+					detail:        detail(t),
 					documentation: (r.doc && r.doc.description) ? r.doc.description : null,
 				};
 				if (isFn) {
-					item.insertText       = fnSnippet(localName, null, r.doc?.params);
+					item.insertText       = fnSnippet(localName, t, null);
 					item.insertTextFormat = 2;
 				}
 				if (r.doc && r.doc.deprecated) item.tags = [1];
@@ -279,7 +281,7 @@ export function completion(uri, doc, position) {
 		if (imps) {
 			for (let i = 0; i < length(imps); i++) {
 				if (imps[i].specifier === specifier && imps[i].resolvedUri)
-					return exportsOfModule(imps[i].resolvedUri);
+					return exportsOfModule(imps[i].resolvedUri, true);
 			}
 		}
 		return [];

@@ -37,14 +37,21 @@ function labels(items) {
 }
 
 // parser.uc's exports, in declaration order, as completion items.
-let PARSER_ITEMS = [
-	{ label: 'newParser', kind: 3, detail: 'object', documentation: 'Create a parser for a language.', insertText: 'newParser(${1:language})', insertTextFormat: 2 },
-	{ label: 'parse', kind: 3, detail: 'object', documentation: 'Parse source text into a tree.', insertText: 'parse(${1:parser}, ${2:source})', insertTextFormat: 2 },
-	{ label: 'rootNode', kind: 6, detail: null, documentation: 'The root node of a tree.' },
-	{ label: 'nodeType', kind: 6, detail: null, documentation: 'The type name of a node.' },
-	{ label: 'text', kind: 3, detail: 'string', documentation: 'The source text a node spans.', insertText: 'text(${1:node}, ${2:source})', insertTextFormat: 2 },
-	{ label: 'parseString', kind: 3, detail: null, documentation: null, insertText: 'parseString($1)', insertTextFormat: 2, tags: [ 1 ] },
+// parser.uc's exports as items: inside an import clause, the names alone;
+// as members (`p.`), calls with a snippet per parameter.
+let PARSER_IMPORT_ITEMS = [
+	{ label: 'newParser', kind: 3, detail: '(language: string) => object', documentation: 'Create a parser for a language.' },
+	{ label: 'parse', kind: 3, detail: '(parser: object, source: string) => object', documentation: 'Parse source text into a tree.' },
+	{ label: 'rootNode', kind: 3, detail: '(tree: ?) => ?', documentation: 'The root node of a tree.' },
+	{ label: 'nodeType', kind: 3, detail: '(node: ?) => ?', documentation: 'The type name of a node.' },
+	{ label: 'text', kind: 3, detail: '(node: object, source: string) => string', documentation: 'The source text a node spans.' },
+	{ label: 'parseString', kind: 3, detail: '(source: ?) => ?', documentation: null, tags: [ 1 ] },
 ];
+let SNIPPETS = [ 'newParser(${1:language})', 'parse(${1:parser}, ${2:source})', 'rootNode(${1:tree})',
+                 'nodeType(${1:node})', 'text(${1:node}, ${2:source})', 'parseString(${1:source})' ];
+let PARSER_ITEMS = [];
+for (let i = 0; i < length(PARSER_IMPORT_ITEMS); i++)
+	push(PARSER_ITEMS, { ...PARSER_IMPORT_ITEMS[i], insertText: SNIPPETS[i], insertTextFormat: 2 });
 
 afterEach(() => {
 	documents.close(URI);
@@ -97,7 +104,7 @@ describe('completion — import context', () => {
 
 		// Falling through to importedItems would return only {parse}, so the
 		// other exports distinguish the two paths.
-		assert.match(PARSER_ITEMS, items);
+		assert.match(PARSER_IMPORT_ITEMS, items);
 	});
 
 	it('outside an import statement offers scope locals and named imports', () => {
@@ -126,8 +133,8 @@ describe('completion — member (cursor on property)', () => {
 	it('namespace import: items include the function kind for function exports', () => {
 		let items = completeImporting("import * as p from 'parser';\np.$0parse");
 
-		// KIND_FUNCTION (3) for function exports, VARIABLE (6) for the others
-		assert.match([ 3, 3, 6, 6, 3, 3 ], map(items, (i) => i.kind));
+		// FUNCTION (3) for every export: rootNode and nodeType are bound to arrows
+		assert.match([ 3, 3, 3, 3, 3, 3 ], map(items, (i) => i.kind));
 	});
 
 	it('trigger character: cursor right after dot returns members', () => {
@@ -231,7 +238,7 @@ describe('completion — keywords', () => {
 		let items = completeAt("import { x } from '$0parser';\n");
 
 		// the import context offers the module's exports, never keywords
-		assert.match(PARSER_ITEMS, items);
+		assert.match(PARSER_IMPORT_ITEMS, items);
 	});
 });
 

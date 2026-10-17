@@ -36,16 +36,18 @@ function withLabels(items, labels) {
 
 // The completions of the parser module's exports, in any order.
 const PARSER_EXPORTS = any_order([
-	{ label: 'newParser', kind: 3, detail: 'object', documentation: 'Create a parser for a language.',
+	{ label: 'newParser', kind: 3, detail: '(language: string) => object', documentation: 'Create a parser for a language.',
 		insertText: 'newParser(${1:language})', insertTextFormat: 2 },
-	{ label: 'parse', kind: 3, detail: 'object', documentation: 'Parse source text into a tree.',
+	{ label: 'parse', kind: 3, detail: '(parser: object, source: string) => object', documentation: 'Parse source text into a tree.',
 		insertText: 'parse(${1:parser}, ${2:source})', insertTextFormat: 2 },
-	{ label: 'rootNode', kind: 6, detail: null, documentation: 'The root node of a tree.' },
-	{ label: 'nodeType', kind: 6, detail: null, documentation: 'The type name of a node.' },
-	{ label: 'text', kind: 3, detail: 'string', documentation: 'The source text a node spans.',
+	{ label: 'rootNode', kind: 3, detail: '(tree: ?) => ?', documentation: 'The root node of a tree.',
+		insertText: 'rootNode(${1:tree})', insertTextFormat: 2 },
+	{ label: 'nodeType', kind: 3, detail: '(node: ?) => ?', documentation: 'The type name of a node.',
+		insertText: 'nodeType(${1:node})', insertTextFormat: 2 },
+	{ label: 'text', kind: 3, detail: '(node: object, source: string) => string', documentation: 'The source text a node spans.',
 		insertText: 'text(${1:node}, ${2:source})', insertTextFormat: 2 },
-	{ label: 'parseString', kind: 3, detail: null, documentation: null,
-		insertText: 'parseString($1)', insertTextFormat: 2, tags: [ 1 ] },  // @deprecated
+	{ label: 'parseString', kind: 3, detail: '(source: ?) => ?', documentation: null,
+		insertText: 'parseString(${1:source})', insertTextFormat: 2, tags: [ 1 ] },  // @deprecated
 ]);
 
 describe('textDocument/completion', () => {

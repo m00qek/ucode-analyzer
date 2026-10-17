@@ -54,13 +54,8 @@ describe('completion — snippets and @deprecated', () => {
 		// Opening a file that imports from it and completing inside the import braces
 		// goes through exportsOfModule, which should mark oldFn with tags: [1].
 		let resp = completeAt("import { o$0ldFn, newFn } from 'deprecated';\n");
-		// Current behaviour: inside import braces each item inserts a call
-		// snippet (`oldFn($1)`, though both take no parameters), and carries no
-		// detail or documentation.
-		let item = (label) => ({
-			label, kind: 3, detail: null, documentation: null,
-			insertText: label + '($1)', insertTextFormat: 2,
-		});
+		// Inside import braces an item is the name alone, not a call.
+		let item = (label) => ({ label, kind: 3, detail: '() => ?', documentation: null });
 		assert.match(any_order([ { ...item('oldFn'), tags: [ 1 ] }, item('newFn') ]), resp.result);
 	});
 });
