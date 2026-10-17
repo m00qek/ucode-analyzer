@@ -12,11 +12,13 @@ import { CompletionItemKind } from 'ucode_analyzer.code_analysis.lsp_types';
 // LSP CompletionItemKind constants
 
 // All ucode keywords offered in non-member, non-import contexts.
+// ucode's keywords, checked against the interpreter: no do, finally, throw,
+// typeof, void or instanceof; the alt-syntax `elif` and `end…` forms.
 let KEYWORDS = [
 	'break', 'case', 'catch', 'const', 'continue', 'default', 'delete',
-	'do', 'else', 'export', 'false', 'finally', 'for', 'function', 'if',
-	'import', 'in', 'instanceof', 'let', 'null', 'return', 'switch',
-	'throw', 'true', 'try', 'typeof', 'void', 'while',
+	'elif', 'else', 'endfor', 'endfunction', 'endif', 'endwhile', 'export',
+	'false', 'for', 'function', 'if', 'import', 'in', 'let', 'null', 'return',
+	'switch', 'this', 'true', 'try', 'while',
 ];
 
 // Walk the tree to find if offset falls inside an import_statement.
