@@ -1,5 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as native from 'rpc_client.native';
+import * as fs from 'fs';
 
 const WS = '/app/test/fixtures/linter';
 
@@ -93,5 +94,34 @@ describe('ucode-linter — file mode', () => {
 		let r = runLinter([ WS + '/src/clean.uc' ]);
 		assert.match(true, index(r.out, '[') < 0);
 		assert.match(0, r.code);
+	});
+});
+
+describe('ucode-linter — workspace layout', () => {
+	it('lints files outside the library paths', () => {
+		let dir = fs.mkdtemp('/tmp/linter-flat-XXXXXX');
+		fs.mkdir(dir + '/sub');
+		fs.writefile(dir + '/main.uc', 'ghost();\n');
+		fs.writefile(dir + '/sub/deep.uc', 'phantom();\n');
+		let r = runLinter([ '--workspace', dir ]);
+		let created = fs.stat(dir + '/.lsp');
+		system(['rm', '-rf', dir]);
+		assert.match(true, index(r.out, "main.uc:1:1: [warning] 'ghost' is not defined") >= 0);
+		assert.match(true, index(r.out, "sub/deep.uc:1:1: [warning] 'phantom' is not defined") >= 0);
+		assert.match(null, created);
+	});
+
+	it('--init writes the detected config once', () => {
+		let dir = fs.mkdtemp('/tmp/linter-init-XXXXXX');
+		fs.mkdir(dir + '/src');
+		fs.writefile(dir + '/src/a.uc', 'let a = 1;\n');
+		let first = runLinter([ '--init', '--workspace', dir ]);
+		let written = json(fs.readfile(dir + '/.lsp/config.json'));
+		let second = runLinter([ '--init', '--workspace', dir ]);
+		system(['rm', '-rf', dir]);
+		assert.match(0, first.code);
+		assert.match(sprintf('Wrote %s/.lsp/config.json\n', dir), first.out);
+		assert.match({ workspace: { libraryPaths: ['src'] } }, written);
+		assert.match(sprintf('%s/.lsp/config.json already exists; left unchanged\n', dir), second.out);
 	});
 });

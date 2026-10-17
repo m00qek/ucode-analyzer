@@ -56,6 +56,20 @@ describe('glob.scan', () => {
 			assert.match(false, index(f, 'language_server') >= 0);
 	});
 
+	it('does not enter an excluded directory', () => {
+		let root = '/tmp/glob-prune';
+		system(sprintf('rm -rf %s', root));
+		fs.mkdir(root);
+		fs.mkdir(root + '/.git');
+		fs.writefile(root + '/.git/x.uc', 'let x = 1;\n');
+		fs.writefile(root + '/a.uc', 'let a = 1;\n');
+
+		let files = scan(root, ['**/*.uc'], ['**/.*/**']);
+		system(sprintf('rm -rf %s', root));
+
+		assert.match([root + '/a.uc'], files);
+	});
+
 	it('returns empty list when no files match', () => {
 		let files = scan('/app/src', ['**/*.lua'], []);
 		assert.match(0, length(files));

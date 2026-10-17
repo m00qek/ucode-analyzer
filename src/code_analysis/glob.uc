@@ -46,9 +46,9 @@ function matchesPattern(relPath, pattern) {
 	return match(relPath, globToRegex(pattern)) !== null;
 }
 
-function matchesAny(relPath, patterns) {
-	for (let p in patterns) {
-		if (matchesPattern(relPath, p))
+function matchesAny(relPath, regexes) {
+	for (let re in regexes) {
+		if (match(relPath, re) !== null)
 			return true;
 	}
 	return false;
@@ -56,7 +56,9 @@ function matchesAny(relPath, patterns) {
 
 // Symlinks are followed (fs.stat), but each real directory is entered at most
 // once (keyed by fs.realpath), so a link back up the tree -- or two links to the
-// same directory -- cannot make the walk loop or report a file twice.
+// same directory -- cannot make the walk loop or report a file twice. A
+// directory that an exclude matches with a trailing slash (`build/**`,
+// `**/.*/**`) is not entered at all.
 function walkDir(absDir, relDir, includes, excludes, results, visited) {
 	let real = fs.realpath(absDir);
 	if (!real || visited[real]) return;
@@ -70,7 +72,8 @@ function walkDir(absDir, relDir, includes, excludes, results, visited) {
 		if (!stat) continue;
 
 		if (stat.type === 'directory') {
-			walkDir(absPath, relPath, includes, excludes, results, visited);
+			if (!matchesAny(relPath + '/', excludes))
+				walkDir(absPath, relPath, includes, excludes, results, visited);
 		} else {
 			if (matchesAny(relPath, includes) && !matchesAny(relPath, excludes))
 				push(results, absPath);
@@ -81,7 +84,7 @@ function walkDir(absDir, relDir, includes, excludes, results, visited) {
 // Returns absolute paths of files under dir matching includes/excludes.
 export function scan(dir, includes, excludes) {
 	let results = [];
-	walkDir(dir, '', includes, excludes ?? [], results, {});
+	walkDir(dir, '', map(includes, globToRegex), map(excludes ?? [], globToRegex), results, {});
 	return results;
 };
 

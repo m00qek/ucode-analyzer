@@ -2,7 +2,7 @@
 'use strict';
 
 import { docopt } from 'docopt';
-import { load as loadConfig } from 'code_analysis.config';
+import { load as loadConfig, init as initConfig } from 'code_analysis.config';
 import { run } from 'linter.run';
 import { detectJobs } from 'code_analysis.parallel';
 import * as fs from 'fs';
@@ -13,11 +13,15 @@ ucode-linter - lint ucode source files.
 Usage:
   ucode-linter [options] <file>...
   ucode-linter [options] --workspace=<path>
+  ucode-linter --init [--workspace=<path>]
   ucode-linter -h | --help
   ucode-linter --version
 
 Options:
   --workspace=<path>  Lint every .uc file in the workspace at <path>.
+  --init              Write <workspace>/.lsp/config.json with the library paths
+                      the linter and the language server would detect, to edit
+                      by hand. The workspace defaults to the current directory.
   --config=<path>     Directory containing config.json. Defaults to the
                       workspace (file mode: the current directory).
   --format=<fmt>      Output format: text | json   [default: text]
@@ -34,6 +38,13 @@ const args = docopt(doc, ARGV, true, '0.1.0');
 
 const files    = args['<file>'] ?? [];
 const fileMode = length(files) > 0;
+
+if (args['--init']) {
+	let dir = fs.realpath(args['--workspace'] ?? fs.getcwd() ?? '.');
+	let r = initConfig(dir);
+	print(r.created ? sprintf('Wrote %s\n', r.path) : sprintf('%s already exists; left unchanged\n', r.path));
+	exit(0);
+}
 
 // In file mode the workspace root is the current directory (the imports in the
 // linted files resolve against it); otherwise it is the --workspace path.

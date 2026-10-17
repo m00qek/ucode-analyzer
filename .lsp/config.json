@@ -1,1 +1,1 @@
-{ "workspace": { "libraryPaths": [ "src", "test", "test/helpers", "mod", "test/mod" ] } }
+{ "workspace": { "libraryPaths": [ "src", "test", "test/helpers", "mod", "test/mod" ], "exclude": [ "third_party/**" ] } }

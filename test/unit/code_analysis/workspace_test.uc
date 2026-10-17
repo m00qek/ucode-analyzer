@@ -1,5 +1,6 @@
 import { describe, it, assert } from 'utest';
-import { isWorkspaceUri } from 'code_analysis.workspace';
+import * as fs from 'fs';
+import { isWorkspaceUri, loadWorkspaceDocs } from 'code_analysis.workspace';
 
 // selfSrcDir and one systemLibPath sit UNDER the workspace so their exclusion
 // (and its boundary) is actually exercised — a path outside /app is already
@@ -53,5 +54,42 @@ describe('workspace — isWorkspaceUri classification', () => {
 
 	it('does not over-exclude a sibling of a nested workspace root (boundary)', () => {
 		assert.match(true, ws('/app/nested-extra/x.uc', ['/app/nested/']));
+	});
+});
+
+describe('workspace — excluded files', () => {
+	let xcfg = { workspaceDir: '/app', workspace: { exclude: ['gen/**'] } };
+	function wsx(path) {
+		return isWorkspaceUri('file://' + path, xcfg, []);
+	}
+
+	it('excludes hidden folders and node_modules at any depth', () => {
+		assert.match(false, wsx('/app/.git/x.uc'));
+		assert.match(false, wsx('/app/src/.cache/x.uc'));
+		assert.match(false, wsx('/app/web/node_modules/pkg/x.uc'));
+		assert.match(true, wsx('/app/src/x.uc'));
+	});
+
+	it('excludes what workspace.exclude matches', () => {
+		assert.match(false, wsx('/app/gen/x.uc'));
+		assert.match(true, wsx('/app/generator/x.uc'));
+	});
+});
+
+describe('workspace — loadWorkspaceDocs', () => {
+	it('indexes the whole workspace, not only its library paths', () => {
+		let dir = fs.mkdtemp('/tmp/workspace-XXXXXX');
+		for (let f in ['main.uc', 'sub/deep.uc', 'gen/out.uc', '.hidden/h.uc', 'node_modules/m/n.uc']) {
+			system(['mkdir', '-p', fs.dirname(dir + '/' + f)]);
+			fs.writefile(dir + '/' + f, 'let x = 1;\n');
+		}
+		let docs = loadWorkspaceDocs({
+			workspaceDir: dir,
+			workspace: { libraryPaths: ['src'], exclude: ['gen/**'] },
+			systemLibPaths: [],
+		});
+		system(['rm', '-rf', dir]);
+		assert.match(['file://' + dir + '/main.uc', 'file://' + dir + '/sub/deep.uc'],
+			sort(map(docs, (d) => d.uri)));
 	});
 });

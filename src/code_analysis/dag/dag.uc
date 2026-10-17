@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as mode from 'code_analysis.mode';
 import { extractExports, extractImports, extractTypedefs, extractModuleDoc, extractVersions, resolveModule } from 'code_analysis.dag.indexer';
 import * as type_registry from 'code_analysis.types.registry';
+import { libraryDirs } from 'code_analysis.config';
 
 let _config = {};
 let _nodes = {};
@@ -19,12 +20,7 @@ function uriToPath(uri) {
 }
 
 function resolvedLibPaths() {
-	let ws = _config.workspace ?? {};
-	let paths = ws.libraryPaths ?? ['src'];
-	let workdir = _config.workspaceDir ?? '/';
-	let out = [];
-	for (let p in paths)
-		push(out, (substr(p, 0, 1) === '/') ? p : workdir + '/' + p);
+	let out = libraryDirs(_config);
 	if (_config.selfSrcDir) push(out, _config.selfSrcDir);
 	for (let p in (_config.systemLibPaths ?? []))
 		push(out, p);

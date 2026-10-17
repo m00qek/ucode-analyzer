@@ -23,39 +23,56 @@ function hasUcFiles(absPath) {
 	return length(scan(absPath, ['**/*.uc'], [])) > 0;
 }
 
+// Folders that commonly hold a project's importable modules.
 let CANDIDATES = ['src', 'test', 'files/usr/share/ucode'];
 
-function detectLibraryPaths(workspaceDir) {
+// The library paths of a workspace with no configured ones: the candidate
+// folders that hold .uc files, else the workspace root.
+export function detectLibraryPaths(workspaceDir) {
 	let paths = filter(CANDIDATES, (p) => hasUcFiles(workspaceDir + '/' + p));
-	return length(paths) > 0 ? paths : ['src'];
+	return length(paths) > 0 ? paths : ['.'];
+};
+
+// The configured library paths as absolute directories: relative ones are
+// under the workspace, and `.` is the workspace itself.
+export function libraryDirs(config) {
+	let workdir = config.workspaceDir ?? '/';
+	return map(config.workspace?.libraryPaths ?? ['src'], (p) =>
+		(substr(p, 0, 1) === '/') ? p : (p === '.') ? workdir : workdir + '/' + p);
+};
+
+function projectConfigPath(workspaceDir) {
+	return workspaceDir + '/.lsp/config.json';
 }
 
-function writeDefault(workspaceDir) {
-	let lspDir = workspaceDir + '/.lsp';
-	let stat = fs.stat(lspDir);
-	if (!stat) fs.mkdir(lspDir);
-
-	let paths = detectLibraryPaths(workspaceDir);
-	let config = { workspace: { libraryPaths: paths } };
-
-	let f = fs.open(lspDir + '/config.json', 'w');
-	if (f) {
-		f.write(sprintf('%J\n', config));
-		f.close();
-	}
-
-	return config;
-}
-
-// Loads and deep-merges user config and project config.
-// Project config wins on conflicts. Creates .lsp/config.json if absent.
+// Loads and deep-merges user config and project config; project config wins
+// on conflicts. Library paths not set by either are detected afresh on every
+// load, so they follow the workspace's layout; nothing is written.
 export function load(configDir, workspaceDir) {
 	let userConfig    = readJson(configDir + '/config.json') ?? {};
-	let projectConfig = readJson(workspaceDir + '/.lsp/config.json');
-	if (projectConfig === null)
-		projectConfig = writeDefault(workspaceDir);
+	let projectConfig = readJson(projectConfigPath(workspaceDir)) ?? {};
 	let merged = deepMerge(userConfig, projectConfig);
+	merged.workspace ??= {};
+	if (!merged.workspace.libraryPaths)
+		merged.workspace.libraryPaths = detectLibraryPaths(workspaceDir);
 	if (!merged.systemLibPaths)
 		merged.systemLibPaths = ['/usr/share/ucode'];
 	return merged;
+};
+
+// Write a project config holding the detected library paths, unless the
+// workspace already has one. Returns { path, created }.
+export function init(workspaceDir) {
+	let path = projectConfigPath(workspaceDir);
+	if (fs.stat(path))
+		return { path, created: false };
+
+	let lspDir = workspaceDir + '/.lsp';
+	if (!fs.stat(lspDir) && !fs.mkdir(lspDir))
+		die(sprintf('cannot create %s: %s', lspDir, fs.error()));
+
+	let config = { workspace: { libraryPaths: detectLibraryPaths(workspaceDir) } };
+	if (fs.writefile(path, sprintf('%.2J\n', config)) === null)
+		die(sprintf('cannot write %s: %s', path, fs.error()));
+	return { path, created: true };
 };
