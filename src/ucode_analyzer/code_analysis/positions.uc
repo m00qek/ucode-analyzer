@@ -25,25 +25,7 @@ export function nodeAtOffset(node, offset) {
 	return ts.namedDescendantAt(node, offset);
 };
 
-// Return the text of the /** */ comment immediately before stmt among parent's
-// children, or null. A // comment or any intervening named node resets the
-// search — only an unbroken /** */ directly before stmt counts.
-export function docBefore(stmt, parent, text) {
-	let stmtStart = ts.startByte(stmt);
-	let found = null;
-	let children = ts.children(parent);
-	for (let i = 0; i < length(children); i++) {
-		let c = children[i];
-		if (ts.startByte(c) >= stmtStart) break;
-		if (ts.nodeType(c) === 'doc_comment')
-			found = ts.text(c, text);
-		else if (ts.isNamed(c))
-			found = null;
-	}
-	return found;
-};
-
-// Like docBefore, but resolves the preceding /** */ doc for EVERY named child of
+// Like docBefore (below), but resolves the preceding /** */ doc for EVERY named child of
 // parent in a single left-to-right pass, returning { startByte -> docText|null }.
 // Callers needing docs for many siblings (object fields, top-level declarations)
 // use this instead of calling docBefore per sibling — the latter re-fetches and
@@ -83,16 +65,9 @@ export function docBearingStatement(node) {
 	return { target, parent: p };
 };
 
-// The /** */ doc text immediately preceding `node`'s statement, or null. The
-// inferrer has its own cached variant on the hot path; everything else uses this.
-export function precedingDoc(node, text) {
-	let s = docBearingStatement(node);
-	return s.parent ? docBefore(s.target, s.parent, text) : null;
-};
-
-// Like docBefore, but returns the /** */ comment NODE (for its byte offsets)
-// instead of its text. Same reset rule: a // comment or an intervening named
-// node clears the pending doc.
+// The /** */ comment node immediately before stmt among parent's children, or
+// null. A // comment or any intervening named node resets the search: only an
+// unbroken /** */ directly before stmt counts.
 export function docNodeBefore(stmt, parent, text) {
 	let stmtStart = ts.startByte(stmt);
 	let found = null;
@@ -106,12 +81,23 @@ export function docNodeBefore(stmt, parent, text) {
 	return found;
 };
 
-// The /** */ comment NODE immediately preceding `node`'s statement, or null —
-// the node counterpart of precedingDoc, for callers that need the comment's
-// source position (e.g. to anchor a diagnostic inside the doc block).
+// The /** */ comment node immediately preceding `node`'s statement, or null.
 export function precedingDocNode(node, text) {
 	let s = docBearingStatement(node);
 	return s.parent ? docNodeBefore(s.target, s.parent, text) : null;
+};
+
+// The text of docNodeBefore, or null.
+export function docBefore(stmt, parent, text) {
+	let c = docNodeBefore(stmt, parent, text);
+	return c ? ts.text(c, text) : null;
+};
+
+// The text of precedingDocNode, or null. The inferrer has its own cached
+// variant on the hot path.
+export function precedingDoc(node, text) {
+	let c = precedingDocNode(node, text);
+	return c ? ts.text(c, text) : null;
 };
 
 // Build a table of byte offsets at which each line starts.

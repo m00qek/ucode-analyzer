@@ -24,7 +24,7 @@ function isExported(node) {
 }
 
 // Collect every declaration, nested ones included, but not those inside
-// parameter lists. Import-introduced names are handled by unused_imports.uc.
+// parameter lists. Import-introduced names are handled by unused_import.uc.
 // Each entry: { name, declByte, nameNode }
 function collectDeclarations(root, source, out) {
 	function add(nameNode) {

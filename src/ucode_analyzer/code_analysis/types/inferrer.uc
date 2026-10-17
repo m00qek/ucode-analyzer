@@ -575,7 +575,7 @@ function declParams(node, source, doc) {
 	let docParams = (doc && doc.params) ? doc.params : [];
 
 	// Params: from JSDoc @param when annotated, otherwise one UNKNOWN entry per
-	// formal parameter so addParamScope can still bind the names.
+	// formal parameter so the function's scope can still bind the names.
 	let params = [];
 	if (length(docParams) > 0) {
 		params = map(docParams, (p) => ({ name: p.name, type: p.type ?? UNKNOWN }));
