@@ -73,7 +73,7 @@ export function jobsFor(status, cpuMax, cpuinfo) {
 };
 
 // Default worker count for batch work. Batch workspace work is the one place
-// the design permits scaling past the 2-core floor (see CLAUDE.md) — the
+// the design scales past the 2 cores it must stay usable on — the
 // interactive hot path never forks.
 export function detectJobs() {
 	// cgroup v2 exposes the quota as cpu.max; v1 as two files (-1 = unlimited).

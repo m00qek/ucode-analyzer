@@ -1,9 +1,8 @@
 # Decision log
 
-Durable "why we chose X" records. Completed work lives in git history and
-`CLAUDE.md`; forward-looking work lives in `plan.md`. This file is for choices
-that are easy to second-guess later — especially the things we deliberately did
-*not* do.
+Durable "why we chose X" records. Completed work lives in git history. This
+file is for choices that are easy to second-guess later — especially the things
+we deliberately did *not* do.
 
 ---
 
@@ -22,9 +21,8 @@ type scope map.
   init) and, more leniently, a call above a `function` declaration (ucode does
   NOT hoist, so that call is a runtime error, but gd still points at the sole
   declaration). A positional scope-map query returns `null` for both → the
-  use-before-`let` case is a real regression. (ucode has no hoisting — see the
-  ucode-language-nonfeatures memory — so the function case is UX-nicety, not a
-  correctness requirement.)
+  use-before-`let` case is a real regression. (ucode has no hoisting, so the
+  function case is UX-nicety, not a correctness requirement.)
 - A faithful version needs a *separate hoisted decl map* replicating four
   visibility models — block = whole-block, function = params, for-in = loop
   var(s), catch = param — across ~9 walker variants (`walkBlock`, `walkFn`,
@@ -125,7 +123,7 @@ json")` (malformed literal), `json()` (throws because `null` is neither string
 nor object). None is provable from arity or declared type without guessing the
 value, so a static signature check can't reach them without false positives.
 
-This is the meta-lesson in CLAUDE.md / `to-fix.md` applied to a *feature*: the
+This is a general lesson applied to a *feature*: the
 grammar and declarations describe a superset of what the language enforces, so
 "the data exists" never implies "the check is true." The one call-shaped check
 that survived this bar — the printf/sprintf format checker — did so because it is
