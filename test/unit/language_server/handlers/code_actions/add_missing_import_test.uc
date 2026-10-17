@@ -5,15 +5,16 @@ import { positionToOffset } from 'ucode_analyzer.code_analysis.positions';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_vars';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.add_missing_import';
+import * as fixture from 'fixture';
 
-let URI = 'file:///app/test/t.uc';
+let URI = fixture.uri('t.uc');
 
-dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
+dag.init(fixture.config());
 let _g = dag.resolveSpecifier('global');
 dag.addFromDisk(_g);
 initBuiltinsFromDag(_g);
-dag.addFromDisk('file:///app/test/fixtures/greet.uc');
-dag.addFromDisk('file:///app/test/fixtures/legacy_mod.uc');
+dag.addFromDisk(fixture.uri('greet.uc'));
+dag.addFromDisk(fixture.uri('legacy_mod.uc'));
 
 afterEach(() => documents.close(URI));
 
@@ -35,24 +36,24 @@ describe('add_missing_import', () => {
 	it('imports an ES export, not a legacy return-object field of the same name', () => {
 		let text = "greet();\n";
 		let a = actions(text);
-		assert.match(["Import 'greet' from 'fixtures.greet'"], map(a, (x) => x.title));
-		assert.match("import { greet } from 'fixtures.greet';\ngreet();\n", applied(text, a[0]));
+		assert.match(["Import 'greet' from 'greet'"], map(a, (x) => x.title));
+		assert.match("import { greet } from 'greet';\ngreet();\n", applied(text, a[0]));
 		assert.match(true, a[0].isPreferred);
 	});
 
 	it('extends an existing import from the same module', () => {
-		let text = "import { other } from 'fixtures.greet';\ngreet();\n";
-		assert.match("import { other, greet } from 'fixtures.greet';\ngreet();\n", applied(text, actions(text)[0]));
+		let text = "import { other } from 'greet';\ngreet();\n";
+		assert.match("import { other, greet } from 'greet';\ngreet();\n", applied(text, actions(text)[0]));
 	});
 
 	it('adds a line after the last import, in its quote style', () => {
 		let text = "import * as fs from \"fs\";\ngreet();\n";
-		assert.match("import * as fs from \"fs\";\nimport { greet } from \"fixtures.greet\";\ngreet();\n", applied(text, actions(text)[0]));
+		assert.match("import * as fs from \"fs\";\nimport { greet } from \"greet\";\ngreet();\n", applied(text, actions(text)[0]));
 	});
 
 	it('keeps a shebang first', () => {
 		let text = "#!/usr/bin/ucode\ngreet();\n";
-		assert.match("#!/usr/bin/ucode\nimport { greet } from 'fixtures.greet';\ngreet();\n", applied(text, actions(text)[0]));
+		assert.match("#!/usr/bin/ucode\nimport { greet } from 'greet';\ngreet();\n", applied(text, actions(text)[0]));
 	});
 
 	it('imports a declaration-module function', () => {

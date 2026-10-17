@@ -2,6 +2,7 @@ import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.remove_duplicate_key';
 import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_object_key';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -19,9 +20,9 @@ describe('remove_duplicate_key', () => {
 	});
 
 	it('returns empty list when diagnostics have no duplicate-key code', () => {
-		let doc = open("let x = { a: 1, a: 2 };\n");
-		let diags = [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-		               severity: 2, code: 'other', message: 'msg' }];
+		let src = cursors("$0l$1et x = { a: 1, a: 2 };\n");
+		let doc = open(src.text);
+		let diags = [{ range: { start: src.at[0], end: src.at[1] }, severity: 2, code: 'other', message: 'msg' }];
 		assert.match(0, length(actionsFor(URI, doc, diags)));
 	});
 
@@ -51,23 +52,23 @@ describe('remove_duplicate_key', () => {
 	it('edit deletes the duplicate pair (not last in list)', () => {
 		// Three pairs: a, b, a. The second 'a' is duplicate and is last.
 		// Try with duplicate in middle: a, a, b
-		let doc = open("let x = { a: 1, a: 2, b: 3 };\n");
+		let src = cursors("let x = { a: 1, $0a: 2, $1b: 3 };\n");
+		let doc = open(src.text);
 		let diags = duplicateObjectKey(doc);
 		assert.match(1, length(diags));
 		let edit = actionsFor(URI, doc, diags)[0].edit.changes[URI][0];
 		assert.match('', edit.newText);
-		// Edit should be on line 0
-		assert.match(0, edit.range.start.line);
-		assert.match(0, edit.range.end.line);
+		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 	});
 
 	it('edit deletes the duplicate pair (last in list)', () => {
-		let doc = open("let x = { a: 1, b: 2, a: 3 };\n");
+		let src = cursors("let x = { a: 1, b: 2$0, a: 3$1 };\n");
+		let doc = open(src.text);
 		let diags = duplicateObjectKey(doc);
 		assert.match(1, length(diags));
 		let edit = actionsFor(URI, doc, diags)[0].edit.changes[URI][0];
 		assert.match('', edit.newText);
-		assert.match(0, edit.range.start.line);
+		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 	});
 
 	it('action carries back the originating diagnostic', () => {

@@ -1,6 +1,7 @@
 import { describe, it, assert, prop, gen, contains, not } from 'utest';
 import { matchPattern, scan } from 'ucode_analyzer.code_analysis.glob';
 import * as fs from 'fs';
+import * as fixture from 'fixture';
 
 describe('glob.matchPattern', () => {
 	it('matches ** at start', () => {
@@ -40,20 +41,23 @@ describe('glob.matchPattern', () => {
 });
 
 describe('glob.scan', () => {
+	let WS = fixture.WORKSPACE;
+
 	it('finds .uc files matching include pattern', () => {
-		let files = scan('/app/src', ['**/*.uc'], []);
-		assert.match(true, length(files) > 0);
+		let files = scan(WS, ['**/*.uc'], []);
+		assert.match(contains([WS + '/parser.uc', WS + '/reexport/deep.uc']), files);
 		for (let f in files)
-			assert.match(contains('.uc'), f);
+			assert.match(true, substr(f, -3) === '.uc', f);
 	});
 
 	it('excludes paths matching exclude pattern', () => {
-		let all  = scan('/app/src/ucode_analyzer', ['**/*.uc'], []);
-		let excl = scan('/app/src/ucode_analyzer', ['**/*.uc'], ['language_server/**']);
+		let all  = scan(WS, ['**/*.uc'], []);
+		let excl = scan(WS, ['**/*.uc'], ['reexport/**']);
 
 		assert.match(true, length(excl) < length(all));
+		assert.match(contains([WS + '/parser.uc']), excl);
 		for (let f in excl)
-			assert.match(not(contains('language_server')), f);
+			assert.match(not(contains('reexport')), f);
 	});
 
 	it('does not enter an excluded directory', () => {
@@ -71,7 +75,7 @@ describe('glob.scan', () => {
 	});
 
 	it('returns empty list when no files match', () => {
-		let files = scan('/app/src', ['**/*.lua'], []);
+		let files = scan(WS, ['**/*.lua'], []);
 		assert.match(0, length(files));
 	});
 

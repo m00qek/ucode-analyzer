@@ -1,6 +1,7 @@
 import { describe, it, assert, contains } from 'utest';
 import * as lsp from 'client';
 import * as fs from 'fs';
+import * as fixture from 'fixture';
 
 describe('initialize response', () => {
 	it('returns capabilities and serverInfo', () => {
@@ -74,7 +75,7 @@ describe('exit behavior', () => {
 		// A timeout returns a negative signal number instead of hanging the suite.
 		let status = system(sprintf(
 			'cat %s | ucode -L /app/src /app/src/ucode-analyzer.uc ' +
-			'--config /tmp --workspace /app >/dev/null 2>&1', path), 30000);
+			'--config /tmp --workspace %s >/dev/null 2>&1', path, fixture.WORKSPACE), 30000);
 		fs.unlink(path);
 		assert.match(0, status);
 	});
@@ -130,7 +131,7 @@ describe('workspace file watcher', () => {
 		lsp.initialize(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', method: 'workspace/didChangeWatchedFiles', params: {
-			changes: [{ uri: 'file:///app/src/gone.uc', type: 3 }],
+			changes: [{ uri: fixture.uri('gone.uc'), type: 3 }],
 		}});
 
 		// Server must still respond to a subsequent request.
@@ -189,7 +190,8 @@ describe('failing notification', () => {
 	it('is logged to stderr and the server stays alive', () => {
 		let log = fs.mkdtemp('/tmp/lifecycle-XXXXXX') + '/stderr.log';
 		let proc = lsp.spawn('sh', ['-c',
-			sprintf('exec ucode -L /app/src /app/src/ucode-analyzer.uc --config /tmp --workspace /app 2>%s', log)]);
+			sprintf('exec ucode -L /app/src /app/src/ucode-analyzer.uc --config /tmp --workspace %s 2>%s',
+				fixture.WORKSPACE, log)]);
 		lsp.initialize(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {} });

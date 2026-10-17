@@ -1,7 +1,12 @@
 import { describe, it, assert, setup, teardown, contains } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 const URI = 'file:///test.uc';
+
+// The document most tests open, and the text didChange replaces it with.
+const SRC = cursors('let $0x = 5;');
+const CHANGED = cursors("let $0x = 'five';");
 
 let proc;
 
@@ -17,10 +22,10 @@ teardown(() => {
 
 let _id = 1;
 
-// The hover text at the `x` of `let x = …` on the first line, or null.
-function hoverX(uri) {
+// The hover text at position `at` (default: the `x` of SRC), or null.
+function hoverAt(at, uri) {
 	lsp.send(proc, { jsonrpc: '2.0', id: _id, method: 'textDocument/hover', params: {
-		textDocument: { uri: uri ?? URI }, position: { line: 0, character: 4 },
+		textDocument: { uri: uri ?? URI }, position: at ?? SRC.at[0],
 	}});
 	let resp = lsp.receive(proc);
 	assert.match(_id++, resp.id);
@@ -34,12 +39,12 @@ function close(uri) {
 
 describe('LSP document sync', () => {
 	it('didOpen makes the text available', () => {
-		lsp.open(proc, URI, 'let x = 5;');
-		assert.match(contains('int'), hoverX());
+		lsp.open(proc, URI, SRC.text);
+		assert.match(contains('int'), hoverAt());
 	});
 
 	it('hover is null for a document that was never opened', () => {
-		assert.match(null, hoverX('file:///not-open.uc'));
+		assert.match(null, hoverAt(SRC.at[0], 'file:///not-open.uc'));
 	});
 
 	it('unknown request returns MethodNotFound', () => {
@@ -51,29 +56,29 @@ describe('LSP document sync', () => {
 	});
 
 	it('didChange replaces the text', () => {
-		lsp.open(proc, URI, 'let x = 5;');
-		lsp.change(proc, URI, "let x = 'five';", 2);
-		assert.match(contains('string'), hoverX());
+		lsp.open(proc, URI, SRC.text);
+		lsp.change(proc, URI, CHANGED.text, 2);
+		assert.match(contains('string'), hoverAt(CHANGED.at[0]));
 	});
 
 	it('didClose forgets the document', () => {
-		lsp.open(proc, URI, 'let x = 5;');
+		lsp.open(proc, URI, SRC.text);
 		close(URI);
-		assert.match(null, hoverX());
+		assert.match(null, hoverAt());
 	});
 
 	it('didChange before didOpen is ignored', () => {
-		lsp.change(proc, 'file:///never-opened.uc', 'let x = 1;', 2);
-		assert.match(null, hoverX('file:///never-opened.uc'));
+		lsp.change(proc, 'file:///never-opened.uc', SRC.text, 2);
+		assert.match(null, hoverAt(SRC.at[0], 'file:///never-opened.uc'));
 	});
 
 	it('didChange with empty contentChanges keeps the text', () => {
-		lsp.open(proc, URI, 'let x = 5;');
+		lsp.open(proc, URI, SRC.text);
 		lsp.send(proc, {
 			jsonrpc: '2.0', method: 'textDocument/didChange',
 			params: { textDocument: { uri: URI, version: 2 }, contentChanges: [] },
 		});
-		assert.match(contains('int'), hoverX());
+		assert.match(contains('int'), hoverAt());
 	});
 
 	it('textDocument/diagnostic reports on the open text', () => {

@@ -1,6 +1,7 @@
 import { describe, it, assert, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
 import * as pos from 'ucode_analyzer.code_analysis.positions';
+import { cursors } from 'cursor';
 
 describe('positions (buildLineTable)', () => {
 	it('single line', () => {
@@ -102,18 +103,16 @@ describe('positions (nodeAtOffset)', () => {
 
 	function parse(text) { return ts.parse(_p, text); }
 
-	// 'let foo = 1;' — 'foo' is at bytes 4–6
 	it('drills to the identifier node', () => {
-		let text = 'let foo = 1;';
-		let root = ts.rootNode(parse(text));
-		assert.match('identifier', ts.nodeType(pos.nodeAtOffset(root, 4)));
+		let src = cursors('let $0foo = 1;');
+		let root = ts.rootNode(parse(src.text));
+		assert.match('identifier', ts.nodeType(pos.nodeAtOffset(root, src.offset[0])));
 	});
 
-	// 'let x = 42;' — '42' starts at byte 8
 	it('drills to the number node', () => {
-		let text = 'let x = 42;';
-		let root = ts.rootNode(parse(text));
-		assert.match('number', ts.nodeType(pos.nodeAtOffset(root, 8)));
+		let src = cursors('let x = $042;');
+		let root = ts.rootNode(parse(src.text));
+		assert.match('number', ts.nodeType(pos.nodeAtOffset(root, src.offset[0])));
 	});
 
 	it('returns the given node when no named child contains offset', () => {

@@ -1,14 +1,9 @@
 import { describe, it, assert } from 'utest';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as platform from 'ucode_analyzer.language_server.platform';
+import * as fixture from 'fixture';
 
 const DECL_DIR = '/app/src/ucode_analyzer/declarations';
-
-let _config = {
-	workspaceDir: '/app',
-	workspace: { libraryPaths: ['src'] },
-	selfSrcDir: '/app/src/ucode_analyzer',
-};
 
 let V1 = '2025.07.18~3f64c808';
 let V2 = '2026.01.16~85922056';
@@ -18,7 +13,7 @@ let IO_URI   = 'file://' + DECL_DIR + '/io.d.uc';
 let MATH_URI = 'file://' + DECL_DIR + '/math.d.uc';
 
 function loadVersions(uris) {
-	dag.init(_config);
+	dag.init(fixture.config());
 	let result = {};
 	for (let uri in uris) {
 		dag.addFromDisk(uri);

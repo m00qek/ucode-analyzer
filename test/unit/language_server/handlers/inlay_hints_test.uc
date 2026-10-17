@@ -3,11 +3,12 @@ import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { inlayHints } from 'ucode_analyzer.language_server.handlers.inlay_hints';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { cursors } from 'cursor';
+import * as fixture from 'fixture';
 
 let URI = 'file:///test.uc';
 
-let _config = { workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } };
-dag.init(_config);
+dag.init(fixture.config());
 
 // Full-file range helper.
 function fullRange() {
@@ -75,13 +76,10 @@ describe('inlayHints — variable type hints', () => {
 	});
 
 	it('hint position is at the end of the variable name', () => {
-		// line 0: function makeStr() { return 'x'; }
-		// line 1: let z = makeStr();   — 'z' starts at char 4, ends at char 5
-		let doc = open("function makeStr() { return 'x'; }\nlet z = makeStr();\n");
-		let typeHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 1);
+		let src = cursors("function makeStr() { return 'x'; }\nlet z$0 = makeStr();\n");
+		let typeHints = filter(inlayHints(open(src.text), fullRange()), (h) => h.kind === 1);
 		assert.match(1, length(typeHints));
-		assert.match(1, typeHints[0].position.line);
-		assert.match(5, typeHints[0].position.character);
+		assert.match(src.at[0], typeHints[0].position);
 	});
 
 	it('hint has kind 1 (Type) and paddingLeft', () => {
@@ -93,14 +91,12 @@ describe('inlayHints — variable type hints', () => {
 	});
 
 	it('respects range: excludes hints outside the requested range', () => {
-		// line 0: function makeStr() { return 'x'; }
-		// line 1: let a = makeStr();   — in range
-		// line 2: let b = makeStr();   — outside range (range ends at line 2 start)
-		let doc = open("function makeStr() { return 'x'; }\nlet a = makeStr();\nlet b = makeStr();\n");
-		let range = { start: { line: 1, character: 0 }, end: { line: 2, character: 0 } };
-		let typeHints = filter(inlayHints(doc, range), (h) => h.kind === 1);
+		// the range is the line of `a`; `b` starts where it ends
+		let src = cursors("function makeStr() { return 'x'; }\n$0let a$2 = makeStr();\n$1let b = makeStr();\n");
+		let range = { start: src.at[0], end: src.at[1] };
+		let typeHints = filter(inlayHints(open(src.text), range), (h) => h.kind === 1);
 		assert.match(1, length(typeHints));
-		assert.match(1, typeHints[0].position.line);
+		assert.match(src.at[2], typeHints[0].position);
 	});
 });
 
@@ -125,11 +121,9 @@ describe('inlayHints — parameter name hints', () => {
 	});
 
 	it('hint position is at the start of the argument', () => {
-		// f(42) on line 4; '42' starts at character 2.
-		let doc = open("/**\n * @param {int} x\n */\nfunction f(x) { return x; }\nf(42);\n");
-		let paramHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 2);
-		assert.match(4, paramHints[0].position.line);
-		assert.match(2, paramHints[0].position.character);
+		let src = cursors("/**\n * @param {int} x\n */\nfunction f(x) { return x; }\nf($042);\n");
+		let paramHints = filter(inlayHints(open(src.text), fullRange()), (h) => h.kind === 2);
+		assert.match(src.at[0], paramHints[0].position);
 	});
 
 	it('skips hint when argument identifier matches param name', () => {

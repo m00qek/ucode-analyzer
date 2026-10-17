@@ -1,5 +1,6 @@
 import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -19,13 +20,16 @@ function open(uri, text) {
 
 describe('textDocument/linkedEditingRange and documentLink', () => {
 	it('links the keywords of a colon-form block', () => {
-		open('file:///le.uc', "for (k in o):\n  y();\nendfor\n");
+		let src = cursors("$1for$2 (k in o):\n  y();\nend$3f$0or$4\n");
+		open('file:///le.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/linkedEditingRange', params: {
-			textDocument: { uri: 'file:///le.uc' }, position: { line: 2, character: 4 },
+			textDocument: { uri: 'file:///le.uc' }, position: src.at[0],
 		}});
 		let r = lsp.receive(proc).result;
-		assert.match(2, length(r?.ranges ?? []));
-		assert.match({ line: 2, character: 3 }, r.ranges[1].start);
+		assert.match([
+			{ start: src.at[1], end: src.at[2] },
+			{ start: src.at[3], end: src.at[4] },
+		], r?.ranges);
 	});
 
 	it('links an import to its module file', () => {

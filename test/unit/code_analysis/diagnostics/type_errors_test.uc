@@ -2,6 +2,8 @@ import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { typeErrors } from 'ucode_analyzer.code_analysis.diagnostics.type_errors';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { cursors } from 'cursor';
+import * as fixture from 'fixture';
 
 let URI = 'file:///test.uc';
 
@@ -10,6 +12,10 @@ afterEach(() => documents.close(URI));
 function open(text) {
 	documents.open(URI, text, 1);
 	return documents.get(URI);
+}
+
+function startsAt(d, pos) {
+	return d.range.start.line === pos.line && d.range.start.character === pos.character;
 }
 
 describe('diagnostics — type errors: call non-function', () => {
@@ -36,13 +42,9 @@ describe('diagnostics — type errors: call non-function', () => {
 	});
 
 	it('error range covers the callee identifier', () => {
-		let doc = open("let x = 'hello';\nx();\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'x') >= 0);
-		let d = diags[0];
-		assert.match(1, d.range.start.line);
-		assert.match(0, d.range.start.character);
-		assert.match(1, d.range.end.line);
-		assert.match(1, d.range.end.character);
+		let src = cursors("let x = 'hello';\n$0x$1();\n");
+		let diags = filter(typeErrors(URI, open(src.text)), (d) => index(d.message, 'x') >= 0);
+		assert.match({ start: src.at[0], end: src.at[1] }, diags[0].range);
 	});
 
 	it('does not report error for calls to UNKNOWN-typed names (e.g. parameters)', () => {
@@ -67,11 +69,9 @@ describe('diagnostics — type errors: member access on null', () => {
 	});
 
 	it('error range covers the object identifier', () => {
-		let doc = open("let x = null;\nx.foo;\n");
-		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'null-access');
-		let d = diags[0];
-		assert.match(1, d.range.start.line);
-		assert.match(0, d.range.start.character);
+		let src = cursors("let x = null;\n$0x$1.foo;\n");
+		let diags = filter(typeErrors(URI, open(src.text)), (d) => d.code === 'null-access');
+		assert.match({ start: src.at[0], end: src.at[1] }, diags[0].range);
 	});
 
 	it('does not report error for member access on non-null types', () => {
@@ -98,11 +98,11 @@ describe('diagnostics — type errors: flow sensitivity (if-body narrowing)', ()
 	});
 
 	it('still warns OUTSIDE the if-body when no guard clause exits', () => {
-		let doc = open("let x = null;\nif (x) {\n  x.foo;\n}\nx.bar;\n");
-		let diags = filter(typeErrors(URI, doc),
+		let src = cursors("let x = null;\nif (x) {\n  x.foo;\n}\n$0x.bar;\n");
+		let diags = filter(typeErrors(URI, open(src.text)),
 			(d) => d.code === 'null-access' || d.code === 'may-be-null');
-		// bar access on line 4 is NOT guarded
-		let outsideWarning = filter(diags, (d) => d.range.start.line === 4);
+		// the bar access is NOT guarded
+		let outsideWarning = filter(diags, (d) => startsAt(d, src.at[0]));
 		assert.match(1, length(outsideWarning));
 	});
 });
@@ -121,10 +121,10 @@ describe('diagnostics — type errors: flow sensitivity (guard clause)', () => {
 	});
 
 	it('still warns on line BEFORE the guard, where null is possible', () => {
-		let doc = open("let x = null;\nx.foo;\nif (!x) return;\n");
-		let diags = filter(typeErrors(URI, doc),
+		let src = cursors("let x = null;\n$0x.foo;\nif (!x) return;\n");
+		let diags = filter(typeErrors(URI, open(src.text)),
 			(d) => d.code === 'null-access' || d.code === 'may-be-null');
-		let beforeGuard = filter(diags, (d) => d.range.start.line === 1);
+		let beforeGuard = filter(diags, (d) => startsAt(d, src.at[0]));
 		assert.match(1, length(beforeGuard));
 	});
 });
@@ -245,7 +245,7 @@ describe('diagnostics — type errors: unknown-property', () => {
 	});
 
 	it('knows the fields of fs.stat(), including perm', () => {
-		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } });
+		dag.init(fixture.config());
 		function statProps(text) {
 			dag.add(URI, text, documents.open(URI, text, 1).tree);
 			let r = unknownProps(text);
@@ -381,13 +381,20 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 });
 
 describe('diagnostics — type errors: values set elsewhere', () => {
-	function codes(text) {
-		return map(typeErrors(URI, open(text)), (d) => [d.code, d.range.start.line]);
+	// [code, n] per diagnostic: n is the marker `$n` its range starts at (else
+	// the start position itself).
+	function codes(marked) {
+		let src = cursors(marked);
+		return map(typeErrors(URI, open(src.text)), (d) => {
+			for (let n = 0; n < length(src.at); n++)
+				if (src.at[n] && startsAt(d, src.at[n])) return [d.code, n];
+			return [d.code, d.range.start];
+		});
 	}
 
 	it('an outer variable assigned in another function may be null, not is null', () => {
-		assert.match([['may-be-null', 1]], codes(
-			"let marks = null;\nfunction use() { return marks[0]; }\nfunction init() { marks = [1]; return use(); }\ninit();\n"));
+		assert.match([['may-be-null', 0]], codes(
+			"let marks = null;\nfunction use() { return $0marks[0]; }\nfunction init() { marks = [1]; return use(); }\ninit();\n"));
 	});
 
 	it('a guard on an outer variable assigned elsewhere clears it', () => {
@@ -416,10 +423,10 @@ describe('diagnostics — type errors: values set elsewhere', () => {
 	});
 
 	it('a ??= in one branch leaves the variable possibly null', () => {
-		assert.match([['may-be-null', 3]], codes("let e = null;\nlet c = time();\nif (c) e ??= {};\nprint(e.x);\n"));
+		assert.match([['may-be-null', 0]], codes("let e = null;\nlet c = time();\nif (c) e ??= {};\nprint($0e.x);\n"));
 	});
 
 	it('other compound assignments do not fill a null variable', () => {
-		assert.match([['null-access', 2]], codes("let e = null;\ne += 1;\nprint(e.x);\n"));
+		assert.match([['null-access', 0]], codes("let e = null;\ne += 1;\nprint($0e.x);\n"));
 	});
 });

@@ -1,5 +1,7 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, any_order } from 'utest';
 import * as lsp from 'client';
+import { cursors, locate } from 'cursor';
+import * as fixture from 'fixture';
 
 let proc;
 
@@ -13,34 +15,41 @@ teardown(() => {
 	assert.match(0, lsp.close(proc));
 });
 
+// Open the cursors' text at uri and rename the symbol at $0 to newName.
+function renameAt(id, uri, src, newName) {
+	lsp.open(proc, uri, src.text);
+	lsp.send(proc, { jsonrpc: '2.0', id, method: 'textDocument/rename', params: {
+		textDocument: { uri }, position: src.at[0], newName,
+	}});
+	return lsp.receive(proc);
+}
+
+// The range from marker a to marker b.
+function span(src, a, b) {
+	return { start: src.at[a], end: src.at[b] };
+}
+
+// The range of `name` at pos.
+function rangeAt(pos, name) {
+	return { start: pos, end: { line: pos.line, character: pos.character + length(name) } };
+}
+
 describe('textDocument/rename', () => {
 
 	it('returns workspace edit replacing all occurrences', () => {
-		lsp.open(proc, 'file:///t.uc', "let count = 0;\ncount;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/rename', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 4 },
-			newName: 'total',
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("let $0$1count$2 = 0;\n$3count$4;\n");
+		let resp = renameAt(1, 'file:///t.uc', src, 'total');
 		let edits = resp.result.changes['file:///t.uc'];
 
 		assert.match(1, resp.id);
-		assert.match(2, length(edits));
-		for (let e in edits)
-			assert.match('total', e.newText);
+		assert.match(any_order([
+			{ range: span(src, 1, 2), newText: 'total' },
+			{ range: span(src, 3, 4), newText: 'total' },
+		]), edits);
 	});
 
 	it('returns null when cursor is not on an identifier', () => {
-		lsp.open(proc, 'file:///t.uc', "let x = 1;");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/rename', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 0 },
-			newName: 'y',
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = renameAt(1, 'file:///t.uc', cursors("$0let x = 1;"), 'y');
 
 		assert.match(1, resp.id);
 		assert.match(null, resp.result);
@@ -48,50 +57,40 @@ describe('textDocument/rename', () => {
 
 	it('cross-file: rename from importer propagates edits to declaring module', () => {
 		let uri = 'file:///t_xrename.uc';
-		let text = "import { parse } from 'tree_sitter';\nparse();\n";
-		lsp.open(proc, uri, text);
-		lsp.send(proc, { jsonrpc: '2.0', id: 10, method: 'textDocument/rename', params: {
-			textDocument: { uri },
-			position: { line: 1, character: 0 },  // 'parse' in 'parse();'
-			newName: 'parseDoc',
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("import { $1parse$2 } from 'parser';\n$0$3parse$4();\n");
+		let resp = renameAt(10, uri, src, 'parseDoc');
 
 		assert.match(10, resp.id);
 		assert.match(true, resp.result !== null);
 		let changes = resp.result.changes;
 
 		// Importing file must have edits (import specifier + call).
-		assert.match(true, type(changes[uri]) === 'array');
-		assert.match(true, length(changes[uri]) >= 1);
+		assert.match(any_order([
+			{ range: span(src, 1, 2), newText: 'parseDoc' },
+			{ range: span(src, 3, 4), newText: 'parseDoc' },
+		]), changes[uri]);
 
-		// tree_sitter.uc must also have edits (the export declaration and internal uses).
-		let tsUri = 'file:///app/src/tree_sitter.uc';
-		assert.match(true, type(changes[tsUri]) === 'array');
-		assert.match(true, length(changes[tsUri]) >= 1);
-		for (let e in (changes[tsUri] ?? []))
-			assert.match('parseDoc', e.newText);
+		// parser.uc must also have edits (the export declaration and the internal
+		// call in parseString()).
+		let parser = fixture.read('parser.uc');
+		let decl = rangeAt(locate(parser, 'export function parse(', 0, length('export function ')), 'parse');
+		let call = rangeAt(locate(parser, 'return parse(', 0, length('return ')), 'parse');
+		assert.match(any_order([
+			{ range: decl, newText: 'parseDoc' },
+			{ range: call, newText: 'parseDoc' },
+		]), changes[fixture.uri('parser.uc')]);
 	});
 
 	it('renames only the binding in scope, not same-named identifiers in other scopes', () => {
 		// Two functions each declare a local `n`.  Renaming one must not affect the other.
-		let text = "function a(n) { return n; }\nfunction b(n) { return n; }\n";
-		lsp.open(proc, 'file:///t.uc', text);
-		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/rename', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 11 },  // `n` parameter in function a
-			newName: 'num',
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("function a($0$1n$2) { return $3n$4; }\nfunction b(n) { return n; }\n");
+		let resp = renameAt(2, 'file:///t.uc', src, 'num');
 		let edits = resp.result.changes['file:///t.uc'];
 
-		// Only 2 edits: parameter declaration + use inside a.  Function b unchanged.
-		assert.match(2, length(edits));
-		for (let e in edits) {
-			assert.match('num', e.newText);
-			assert.match(0, e.range.start.line);
-		}
+		// Only the parameter declaration + use inside a.  Function b unchanged.
+		assert.match(any_order([
+			{ range: span(src, 1, 2), newText: 'num' },
+			{ range: span(src, 3, 4), newText: 'num' },
+		]), edits);
 	});
 });

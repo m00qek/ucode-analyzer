@@ -2,6 +2,8 @@ import { describe, it, assert, prop, gen, contains, not } from 'utest';
 import * as ts from 'tree_sitter';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'ucode_analyzer.code_analysis.dag.indexer';
+import { cursors } from 'cursor';
+import * as fixture from 'fixture';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -176,37 +178,34 @@ describe('indexer.extractExports', () => {
 	});
 
 	it('stores position for an exported function', () => {
-		let text = 'export function foo(x) { return x; };';
-		let exps = extractExports(text, parse(text));
+		let src = cursors('export function $0foo(x) { return x; };');
+		let exps = extractExports(src.text, parse(src.text));
 
-		// 'foo' starts at col 16 (after 'export function ')
-		assert.match({ line: 0, character: 16 }, exps[0].position);
+		assert.match(src.at[0], exps[0].position);
 	});
 
 	it('stores position for an exported const', () => {
-		let text = 'export const BAR = 42;';
-		let exps = extractExports(text, parse(text));
+		let src = cursors('export const $0BAR = 42;');
+		let exps = extractExports(src.text, parse(src.text));
 
-		// 'BAR' starts at col 13 (after 'export const ')
-		assert.match({ line: 0, character: 13 }, exps[0].position);
+		assert.match(src.at[0], exps[0].position);
 	});
 
 	it('stores position across multiple lines', () => {
-		let text = 'export function a() {};\nexport const b = 1;';
-		let exps = extractExports(text, parse(text));
+		let src = cursors('export function $0a() {};\nexport const $1b = 1;');
+		let exps = extractExports(src.text, parse(src.text));
 
-		assert.match({ line: 0, character: 16 }, exps[0].position);
-		assert.match({ line: 1, character: 13 }, exps[1].position);
+		assert.match(src.at[0], exps[0].position);
+		assert.match(src.at[1], exps[1].position);
 	});
 
 	it('stores position for export-clause exports', () => {
-		// function greet() {} export { greet };  — greet is at col 9
-		let text = 'function greet() {}\nexport { greet };';
-		let exps = extractExports(text, parse(text));
+		let src = cursors('function $0greet() {}\nexport { greet };');
+		let exps = extractExports(src.text, parse(src.text));
 
 		assert.match('greet', exps[0].name);
-		// local 'greet' starts at col 9 on line 0 (after 'function ')
-		assert.match({ line: 0, character: 9 }, exps[0].position);
+		// the local declaration, not the export clause
+		assert.match(src.at[0], exps[0].position);
 	});
 
 	it('names an export-clause default export `default`', () => {
@@ -267,10 +266,9 @@ describe('indexer.extractExports', () => {
 	});
 
 	it('records the field key position for a return-object export', () => {
-		// `read_state` key starts at col 1 on line 1 (after the leading tab)
-		let text = "return {\n\tread_state: function() {}\n};\n";
-		let exps = extractExports(text, parse(text));
-		assert.match({ line: 1, character: 1 }, exps[0].position);
+		let src = cursors("return {\n\t$0read_state: function() {}\n};\n");
+		let exps = extractExports(src.text, parse(src.text));
+		assert.match(src.at[0], exps[0].position);
 	});
 
 	it('lets an ES export take precedence over a same-named return field', () => {
@@ -385,34 +383,37 @@ describe('indexer.extractImports', () => {
 });
 
 describe('indexer.resolveModule', () => {
+	let WS = fixture.WORKSPACE;
+
 	it('resolves dot-separated module to slash path', () => {
-		let uri = resolveModule('ucode_analyzer.code_analysis.documents', ['/app/src'], '/app');
-		assert.match('file:///app/src/ucode_analyzer/code_analysis/documents.uc', uri);
+		let uri = resolveModule('reexport.wrapper', [WS], WS);
+		assert.match(fixture.uri('reexport/wrapper.uc'), uri);
 	});
 
 	it('resolves simple module name', () => {
-		let uri = resolveModule('tree_sitter', ['/app/src'], '/app');
-		assert.match('file:///app/src/tree_sitter.uc', uri);
+		let uri = resolveModule('parser', [WS], WS);
+		assert.match(fixture.uri('parser.uc'), uri);
 	});
 
 	it('resolves relative library path against workspace dir', () => {
-		let uri = resolveModule('tree_sitter', ['src'], '/app');
-		assert.match('file:///app/src/tree_sitter.uc', uri);
+		let uri = resolveModule('deep', ['reexport'], WS);
+		assert.match(fixture.uri('reexport/deep.uc'), uri);
 	});
 
 	it('returns null for unknown module', () => {
-		let uri = resolveModule('nonexistent.module', ['/app/src'], '/app');
+		let uri = resolveModule('nonexistent.module', [WS], WS);
 		assert.match(null, uri);
 	});
 
+	// The bundled declarations.
 	it('resolves declaration file directly under lib path (no extra declarations/ prefix)', () => {
 		// When libPath itself is a declarations dir, .d.uc lives at absLib/<name>.d.uc
-		let uri = resolveModule('uci', ['/app/src/ucode_analyzer/declarations'], '/app');
+		let uri = resolveModule('uci', ['/app/src/ucode_analyzer/declarations'], WS);
 		assert.match('file:///app/src/ucode_analyzer/declarations/uci.d.uc', uri);
 	});
 
 	it('resolves dot-separated declaration file directly under lib path', () => {
-		let uri = resolveModule('uci', ['/app/src/ucode_analyzer'], '/app');
+		let uri = resolveModule('uci', ['/app/src/ucode_analyzer'], WS);
 		assert.match('file:///app/src/ucode_analyzer/declarations/uci.d.uc', uri);
 	});
 });

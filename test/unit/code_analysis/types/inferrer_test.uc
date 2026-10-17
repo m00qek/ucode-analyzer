@@ -7,6 +7,8 @@ import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_brid
 import { buildScopeMap, scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { makeScope, scopeSet, scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import { cursors } from 'cursor';
+import * as fixture from 'fixture';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -14,13 +16,10 @@ function parse(text) {
 	return ts.parse(_parser, text);
 }
 
-let URI = 'file:///app/src/test_main.uc';
+let URI = fixture.uri('test_main.uc');
+let PARSER_URI = fixture.uri('parser.uc');
 
-let _config = {
-	workspaceDir: '/app',
-	selfSrcDir: '/app/src/ucode_analyzer',
-	workspace: { libraryPaths: ['src'] },
-};
+let _config = fixture.config();
 
 // Bootstrap the builtin scope from stdlib.d.uc once for the whole test run.
 dag.init(_config);
@@ -405,11 +404,9 @@ describe('inferrer — buildScope: export function', () => {
 });
 
 describe('inferrer — buildScope: namespace import alias', () => {
-	let TS_URI = 'file:///app/src/tree_sitter.uc';
-
 	it('namespace alias is in scope as module type', () => {
-		dag.addFromDisk(TS_URI);
-		let text = "import * as ts from 'tree_sitter';\nts;\n";
+		dag.addFromDisk(PARSER_URI);
+		let text = "import * as ts from 'parser';\nts;\n";
 		let tree = parse(text);
 		let offset = length(text);
 
@@ -419,15 +416,15 @@ describe('inferrer — buildScope: namespace import alias', () => {
 		let t = scopeGet(scope, 'ts');
 		assert.match(true, t !== null);
 		assert.match('module', t.kind);
-		assert.match('tree_sitter', t.path);
+		assert.match('parser', t.path);
 	});
 
 	it('a local binding shadows a same-named namespace import in member access', () => {
-		dag.addFromDisk(TS_URI);
+		dag.addFromDisk(PARSER_URI);
 		// `parser` is both a namespace import and a block-local record with a `parse`
 		// field. Inside the block, `parser.parse` must resolve to the local record's
-		// int field, not tree_sitter's parse() function.
-		let text = "import * as parser from 'tree_sitter';\n{\nlet parser = { parse: 42 };\nlet r = parser.parse;\n}\n";
+		// int field, not the parser module's parse() function.
+		let text = "import * as parser from 'parser';\n{\nlet parser = { parse: 42 };\nlet r = parser.parse;\n}\n";
 		let tree = parse(text);
 		dag.add(URI, text, tree);
 
@@ -440,7 +437,7 @@ describe('inferrer — buildScope: namespace import alias', () => {
 		let scope = scopeFor(text, tree, ts.startByte(member));
 		let t = inferNode(member, text, URI, scope, 0);
 		// The local record's `parse` field is a literal int (carries value:42),
-		// not tree_sitter's parse() function.
+		// not the parser module's parse() function.
 		assert.match('primitive', t.kind);
 		assert.match('int', t.name);
 	});
@@ -729,8 +726,6 @@ describe('inferrer — buildScope: local function declarations', () => {
 });
 
 describe('inferrer — buildScope: local declarations inside function bodies', () => {
-	let TS_URI = 'file:///app/src/tree_sitter.uc';
-
 	it('let inside a function body is in scope', () => {
 		let text = "function f() {\nlet x = 42;\nx;\n}";
 		let tree = parse(text);
@@ -744,20 +739,15 @@ describe('inferrer — buildScope: local declarations inside function bodies', (
 	});
 
 	it('local var gets return type of a namespace member call', () => {
-		dag.addFromDisk(TS_URI);
-		let text = "import * as ts from 'tree_sitter';\nfunction f(p) {\nlet root = ts.rootNode(p);\nroot;\n}";
-		let tree = parse(text);
-		// Offset at 'root' reference inside body
-		let offset = length("import * as ts from 'tree_sitter';\nfunction f(p) {\nlet root = ts.rootNode(p);\n");
+		dag.addFromDisk(PARSER_URI);
+		let src = cursors("import * as ts from 'parser';\nfunction f(n, s) {\nlet str = ts.text(n, s);\n$0str;\n}");
+		let tree = parse(src.text);
 
-		dag.add(URI, text, tree);
-		let scope = scopeFor(text, tree, offset);
+		dag.add(URI, src.text, tree);
+		let scope = scopeFor(src.text, tree, src.offset[0]);
 
-		let t = scopeGet(scope, 'root');
-		assert.match(true, t !== null && t.kind !== 'unknown');
-		// rootNode returns Node (ref type)
-		assert.match('ref', t.kind);
-		assert.match('Node', t.name);
+		// text() is documented @returns {string}
+		assert.match(prim('string'), scopeGet(scope, 'str'));
 	});
 
 	it('let declared after cursor is not in scope', () => {
@@ -875,11 +865,9 @@ describe('inferrer — chained member access', () => {
 });
 
 describe('inferrer — property_identifier in member expression', () => {
-	let TS_URI = 'file:///app/src/tree_sitter.uc';
-
 	it('inferring a property_identifier redirects to its member_expression', () => {
-		dag.addFromDisk(TS_URI);
-		let text = "import * as ts from 'tree_sitter';\nts.text;\n";
+		dag.addFromDisk(PARSER_URI);
+		let text = "import * as ts from 'parser';\nts.text;\n";
 		let tree = parse(text);
 
 		// Find the property_identifier node for 'text'
@@ -1077,10 +1065,10 @@ describe('inferrer — buildScope: Object/dict for-in key type', () => {
 });
 
 describe('inferrer — export clause carries doc', () => {
-	let GREET_URI = 'file:///app/test/fixtures/greet.uc';
+	let GREET_URI = fixture.uri('greet.uc');
 
 	it('exported name via export { name } has the function kind', () => {
-		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
+		dag.init(_config);
 		dag.addFromDisk(GREET_URI);
 		let exps = dag.exportsOf(GREET_URI);
 		assert.match(true, exps !== null && length(exps) > 0);
@@ -1090,18 +1078,16 @@ describe('inferrer — export clause carries doc', () => {
 });
 
 describe('inferrer — importScope: renamed imports', () => {
-	let TS_URI = 'file:///app/src/tree_sitter.uc';
-
 	beforeEach(() => {
 		dag.init(_config);
 		dag.remove(URI);
 		invalidateUri(URI);
-		dag.addFromDisk(TS_URI);
+		dag.addFromDisk(PARSER_URI);
 	});
 
 	it('renamed import is available under its local binding name', () => {
-		// import { parse as p } from 'tree_sitter'; → 'p' must be in scope, not 'parse'
-		let text = "import { parse as p } from 'tree_sitter';\np;";
+		// import { parse as p } from 'parser'; → 'p' must be in scope, not 'parse'
+		let text = "import { parse as p } from 'parser';\np;";
 		let tree = parse(text);
 		dag.add(URI, text, tree);
 		let offset = length(text) - 1;  // at 'p'
@@ -1111,7 +1097,7 @@ describe('inferrer — importScope: renamed imports', () => {
 	});
 
 	it('renamed import carries the resolved type from the source module', () => {
-		let text = "import { parse as p } from 'tree_sitter';\np;";
+		let text = "import { parse as p } from 'parser';\np;";
 		let tree = parse(text);
 		dag.add(URI, text, tree);
 		let offset = length(text) - 1;
@@ -1121,7 +1107,7 @@ describe('inferrer — importScope: renamed imports', () => {
 	});
 
 	it('unrenamed import is still available under its original name', () => {
-		let text = "import { parse } from 'tree_sitter';\nparse;";
+		let text = "import { parse } from 'parser';\nparse;";
 		let tree = parse(text);
 		dag.add(URI, text, tree);
 		let offset = length(text) - 1;
@@ -1133,31 +1119,31 @@ describe('inferrer — importScope: renamed imports', () => {
 
 describe('inferrer — require() module loader', () => {
 	beforeEach(() => {
-		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
+		dag.init(_config);
 		dag.remove(URI);
 		invalidateUri(URI);
 	});
 
 	it('require("spec") is typed as the module named by the specifier', () => {
-		let t = infer('let m = require("fixtures.greet");');
+		let t = infer('let m = require("greet");');
 		assert.match('module', t.kind);
-		assert.match('fixtures.greet', t.path);
+		assert.match('greet', t.path);
 	});
 
 	it('member access on a required module resolves to the export type', () => {
-		// fixtures/greet.uc exports the function `greet`.
-		let t = infer('let g = require("fixtures.greet").greet;');
+		// greet.uc exports the function `greet`.
+		let t = infer('let g = require("greet").greet;');
 		assert.match('function', t.kind);
 	});
 
 	it('member of a require-bound legacy (return-object) module resolves', () => {
-		// fixtures/legacy_mod.uc exports via a top-level `return { greet, ... }`.
-		let t = infer('let g = require("fixtures.legacy_mod").greet;');
+		// legacy_mod.uc exports via a top-level `return { greet, ... }`.
+		let t = infer('let g = require("legacy_mod").greet;');
 		assert.match('function', t.kind);
 	});
 
 	it('a locally shadowed require is not treated as the module loader', () => {
-		let text = 'let m = require("fixtures.greet");';
+		let text = 'let m = require("greet");';
 		// A real shadow lives in a non-root scope; the builtin sits in the root.
 		let scope = makeScope(makeScope(null));
 		scopeSet(scope, 'require', prim('string'));   // shadow the builtin
@@ -1206,7 +1192,8 @@ describe('inferrer — require() module loader', () => {
 });
 
 describe('inferrer — importScope: object-literal export typed as record', () => {
-	let MY_URI = 'file:///app/src/mymod.uc';
+	let MY_URI = fixture.uri('mymod.uc');
+	let MY_PATH = fixture.WORKSPACE + '/mymod.uc';
 	// Uses explicit pair syntax (greet: greet) to avoid shorthand property nodes.
 	let modContent = "/** @param {string} s @returns {int} */\nfunction greet(s) { return 0; }\nexport const ns = { greet: greet };";
 
@@ -1219,8 +1206,8 @@ describe('inferrer — importScope: object-literal export typed as record', () =
 
 	it('imported object-literal const is typed as a record with correct fields', () => {
 		mock.global.patch('fs', {
-			data: { '/app/src/mymod.uc': modContent },
-			behavior: { stat: (path) => (path === '/app/src/mymod.uc') ? { type: 'file', size: length(modContent) } : null }
+			data: { [MY_PATH]: modContent },
+			behavior: { stat: (path) => (path === MY_PATH) ? { type: 'file', size: length(modContent) } : null }
 		});
 		dag.add(MY_URI, modContent, parse(modContent));
 		let importText = "import { ns } from 'mymod';\nns;";
@@ -1236,7 +1223,8 @@ describe('inferrer — importScope: object-literal export typed as record', () =
 });
 
 describe('inferrer — member access on record-typed expression (nested object export)', () => {
-	let MOD_URI = 'file:///app/src/nested.uc';
+	let MOD_URI = fixture.uri('nested.uc');
+	let MOD_PATH = fixture.WORKSPACE + '/nested.uc';
 
 	beforeEach(() => {
 		dag.init(_config);
@@ -1251,8 +1239,8 @@ describe('inferrer — member access on record-typed expression (nested object e
 		let modText = "export const api = { sub: { /** @returns {int} */ go: function() {} } };";
 		dag.add(MOD_URI, modText, parse(modText));
 		mock.global.patch('fs', {
-			data: { '/app/src/nested.uc': modText },
-			behavior: { stat: (path) => (path === '/app/src/nested.uc') ? { type: 'file', size: length(modText) } : null }
+			data: { [MOD_PATH]: modText },
+			behavior: { stat: (path) => (path === MOD_PATH) ? { type: 'file', size: length(modText) } : null }
 		});
 		let text = "import { api } from 'nested';\napi.sub.go;";
 		let tree = parse(text);
@@ -1276,8 +1264,8 @@ describe('inferrer — member access on record-typed expression (nested object e
 		let modText = "export const api = { /** @param {string} s @returns {int} */ greet: function(s) {} };";
 		dag.add(MOD_URI, modText, parse(modText));
 		mock.global.patch('fs', {
-			data: { '/app/src/nested.uc': modText },
-			behavior: { stat: (path) => (path === '/app/src/nested.uc') ? { type: 'file', size: length(modText) } : null }
+			data: { [MOD_PATH]: modText },
+			behavior: { stat: (path) => (path === MOD_PATH) ? { type: 'file', size: length(modText) } : null }
 		});
 		let text = "import { api } from 'nested';\napi.greet;";
 		let tree = parse(text);
@@ -1293,8 +1281,6 @@ describe('inferrer — member access on record-typed expression (nested object e
 });
 
 describe('inferrer — member access on module-typed expression', () => {
-	let TS_URI = 'file:///app/src/tree_sitter.uc';
-
 	// Return the property_identifier node from `x.member;` expression text.
 	function moduleMemberNode(text) {
 		let tree  = parse(text);
@@ -1305,20 +1291,20 @@ describe('inferrer — member access on module-typed expression', () => {
 	}
 
 	it('resolves member of a module-typed binding when module is pre-indexed', () => {
-		dag.addFromDisk(TS_URI);
+		dag.addFromDisk(PARSER_URI);
 		let propNode = moduleMemberNode('x.parse;');
 		let scope = makeScope(null);
-		scopeSet(scope, 'x', { kind: 'module', path: 'tree_sitter' });
+		scopeSet(scope, 'x', { kind: 'module', path: 'parser' });
 		let type = inferNode(propNode, 'x.parse;', URI, scope, 0);
 		assert.match('function', type.kind);
 	});
 
 	it('lazy-indexes the module from disk when not yet in the DAG', () => {
-		// tree_sitter is NOT pre-indexed — the inferrer must call addFromDisk itself.
-		dag.remove(TS_URI);
+		// parser is NOT pre-indexed — the inferrer must call addFromDisk itself.
+		dag.remove(PARSER_URI);
 		let propNode = moduleMemberNode('x.parse;');
 		let scope = makeScope(null);
-		scopeSet(scope, 'x', { kind: 'module', path: 'tree_sitter' });
+		scopeSet(scope, 'x', { kind: 'module', path: 'parser' });
 		let type = inferNode(propNode, 'x.parse;', URI, scope, 0);
 		assert.match('function', type.kind);
 	});

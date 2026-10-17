@@ -1,27 +1,39 @@
-import { describe, it, assert, afterEach, beforeEach, mock } from 'utest';
+import { describe, it, assert, afterEach, beforeEach, mock, any_order } from 'utest';
 import * as ts from 'tree_sitter';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { references } from 'ucode_analyzer.language_server.handlers.references';
+import { cursors } from 'cursor';
+import * as fixture from 'fixture';
 
 let _parser = ts.newParser(ts.ucode());
 function parse(text) { return ts.parse(_parser, text); }
 
-let _dagCfg = { workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } };
-
 let URI   = 'file:///test.uc';
-let URI_A = 'file:///app/src/a.uc';
-let URI_B = 'file:///app/src/b.uc';
+let URI_A = fixture.uri('a.uc');
+let URI_B = fixture.uri('b.uc');
+
+// Open the text of `src` (from cursors()) and find the references at $0.
+function refsAt(src, includeDeclaration) {
+	documents.open(URI, src.text, 1);
+	return references(URI, documents.get(URI), src.at[0], includeDeclaration);
+}
+
+// The range from marker a to marker b.
+function span(src, a, b) {
+	return { start: src.at[a], end: src.at[b] };
+}
+
+function ranges(locs) {
+	return map(locs, (l) => l.range);
+}
 
 afterEach(() => documents.close(URI));
 
 describe('references', () => {
 	it('returns null when cursor is not on an identifier', () => {
-		let text = "let x = 1;\n";
-		documents.open(URI, text, 1);
-
-		// position on 'l' in 'let' — anonymous token
-		assert.match(null, references(URI, documents.get(URI), { line: 0, character: 0 }));
+		// 'let' is an anonymous token
+		assert.match(null, refsAt(cursors("$0let x = 1;\n")));
 	});
 
 	it('returns null for position beyond end of file', () => {
@@ -32,21 +44,15 @@ describe('references', () => {
 	});
 
 	it('finds all occurrences of an identifier', () => {
-		let text = "let x = 1;\nlet y = x + x;\n";
-		documents.open(URI, text, 1);
-
-		// cursor on 'x' at (0, 4) — declaration
-		let locs = references(URI, documents.get(URI), { line: 0, character: 4 });
+		// on the declaration
+		let locs = refsAt(cursors("let $0x = 1;\nlet y = x + x;\n"));
 
 		// x appears 3 times: declaration + two uses
 		assert.match(3, length(locs));
 	});
 
 	it('each location has the correct uri', () => {
-		let text = "let z = 0;\nz;\n";
-		documents.open(URI, text, 1);
-
-		let locs = references(URI, documents.get(URI), { line: 0, character: 4 });
+		let locs = refsAt(cursors("let $0z = 0;\nz;\n"));
 
 		assert.match(2, length(locs));
 		for (let l in locs)
@@ -54,23 +60,14 @@ describe('references', () => {
 	});
 
 	it('locations are on the correct lines', () => {
-		let text = "let v = 1;\nv;\nv;\n";
-		documents.open(URI, text, 1);
+		let src = cursors("let $0$1v$2 = 1;\n$3v$4;\n$5v$6;\n");
+		let locs = refsAt(src);
 
-		let locs = references(URI, documents.get(URI), { line: 0, character: 4 });
-
-		assert.match(3, length(locs));
-		let lines = sort(map(locs, (l) => l.range.start.line));
-		assert.match(0, lines[0]);
-		assert.match(1, lines[1]);
-		assert.match(2, lines[2]);
+		assert.match(any_order([ span(src, 1, 2), span(src, 3, 4), span(src, 5, 6) ]), ranges(locs));
 	});
 
 	it('finds single occurrence when identifier appears only once', () => {
-		let text = "unique;\n";
-		documents.open(URI, text, 1);
-
-		let locs = references(URI, documents.get(URI), { line: 0, character: 0 });
+		let locs = refsAt(cursors("$0unique;\n"));
 
 		assert.match(1, length(locs));
 	});
@@ -80,103 +77,80 @@ describe('references — scope awareness', () => {
 	it('does not cross function-scope boundaries for parameters with the same name', () => {
 		// Two functions both have a parameter called `x`.
 		// References on function a's x must not include function b's x.
-		let text = "function a(x) { return x; }\nfunction b(x) { return x; }\n";
-		documents.open(URI, text, 1);
-
-		// cursor on 'x' at (0, 11) — parameter in function a
-		let locs = references(URI, documents.get(URI), { line: 0, character: 11 });
+		let src = cursors("function a($0$1x$2) { return $3x$4; }\nfunction b(x) { return x; }\n");
+		let locs = refsAt(src);
 
 		// Only the declaration and use inside `a` — 2 total, not 4.
-		assert.match(2, length(locs));
-		for (let l in locs)
-			assert.match(0, l.range.start.line);
+		assert.match(any_order([ span(src, 1, 2), span(src, 3, 4) ]), ranges(locs));
 	});
 
 	it('does not mix outer and inner let bindings with the same name', () => {
 		// Outer x and inner x (shadowed) are separate bindings.
-		let text = "let x = 1;\nfunction foo() {\n  let x = 2;\n  return x;\n}\nx;\n";
-		documents.open(URI, text, 1);
+		let src = cursors("let $0x = 1;\nfunction foo() {\n  let $1x = 2;\n  return x;\n}\nx;\n");
+		documents.open(URI, src.text, 1);
 
-		// cursor on outer 'x' at (0, 4) — outer declaration
-		let outer = references(URI, documents.get(URI), { line: 0, character: 4 });
-		// cursor on inner 'x' at (2, 6) — inner declaration
-		let inner = references(URI, documents.get(URI), { line: 2, character: 6 });
+		let outer = references(URI, documents.get(URI), src.at[0]);
+		let inner = references(URI, documents.get(URI), src.at[1]);
 
-		// Outer x: declaration (line 0) + reference (line 5) = 2
+		// Outer x: declaration + the use after foo = 2
 		assert.match(2, length(outer));
-		// Inner x: declaration (line 2) + reference (line 3) = 2
+		// Inner x: declaration + return = 2
 		assert.match(2, length(inner));
 	});
 
 	it('finds all occurrences of a for-in loop variable within its body', () => {
-		let text = "let arr = [];\nfor (let i in arr) {\n  i;\n  i;\n}\n";
-		documents.open(URI, text, 1);
-
-		// cursor on 'i' in the loop body (line 2, char 2)
-		let locs = references(URI, documents.get(URI), { line: 2, character: 2 });
+		// on a use in the loop body
+		let locs = refsAt(cursors("let arr = [];\nfor (let i in arr) {\n  $0i;\n  i;\n}\n"));
 
 		// declaration (for-in variable) + 2 uses = 3
 		assert.match(3, length(locs));
 	});
 
 	it('finds both the declaration and use of a catch variable', () => {
-		let text = "try {\n} catch(e) {\n  e;\n}\n";
-		documents.open(URI, text, 1);
-
-		// cursor on 'e' inside catch body (line 2, char 2)
-		let locs = references(URI, documents.get(URI), { line: 2, character: 2 });
+		// on the use inside the catch body
+		let locs = refsAt(cursors("try {\n} catch(e) {\n  $0e;\n}\n"));
 
 		// catch parameter declaration + use = 2
 		assert.match(2, length(locs));
 	});
 
 	it('finds all occurrences of a rest parameter in the function body', () => {
-		let text = "function f(...args) { return args[0]; }\n";
-		documents.open(URI, text, 1);
-
-		// cursor on 'args' in body (line 0, char 29)
-		let locs = references(URI, documents.get(URI), { line: 0, character: 29 });
+		// on the use in the body
+		let locs = refsAt(cursors("function f(...args) { return $0args[0]; }\n"));
 
 		// rest-element binding (declaration) + use in return = 2
 		assert.match(2, length(locs));
 	});
 
 	it('finds loop variable references in C-style for condition and increment', () => {
-		let text = "for (let i = 0; i < 10; i++) { i; }\n";
-		documents.open(URI, text, 1);
-
-		// cursor on 'i' in the condition (line 0, character 16)
-		let locs = references(URI, documents.get(URI), { line: 0, character: 16 });
+		// on the use in the condition
+		let locs = refsAt(cursors("for (let i = 0; $0i < 10; i++) { i; }\n"));
 
 		// declaration + condition + increment + body = 4
 		assert.match(4, length(locs));
 	});
 
 	it('excludes declaration site when includeDeclaration is false', () => {
-		let text = "let x = 1;\nx;\nx;\n";
-		documents.open(URI, text, 1);
+		let src = cursors("let $0x = 1;\n$1x$2;\n$3x$4;\n");
+		documents.open(URI, src.text, 1);
 
-		// cursor on declaration 'x' at (0, 4)
-		let all  = references(URI, documents.get(URI), { line: 0, character: 4 }, true);
-		let refs = references(URI, documents.get(URI), { line: 0, character: 4 }, false);
+		let all  = references(URI, documents.get(URI), src.at[0], true);
+		let refs = references(URI, documents.get(URI), src.at[0], false);
 
-		// with declaration: 3 (decl + 2 uses); without: 2 (uses only)
+		// with declaration: 3 (decl + 2 uses); without: the 2 uses only
 		assert.match(3, length(all));
-		assert.match(2, length(refs));
-		// none of the ref-only locations should be on the declaration line
-		for (let l in refs)
-			assert.match(true, l.range.start.line > 0);
+		assert.match(any_order([ span(src, 1, 2), span(src, 3, 4) ]), ranges(refs));
 	});
 });
 
 describe('cross-file references', () => {
-	let TEXT_A         = "export function foo() { foo(); };\n";
-	let TEXT_B_NAMED   = "import { foo } from 'a';\nfoo();\n";
-	let TEXT_B_ALIASED = "import { foo as bar } from 'a';\nbar();\n";
-	let TEXT_B_NS      = "import * as a from 'a';\na.foo();\n";
+	let TEXT_A         = cursors("export function $0foo() { foo(); };\n");
+	let TEXT_B_NAMED   = cursors("import { foo } from 'a';\n$0foo();\n");
+	let TEXT_B_ALIASED = cursors("import { foo as bar } from 'a';\n$0bar();\n");
+	let TEXT_B_NS      = cursors("import * as a from 'a';\na.foo();\n");
 
 	beforeEach(() => {
-		dag.init(_dagCfg);
+		dag.init(fixture.config());
 		dag.remove(URI_A);
 		dag.remove(URI_B);
 	});
@@ -190,7 +164,7 @@ describe('cross-file references', () => {
 
 	function setupFiles(textA, textB) {
 		dag.add(URI_A, textA, parse(textA));
-		mock.global.patch('fs', { data: { '/app/src/a.uc': textA } });
+		mock.global.patch('fs', { data: { [fixture.WORKSPACE + '/a.uc']: textA } });
 		dag.add(URI_B, textB, parse(textB));
 		mock.global.unpatch('fs');
 		documents.open(URI_A, textA, 1);
@@ -198,10 +172,10 @@ describe('cross-file references', () => {
 	}
 
 	it('named import: cursor in importing file returns locations in both files', () => {
-		setupFiles(TEXT_A, TEXT_B_NAMED);
+		setupFiles(TEXT_A.text, TEXT_B_NAMED.text);
 
-		// cursor on 'foo' in 'foo();' on line 1 of URI_B
-		let locs = references(URI_B, documents.get(URI_B), { line: 1, character: 0 });
+		// on the call 'foo();'
+		let locs = references(URI_B, documents.get(URI_B), TEXT_B_NAMED.at[0]);
 
 		let inA = filter(locs, (l) => l.uri === URI_A);
 		let inB = filter(locs, (l) => l.uri === URI_B);
@@ -210,20 +184,20 @@ describe('cross-file references', () => {
 	});
 
 	it('export declaration: cursor in declaring file returns locations in importing file', () => {
-		setupFiles(TEXT_A, TEXT_B_NAMED);
+		setupFiles(TEXT_A.text, TEXT_B_NAMED.text);
 
-		// cursor on 'foo' in 'export function foo()' in URI_A (line 0, char 16)
-		let locs = references(URI_A, documents.get(URI_A), { line: 0, character: 16 });
+		// on the declared name in 'export function foo()'
+		let locs = references(URI_A, documents.get(URI_A), TEXT_A.at[0]);
 
 		let inB = filter(locs, (l) => l.uri === URI_B);
 		assert.match(true, length(inB) >= 1);
 	});
 
 	it('aliased import: cursor on local alias returns only within-file locations', () => {
-		setupFiles(TEXT_A, TEXT_B_ALIASED);
+		setupFiles(TEXT_A.text, TEXT_B_ALIASED.text);
 
-		// cursor on 'bar' in 'bar();' on line 1 of URI_B — local alias, no cross-file
-		let locs = references(URI_B, documents.get(URI_B), { line: 1, character: 0 });
+		// on the call 'bar();' — a local alias, no cross-file
+		let locs = references(URI_B, documents.get(URI_B), TEXT_B_ALIASED.at[0]);
 
 		let inA = filter(locs, (l) => l.uri === URI_A);
 		assert.match(0, length(inA));
@@ -231,10 +205,10 @@ describe('cross-file references', () => {
 	});
 
 	it('namespace import: cursor in declaring file returns property accesses in importer', () => {
-		setupFiles(TEXT_A, TEXT_B_NS);
+		setupFiles(TEXT_A.text, TEXT_B_NS.text);
 
-		// cursor on 'foo' export in URI_A (line 0, char 16)
-		let locs = references(URI_A, documents.get(URI_A), { line: 0, character: 16 });
+		// on the 'foo' export
+		let locs = references(URI_A, documents.get(URI_A), TEXT_A.at[0]);
 
 		// URI_B uses 'a.foo()' — the 'foo' property should appear as a cross-file location
 		let inB = filter(locs, (l) => l.uri === URI_B);

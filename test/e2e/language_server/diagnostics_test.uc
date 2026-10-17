@@ -1,5 +1,6 @@
 import { describe, it, assert, setup, teardown, contains } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -52,7 +53,7 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('reports error when a named import does not exist in the module', () => {
-		let diags = diagnose('file:///t.uc', "import { noSuchExport } from 'tree_sitter';\n");
+		let diags = diagnose('file:///t.uc', "import { noSuchExport } from 'parser';\n");
 		// Expect at least one ERROR about the missing export.
 		let errDiags = filter(diags, (d) =>
 			d.severity === 1 && index(d.message, 'noSuchExport') >= 0);
@@ -76,8 +77,9 @@ describe('textDocument/diagnostic', () => {
 	// tree-sitter parses this small file as one ERROR; the server re-parses it
 	// with the closers appended and reports them, not the whole file, as missing.
 	it('reports each block left open at the end of a small file as a missing }', () => {
-		let diags = diagnose('file:///t.uc', "function f(a) {\n\tif (a) {\n\t\tf(a);\n");
-		let eof = { line: 3, character: 0 };
+		let src = cursors("function f(a) {\n\tif (a) {\n\t\tf(a);\n$0");
+		let diags = diagnose('file:///t.uc', src.text);
+		let eof = src.at[0];
 		assert.match([
 			{ message: "Syntax error: missing '}'", range: { start: eof, end: eof } },
 			{ message: "Syntax error: missing '}'", range: { start: eof, end: eof } },
@@ -121,7 +123,7 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('reports deprecated hint for use of @deprecated imported symbol', () => {
-		let diags = diagnose('file:///t.uc', "import { oldFn } from 'fixtures.deprecated';\noldFn();\n");
+		let diags = diagnose('file:///t.uc', "import { oldFn } from 'deprecated';\noldFn();\n");
 		let depDiags = filter(diags, (d) => d.message === 'Deprecated');
 		assert.match(true, length(depDiags) >= 1);
 		assert.match(4, depDiags[0].severity);  // HINT
@@ -129,21 +131,21 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('does not report deprecated hint for non-deprecated imported symbol', () => {
-		let diags = diagnose('file:///t.uc', "import { newFn } from 'fixtures.deprecated';\nnewFn();\n");
+		let diags = diagnose('file:///t.uc', "import { newFn } from 'deprecated';\nnewFn();\n");
 		let depDiags = filter(diags, (d) => d.message === 'Deprecated');
 		assert.match(0, length(depDiags));
 	});
 
 	it('reports unused-import hint for an import that is never used', () => {
-		let diags = diagnose('file:///t.uc', "import * as ts from 'tree_sitter';\n");
+		let diags = diagnose('file:///t.uc', "import * as p from 'parser';\n");
 		let d = filter(diags, (d) => d.code === 'unused-import');
 		assert.match(1, length(d));
 		assert.match(4, d[0].severity);   // HINT
-		assert.match(contains("'ts'"), d[0].message);
+		assert.match(contains("'p'"), d[0].message);
 	});
 
 	it('does not report unused-import for an import that is used', () => {
-		let diags = diagnose('file:///t.uc', "import * as ts from 'tree_sitter';\nts.ucode;\n");
+		let diags = diagnose('file:///t.uc', "import * as p from 'parser';\np.parse;\n");
 		let d = filter(diags, (d) => d.code === 'unused-import');
 		assert.match(0, length(d));
 	});

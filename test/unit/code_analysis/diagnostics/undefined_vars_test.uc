@@ -3,14 +3,11 @@ import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_vars';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
+import * as fixture from 'fixture';
 
 let URI = 'file:///test.uc';
 
-let _config = {
-	workspaceDir: '/app',
-	selfSrcDir: '/app/src/ucode_analyzer',
-	workspace: { libraryPaths: ['src'] },
-};
+let _config = fixture.config();
 
 // Bootstrap stdlib once so undefinedVars can distinguish builtins from
 // truly undefined names.
@@ -94,7 +91,7 @@ describe('diagnostics — undefined variables', () => {
 	});
 
 	it('does not warn for a namespace import alias', () => {
-		let text = "import * as ts from 'tree_sitter';\nts.parse;\n";
+		let text = "import * as ts from 'parser';\nts.parse;\n";
 		documents.open(URI, text, 1);
 
 		let diags = undefinedVars(documents.get(URI));
@@ -103,7 +100,7 @@ describe('diagnostics — undefined variables', () => {
 	});
 
 	it('does not warn for a named import', () => {
-		let text = "import { parse } from 'tree_sitter';\nparse('x');\n";
+		let text = "import { parse } from 'parser';\nparse('x');\n";
 		documents.open(URI, text, 1);
 
 		let diags = undefinedVars(documents.get(URI));
@@ -270,15 +267,16 @@ describe('diagnostics — undefined variables', () => {
 
 	it('reads extra globals from workspace.globals (list or glob map)', () => {
 		let saved = dag.config();
-		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'], globals: ['ext1'] } });
-		documents.open('file:///app/a.uc', "ext1; ext2;\n", 1);
-		assert.match(['ext2'], map(undefinedVars(documents.get('file:///app/a.uc')), (d) => match(d.message, /'([^']+)'/)?.[1]));
-		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'], globals: { 'www/**': ['uhttpd'] } } });
-		documents.open('file:///app/www/h.uc', "uhttpd.recv;\n", 1);
-		assert.match(0, length(undefinedVars(documents.get('file:///app/www/h.uc'))));
-		documents.open('file:///app/other.uc', "uhttpd.recv;\n", 1);
-		assert.match(1, length(undefinedVars(documents.get('file:///app/other.uc'))));
-		for (let u in ['file:///app/a.uc', 'file:///app/www/h.uc', 'file:///app/other.uc']) documents.close(u);
+		let a = fixture.uri('a.uc'), h = fixture.uri('www/h.uc'), other = fixture.uri('other.uc');
+		dag.init(fixture.config({ globals: ['ext1'] }));
+		documents.open(a, "ext1; ext2;\n", 1);
+		assert.match(['ext2'], map(undefinedVars(documents.get(a)), (d) => match(d.message, /'([^']+)'/)?.[1]));
+		dag.init(fixture.config({ globals: { 'www/**': ['uhttpd'] } }));
+		documents.open(h, "uhttpd.recv;\n", 1);
+		assert.match(0, length(undefinedVars(documents.get(h))));
+		documents.open(other, "uhttpd.recv;\n", 1);
+		assert.match(1, length(undefinedVars(documents.get(other))));
+		for (let u in [a, h, other]) documents.close(u);
 		dag.init(saved);
 	});
 });

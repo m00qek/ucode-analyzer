@@ -126,13 +126,14 @@ export function receiveServerRequest(proc) {
 	}
 };
 
-// Start a server on `workspace` (default: this repository).
+// Start a server on `workspace` (default: the fixture workspace,
+// test/fixtures/workspace).
 export function connect(workspace) {
 	return spawn('ucode', [
 		'-L', '/app/src',
 		'/app/src/ucode-analyzer.uc',
 		'--config', '/tmp',
-		'--workspace', workspace ?? '/app',
+		'--workspace', workspace ?? '/app/test/fixtures/workspace',
 	]);
 };
 

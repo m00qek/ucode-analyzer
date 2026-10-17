@@ -2,6 +2,7 @@ import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { codeAction } from 'ucode_analyzer.language_server.handlers.code_actions';
 import { preferStrictEquality } from 'ucode_analyzer.code_analysis.diagnostics.prefer_strict_equality';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -21,9 +22,9 @@ describe('codeAction', () => {
 	});
 
 	it('returns null when diagnostics have no severity-4 entries', () => {
-		let doc = open("let x = 1 == 1;\n");
-		let diags = [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } },
-		               severity: 1, message: 'some error' }];
+		let src = cursors("$0let$1 x = 1 == 1;\n");
+		let doc = open(src.text);
+		let diags = [{ range: { start: src.at[0], end: src.at[1] }, severity: 1, message: 'some error' }];
 		assert.match(null, codeAction(URI, doc, diags));
 	});
 
@@ -64,14 +65,13 @@ describe('codeAction', () => {
 	});
 
 	it('edit range matches the diagnostic range exactly', () => {
-		let doc = open("let x = 1 == 2;\n");
+		let src = cursors("let x = 1 $0==$1 2;\n");
+		let doc = open(src.text);
 		let diags = preferStrictEquality(doc);
 		let action = codeAction(URI, doc, diags)[0];
 		let edit = action.edit.changes[URI][0];
-		assert.match(diags[0].range.start.line,      edit.range.start.line);
-		assert.match(diags[0].range.start.character, edit.range.start.character);
-		assert.match(diags[0].range.end.line,        edit.range.end.line);
-		assert.match(diags[0].range.end.character,   edit.range.end.character);
+		assert.match(diags[0].range, edit.range);
+		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 	});
 
 	it('produces one action per operator when multiple are present', () => {

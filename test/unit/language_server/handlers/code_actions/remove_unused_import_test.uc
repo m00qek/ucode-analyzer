@@ -2,6 +2,7 @@ import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.remove_unused_import';
 import { unusedImports } from 'ucode_analyzer.code_analysis.diagnostics.unused_imports';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -19,9 +20,9 @@ describe('remove_unused_import', () => {
 	});
 
 	it('returns empty list when diagnostics have no unused-import code', () => {
-		let doc = open("import { x } from 'mod';\n");
-		let diags = [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-		               severity: 1, code: 'some-other-code', message: 'err' }];
+		let src = cursors("$0i$1mport { x } from 'mod';\n");
+		let doc = open(src.text);
+		let diags = [{ range: { start: src.at[0], end: src.at[1] }, severity: 1, code: 'some-other-code', message: 'err' }];
 		assert.match(0, length(actionsFor(URI, doc, diags)));
 	});
 
@@ -49,46 +50,43 @@ describe('remove_unused_import', () => {
 	});
 
 	it('edit removes the entire import line for a namespace import', () => {
-		let doc = open("import * as ts from 'tree_sitter';\nlet x = 1;\n");
+		let src = cursors("$0import * as ts from 'tree_sitter';\n$1let x = 1;\n");
+		let doc = open(src.text);
 		let diags = unusedImports(doc);
 		let edit = actionsFor(URI, doc, diags)[0].edit.changes[URI][0];
-		assert.match(0, edit.range.start.line);
-		assert.match(0, edit.range.start.character);
-		assert.match(1, edit.range.end.line);
-		assert.match(0, edit.range.end.character);
+		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 		assert.match('', edit.newText);
 	});
 
 	it('edit removes the entire import line for a single named import', () => {
-		let doc = open("import { foo } from 'mod';\nlet x = 1;\n");
+		let src = cursors("$0import { foo } from 'mod';\n$1let x = 1;\n");
+		let doc = open(src.text);
 		let diags = unusedImports(doc);
 		let edit = actionsFor(URI, doc, diags)[0].edit.changes[URI][0];
-		assert.match(0, edit.range.start.line);
-		assert.match(0, edit.range.start.character);
-		assert.match(1, edit.range.end.line);
+		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 		assert.match('', edit.newText);
 	});
 
 	it('removes only the unused specifier when multiple named imports exist', () => {
-		let doc = open("import { foo, bar } from 'mod';\nbar;\n");
+		// deletes 'foo, ', not the whole line
+		let src = cursors("import { $0foo, $1bar } from 'mod';\nbar;\n");
+		let doc = open(src.text);
 		let diags = unusedImports(doc);
 		assert.match(1, length(diags));
 		assert.match('foo', index(diags[0].message, 'foo') >= 0 ? 'foo' : '?');
 		let edit = actionsFor(URI, doc, diags)[0].edit.changes[URI][0];
-		// Should delete 'foo, ' (i.e. stay on line 0, not remove the whole line)
-		assert.match(0, edit.range.start.line);
-		assert.match(0, edit.range.end.line);
+		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 		assert.match('', edit.newText);
 	});
 
 	it('removes trailing specifier leaving earlier ones intact', () => {
-		let doc = open("import { foo, bar } from 'mod';\nfoo;\n");
+		// deletes ', bar'
+		let src = cursors("import { foo$0, bar$1 } from 'mod';\nfoo;\n");
+		let doc = open(src.text);
 		let diags = unusedImports(doc);
 		assert.match(1, length(diags));
 		let edit = actionsFor(URI, doc, diags)[0].edit.changes[URI][0];
-		// Should delete ', bar' (same line, non-zero start character)
-		assert.match(0, edit.range.start.line);
-		assert.match(true, edit.range.start.character > 0);
+		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 		assert.match('', edit.newText);
 	});
 

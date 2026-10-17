@@ -4,14 +4,16 @@ import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { resolveDoc } from 'ucode_analyzer.code_analysis.doc_resolver';
 import { makeScope } from 'ucode_analyzer.code_analysis.types.scope';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import * as fixture from 'fixture';
 
 let _parser = ts.newParser(ts.ucode());
 function parse(text) { return ts.parse(_parser, text); }
 
-let _config = { workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } };
+let _config = fixture.config();
 
-let URI_A = 'file:///app/src/a.uc';
-let URI_B = 'file:///app/src/b.uc';
+// Not in the fixture workspace: tests add them, or mock them on disk.
+let URI_A = fixture.uri('a.uc');
+let URI_B = fixture.uri('b.uc');
 
 beforeEach(() => {
 	dag.init(_config);
@@ -51,7 +53,7 @@ describe('doc_resolver — resolveDoc precedence', () => {
 
 		dag.add(URI_A, srcA, parse(srcA));
 		// Make 'a' resolve to URI_A on disk so B's import edge points at it.
-		mock.global.patch('fs', { data: { '/app/src/a.uc': srcA } });
+		mock.global.patch('fs', { data: { [fixture.WORKSPACE + '/a.uc']: srcA } });
 		let treeB = parse(srcB);
 		dag.add(URI_B, srcB, treeB);
 		mock.global.unpatch('fs');

@@ -1,5 +1,6 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, any_order } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -13,50 +14,46 @@ teardown(() => {
 	assert.match(0, lsp.close(proc));
 });
 
+// Open the cursors' text and ask for the highlights at $0.
+function highlightAt(id, src) {
+	lsp.open(proc, 'file:///t.uc', src.text);
+	lsp.send(proc, { jsonrpc: '2.0', id, method: 'textDocument/documentHighlight', params: {
+		textDocument: { uri: 'file:///t.uc' },
+		position: src.at[0],
+	}});
+	return lsp.receive(proc);
+}
+
+// A Text (kind 1) highlight from marker a to marker b.
+function highlight(src, a, b) {
+	return { range: { start: src.at[a], end: src.at[b] }, kind: 1 };
+}
+
 describe('textDocument/documentHighlight', () => {
 
 	it('returns all occurrences of the identifier under cursor', () => {
-		lsp.open(proc, 'file:///t.uc', "let z = 0;\nz;\nz;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentHighlight', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 4 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("let $0$1z$2 = 0;\n$3z$4;\n$5z$6;\n");
+		let resp = highlightAt(1, src);
 
 		assert.match(1, resp.id);
-		assert.match(3, length(resp.result));
-		for (let h in resp.result)
-			assert.match(1, h.kind);
+		assert.match(any_order([
+			highlight(src, 1, 2), highlight(src, 3, 4), highlight(src, 5, 6),
+		]), resp.result);
 	});
 
 	it('returns null when cursor is not on an identifier', () => {
-		lsp.open(proc, 'file:///t.uc', "let x = 1;");
-		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/documentHighlight', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 0 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = highlightAt(2, cursors("$0let x = 1;"));
 
 		assert.match(2, resp.id);
 		assert.match(null, resp.result);
 	});
 
 	it('is scope-aware: highlights only the binding in the correct scope', () => {
-		let text = "function a(x) { return x; }\nfunction b(x) { return x; }\n";
-		lsp.open(proc, 'file:///t.uc', text);
-		lsp.send(proc, { jsonrpc: '2.0', id: 3, method: 'textDocument/documentHighlight', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 11 },  // x in function a
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("function a($0$1x$2) { return $3x$4; }\nfunction b(x) { return x; }\n");
+		let resp = highlightAt(3, src);
 
 		assert.match(3, resp.id);
-		// Only 2 highlights: parameter + use inside a. Function b's x excluded.
-		assert.match(2, length(resp.result));
-		for (let h in resp.result)
-			assert.match(0, h.range.start.line);
+		// Only the parameter + use inside a. Function b's x excluded.
+		assert.match(any_order([ highlight(src, 1, 2), highlight(src, 3, 4) ]), resp.result);
 	});
 });

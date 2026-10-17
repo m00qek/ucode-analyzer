@@ -2,15 +2,13 @@ import { describe, it, assert, beforeEach, afterEach, contains, not } from 'utes
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { workspaceSymbol } from 'ucode_analyzer.language_server.handlers.workspace_symbol';
+import { cursors } from 'cursor';
+import * as fixture from 'fixture';
 
 let URI_A = 'file:///a.uc';
 let URI_B = 'file:///b.uc';
 
-let _config = {
-	workspaceDir: '/app',
-	selfSrcDir: '/app/src/ucode_analyzer',
-	workspace: { libraryPaths: ['src'] },
-};
+let _config = fixture.config();
 
 function addDoc(uri, text) {
 	documents.open(uri, text, 1);
@@ -61,13 +59,12 @@ describe('workspace/symbol', () => {
 		assert.match('a.uc', s.containerName);
 	});
 
-	it('location range end is offset by name length from start', () => {
-		addDoc(URI_A, "export function greet() {};\n");
+	it('location range spans the name', () => {
+		let src = cursors("export function $1greet$2() {};\n");
+		addDoc(URI_A, src.text);
 		let syms = workspaceSymbol('');
 		let s = filter(syms, (s) => s.name === 'greet')[0];
-		let r = s.location.range;
-		assert.match(r.start.line, r.end.line);
-		assert.match(r.start.character + length('greet'), r.end.character);
+		assert.match({ start: src.at[1], end: src.at[2] }, s.location.range);
 	});
 
 	it('empty query returns all exported symbols', () => {

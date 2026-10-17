@@ -1,8 +1,8 @@
 return {
 	lib_paths: [ "../src", "helpers" ],
 	mocks: { fs: null },
-	// Per test file. Each e2e test starts a server that indexes this repo
-	// (~3.5 s); lifecycle_test alone takes ~35 s, and 8 parallel workers on a
-	// busy host pushed it past utest's 60 s default.
-	timeout: 300,
+	// Per test file. e2e tests start servers on the fixture workspace (~0.3 s
+	// each); the slowest file takes ~6 s alone, more on a busy host with 8
+	// parallel workers, so stay well above that.
+	timeout: 120,
 };

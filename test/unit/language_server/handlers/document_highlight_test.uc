@@ -1,16 +1,22 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, any_order } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { documentHighlight } from 'ucode_analyzer.language_server.handlers.document_highlight';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
+
+// Open the text of `src` (from cursors()) and highlight the name at $0.
+function highlightAt(src) {
+	documents.open(URI, src.text, 1);
+	return documentHighlight(URI, documents.get(URI), src.at[0]);
+}
 
 afterEach(() => documents.close(URI));
 
 describe('documentHighlight', () => {
 	it('returns null when cursor is not on an identifier', () => {
-		documents.open(URI, "let x = 1;\n", 1);
-		// 'l' in 'let' — anonymous token
-		assert.match(null, documentHighlight(URI, documents.get(URI), { line: 0, character: 0 }));
+		// 'let' is an anonymous token
+		assert.match(null, highlightAt(cursors("$0let x = 1;\n")));
 	});
 
 	it('returns null for position beyond end of file', () => {
@@ -19,37 +25,30 @@ describe('documentHighlight', () => {
 	});
 
 	it('returns all occurrences as highlights', () => {
-		documents.open(URI, "let z = 0;\nz;\nz;\n", 1);
-		let highlights = documentHighlight(URI, documents.get(URI), { line: 0, character: 4 });
+		let highlights = highlightAt(cursors("let $0z = 0;\nz;\nz;\n"));
 		assert.match(3, length(highlights));
 	});
 
 	it('each highlight has kind 1 (Text)', () => {
-		documents.open(URI, "let x = 1;\nx;\n", 1);
-		let highlights = documentHighlight(URI, documents.get(URI), { line: 0, character: 4 });
+		let highlights = highlightAt(cursors("let $0x = 1;\nx;\n"));
 		for (let h in highlights)
 			assert.match(1, h.kind);
 	});
 
 	it('highlight ranges span the exact identifier token', () => {
-		documents.open(URI, "let count = 0;\n", 1);
-		let highlights = documentHighlight(URI, documents.get(URI), { line: 0, character: 4 });
-		let h = highlights[0];
-		// 'count' starts at col 4 and ends at col 9
-		assert.match(0, h.range.start.line);
-		assert.match(4, h.range.start.character);
-		assert.match(0, h.range.end.line);
-		assert.match(9, h.range.end.character);
+		let src = cursors("let $0$1count$2 = 0;\n");
+		let highlights = highlightAt(src);
+		assert.match({ start: src.at[1], end: src.at[2] }, highlights[0].range);
 	});
 
 	it('is scope-aware: does not cross function boundaries', () => {
-		let text = "function a(x) { return x; }\nfunction b(x) { return x; }\n";
-		documents.open(URI, text, 1);
-		// cursor on 'x' parameter in function a
-		let highlights = documentHighlight(URI, documents.get(URI), { line: 0, character: 11 });
+		// on the 'x' parameter in function a
+		let src = cursors("function a($0$1x$2) { return $3x$4; }\nfunction b(x) { return x; }\n");
+		let highlights = highlightAt(src);
 		// Only 2: parameter declaration + use inside a
-		assert.match(2, length(highlights));
-		for (let h in highlights)
-			assert.match(0, h.range.start.line);
+		assert.match(any_order([
+			{ start: src.at[1], end: src.at[2] },
+			{ start: src.at[3], end: src.at[4] },
+		]), map(highlights, (h) => h.range));
 	});
 });

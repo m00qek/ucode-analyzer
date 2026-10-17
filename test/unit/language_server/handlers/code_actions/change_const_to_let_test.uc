@@ -2,6 +2,7 @@ import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.change_const_to_let';
 import { assignmentToConst } from 'ucode_analyzer.code_analysis.diagnostics.assignment_const';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -19,9 +20,9 @@ describe('change_const_to_let', () => {
 	});
 
 	it('returns empty list when diagnostics have no const-assignment code', () => {
-		let doc = open("const x = 1; x = 2;\n");
-		let diags = [{ code: 'other', message: 'msg',
-		               range: { start: { line: 0, character: 13 }, end: { line: 0, character: 14 } } }];
+		let src = cursors("const x = 1; $0x$1 = 2;\n");
+		let doc = open(src.text);
+		let diags = [{ code: 'other', message: 'msg', range: { start: src.at[0], end: src.at[1] } }];
 		assert.match(0, length(actionsFor(URI, doc, diags)));
 	});
 
@@ -50,13 +51,12 @@ describe('change_const_to_let', () => {
 	});
 
 	it('edit replaces the const keyword with let', () => {
-		let doc = open("const x = 1;\nx = 2;\n");
+		let src = cursors("$0const$1 x = 1;\nx = 2;\n");
+		let doc = open(src.text);
 		let diags = assignmentToConst(doc);
 		let edit = actionsFor(URI, doc, diags)[0].edit.changes[URI][0];
 		assert.match('let', edit.newText);
-		// const keyword is at line 0, character 0
-		assert.match(0, edit.range.start.line);
-		assert.match(0, edit.range.start.character);
+		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 	});
 
 	it('deduplicates: two assignments to same const produce one action', () => {

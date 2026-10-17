@@ -3,23 +3,34 @@ import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { definition } from 'ucode_analyzer.language_server.handlers.definition';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import { cursors, locate } from 'cursor';
+import * as fixture from 'fixture';
 
-let URI       = 'file:///test.uc';
-let TS_URI    = 'file:///app/src/tree_sitter.uc';
-let GREET_URI = 'file:///app/test/fixtures/greet.uc';
-let TPL_URI   = 'file:///app/test/fixtures/template_lib.uc';
-let DE_URI    = 'file:///app/test/fixtures/default_export.uc';
+let URI        = 'file:///test.uc';
+let PARSER_URI = fixture.uri('parser.uc');
+let GREET_URI  = fixture.uri('greet.uc');
+let TPL_URI    = fixture.uri('template_lib.uc');
+let DE_URI     = fixture.uri('default_export.uc');
 
-let _config = {
-	workspaceDir: '/app',
-	selfSrcDir: '/app/src/ucode_analyzer',
-	workspace: { libraryPaths: ['src', 'test'] },
-};
+let _config = fixture.config();
+
+// Open the text and go to the definition at its $0.
+function definitionAt(src) {
+	documents.open(URI, src.text, 1);
+	return definition(URI, documents.get(URI), src.at[0]);
+}
+
+// The same, with the text in the DAG so its imports resolve.
+function definitionImporting(src) {
+	documents.open(URI, src.text, 1);
+	dag.add(URI, src.text, documents.get(URI).tree);
+	return definition(URI, documents.get(URI), src.at[0]);
+}
 
 afterEach(() => {
 	documents.close(URI);
 	dag.remove(URI);
-	dag.remove(TS_URI);
+	dag.remove(PARSER_URI);
 	dag.remove(GREET_URI);
 	dag.remove(TPL_URI);
 	dag.remove(DE_URI);
@@ -28,99 +39,63 @@ afterEach(() => {
 
 describe('definition — local declarations', () => {
 	it('finds a let declaration by name', () => {
-		let text = "let count = 0;\ncount;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		// position (1, 0) is 'count' on the second line (the reference)
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		let src = cursors("let $1count = 0;\n$0count;");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);       // declaration is on line 0
-		assert.match(4, result.range.start.character);  // 'count' starts at col 4
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('finds a const declaration', () => {
-		let text = "const MAX = 100;\nMAX;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		let src = cursors("const $1MAX = 100;\n$0MAX;");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(6, result.range.start.character);  // 'MAX' starts at col 6
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('finds a function declaration', () => {
-		let text = "function greet() {}\ngreet;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		let src = cursors("function $1greet() {}\n$0greet;");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(9, result.range.start.character);  // 'greet' after 'function '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('resolves a forward reference to a later function declaration', () => {
 		// ucode does NOT hoist function declarations (calling foo() above its
 		// declaration is a runtime error), but there is only one `foo` in the
 		// file, so go-to-definition should still jump to the declaration.
-		let text = "foo();\nfunction foo() { return 1; }\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 0, character: 0 });
+		let src = cursors("$0foo();\nfunction $1foo() { return 1; }\n");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(1, result.range.start.line);       // the declaration below
-		assert.match(9, result.range.start.character);  // 'foo' after 'function '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('resolves a use of a let before its declaration in the same block', () => {
-		let text = "x;\nlet x = 1;\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 0, character: 0 });
+		let src = cursors("$0x;\nlet $1x = 1;\n");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(1, result.range.start.line);       // 'let x' below
-		assert.match(4, result.range.start.character);
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('finds an exported let declaration', () => {
-		let text = "export let x = 1;\nx;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		let src = cursors("export let $1x = 1;\n$0x;");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('returns null for an unknown identifier', () => {
-		let text = "foo;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 0, character: 0 });
-
-		assert.match(null, result);
+		assert.match(null, definitionAt(cursors("$0foo;")));
 	});
 
 	it('returns null when cursor is on a non-identifier node', () => {
-		let text = "let x = 5;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		// position (0, 0) is 'l' in 'let' — anonymous token
-		let result = definition(URI, doc, { line: 0, character: 0 });
-
-		assert.match(null, result);
+		// 'let' is an anonymous token
+		assert.match(null, definitionAt(cursors("$0let x = 5;")));
 	});
 
 	it('returns null for position beyond end of file', () => {
@@ -135,30 +110,18 @@ describe('definition — local declarations', () => {
 describe('definition — named imports (inline export)', () => {
 	beforeEach(() => {
 		dag.init(_config);
-		dag.addFromDisk(TS_URI);
+		dag.addFromDisk(PARSER_URI);
 	});
 
 	it('jumps to export function declaration in source file', () => {
-		let text = "import { parse } from 'tree_sitter';\nparse;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
+		let result = definitionImporting(cursors("import { parse } from 'parser';\n$0parse;\n"));
 
-		// (1, 0) is the 'parse' reference on line 1
-		let result = definition(URI, doc, { line: 1, character: 0 });
-
-		assert.match(TS_URI, result.uri);
-		// 'parse' is declared in tree_sitter.uc — just verify the uri and a line number
-		assert.match(true, result.range.start.line >= 0);
+		assert.match(PARSER_URI, result.uri);
+		assert.match(locate(fixture.read('parser.uc'), 'export function parse(', 0, length('export function ')), result.range.start);
 	});
 
 	it('returns null when the imported name does not exist in source', () => {
-		let text = "import { doesNotExist } from 'tree_sitter';\ndoesNotExist;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		let result = definitionImporting(cursors("import { doesNotExist } from 'parser';\n$0doesNotExist;\n"));
 
 		assert.match(null, result);
 	});
@@ -171,18 +134,11 @@ describe('definition — named imports (export clause)', () => {
 	});
 
 	it('jumps to local function declaration for export { name } style', () => {
-		// fixtures/greet.uc: function greet() {}  export { greet };
-		let text = "import { greet } from 'fixtures.greet';\ngreet;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		// (1, 0) is the 'greet' reference
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		// greet.uc: function greet() {}  export { greet };
+		let result = definitionImporting(cursors("import { greet } from 'greet';\n$0greet;\n"));
 
 		assert.match(GREET_URI, result.uri);
-		assert.match(0, result.range.start.line);       // function greet() on line 0
-		assert.match(9, result.range.start.character);  // 'greet' after 'function '
+		assert.match(locate(fixture.read('greet.uc'), 'function greet', 0, length('function ')), result.range.start);
 	});
 
 	it('extractExports reports export-clause names in the DAG', () => {
@@ -201,16 +157,11 @@ describe('definition — cross-file default import', () => {
 	});
 
 	it('jumps from a default-imported name to the `export default` value', () => {
-		// fixtures/default_export.uc line 1: export default { k: 2 };
-		let text = "import x from 'fixtures.default_export';\nx;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-
-		let result = definition(URI, documents.get(URI), { line: 1, character: 0 });
+		// default_export.uc: export default { k: 2 };
+		let result = definitionImporting(cursors("import x from 'default_export';\n$0x;\n"));
 
 		assert.match(DE_URI, result.uri);
-		assert.match(1, result.range.start.line);
-		assert.match(15, result.range.start.character);  // the `{` after 'export default '
+		assert.match(locate(fixture.read('default_export.uc'), 'export default {', 0, length('export default ')), result.range.start);
 	});
 });
 
@@ -221,48 +172,29 @@ describe('definition — cross-file into a template module', () => {
 	});
 
 	it('jumps to an export declared inside a {% %} tag in a template file', () => {
-		// fixtures/template_lib.uc: {% export function render(name) {...}; %}
-		let text = "import { render } from 'fixtures.template_lib';\nrender;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		// (1, 0) is the 'render' reference
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		// template_lib.uc: {% export function render(name) {...}; %}
+		let result = definitionImporting(cursors("import { render } from 'template_lib';\n$0render;\n"));
 
 		assert.match(TPL_URI, result.uri);
-		assert.match(0, result.range.start.line);        // export is on line 0 of the template
-		assert.match(19, result.range.start.character);  // 'render' after '{% export function '
+		assert.match(locate(fixture.read('template_lib.uc'), 'export function render', 0, length('export function ')), result.range.start);
 	});
 });
 
 describe('definition — namespace import alias', () => {
 	beforeEach(() => {
 		dag.init(_config);
-		dag.addFromDisk(TS_URI);
+		dag.addFromDisk(PARSER_URI);
 	});
 
 	it('jumps to the top of the imported module file', () => {
-		let text = "import * as ts from 'tree_sitter';\nts;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
+		let result = definitionImporting(cursors("import * as p from 'parser';\n$0p;\n"));
 
-		// (1, 0) is 'ts' — the namespace alias reference
-		let result = definition(URI, doc, { line: 1, character: 0 });
-
-		assert.match(TS_URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(0, result.range.start.character);
+		assert.match(PARSER_URI, result.uri);
+		assert.match({ line: 0, character: 0 }, result.range.start);
 	});
 
 	it('returns null for an identifier that is not a namespace alias', () => {
-		let text = "import * as ts from 'tree_sitter';\nnotAlias;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		let result = definitionImporting(cursors("import * as p from 'parser';\n$0notAlias;\n"));
 		assert.match(null, result);
 	});
 });
@@ -270,30 +202,18 @@ describe('definition — namespace import alias', () => {
 describe('definition — member expression (namespace import)', () => {
 	beforeEach(() => {
 		dag.init(_config);
-		dag.addFromDisk(TS_URI);
+		dag.addFromDisk(PARSER_URI);
 	});
 
 	it('jumps to the export in the module when cursor is on the property', () => {
-		// 'parse' is an export of tree_sitter.uc; cursor on 'parse' in ts.parse()
-		// Column: "import * as ts from 'tree_sitter';\nts.parse;\n" — 'parse' starts at col 3
-		let text = "import * as ts from 'tree_sitter';\nts.parse;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
+		let result = definitionImporting(cursors("import * as p from 'parser';\np.$0parse;\n"));
 
-		let result = definition(URI, doc, { line: 1, character: 3 });
-
-		assert.match(TS_URI, result.uri);
-		assert.match(true, result.range.start.line >= 0);
+		assert.match(PARSER_URI, result.uri);
+		assert.match(locate(fixture.read('parser.uc'), 'export function parse(', 0, length('export function ')), result.range.start);
 	});
 
 	it('returns null for a property not exported by the module', () => {
-		let text = "import * as ts from 'tree_sitter';\nts.doesNotExist;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 1, character: 3 });
+		let result = definitionImporting(cursors("import * as p from 'parser';\np.$0doesNotExist;\n"));
 		assert.match(null, result);
 	});
 });
@@ -304,77 +224,40 @@ describe('definition — require() module loader', () => {
 		dag.addFromDisk(GREET_URI);
 	});
 
-	// fixtures/greet.uc: function greet() {}  export { greet };
+	// greet.uc: function greet() {}  export { greet };
 	it('jumps to the module file when cursor is on the require() string', () => {
-		let text = "let mod = require(\"fixtures.greet\");\nmod.greet;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		// (0, 20) is inside the "fixtures.greet" specifier
-		let result = definition(URI, doc, { line: 0, character: 20 });
+		let result = definitionImporting(cursors("let mod = require(\"gr$0eet\");\nmod.greet;\n"));
 		assert.match(GREET_URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(0, result.range.start.character);
+		assert.match({ line: 0, character: 0 }, result.range.start);
 	});
 
 	it('jumps to the module file from a use of the require-bound variable', () => {
-		let text = "let mod = require(\"fixtures.greet\");\nmod.greet;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		// (1, 0) is 'mod' — the module-typed variable reference
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		let result = definitionImporting(cursors("let mod = require(\"greet\");\n$0mod.greet;\n"));
 		assert.match(GREET_URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(0, result.range.start.character);
+		assert.match({ line: 0, character: 0 }, result.range.start);
 	});
 
 	it('jumps into the module on member access of a require-bound variable', () => {
-		let text = "let mod = require(\"fixtures.greet\");\nmod.greet;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		// (1, 4) is 'greet' in mod.greet
-		let result = definition(URI, doc, { line: 1, character: 4 });
+		let result = definitionImporting(cursors("let mod = require(\"greet\");\nmod.$0greet;\n"));
 		assert.match(GREET_URI, result.uri);
 	});
 
 	it('does not treat a non-require string literal as a module jump', () => {
-		let text = "let s = \"fixtures.greet\";\ns;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		let result = definition(URI, doc, { line: 0, character: 12 });
+		let result = definitionImporting(cursors("let s = \"gre$0et\";\ns;\n"));
 		assert.match(null, result);
 	});
 
 	it('does not module-jump on the string of a locally-shadowed require', () => {
 		// a user `let require = …` is not the builtin loader
-		let text = "let require = (n) => n;\nlet m = require(\"fixtures.greet\");\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		// (1, 18) is inside the "fixtures.greet" argument
-		let result = definition(URI, doc, { line: 1, character: 18 });
+		let result = definitionImporting(cursors("let require = (n) => n;\nlet m = require(\"gr$0eet\");\n"));
 		assert.match(null, result);
 	});
 
-	// fixtures/legacy_mod.uc exports via a top-level `return { greet, version }`.
+	// legacy_mod.uc exports via a top-level `return { greet, version }`.
 	it('jumps into a legacy (return-object) module on member access', () => {
-		let LEGACY_URI = 'file:///app/test/fixtures/legacy_mod.uc';
+		let LEGACY_URI = fixture.uri('legacy_mod.uc');
 		dag.addFromDisk(LEGACY_URI);
-		let text = "let m = require(\"fixtures.legacy_mod\");\nm.greet;\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		let doc = documents.get(URI);
-
-		// (1, 2) is 'greet' in m.greet
-		let result = definition(URI, doc, { line: 1, character: 2 });
+		let result = definitionImporting(cursors("let m = require(\"legacy_mod\");\nm.$0greet;\n"));
 		assert.match(LEGACY_URI, result.uri);
 		dag.remove(LEGACY_URI);
 	});
@@ -382,164 +265,101 @@ describe('definition — require() module loader', () => {
 
 describe('definition — function parameters', () => {
 	it('jumps to parameter declaration in the enclosing function', () => {
-		let text = "function parse(ts, opts) {\nts;\n}";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		// (1, 0) is 'ts' — a reference to the parameter
-		let result = definition(URI, doc, { line: 1, character: 0 });
+		let src = cursors("function parse($1ts, opts) {\n$0ts;\n}");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);        // parameter declared on line 0
-		assert.match(15, result.range.start.character);  // 'ts' at col 15 (after 'function parse(')
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('resolves to the innermost parameter when nested functions shadow the name', () => {
-		// outer 'x' is at col 9; inner 'x' is at col 18 (after 'function inner(')
-		let text = "function outer(x) {\nfunction inner(x) {\nx;\n}\n}";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		// (2, 0) is 'x' inside inner() — should resolve to inner's parameter
-		let result = definition(URI, doc, { line: 2, character: 0 });
+		let src = cursors("function outer(x) {\nfunction inner($1x) {\n$0x;\n}\n}");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(1, result.range.start.line);        // inner's parameter is on line 1
-		assert.match(15, result.range.start.character);  // 'x' after 'function inner('
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('does not match a parameter from a sibling function', () => {
-		let text = "function a(x) {}\nfunction b() {\nx;\n}";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-
-		// (2, 0) is 'x' inside b(), which has no parameter named x
-		let result = definition(URI, doc, { line: 2, character: 0 });
-
-		assert.match(null, result);
+		// x inside b(), which has no parameter named x
+		assert.match(null, definitionAt(cursors("function a(x) {}\nfunction b() {\n$0x;\n}")));
 	});
 
 	it('jumps to a rest parameter of a function', () => {
-		// function f(a, ...rest) — 'rest' is at col 17 (after 'function f(a, ...')
-		let text = "function f(a, ...rest) {\n\treturn rest;\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		let result = definition(URI, doc, { line: 1, character: 8 });  // rest in `return rest`
+		let src = cursors("function f(a, ...$1rest) {\n\treturn $0rest;\n}\n");
+		let result = definitionAt(src);
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(17, result.range.start.character);
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to a rest parameter of an arrow function', () => {
-		// let g = (...xs) => xs; — 'xs' at col 12
-		let text = "let g = (...xs) => xs;\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		let result = definition(URI, doc, { line: 0, character: 19 });  // xs in the body
-		assert.match(0, result.range.start.line);
-		assert.match(12, result.range.start.character);
+		let src = cursors("let g = (...$1xs) => $0xs;\n");
+		let result = definitionAt(src);
+		assert.match(src.at[1], result.range.start);
 	});
 });
 
 describe('definition — local (block/loop/catch) declarations', () => {
 	it('jumps to a function-local let declaration', () => {
-		let text = "function f() {\n\tlet x = 1;\n\treturn x;\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		// (2, 8) is 'x' in `return x`
-		let result = definition(URI, doc, { line: 2, character: 8 });
+		let src = cursors("function f() {\n\tlet $1x = 1;\n\treturn $0x;\n}\n");
+		let result = definitionAt(src);
 		assert.match(URI, result.uri);
-		assert.match(1, result.range.start.line);        // `let x` on line 1
-		assert.match(5, result.range.start.character);   // 'x' after '\tlet '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('resolves to the innermost let when a nested block shadows the name', () => {
-		//  0: function f() {
-		//  1: \tlet x = 1;
-		//  2: \t{
-		//  3: \t\tlet x = 2;      <- inner 'x' at col 6 (two tabs + 'let ')
-		//  4: \t\treturn x;
-		let text = "function f() {\n\tlet x = 1;\n\t{\n\t\tlet x = 2;\n\t\treturn x;\n\t}\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		// (4, 9) is 'x' in the inner block's `return x` (two tabs + 'return ')
-		let result = definition(URI, doc, { line: 4, character: 9 });
+		let src = cursors("function f() {\n\tlet x = 1;\n\t{\n\t\tlet $1x = 2;\n\t\treturn $0x;\n\t}\n}\n");
+		let result = definitionAt(src);
 		assert.match(URI, result.uri);
-		assert.match(3, result.range.start.line);        // inner `let x` on line 3
-		assert.match(6, result.range.start.character);
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to a for-in loop variable', () => {
-		let text = "for (let k in obj) {\n\tprint(k);\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		// (1, 7) is 'k' in print(k)
-		let result = definition(URI, doc, { line: 1, character: 7 });
+		let src = cursors("for (let $1k in obj) {\n\tprint($0k);\n}\n");
+		let result = definitionAt(src);
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(9, result.range.start.character);   // 'k' after 'for (let '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to a C-style for loop variable', () => {
-		let text = "for (let i = 0; i < 3; i++) {\n\tprint(i);\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		let result = definition(URI, doc, { line: 1, character: 7 });
-		assert.match(0, result.range.start.line);
-		assert.match(9, result.range.start.character);   // 'i' after 'for (let '
+		let src = cursors("for (let $1i = 0; i < 3; i++) {\n\tprint($0i);\n}\n");
+		let result = definitionAt(src);
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to a catch parameter', () => {
-		let text = "try {} catch (e) {\n\tprint(e);\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		let result = definition(URI, doc, { line: 1, character: 7 });
-		assert.match(0, result.range.start.line);
-		assert.match(14, result.range.start.character);  // 'e' after 'try {} catch ('
+		let src = cursors("try {} catch ($1e) {\n\tprint($0e);\n}\n");
+		let result = definitionAt(src);
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to the value variable of a two-variable for-in', () => {
-		// for (let k, v in obj) — 'v' is bound at col 12 on line 0
-		let text = "let obj = {};\nfor (let k, v in obj) {\n\tprint(v);\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		let result = definition(URI, doc, { line: 2, character: 7 });  // v in print(v)
+		let src = cursors("let obj = {};\nfor (let k, $1v in obj) {\n\tprint($0v);\n}\n");
+		let result = definitionAt(src);
 		assert.match(URI, result.uri);
-		assert.match(1, result.range.start.line);
-		assert.match(12, result.range.start.character);  // 'v' after 'for (let k, '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('a for-in without let assigns, so gd resolves to the real declaration', () => {
 		// `for (x in …)` does not declare x; gd on the body x must reach `let x`.
-		let text = "let x = 0;\nfor (x in [1]) {\n\tprint(x);\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		let result = definition(URI, doc, { line: 2, character: 7 });
-		assert.match(0, result.range.start.line);         // the `let x`, not the loop header
-		assert.match(4, result.range.start.character);
+		let src = cursors("let $1x = 0;\nfor (x in [1]) {\n\tprint($0x);\n}\n");
+		let result = definitionAt(src);
+		assert.match(src.at[1], result.range.start);  // the `let x`, not the loop header
 	});
 
 	it('resolves an outer-function local captured by a nested closure', () => {
-		//  1: \tlet cap = 1;      <- outer local, 'cap' at col 5
-		//  3: \t\treturn cap;     <- captured inside inner(), 'cap' at col 9
-		let text = "function outer() {\n\tlet cap = 1;\n\tfunction inner() {\n\t\treturn cap;\n\t}\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		let result = definition(URI, doc, { line: 3, character: 9 });
+		let src = cursors("function outer() {\n\tlet $1cap = 1;\n\tfunction inner() {\n\t\treturn $0cap;\n\t}\n}\n");
+		let result = definitionAt(src);
 		assert.match(URI, result.uri);
-		assert.match(1, result.range.start.line);         // outer's `let cap`
-		assert.match(5, result.range.start.character);
+		assert.match(src.at[1], result.range.start);  // outer's `let cap`
 	});
 
 	it('resolves a parameter that shadows a builtin name to the parameter', () => {
 		// 'length' is a builtin; as a param it must resolve locally, not to global.d.uc
-		let text = "function f(length) {\n\treturn length;\n}\n";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
-		let result = definition(URI, doc, { line: 1, character: 8 });
+		let src = cursors("function f($1length) {\n\treturn $0length;\n}\n");
+		let result = definitionAt(src);
 		assert.match(URI, result.uri);                    // the param, not the builtin file
-		assert.match(0, result.range.start.line);
-		assert.match(11, result.range.start.character);   // 'length' after 'function f('
+		assert.match(src.at[1], result.range.start);
 	});
 });
 
@@ -548,18 +368,17 @@ describe('definition — local (block/loop/catch) declarations', () => {
 // whole binderIn/localScopeDef surface in one loop — the two-var and no-let
 // for-in bugs would have been caught here by shrinking.
 describe('definition — local binder identity (property)', () => {
-	// Reference sites are placed on their own line so the use column is fixed
-	// regardless of the (random) identifier length.
+	// $0 marks the use site.
 	function buildBinderSource(shape, n) {
-		if (shape === "let")     return { src: sprintf("function f() {\n\tlet %s = 1;\n\t%s;\n}\n", n, n),                 use: { line: 2, character: 1 } };
-		if (shape === "block")   return { src: sprintf("function f() {\n\t{\n\t\tlet %s = 1;\n\t\t%s;\n\t}\n}\n", n, n),   use: { line: 3, character: 2 } };
-		if (shape === "for-in")  return { src: sprintf("for (let %s in [1]) {\n\t%s;\n}\n", n, n),                        use: { line: 1, character: 1 } };
-		if (shape === "for-in2") return { src: sprintf("for (let k, %s in obj) {\n\t%s;\n}\n", n, n),                     use: { line: 1, character: 1 } };
-		if (shape === "for-c")   return { src: sprintf("for (let %s = 0; %s < 3; %s++) {\n\t0;\n}\n", n, n, n),           use: { line: 0, character: 9 } };
-		if (shape === "catch")   return { src: sprintf("try {} catch (%s) {\n\t%s;\n}\n", n, n),                          use: { line: 1, character: 1 } };
-		if (shape === "param")   return { src: sprintf("function f(%s) {\n\t%s;\n}\n", n, n),                             use: { line: 1, character: 1 } };
+		if (shape === "let")     return cursors(sprintf("function f() {\n\tlet %s = 1;\n\t$0%s;\n}\n", n, n));
+		if (shape === "block")   return cursors(sprintf("function f() {\n\t{\n\t\tlet %s = 1;\n\t\t$0%s;\n\t}\n}\n", n, n));
+		if (shape === "for-in")  return cursors(sprintf("for (let %s in [1]) {\n\t$0%s;\n}\n", n, n));
+		if (shape === "for-in2") return cursors(sprintf("for (let k, %s in obj) {\n\t$0%s;\n}\n", n, n));
+		if (shape === "for-c")   return cursors(sprintf("for (let $0%s = 0; %s < 3; %s++) {\n\t0;\n}\n", n, n, n));
+		if (shape === "catch")   return cursors(sprintf("try {} catch (%s) {\n\t$0%s;\n}\n", n, n));
+		if (shape === "param")   return cursors(sprintf("function f(%s) {\n\t$0%s;\n}\n", n, n));
 		// arrow bare param
-		return { src: sprintf("let g = %s => {\n\treturn %s;\n};\n", n, n),                                               use: { line: 1, character: 8 } };
+		return cursors(sprintf("let g = %s => {\n\treturn $0%s;\n};\n", n, n));
 	}
 
 	// The identifier text at a resolved Location's start position.
@@ -577,47 +396,37 @@ describe('definition — local binder identity (property)', () => {
 			ctx.classify(c.shape, true);
 			let b = buildBinderSource(c.shape, c.name);
 			dag.init(_config);
-			documents.open(URI, b.src, 1);
-			dag.add(URI, b.src, documents.get(URI).tree);
-			let r = definition(URI, documents.get(URI), b.use);
+			documents.open(URI, b.text, 1);
+			dag.add(URI, b.text, documents.get(URI).tree);
+			let r = definition(URI, documents.get(URI), b.at[0]);
 			documents.close(URI);
 			dag.remove(URI);
 			assert.match(true, r !== null);
-			assert.match(c.name, identAt(b.src, r.range.start));
+			assert.match(c.name, identAt(b.text, r.range.start));
 		});
 });
 
 describe('definition — member expression (record type, named import)', () => {
 	beforeEach(() => {
 		dag.init(_config);
-		dag.addFromDisk(TS_URI);
+		dag.addFromDisk(PARSER_URI);
 	});
 
-	afterEach(() => dag.remove(TS_URI));
+	afterEach(() => dag.remove(PARSER_URI));
 
 	it('jumps to record field key when cursor is on property of named import', () => {
-		// tree_sitter exports { newParser, parse, ... } as top-level functions,
-		// but also queryMatches etc.  Use a local record to keep the test
-		// self-contained and independent of tree_sitter.uc layout.
-		let text = "let api = { greet: function(name) {}, bye: function() {} };\napi.greet;";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-
-		// cursor on 'greet' in 'api.greet' — line 1, character 4
-		let result = definition(URI, documents.get(URI), { line: 1, character: 4 });
+		// A local record keeps the test self-contained, independent of any
+		// module's layout.
+		let src = cursors("let api = { $1greet: function(name) {}, bye: function() {} };\napi.$0greet;");
+		let result = definitionImporting(src);
 
 		assert.match(true, result !== null);
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(12, result.range.start.character);  // 'greet' after '{ '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('returns null when property does not exist on the record', () => {
-		let text = "let api = { greet: function() {} };\napi.doesNotExist;";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-
-		let result = definition(URI, documents.get(URI), { line: 1, character: 4 });
+		let result = definitionImporting(cursors("let api = { greet: function() {} };\napi.$0doesNotExist;"));
 
 		assert.match(null, result);
 	});
@@ -627,26 +436,17 @@ describe('definition — chained member expression', () => {
 	beforeEach(() => dag.init(_config));
 
 	it('jumps to a field on a nested record (a.b.c where a.b is a record)', () => {
-		// 'api.sub.go' — api.sub is a record with field 'go'
-		let text = "let api = { sub: { go: function() {}, stop: function() {} } };\napi.sub.go;";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-
-		// cursor on 'go' in 'api.sub.go' — line 1, character 8
-		let result = definition(URI, documents.get(URI), { line: 1, character: 8 });
+		// api.sub is a record with field 'go'
+		let src = cursors("let api = { sub: { $1go: function() {}, stop: function() {} } };\napi.sub.$0go;");
+		let result = definitionImporting(src);
 
 		assert.match(true, result !== null);
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(19, result.range.start.character);  // 'go' after '{ sub: { '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('returns null when intermediate member does not exist', () => {
-		let text = "let api = { sub: { go: function() {} } };\napi.missing.go;";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-
-		let result = definition(URI, documents.get(URI), { line: 1, character: 12 });
+		let result = definitionImporting(cursors("let api = { sub: { go: function() {} } };\napi.missing.$0go;"));
 
 		assert.match(null, result);
 	});
@@ -654,52 +454,42 @@ describe('definition — chained member expression', () => {
 
 describe('definition — brace-spanning template tag bindings', () => {
 	it('jumps to a for-in loop variable declared in a brace-spanning tag', () => {
-		let text = "{% for (let x in [1]) { %}\n{{ x }}\n{% } %}\n";
-		documents.open(URI, text, 1);
-		let result = definition(URI, documents.get(URI), { line: 1, character: 3 });
+		let src = cursors("{% for (let $1x in [1]) { %}\n{{ $0x }}\n{% } %}\n");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(12, result.range.start.character);  // 'x' after '{% for (let '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to a C-for initializer variable in a brace-spanning tag', () => {
-		let text = "{% for (let i = 0; i < 3; i++) { %}\n{{ i }}\n{% } %}\n";
-		documents.open(URI, text, 1);
-		let result = definition(URI, documents.get(URI), { line: 1, character: 3 });
+		let src = cursors("{% for (let $1i = 0; i < 3; i++) { %}\n{{ $0i }}\n{% } %}\n");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(12, result.range.start.character);  // 'i' after '{% for (let '
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to a catch parameter in a brace-spanning try tag', () => {
-		let text = "{% try { %}\nx\n{% } catch (e) { %}\n{{ e }}\n{% } %}\n";
-		documents.open(URI, text, 1);
-		let result = definition(URI, documents.get(URI), { line: 3, character: 3 });
+		let src = cursors("{% try { %}\nx\n{% } catch ($1e) { %}\n{{ $0e }}\n{% } %}\n");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(2, result.range.start.line);
-		assert.match(12, result.range.start.character);  // 'e' after '{% } catch ('
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to a parameter of a brace-spanning function tag', () => {
-		let text = "{% function f(a, b) { %}\n{{ a }}\n{% } %}\n";
-		documents.open(URI, text, 1);
-		let result = definition(URI, documents.get(URI), { line: 1, character: 3 });
+		let src = cursors("{% function f($1a, b) { %}\n{{ $0a }}\n{% } %}\n");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(14, result.range.start.character);  // 'a' after '{% function f('
+		assert.match(src.at[1], result.range.start);
 	});
 
 	it('jumps to a parameter of a colon-form function tag', () => {
-		let text = "{% function g(a): %}\n{{ a }}\n{% endfunction %}\n";
-		documents.open(URI, text, 1);
-		let result = definition(URI, documents.get(URI), { line: 1, character: 3 });
+		let src = cursors("{% function g($1a): %}\n{{ $0a }}\n{% endfunction %}\n");
+		let result = definitionAt(src);
 
 		assert.match(URI, result.uri);
-		assert.match(0, result.range.start.line);
-		assert.match(14, result.range.start.character);  // 'a' after '{% function g('
+		assert.match(src.at[1], result.range.start);
 	});
 });

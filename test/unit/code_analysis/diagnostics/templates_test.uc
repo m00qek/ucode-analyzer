@@ -3,6 +3,7 @@ import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { diagnosticsFor } from 'ucode_analyzer.code_analysis.diagnostics';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
+import * as fixture from 'fixture';
 
 // Each diagnostic reads a template's code exactly as a script's: inside {% %}
 // the code is the same statement stream. One snippet per pass.
@@ -16,7 +17,7 @@ const SNIPPETS = {
 	'prefer-strict-equality': "let a = 1;\nif (a == 2) print(a);",
 	'unreachable-code':       "function f() { return 1; print(2); }\nf();",
 	'format-argument-count':  "printf('%d %d\\n', 1);",
-	'unknown-import-symbol':  "import { nope } from 'tree_sitter';\nprint(nope);",
+	'unknown-import-symbol':  "import { nope } from 'parser';\nprint(nope);",
 	'null-access':            "let n = null;\nprint(n.x);",
 	'jsdoc-param-mismatch':   "/**\n * @param {int} a\n */\nfunction f(b) { return b; }\nf(1);",
 	'missing-return':         "/** @returns {int} */\nfunction f(x) { if (x) return 1; }\nf(1);",
@@ -24,7 +25,7 @@ const SNIPPETS = {
 };
 
 const GLOBAL = 'file:///app/src/ucode_analyzer/declarations/global.d.uc';
-dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } });
+dag.init(fixture.config());
 dag.addFromDisk(GLOBAL);
 initBuiltinsFromDag(GLOBAL);
 

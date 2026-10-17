@@ -1,5 +1,6 @@
 import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -34,25 +35,27 @@ describe('textDocument/foldingRange', () => {
 	});
 
 	it('returns a range for a multi-line function body', () => {
-		lsp.open(proc, 'file:///t.uc', "function foo() {\n  let x = 1;\n  return x;\n}\n");
+		let src = cursors("$1function foo() {\n  let x = 1;\n  return x;\n$2}\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/foldingRange', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
 		let resp = lsp.receive(proc);
 		assert.match(1, length(resp.result));
-		assert.match(0, resp.result[0].startLine);
-		assert.match(3, resp.result[0].endLine);
+		assert.match(src.at[1].line, resp.result[0].startLine);
+		assert.match(src.at[2].line, resp.result[0].endLine);
 	});
 
 	it('emits an imports range for multiple consecutive imports', () => {
-		lsp.open(proc, 'file:///t.uc', "import * as a from 'utest';\nimport * as b from 'utest';\n\nlet x = 1;\n");
+		let src = cursors("$1import * as a from 'utest';\n$2import * as b from 'utest';\n\nlet x = 1;\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/foldingRange', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
 		let resp = lsp.receive(proc);
 		let imp = filter(resp.result, (r) => r.kind === 'imports')[0];
 		assert.match(true, imp !== null);
-		assert.match(0, imp.startLine);
-		assert.match(1, imp.endLine);
+		assert.match(src.at[1].line, imp.startLine);
+		assert.match(src.at[2].line, imp.endLine);
 	});
 });

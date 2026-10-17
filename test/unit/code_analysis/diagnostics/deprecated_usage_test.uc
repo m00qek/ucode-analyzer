@@ -2,15 +2,13 @@ import { describe, it, assert, beforeEach, afterEach, prop, gen, contains } from
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { deprecatedUsage } from 'ucode_analyzer.code_analysis.diagnostics.deprecated_usage';
+import { cursors } from 'cursor';
+import * as fixture from 'fixture';
 
 let URI   = 'file:///test.uc';
 let URI_B = 'file:///dep.uc';
 
-let _config = {
-	workspaceDir: '/app',
-	selfSrcDir: '/app/src/ucode_analyzer',
-	workspace: { libraryPaths: ['src'] },
-};
+let _config = fixture.config();
 
 beforeEach(() => dag.init(_config));
 
@@ -53,19 +51,17 @@ describe('diagnostics — deprecated usage', () => {
 	});
 
 	it('flags a deprecated imported symbol but not a non-deprecated one', () => {
-		// fixtures/deprecated.uc exports oldFn (@deprecated) and newFn (not).
-		let DEP = 'file:///app/test/fixtures/deprecated.uc';
-		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
+		// deprecated.uc exports oldFn (@deprecated) and newFn (not).
+		let DEP = fixture.uri('deprecated.uc');
 		dag.addFromDisk(DEP);
-		let src = "import { oldFn, newFn } from 'fixtures.deprecated';\noldFn();\nnewFn();\n";
-		documents.open(URI, src, 1);
-		dag.add(URI, src, documents.get(URI).tree);
+		let src = cursors("import { oldFn, newFn } from 'deprecated';\n$0oldFn$1();\nnewFn();\n");
+		documents.open(URI, src.text, 1);
+		dag.add(URI, src.text, documents.get(URI).tree);
 
 		let diags = deprecatedUsage(URI, documents.get(URI));
 		// only the oldFn() call is flagged; newFn() and the import_specifier are not
 		assert.match(1, length(diags));
-		assert.match(1, diags[0].range.start.line);   // line 1: `oldFn();`
-		assert.match(0, diags[0].range.start.character);
+		assert.match({ start: src.at[0], end: src.at[1] }, diags[0].range);
 		dag.remove(DEP);
 	});
 
@@ -79,11 +75,10 @@ describe('diagnostics — deprecated usage', () => {
 	});
 
 	it('reports the correct range for the deprecated identifier', () => {
-		let doc = open("/** @deprecated */\nexport function old() {};\nold();\n");
-		let diags = deprecatedUsage(URI, doc);
+		let src = cursors("/** @deprecated */\nexport function old() {};\n$0old$1();\n");
+		let diags = deprecatedUsage(URI, open(src.text));
 		assert.match(1, length(diags));
-		assert.match(2, diags[0].range.start.line);   // 0-indexed: line 2 is 'old();'
-		assert.match(0, diags[0].range.start.character);
+		assert.match({ start: src.at[0], end: src.at[1] }, diags[0].range);
 	});
 });
 

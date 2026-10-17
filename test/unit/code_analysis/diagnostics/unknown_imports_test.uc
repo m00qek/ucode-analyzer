@@ -2,14 +2,12 @@ import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { unknownImports } from 'ucode_analyzer.code_analysis.diagnostics.unknown_imports';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { cursors } from 'cursor';
+import * as fixture from 'fixture';
 
 let URI = 'file:///test.uc';
 
-let _config = {
-	workspaceDir: '/app',
-	selfSrcDir: '/app/src/ucode_analyzer',
-	workspace: { libraryPaths: ['src'] },
-};
+let _config = fixture.config();
 
 beforeEach(() => dag.init(_config));
 
@@ -20,7 +18,7 @@ afterEach(() => {
 
 describe('diagnostics — unknown imports', () => {
 	it('returns empty list for a valid import', () => {
-		let text = "import * as ts from 'tree_sitter';\n";
+		let text = "import * as ts from 'parser';\n";
 		documents.open(URI, text, 1);
 		dag.add(URI, text, documents.get(URI).tree);
 
@@ -40,14 +38,13 @@ describe('diagnostics — unknown imports', () => {
 	});
 
 	it('highlights the module string node, not the whole statement', () => {
-		let text = "import { foo } from 'no_such_module';\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
+		let src = cursors("import { foo } from $0'no_such_module'$1;\n");
+		documents.open(URI, src.text, 1);
+		dag.add(URI, src.text, documents.get(URI).tree);
 
 		let r = unknownImports(URI, documents.get(URI))[0].range;
 
-		assert.match(0, r.start.line);
-		assert.match(true, r.start.character >= 20);
+		assert.match({ start: src.at[0], end: src.at[1] }, r);
 	});
 
 	it('reports one error per unresolved import', () => {

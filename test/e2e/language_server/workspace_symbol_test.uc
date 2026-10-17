@@ -1,5 +1,6 @@
 import { describe, it, assert, setup, teardown, contains, not } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -33,7 +34,8 @@ describe('workspace/symbol', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, type(resp.result) === 'array');
-		let names = map(resp.result, (s) => s.name);
+		// The fixture workspace exports a greet of its own: count only t.uc's.
+		let names = map(filter(resp.result, (s) => s.location.uri === 'file:///t.uc'), (s) => s.name);
 		assert.match(contains(['greet']), names);
 		assert.match(contains(['count']), names);
 	});
@@ -51,7 +53,8 @@ describe('workspace/symbol', () => {
 	});
 
 	it('result includes location with uri and range', () => {
-		lsp.open(proc, 'file:///t.uc', "export function handleConn() {};\n");
+		let src = cursors("export function $1handleConn$2() {};\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: 'handleConn' } });
 		let resp = lsp.receive(proc);
@@ -59,8 +62,7 @@ describe('workspace/symbol', () => {
 		let s = filter(resp.result, (s) => s.name === 'handleConn' && s.location.uri === 'file:///t.uc')[0];
 		assert.match(true, s !== null);
 		assert.match('file:///t.uc', s.location.uri);
-		assert.match(true, type(s.location.range) === 'object');
-		assert.match(0, s.location.range.start.line);
+		assert.match({ start: src.at[1], end: src.at[2] }, s.location.range);
 	});
 
 	it('non-exported symbols are not returned', () => {

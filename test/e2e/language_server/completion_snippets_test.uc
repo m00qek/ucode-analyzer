@@ -1,5 +1,6 @@
 import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -13,15 +14,21 @@ teardown(() => {
 	assert.match(0, lsp.close(proc));
 });
 
+// Open the marked text and ask for completions at $0.
+function completeAt(marked) {
+	let src = cursors(marked);
+	lsp.open(proc, 'file:///t.uc', src.text);
+	lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
+		textDocument: { uri: 'file:///t.uc' },
+		position: src.at[0],
+	}});
+	return lsp.receive(proc);
+}
+
 describe('completion — snippets and @deprecated', () => {
 
 	it('function item has insertTextFormat 2 and param snippet', () => {
-		lsp.open(proc, 'file:///t.uc', "/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 5, character: 0 },
-		}});
-		let resp = lsp.receive(proc);
+		let resp = completeAt("/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\n$0");
 		let item = filter(resp.result, (i) => i.label === 'add')[0];
 		assert.match(true, item !== null);
 		assert.match(2, item.insertTextFormat);
@@ -29,40 +36,24 @@ describe('completion — snippets and @deprecated', () => {
 	});
 
 	it('zero-param function gets empty-parens snippet', () => {
-		lsp.open(proc, 'file:///t.uc', "function ping() { return true; }\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
-		}});
-		let resp = lsp.receive(proc);
+		let resp = completeAt("function ping() { return true; }\n$0");
 		let item = filter(resp.result, (i) => i.label === 'ping')[0];
 		assert.match(true, item !== null);
 		assert.match('ping()', item.insertText);
 	});
 
 	it('variable items have no snippet', () => {
-		lsp.open(proc, 'file:///t.uc', "let count = 0;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
-		}});
-		let resp = lsp.receive(proc);
+		let resp = completeAt("let count = 0;\n$0");
 		let item = filter(resp.result, (i) => i.label === 'count')[0];
 		assert.match(true, item !== null);
 		assert.match(true, item.insertText === null);
 	});
 
 	it('@deprecated export gets tags: [1] in import-context completion', () => {
-		// fixtures/deprecated.uc exports oldFn (@deprecated) and newFn (not deprecated).
+		// deprecated.uc exports oldFn (@deprecated) and newFn (not deprecated).
 		// Opening a file that imports from it and completing inside the import braces
 		// goes through exportsOfModule, which should mark oldFn with tags: [1].
-		lsp.open(proc, 'file:///t.uc', "import { oldFn, newFn } from 'fixtures.deprecated';\n");
-		// Cursor inside the import braces (character 10) triggers import-context path.
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 10 },
-		}});
-		let resp = lsp.receive(proc);
+		let resp = completeAt("import { o$0ldFn, newFn } from 'deprecated';\n");
 		let oldItem = filter(resp.result, (i) => i.label === 'oldFn')[0];
 		let newItem = filter(resp.result, (i) => i.label === 'newFn')[0];
 		assert.match(true, oldItem !== null);

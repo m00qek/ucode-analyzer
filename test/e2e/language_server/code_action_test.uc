@@ -1,5 +1,6 @@
 import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -56,11 +57,12 @@ describe('textDocument/codeAction', () => {
 	});
 
 	it('returns null when context diagnostics are empty', () => {
-		lsp.open(proc, 'file:///t3.uc', "let x = 1;\nx;\n");
+		let src = cursors("$0let x = 1;\nx;\n");
+		lsp.open(proc, 'file:///t3.uc', src.text);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 3, method: 'textDocument/codeAction', params: {
 			textDocument: { uri: 'file:///t3.uc' },
-			range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+			range: { start: src.at[0], end: src.at[0] },
 			context: { diagnostics: [] },
 		}});
 
@@ -70,7 +72,8 @@ describe('textDocument/codeAction', () => {
 
 	it('remove_unused_import: removes the whole import statement', () => {
 		let uri = 'file:///t4.uc';
-		lsp.open(proc, uri, "import { unusedFn } from 'utest';\nlet x = 1;\nx;\n");
+		let src = cursors("$1import { unusedFn } from 'utest';\n$2let x = 1;\nx;\n");
+		lsp.open(proc, uri, src.text);
 		let diags = lsp.documentDiagnostics(proc, uri).items;
 		let diag = filter(diags, (d) => d.code === 'unused-import')[0];
 		assert.match(true, diag !== null);
@@ -88,16 +91,14 @@ describe('textDocument/codeAction', () => {
 		assert.match(true, action.isPreferred);
 		let edit = action.edit.changes[uri][0];
 		assert.match('', edit.newText);
-		// Whole import line removed: starts at line 0 col 0, ends at line 1 col 0
-		assert.match(0, edit.range.start.line);
-		assert.match(0, edit.range.start.character);
-		assert.match(1, edit.range.end.line);
-		assert.match(0, edit.range.end.character);
+		// The whole import line, newline included
+		assert.match({ start: src.at[1], end: src.at[2] }, edit.range);
 	});
 
 	it('remove_unused_import: removes only the unused specifier from a multi-import', () => {
 		let uri = 'file:///t5.uc';
-		lsp.open(proc, uri, "import { describe, it } from 'utest';\nit;\n");
+		let src = cursors("import { $1describe, $2it } from 'utest';\nit;\n");
+		lsp.open(proc, uri, src.text);
 		let diags = lsp.documentDiagnostics(proc, uri).items;
 		let diag = filter(diags, (d) => d.code === 'unused-import')[0];
 		assert.match(true, diag !== null);
@@ -113,13 +114,13 @@ describe('textDocument/codeAction', () => {
 		let edit = resp.result[0].edit.changes[uri][0];
 		assert.match('', edit.newText);
 		// Only the specifier is removed, not the whole line
-		assert.match(0, edit.range.start.line);
-		assert.match(0, edit.range.end.line);
+		assert.match({ start: src.at[1], end: src.at[2] }, edit.range);
 	});
 
 	it('remove_duplicate_key: removes the duplicate pair', () => {
 		let uri = 'file:///t6.uc';
-		lsp.open(proc, uri, "let x = { a: 1, b: 2, a: 3 };\nx;\n");
+		let src = cursors("let x = { a: 1, b: 2$1, a: 3$2 };\nx;\n");
+		lsp.open(proc, uri, src.text);
 		let diags = lsp.documentDiagnostics(proc, uri).items;
 		let diag = filter(diags, (d) => d.code === 'duplicate-key')[0];
 		assert.match(true, diag !== null);
@@ -137,13 +138,13 @@ describe('textDocument/codeAction', () => {
 		assert.match(true, action.isPreferred);
 		let edit = action.edit.changes[uri][0];
 		assert.match('', edit.newText);
-		// Edit is on line 0 (single-line object literal)
-		assert.match(0, edit.range.start.line);
+		assert.match({ start: src.at[1], end: src.at[2] }, edit.range);
 	});
 
 	it('change_const_to_let: replaces the const keyword with let', () => {
 		let uri = 'file:///t7.uc';
-		lsp.open(proc, uri, "const x = 1;\nx = 2;\n");
+		let src = cursors("$1const$2 x = 1;\nx = 2;\n");
+		lsp.open(proc, uri, src.text);
 		let diags = lsp.documentDiagnostics(proc, uri).items;
 		let diag = filter(diags, (d) => d.code === 'const-assignment')[0];
 		assert.match(true, diag !== null);
@@ -161,9 +162,7 @@ describe('textDocument/codeAction', () => {
 		assert.match(false, action.isPreferred);
 		let edit = action.edit.changes[uri][0];
 		assert.match('let', edit.newText);
-		// const keyword is at line 0, character 0
-		assert.match(0, edit.range.start.line);
-		assert.match(0, edit.range.start.character);
+		assert.match({ start: src.at[1], end: src.at[2] }, edit.range);
 	});
 
 	it('change_const_to_let: deduplicates when multiple assignments to same const', () => {
@@ -186,10 +185,11 @@ describe('textDocument/codeAction', () => {
 	});
 
 	it('generate_jsdoc: offers a refactoring at a function with no doc', () => {
-		lsp.open(proc, 'file:///j.uc', "function add(a, b) {\n\treturn 1;\n}\n");
+		let src = cursors("function $0add(a, b) {\n\treturn 1;\n}\n");
+		lsp.open(proc, 'file:///j.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 7, method: 'textDocument/codeAction', params: {
 			textDocument: { uri: 'file:///j.uc' },
-			range: { start: { line: 0, character: 9 }, end: { line: 0, character: 9 } },
+			range: { start: src.at[0], end: src.at[0] },
 			context: { diagnostics: [] },
 		}});
 		let resp = lsp.receive(proc);

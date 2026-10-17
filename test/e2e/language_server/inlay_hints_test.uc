@@ -1,5 +1,6 @@
 import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let FULL_RANGE = { start: { line: 0, character: 0 }, end: { line: 9999, character: 0 } };
 let proc;
@@ -35,7 +36,8 @@ describe('textDocument/inlayHint', () => {
 	});
 
 	it('emits a type hint for a function-call initializer', () => {
-		lsp.open(proc, 'file:///t.uc', "function makeStr() { return 'hello'; }\nlet y = makeStr();\n");
+		let src = cursors("function makeStr() { return 'hello'; }\nlet y$0 = makeStr();\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/inlayHint', params: {
 			textDocument: { uri: 'file:///t.uc' }, range: FULL_RANGE,
 		}});
@@ -43,7 +45,7 @@ describe('textDocument/inlayHint', () => {
 		let typeHints = filter(resp.result, (h) => h.kind === 1);
 		assert.match(1, length(typeHints));
 		assert.match(': string', typeHints[0].label);
-		assert.match(1, typeHints[0].position.line);
+		assert.match(src.at[0], typeHints[0].position);
 	});
 
 	it('emits parameter name hints for a documented call', () => {
@@ -70,15 +72,16 @@ describe('textDocument/inlayHint', () => {
 	});
 
 	it('respects range: hints outside visible range are not returned', () => {
-		lsp.open(proc, 'file:///t.uc', "function makeStr() { return 'x'; }\nlet a = makeStr();\nlet b = makeStr();\n");
-		// Only line 1 is in range.
+		// Only the `let a` line is in range.
+		let src = cursors("function makeStr() { return 'x'; }\n$1let a$0 = makeStr();\n$2let b = makeStr();\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/inlayHint', params: {
 			textDocument: { uri: 'file:///t.uc' },
-			range: { start: { line: 1, character: 0 }, end: { line: 2, character: 0 } },
+			range: { start: src.at[1], end: src.at[2] },
 		}});
 		let resp = lsp.receive(proc);
 		let typeHints = filter(resp.result, (h) => h.kind === 1);
 		assert.match(1, length(typeHints));
-		assert.match(1, typeHints[0].position.line);
+		assert.match(src.at[0], typeHints[0].position);
 	});
 });

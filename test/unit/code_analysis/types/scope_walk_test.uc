@@ -6,6 +6,7 @@ import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_brid
 import { buildScopeMap, scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import * as fixture from 'fixture';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -13,13 +14,9 @@ function parse(text) {
 	return ts.parse(_parser, text);
 }
 
-let URI = 'file:///app/src/test_walk.uc';
+let URI = fixture.uri('test_walk.uc');
 
-let _config = {
-	workspaceDir: '/app',
-	selfSrcDir: '/app/src/ucode_analyzer',
-	workspace: { libraryPaths: ['src'] },
-};
+let _config = fixture.config();
 
 dag.init(_config);
 let _globalUri = dag.resolveSpecifier('global');

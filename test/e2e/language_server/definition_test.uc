@@ -1,5 +1,7 @@
 import { describe, it, assert, setup, teardown, contains } from 'utest';
 import * as lsp from 'client';
+import { cursors, locate } from 'cursor';
+import * as fixture from 'fixture';
 
 let proc;
 
@@ -13,213 +15,134 @@ teardown(() => {
 	assert.match(0, lsp.close(proc));
 });
 
+// Open the cursors' text and ask for the definition at $0.
+function definitionAt(src) {
+	lsp.open(proc, 'file:///t.uc', src.text);
+	lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
+		textDocument: { uri: 'file:///t.uc' },
+		position: src.at[0],
+	}});
+	return lsp.receive(proc);
+}
+
+// Where `parse` is declared in parser.uc (after 'export function ').
+function parseDecl() {
+	return locate(fixture.read('parser.uc'), 'export function parse(', 0, length('export function '));
+}
+
 describe('textDocument/definition', () => {
 
 	it('returns the location of a local declaration', () => {
-		lsp.open(proc, 'file:///t.uc', "let x = 5;\nx;");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },  // 'x' reference on line 1
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("let $1x = 5;\n$0x;");
+		let resp = definitionAt(src);
 
 		assert.match(1, resp.id);
 		assert.match('file:///t.uc', resp.result.uri);
-		assert.match(0, resp.result.range.start.line);       // declaration on line 0
-		assert.match(4, resp.result.range.start.character);  // 'x' at col 4
+		assert.match(src.at[1], resp.result.range.start);
 	});
 
 	it('returns null for an unknown identifier', () => {
-		lsp.open(proc, 'file:///t.uc', "foo;");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 0 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = definitionAt(cursors("$0foo;"));
 
 		assert.match(1, resp.id);
 		assert.match(null, resp.result);
 	});
 
 	it('returns the location of a local function declaration', () => {
-		lsp.open(proc, 'file:///t.uc', "function greet() {}\ngreet;");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("function $1greet() {}\n$0greet;");
+		let resp = definitionAt(src);
 
 		assert.match(1, resp.id);
 		assert.match('file:///t.uc', resp.result.uri);
-		assert.match(0, resp.result.range.start.line);
-		assert.match(9, resp.result.range.start.character);  // 'greet' after 'function '
+		assert.match(src.at[1], resp.result.range.start);
 	});
 
 	it('returns null for a non-identifier node', () => {
-		lsp.open(proc, 'file:///t.uc', "let x = 5;");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 0, character: 0 },  // 'l' in 'let' — anonymous token
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = definitionAt(cursors("$0let x = 5;"));  // 'let' — anonymous token
 
 		assert.match(1, resp.id);
 		assert.match(null, resp.result);
 	});
 
 	it('follows a named import to an inline export function', () => {
-		// parse is at line 83 col 16 in tree_sitter.uc (after 'export function ')
-		lsp.open(proc, 'file:///t.uc', "import { parse } from 'tree_sitter';\nparse;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = definitionAt(cursors("import { parse } from 'parser';\n$0parse;\n"));
 
 		assert.match(1, resp.id);
-		assert.match(contains('tree_sitter'), resp.result.uri);
-		assert.match(83, resp.result.range.start.line);
-		assert.match(16, resp.result.range.start.character);
+		assert.match(fixture.uri('parser.uc'), resp.result.uri);
+		assert.match(parseDecl(), resp.result.range.start);
 	});
 
 	it('follows a named import to a function declared via export { name }', () => {
-		// test/fixtures/greet.uc: function greet() {}  export { greet };
-		lsp.open(proc, 'file:///t.uc', "import { greet } from 'fixtures.greet';\ngreet;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
-		}});
-
-		let resp = lsp.receive(proc);
+		// greet.uc: function greet() {}  export { greet };
+		let resp = definitionAt(cursors("import { greet } from 'greet';\n$0greet;\n"));
 
 		assert.match(1, resp.id);
-		assert.match(contains('greet'), resp.result.uri);
-		assert.match(0, resp.result.range.start.line);
-		assert.match(9, resp.result.range.start.character);  // 'greet' after 'function '
+		assert.match(fixture.uri('greet.uc'), resp.result.uri);
+		assert.match(locate(fixture.read('greet.uc'), 'greet'), resp.result.range.start);
 	});
 
 	it('returns the location of an inline export let declaration', () => {
-		// 'export let count = 0' — 'count' starts at col 11 (after 'export let ')
-		lsp.open(proc, 'file:///t.uc', "export let count = 0;\ncount;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("export let $1count = 0;\n$0count;\n");
+		let resp = definitionAt(src);
 
 		assert.match(1, resp.id);
 		assert.match('file:///t.uc', resp.result.uri);
-		assert.match(0, resp.result.range.start.line);
-		assert.match(11, resp.result.range.start.character);
+		assert.match(src.at[1], resp.result.range.start);
 	});
 
 	it('returns the location of an inline export function declaration', () => {
-		// 'export function greet' — 'greet' starts at col 16 (after 'export function ')
-		lsp.open(proc, 'file:///t.uc', "export function greet() {};\ngreet;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("export function $1greet() {};\n$0greet;\n");
+		let resp = definitionAt(src);
 
 		assert.match(1, resp.id);
 		assert.match('file:///t.uc', resp.result.uri);
-		assert.match(0, resp.result.range.start.line);
-		assert.match(16, resp.result.range.start.character);
+		assert.match(src.at[1], resp.result.range.start);
 	});
 
 	it('jumps to parameter declaration when cursor is on a parameter reference', () => {
-		// 'ts' is at col 15 in 'function parse(ts, opts)'
-		lsp.open(proc, 'file:///t.uc', "function parse(ts, opts) {\nts;\n}");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },  // 'ts' reference inside body
-		}});
-
-		let resp = lsp.receive(proc);
+		let src = cursors("function parse($1ts, opts) {\n$0ts;\n}");
+		let resp = definitionAt(src);
 
 		assert.match(1, resp.id);
 		assert.match('file:///t.uc', resp.result.uri);
-		assert.match(0, resp.result.range.start.line);
-		assert.match(15, resp.result.range.start.character);
+		assert.match(src.at[1], resp.result.range.start);
 	});
 
 	it('jumps to module top when cursor is on a namespace import alias', () => {
-		lsp.open(proc, 'file:///t.uc', "import * as ts from 'tree_sitter';\nts;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },  // 'ts' alias reference
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = definitionAt(cursors("import * as p from 'parser';\n$0p;\n"));
 
 		assert.match(1, resp.id);
-		assert.match(contains('tree_sitter'), resp.result.uri);
-		assert.match(0, resp.result.range.start.line);
-		assert.match(0, resp.result.range.start.character);
+		assert.match(fixture.uri('parser.uc'), resp.result.uri);
+		assert.match({ line: 0, character: 0 }, resp.result.range.start);
 	});
 
 	it('jumps to the export when cursor is on a member expression property', () => {
-		// cursor on 'parse' (col 3) in 'ts.parse' — should jump to parse in tree_sitter.uc
-		lsp.open(proc, 'file:///t.uc', "import * as ts from 'tree_sitter';\nts.parse;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 3 },  // 'parse' in 'ts.parse'
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = definitionAt(cursors("import * as p from 'parser';\np.$0parse;\n"));
 
 		assert.match(1, resp.id);
-		assert.match(contains('tree_sitter'), resp.result.uri);
-		assert.match(83, resp.result.range.start.line);
-		assert.match(16, resp.result.range.start.character);
+		assert.match(fixture.uri('parser.uc'), resp.result.uri);
+		assert.match(parseDecl(), resp.result.range.start);
 	});
 
 	it('returns null for a property not exported by the module', () => {
-		lsp.open(proc, 'file:///t.uc', "import * as ts from 'tree_sitter';\nts.doesNotExist;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 3 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = definitionAt(cursors("import * as p from 'parser';\np.$0doesNotExist;\n"));
 
 		assert.match(1, resp.id);
 		assert.match(null, resp.result);
 	});
 
 	it('follows a renamed import to the original declaration', () => {
-		lsp.open(proc, 'file:///t.uc', "import { parse as p } from 'tree_sitter';\np;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 0 },
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = definitionAt(cursors("import { parse as p } from 'parser';\n$0p;\n"));
 
 		assert.match(1, resp.id);
-		assert.match(contains('tree_sitter'), resp.result.uri);
-		assert.match(83, resp.result.range.start.line);
-		assert.match(16, resp.result.range.start.character);
+		assert.match(fixture.uri('parser.uc'), resp.result.uri);
+		assert.match(parseDecl(), resp.result.range.start);
 	});
 
 	it('jumps to the field definition when cursor is on a member of a named import record', () => {
 		// assert is a named import from utest whose type is a record.
 		// Cursor on 'match' in 'assert.match' — should jump to 'match' key in assert.uc.
-		lsp.open(proc, 'file:///t.uc', "import { assert } from 'utest';\nassert.match;\n");
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/definition', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			position: { line: 1, character: 7 },  // 'match' in 'assert.match'
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = definitionAt(cursors("import { assert } from 'utest';\nassert.$0match;\n"));
 
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
