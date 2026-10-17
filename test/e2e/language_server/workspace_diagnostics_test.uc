@@ -85,10 +85,10 @@ describe('workspace/diagnostic', () => {
 			assert.match(-32801, first.error.code);
 	});
 
-	it("excludes the server's own bundled sources (selfSrcDir) from the report", () => {
-		// Nothing user-facing is open; /app/src/ucode_analyzer is selfSrcDir and must be excluded.
+	it("reports the server's own sources when they are the workspace", () => {
+		// /app is this checkout, so its sources are worked on, not a dependency.
 		let report = lsp.workspaceDiagnostics(proc, []);
-		let fromSrc = filter(report.items, (item) => index(item.uri, 'file:///app/src/ucode_analyzer/') === 0);
-		assert.match(0, length(fromSrc));
+		let lsp_uc = filter(report.items, (item) => item.uri === 'file:///app/src/ucode_analyzer/language_server/lsp.uc');
+		assert.match(1, length(lsp_uc));
 	});
 });

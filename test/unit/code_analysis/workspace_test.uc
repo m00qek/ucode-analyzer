@@ -2,7 +2,7 @@ import { describe, it, assert } from 'utest';
 import * as fs from 'fs';
 import { isWorkspaceUri, loadWorkspaceDocs } from 'ucode_analyzer.code_analysis.workspace';
 
-// selfSrcDir and one systemLibPath sit UNDER the workspace so their exclusion
+// selfSrcDir and one systemLibPath sit UNDER the workspace so their handling
 // (and its boundary) is actually exercised — a path outside /app is already
 // excluded by the workspace-dir check alone.
 let cfg = {
@@ -28,12 +28,8 @@ describe('workspace — isWorkspaceUri classification', () => {
 		assert.match(false, ws('/app-lib/x.uc'));
 	});
 
-	it('excludes the server bundled sources (selfSrcDir)', () => {
-		assert.match(false, ws('/app/vendor/src/util.uc'));
-	});
-
-	it('does not over-exclude a sibling of selfSrcDir (boundary)', () => {
-		assert.match(true, ws('/app/vendor/src-extra/util.uc'));
+	it('includes the server sources of a checkout in the workspace', () => {
+		assert.match(true, ws('/app/vendor/src/util.uc'));
 	});
 
 	it('excludes a system library path', () => {

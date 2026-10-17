@@ -204,5 +204,5 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 		});
 	}
 
-	return filter(tasks, (t) => t != null);
+	return filter(tasks, (t) => t !== null);
 };

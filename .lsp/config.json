@@ -1,1 +1,2 @@
-{ "workspace": { "libraryPaths": [ "src", "test", "test/helpers", "mod", "test/mod" ], "exclude": [ "third_party/**" ] } }
+{ "workspace": { "libraryPaths": [ "src", "test", "test/helpers", "mod", "test/mod" ], "exclude": [ "third_party/**" ],
+  "globals": { "src/ucode_analyzer/language_server/templates/**": [ "doc", "fields", "label", "module", "params", "returns", "signature", "since", "typeStr", "unavailable" ] } } }

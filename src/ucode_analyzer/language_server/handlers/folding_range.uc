@@ -1,22 +1,6 @@
 import * as ts from 'tree_sitter';
 import { offsetToPosition } from 'ucode_analyzer.code_analysis.positions';
 
-// Nodes whose statement_block bodies are good fold targets.
-let BLOCK_PARENTS = {
-	function_declaration: true,
-	function_expression:  true,
-	arrow_function:       true,
-	if_statement:         true,
-	else_clause:          true,
-	while_statement:      true,
-	for_statement:        true,
-	for_in_statement:     true,
-	do_statement:         true,
-	try_statement:        true,
-	catch_clause:         true,
-	finally_clause:       true,
-};
-
 function walk(node, source, lineTable, ranges) {
 	let nt = ts.nodeType(node);
 

@@ -16,7 +16,7 @@ const BLOCKS = {
 function keywordPair(node) {
 	if (!BLOCKS[ts.nodeType(node)]) return null;
 	let kids = ts.children(node);
-	let open = null, close = null;
+	let open = null;
 	for (let c in kids)
 		if (!ts.isNamed(c) && OPENERS[ts.nodeType(c)]) { open = c; break; }
 	let last = kids[-1];

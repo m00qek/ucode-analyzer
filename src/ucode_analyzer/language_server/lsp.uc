@@ -394,7 +394,7 @@ export function run(config) {
 			// as cancelled without running.
 			let cancelled = {};
 			for (let msg in msgs)
-				if (msg?.method === '$/cancelRequest' && msg.params?.id != null)
+				if (msg?.method === '$/cancelRequest' && msg.params?.id !== null)
 					cancelled[msg.params.id] = true;
 
 			for (let msg in msgs) {

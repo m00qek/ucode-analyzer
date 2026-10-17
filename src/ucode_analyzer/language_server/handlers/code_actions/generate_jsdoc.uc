@@ -72,7 +72,7 @@ export function actionsFor(uri, doc, range) {
 	if (!length(lines)) return [];
 
 	let lineStart = doc.lineTable[line];
-	let indent = match(substr(doc.text, lineStart, ts.startByte(stmt) - lineStart), /^[ \t]*/)[0];
+	let indent = match(substr(doc.text, lineStart, ts.startByte(stmt) - lineStart), /^[ \t]*/)?.[0] ?? '';
 	let text = indent + '/**\n' + join('', map(lines, (l) => indent + l + '\n')) + indent + ' */\n';
 	let at = { line, character: 0 };
 	return [{

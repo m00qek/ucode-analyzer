@@ -56,16 +56,15 @@ function sourceFiles(config) {
 }
 
 // A URI is part of the user's workspace when its path is under workspaceDir and
-// is not one of the server's own bundled sources, a system library, a
-// declaration stub, or a nested workspace (those are dependencies or separate
-// projects, not files we diagnose here).
+// is not a system library, a declaration stub, a nested workspace or excluded
+// (those are dependencies or separate projects, not files we diagnose here).
+// The server's own sources are only ever in a workspace as a checkout being
+// worked on: installed, they are a system library.
 export function isWorkspaceUri(uri, config, nestedRoots) {
 	let path = substr(uri, 7);  // strip "file://"
 	let workdir = config.workspaceDir ?? '/';
 	if (!isUnder(path, workdir)) return false;
 
-	let self = config.selfSrcDir;
-	if (self && isUnder(path, self)) return false;
 	for (let sp in (config.systemLibPaths ?? []))
 		if (isUnder(path, sp)) return false;
 

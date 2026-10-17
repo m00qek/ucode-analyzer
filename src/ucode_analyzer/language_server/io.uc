@@ -20,6 +20,7 @@ import * as io from 'io';
 export function onReadable(handle, onData, onEof) {
 	// Wraps the fd without owning it: the caller's handle still closes it.
 	let fd = io.new(handle.fileno());
+	if (!fd) die(sprintf('cannot watch fd %d: %s', handle.fileno(), io.error()));
 
 	let watch;
 	watch = uloop.handle(fd, function(events, eof, error) {

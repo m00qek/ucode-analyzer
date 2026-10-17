@@ -31,7 +31,7 @@ function isConstTruthy(node, source) {
 	if (!node) return false;
 	let nt = ts.nodeType(node);
 	if (nt === 'true') return true;
-	if (nt === 'number') return (+ts.text(node, source)) != 0;
+	if (nt === 'number') return !!(+ts.text(node, source));
 	return false;
 }
 

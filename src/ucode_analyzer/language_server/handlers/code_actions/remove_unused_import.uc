@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { buildLineTable, positionToOffset, offsetToPosition, findAncestor } from 'ucode_analyzer.code_analysis.positions';
+import { positionToOffset, offsetToPosition, findAncestor } from 'ucode_analyzer.code_analysis.positions';
 
 // Find the deepest node whose span contains offset.
 // Build a deletion range that removes `specifier` from its `named_imports` siblings.
