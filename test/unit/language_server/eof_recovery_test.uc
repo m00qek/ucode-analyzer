@@ -32,12 +32,11 @@ let PREFIX = "let p1 = 1;\nlet p2 = 2;\nlet p3 = 3;\nlet p4 = 4;\nlet p5 = 5;\n"
 let VARIANTS = [
 	{ name: 'closed',     src: cursors(BODY + "\t}\n}\n"), open: false,
 	  fEnd: { line: 5, character: 1 }, globals: [], foldEnd: [ 5, 4 ] },
-	// a fold ends on the last line with text ...
+	// an open block folds to its last line with text
 	{ name: 'large open', src: cursors(PREFIX + BODY),     open: true,
 	  globals: [ 'p1', 'p2', 'p3', 'p4', 'p5' ], foldEnd: [ 8, 8 ] },
-	// ... but on the empty last line when the whole file is one ERROR
 	{ name: 'tiny open',  src: cursors(BODY),              open: true,
-	  globals: [], foldEnd: [ 4, 4 ] },
+	  globals: [], foldEnd: [ 3, 3 ] },
 ];
 
 // The range from marker a to marker b of `src`.

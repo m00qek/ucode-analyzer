@@ -5,8 +5,13 @@ function walk(node, source, lineTable, ranges) {
 	let nt = ts.nodeType(node);
 
 	if (nt === 'statement_block') {
+		// A block left open at the end of the file ends at or past the end of
+		// its text (a MISSING `}`, or closers mode.parse() appended): it folds
+		// to its last line with text, as it does in a large or small file.
+		let end = min(ts.endByte(node), length(source));
+		while (end > ts.startByte(node) && index(" \t\r\n", substr(source, end - 1, 1)) >= 0) end--;
 		let startLine = offsetToPosition(source, lineTable, ts.startByte(node)).line;
-		let endLine   = offsetToPosition(source, lineTable, ts.endByte(node) - 1).line;
+		let endLine   = offsetToPosition(source, lineTable, end - 1).line;
 		if (endLine > startLine)
 			push(ranges, { startLine, endLine });
 	}
