@@ -94,13 +94,12 @@ describe('textDocument/hover — feature coverage', () => {
 		let resp = hoverAt("import * as p from 'parser';\n$0p;\n");
 
 		assert.match(1, resp.id);
-		// Current behaviour: parser.uc has no module doc comment, yet the hover
-		// shows newParser's doc as the module description.
+		// parser.uc has no module doc: its first doc comment is newParser's.
 		assert.match(markdown([
 			'```ucode',
 			"p: module 'parser'",
 			'```',
-			'Create a parser for a language.',
+			'',
 			'**Members:**',
 			'- `newParser`: `(language: string) => object`',
 			'- `parse`: `(parser: object, source: string) => object`',
@@ -108,6 +107,7 @@ describe('textDocument/hover — feature coverage', () => {
 			'- `nodeType`: `(node: ?) => ?`',
 			'- `text`: `(node: object, source: string) => string`',
 			'- `parseString`: `(source: ?) => ?`',
+			'',
 		]), resp.result);
 	});
 
@@ -197,11 +197,14 @@ describe('textDocument/hover — feature coverage', () => {
 			'```ucode',
 			"assert: module 'utest.assert'",
 			'```',
+			'',
 			'Assertion utilities for the utest framework.',
+			'',
 			'**Members:**',
 			'- `fail`: `(msg: string) => ?`',
 			'- `throws`: `(fn: () => ?, pattern: string | RegExp | Combinator<string>, msg: string) => ?`',
 			'- `match`: `(expected: T | Combinator<T>, actual: T, msg: string) => ?`',
+			'',
 		]), resp.result);
 	});
 
@@ -239,9 +242,12 @@ describe('textDocument/hover — feature coverage', () => {
 			'```ucode',
 			"hr: module 'hover_record'",
 			'```',
+			'',
 			'Hover fixture: nested record and module doc.',
+			'',
 			'**Members:**',
 			'- `utils`: `{ ops }`',
+			'',
 		]), resp.result);
 	});
 

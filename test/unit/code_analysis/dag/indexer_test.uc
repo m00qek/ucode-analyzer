@@ -414,6 +414,21 @@ describe('indexer.extractModuleDoc', () => {
 		assert.match('Module for doing things.', doc.description);
 	});
 
+	it('returns null for the doc of the first statement', () => {
+		let text = '// A header.\n\n/** Parses things. */\nexport function parse() {};';
+		assert.match(null, extractModuleDoc(text, parse(text)));
+	});
+
+	it('returns a leading doc set apart by a blank line', () => {
+		let text = '/** The module. */\n\nexport function parse() {};';
+		assert.match('The module.', extractModuleDoc(text, parse(text)).description);
+	});
+
+	it('returns a leading doc followed by another comment', () => {
+		let text = '/** The module. */\n\n/** Parses things. */\nexport function parse() {};';
+		assert.match('The module.', extractModuleDoc(text, parse(text)).description);
+	});
+
 	it('returns null when the first comment is a line comment', () => {
 		let text = '// not a jsdoc\nexport function foo() {};';
 		assert.match(null, extractModuleDoc(text, parse(text)));

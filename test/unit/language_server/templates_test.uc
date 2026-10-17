@@ -158,7 +158,7 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			module: { specifier: 'tree_sitter', description: 'Tree-sitter bindings.' },
 		};
 		let md = templates.renderTemplate('hover/module', ctx, _config);
-		assert.match("```ucode\nts: module 'tree_sitter'\n```\nTree-sitter bindings.", md);
+		assert.match("```ucode\nts: module 'tree_sitter'\n```\n\nTree-sitter bindings.\n", md);
 	});
 
 	it('returns null for a nonexistent template name', () => {

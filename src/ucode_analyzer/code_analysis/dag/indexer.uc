@@ -4,7 +4,7 @@ import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBeforeMap } from 'ucode_analyzer.code_analysis.positions';
 import { topLevelStatements, importStmtSpecifier, importBindings, importRemoteName } from 'ucode_analyzer.code_analysis.mode';
-import { stringLiteralText, namedNonComments, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
+import { stringLiteralText, namedNonComments, declarators, paramNodes, isComment } from 'ucode_analyzer.code_analysis.ast_text';
 
 
 function dotToSlash(s) {
@@ -372,7 +372,15 @@ export function extractModuleDoc(text, tree) {
 		let ct = ts.nodeType(c);
 		if (ct !== 'comment' && ct !== 'doc_comment') break;
 		if (ct !== 'doc_comment') continue;
-		let doc = parseDoc(ts.text(c, text));
+		let raw = ts.text(c, text);
+		// Directly before a statement, it documents that statement. It is the
+		// module's when it says @module, or another comment or a blank line
+		// follows it.
+		let next = children[i + 1];
+		if (next && !isComment(next) && index(raw, '@module') < 0 &&
+		    !match(substr(text, ts.endByte(c), ts.startByte(next) - ts.endByte(c)), /\n[ \t]*\n/))
+			return null;
+		let doc = parseDoc(raw);
 		if (doc.description) return doc;
 		break;
 	}

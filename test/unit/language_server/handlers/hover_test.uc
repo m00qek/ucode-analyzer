@@ -153,15 +153,14 @@ describe('hover — doc comment tags', () => {
 
 	it('lists a module\'s members', () => {
 		let v = hoverText("import * as p from 'parser';\n$0p;\n");
-		// Suspected bug: the description is newParser's doc comment (the first
-		// statement of parser.uc), not a module doc; asserted as it is today.
-		assert.match("```ucode\np: module 'parser'\n```\nCreate a parser for a language.\n**Members:**\n" +
+		// parser.uc has no module doc: its first doc comment is newParser's.
+		assert.match("```ucode\np: module 'parser'\n```\n\n**Members:**\n" +
 			"- `newParser`: `(language: string) => object`\n" +
 			"- `parse`: `(parser: object, source: string) => object`\n" +
 			"- `rootNode`: `(tree: ?) => ?`\n" +
 			"- `nodeType`: `(node: ?) => ?`\n" +
 			"- `text`: `(node: object, source: string) => string`\n" +
-			"- `parseString`: `(source: ?) => ?`", v);
+			"- `parseString`: `(source: ?) => ?`\n", v);
 	});
 
 	it('types an exported const by its @type', () => {
