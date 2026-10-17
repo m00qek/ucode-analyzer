@@ -507,6 +507,17 @@ describe('buildScopeMap template spanning forms', () => {
 		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(scope, 'n'));
 	});
 
+	it('for (k, v in …) binds the key and the value', () => {
+		let src = "{% for (k, v in { a: 1 }): %}\n{{ k }}{{ v }}\n{% endfor %}\n";
+		let scope = scopeAtTpl(src, '{{ k');
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'k'));
+		assert.match(true, scopeGet(scope, 'v') !== null);
+		let lsrc = "{% for (i, s in ['a']): %}\n{{ i }}{{ s }}\n{% endfor %}\n";
+		let lscope = scopeAtTpl(lsrc, '{{ i');
+		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(lscope, 'i'));
+		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(lscope, 's'));
+	});
+
 	it('a C-style for initializer variable is visible in the body', () => {
 		let src = "{% for (let i = 0; i < 3; i++): %}\n{{ i }}\n{% endfor %}\n";
 		let scope = scopeAtTpl(src, '{{ i');

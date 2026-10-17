@@ -396,19 +396,26 @@ function walkIfStmt(node, source, uri, scope, map) {
     }
 }
 
-function walkForIn(node, source, uri, scope, map) {
+// The scope of a for-in body, in either syntax: `for (x in xs)` binds x to
+// the element; `for (k, v in o)` binds k to the key and v to the value.
+function forInScope(node, source, uri, scope) {
     let right = ts.childByField(node, 'object');
     let left  = ts.childByField(node, 'variable') ?? ts.childByField(node, 'key');
-    let body  = ts.childByField(node, 'body');
-    if (right) walkNode(right, source, uri, scope, map);
-    let loopScope = makeScope(scope);
     let value = ts.childByField(node, 'value');
+    let loopScope = makeScope(scope);
     let iterType = right ? inferNode(right, source, uri, scope, 0) : UNKNOWN;
     if (left && ts.nodeType(left) === 'identifier')
         scopeSet(loopScope, ts.text(left, source), value ? keyTypeOf(iterType) : elemTypeOf(iterType));
-    // `for (k, v in o)`: v is the element (list item or dict value).
     if (value && ts.nodeType(value) === 'identifier')
         scopeSet(loopScope, ts.text(value, source), valueTypeOf(iterType));
+    return loopScope;
+}
+
+function walkForIn(node, source, uri, scope, map) {
+    let right = ts.childByField(node, 'object');
+    let body  = ts.childByField(node, 'body');
+    if (right) walkNode(right, source, uri, scope, map);
+    let loopScope = forInScope(node, source, uri, scope);
     if (body) {
         emit(map, ts.startByte(body), loopScope);
         walkNode(body, source, uri, loopScope, map);
@@ -460,17 +467,11 @@ function walkStatementList(list, source, uri, scope, map) {
         scope = stepStatement(ts.namedChild(list, i), source, uri, scope, map);
 }
 
-// {% for (x in xs): %} … {% endfor %} — mirror walkForIn's loop-var binding.
+// {% for (x in xs): %} … {% endfor %}
 function walkForInAlt(node, source, uri, scope, map) {
     let right = ts.childByField(node, 'object');
-    let left  = ts.childByField(node, 'variable') ?? ts.childByField(node, 'key');
     if (right) walkNode(right, source, uri, scope, map);
-    let loopScope = makeScope(scope);
-    if (left && ts.nodeType(left) === 'identifier') {
-        let iterType = right ? inferNode(right, source, uri, scope, 0) : UNKNOWN;
-        scopeSet(loopScope, ts.text(left, source), elemTypeOf(iterType));
-    }
-    walkStatementList(ts.childByField(node, 'body'), source, uri, loopScope, map);
+    walkStatementList(ts.childByField(node, 'body'), source, uri, forInScope(node, source, uri, scope), map);
 }
 
 // {% for (init; cond; incr): %} … {% endfor %} — mirror walkForStmt.
