@@ -33,7 +33,9 @@ export function drainFrames(buf) {
 	return { frames, rest: buf, bad };
 };
 
-export function startListening(dispatch, onEof) {
+// Call onFrames with the bodies of the messages each read completes, all at
+// once, so the caller sees a whole batch (a request and its cancellation).
+export function startListening(onFrames, onEof) {
 	// io.onReadable handles the uloop wiring and the raw, non-blocking reads
 	// (see language_server/io.uc and native.c). Here we only reassemble the
 	// Content-Length framed messages from the delivered byte chunks.
@@ -43,8 +45,8 @@ export function startListening(dispatch, onEof) {
 		_buf = r.rest;
 		for (let header in r.bad)
 			warn(sprintf('ucode-ls: dropped a message header without Content-Length: %J\n', header));
-		for (let body in r.frames)
-			dispatch(body);
+		if (length(r.frames))
+			onFrames(r.frames);
 	}, onEof);
 };
 

@@ -45,9 +45,18 @@ export function spawn(path, args) {
 	return native.spawn(path, args ?? []);
 };
 
-export function send(proc, obj) {
+function framed(obj) {
 	let body = sprintf('%J', obj);
-	write_all(proc, sprintf('Content-Length: %d\r\n\r\n%s', length(body), body));
+	return sprintf('Content-Length: %d\r\n\r\n%s', length(body), body);
+}
+
+export function send(proc, obj) {
+	write_all(proc, framed(obj));
+};
+
+// Send several messages in one write, so the server reads them as one batch.
+export function sendAll(proc, objs) {
+	write_all(proc, join('', map(objs, framed)));
 };
 
 export function close(proc) {

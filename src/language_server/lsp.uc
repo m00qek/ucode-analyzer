@@ -7,7 +7,7 @@ import { completion as completionDoc } from 'language_server.handlers.completion
 import * as dag from 'code_analysis.dag.dag';
 import * as workspace from 'code_analysis.workspace';
 import { invalidateUri } from 'code_analysis.memo';
-import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics, cancel as cancelWorkspaceDiagnostics } from 'language_server.handlers.diagnostic_reports';
+import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics, cancel as cancelWorkspaceDiagnostics, cancelRequest as cancelWorkspaceRequest } from 'language_server.handlers.diagnostic_reports';
 import { signatureHelp as signatureHelpDoc } from 'language_server.handlers.signature_help';
 import { references as referencesDoc } from 'language_server.handlers.references';
 import { documentSymbols as documentSymbolsDoc } from 'language_server.handlers.document_symbols';
@@ -121,6 +121,13 @@ export function run(config) {
 
 		exit: function(msg) {
 			uloop.end();
+		},
+
+		// Only the workspace scan runs in the background; a queued request is
+		// cancelled when its batch is read (see the dispatch below), and others
+		// have already been answered.
+		'$/cancelRequest': function(msg) {
+			cancelWorkspaceRequest(msg.params?.id ?? null);
 		},
 
 		'textDocument/didOpen': function(msg) {
@@ -319,49 +326,66 @@ export function run(config) {
 			e?.message ?? e, at ? sprintf(' (%s:%d)', at.filename, at.line) : ''));
 	});
 
-	protocol.startListening(
-		function(body) {
-			let msg;
+	function dispatch(msg) {
+		// After shutdown, reject all requests (notifications are silently ignored).
+		// Response messages (no method) are also silently ignored.
+		if (shutdown_requested && msg.method !== 'exit') {
+			if ('id' in msg && msg.method)
+				protocol.error(msg.id, -32600, 'server is shutting down');
+			return;
+		}
+
+		// Before initialized, only allow initialize / initialized / exit / $/cancel.
+		// Response messages (no method) are silently ignored.
+		if (!initialized && msg.method !== 'initialize' && msg.method !== 'initialized' &&
+		    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
+			if ('id' in msg && msg.method)
+				protocol.error(msg.id, -32002, 'server not yet initialized');
+			return;
+		}
+
+		let handler = handlers[msg.method];
+
+		if (handler) {
 			try {
-				msg = json(body);
+				handler(msg);
 			} catch(e) {
-				protocol.error(null, -32700, 'Parse error');
-				return;
+				// Logged for notifications too: nothing else would report them.
+				warn(sprintf('ucode-ls: %s failed: %s\n', msg.method, e));
+				if ('id' in msg)
+					protocol.error(msg.id, -32603, sprintf('internal error: %s', e));
 			}
+		} else if ('id' in msg && msg.method) {
+			// Only unknown *requests* (have both id and method) get MethodNotFound.
+			// Response messages (client replies to our outbound requests) have id but
+			// no method — ignore them silently.
+			protocol.error(msg.id, -32601, sprintf('method not found: %s', msg.method));
+		}
+	}
 
-			// After shutdown, reject all requests (notifications are silently ignored).
-			// Response messages (no method) are also silently ignored.
-			if (shutdown_requested && msg.method !== 'exit') {
-				if ('id' in msg && msg.method)
-					protocol.error(msg.id, -32600, 'server is shutting down');
-				return;
-			}
-
-			// Before initialized, only allow initialize / initialized / exit / $/cancel.
-			// Response messages (no method) are silently ignored.
-			if (!initialized && msg.method !== 'initialize' && msg.method !== 'initialized' &&
-			    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
-				if ('id' in msg && msg.method)
-					protocol.error(msg.id, -32002, 'server not yet initialized');
-				return;
-			}
-
-			let handler = handlers[msg.method];
-
-			if (handler) {
+	protocol.startListening(
+		function(bodies) {
+			let msgs = [];
+			for (let body in bodies) {
 				try {
-					handler(msg);
+					push(msgs, json(body));
 				} catch(e) {
-					// Logged for notifications too: nothing else would report them.
-					warn(sprintf('ucode-ls: %s failed: %s\n', msg.method, e));
-					if ('id' in msg)
-						protocol.error(msg.id, -32603, sprintf('internal error: %s', e));
+					protocol.error(null, -32700, 'Parse error');
 				}
-			} else if ('id' in msg && msg.method) {
-				// Only unknown *requests* (have both id and method) get MethodNotFound.
-				// Response messages (client replies to our outbound requests) have id but
-				// no method — ignore them silently.
-				protocol.error(msg.id, -32601, sprintf('method not found: %s', msg.method));
+			}
+
+			// A request whose cancellation arrived in the same batch is answered
+			// as cancelled without running.
+			let cancelled = {};
+			for (let msg in msgs)
+				if (msg?.method === '$/cancelRequest' && msg.params?.id != null)
+					cancelled[msg.params.id] = true;
+
+			for (let msg in msgs) {
+				if (msg?.method && 'id' in msg && cancelled[msg.id])
+					protocol.error(msg.id, -32800, 'request cancelled');
+				else
+					dispatch(msg);
 			}
 		},
 		function() {
