@@ -5,9 +5,6 @@ import { positionToOffset, rangeOf, findAncestor } from 'ucode_analyzer.code_ana
 import { referencesOf, anchorOf } from 'ucode_analyzer.code_analysis.scope_references';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 
-// Walk up parent chain looking for a node of the given type.
-// Extract the module specifier string (without quotes) from an import_statement.
-
 // Locate the import_specifier for `remoteName` imported from `specifier` and
 // return both of its nodes in a single statement scan:
 //   localNode  — the local binding: `bar` for `import { foo as bar }`, else the
@@ -31,26 +28,38 @@ function importSpecNodes(root, text, specifier, remoteName) {
 	return { localNode: null, remoteNode: null };
 }
 
-// Find the property identifier nodes (the `bar` part) for `alias.bar` member expressions.
-function memberPropertyNodesOf(root, text, alias, memberName) {
+// The property nodes (the `bar`) of the `alias.bar` member expressions whose
+// `alias` means the namespace import of `specifier`, not a local of that name.
+function memberPropertyNodesOf(root, text, specifier, memberName) {
 	let result = [];
-	function scan(node) {
-		if (ts.nodeType(node) === 'member_expression') {
-			let obj  = ts.childByField(node, 'object');
-			let prop = ts.childByField(node, 'property');
-			if (obj && prop &&
-			    ts.nodeType(obj) === 'identifier' &&
-			    ts.text(obj, text) === alias &&
-			    ts.text(prop, text) === memberName) {
+	for (let stmt in mode.topLevelStatements(root)) {
+		if (ts.nodeType(stmt) !== 'import_statement' || mode.importStmtSpecifier(stmt, text) !== specifier)
+			continue;
+		let ns = mode.importBindings(stmt).namespaceAlias;
+		if (!ns) continue;
+		for (let use in (referencesOf(root, text, ts.startByte(ns)) ?? [])) {
+			let member = ts.parent(use);
+			if (!member || ts.nodeType(member) !== 'member_expression') continue;
+			let obj  = ts.childByField(member, 'object');
+			let prop = ts.childByField(member, 'property');
+			if (obj && prop && ts.startByte(obj) === ts.startByte(use) && ts.text(prop, text) === memberName)
 				push(result, prop);
-				return;
-			}
 		}
-		for (let i = 0; i < ts.namedChildCount(node); i++)
-			scan(ts.namedChild(node, i));
 	}
-	scan(root);
 	return result;
+}
+
+// The `b` nodes of the export specifiers `export { a as b }` that export a
+// local under the different name `exportName`.
+function exportAliasNodes(root, text, exportName) {
+	let out = [];
+	for (let spec in ts.descendants(root, ['export_specifier'])) {
+		let alias = ts.childByField(spec, 'alias');
+		let name  = ts.childByField(spec, 'name');
+		if (alias && name && ts.text(alias, text) === exportName && ts.text(name, text) !== exportName)
+			push(out, alias);
+	}
+	return out;
 }
 
 
@@ -123,8 +132,12 @@ export function crossFileRefsOf(declaringUri, exportName, excludeUri) {
 				let nodes = referencesOf(root, doc.text, byteOff);
 				if (nodes && length(nodes) > 0) {
 					let ranges = nodeRanges(nodes, doc.text, lt);
+					// `export { a as b }`: renaming b renames the alias, not the local a.
+					let aliases = exportAliasNodes(root, doc.text, exportName);
+					let renames = length(aliases) ? nodeRanges(aliases, doc.text, lt) : ranges;
 					let e = getEntry(declaringUri);
-					for (let r in ranges) { push(e.refRanges, r); push(e.renameRanges, r); }
+					for (let r in ranges)  push(e.refRanges, r);
+					for (let r in renames) push(e.renameRanges, r);
 				}
 				break;
 			}
@@ -148,7 +161,7 @@ export function crossFileRefsOf(declaringUri, exportName, excludeUri) {
 
 			if (imp.alias !== null) {
 				// Namespace import: find `imp.alias.exportName` property accesses.
-				let propNodes = memberPropertyNodesOf(root, doc.text, imp.alias, exportName);
+				let propNodes = memberPropertyNodesOf(root, doc.text, imp.specifier, exportName);
 				let ranges = nodeRanges(propNodes, doc.text, lt);
 				refRanges = ranges;
 				renameRanges = ranges;

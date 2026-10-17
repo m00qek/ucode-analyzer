@@ -48,7 +48,8 @@ function removeOutEdges(uri) {
 function addOutEdges(uri, imports) {
 	let targets = [];
 	for (let imp in imports) {
-		if (!imp.resolvedUri) continue;
+		// Once per imported file, however many statements import it.
+		if (!imp.resolvedUri || index(targets, imp.resolvedUri) >= 0) continue;
 		push(targets, imp.resolvedUri);
 		if (!_inEdges[imp.resolvedUri]) _inEdges[imp.resolvedUri] = [];
 		push(_inEdges[imp.resolvedUri], uri);
