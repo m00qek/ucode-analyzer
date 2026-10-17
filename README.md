@@ -1,5 +1,7 @@
 # ucode-analyzer
 
+[![CI](https://github.com/m00qek/ucode-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/m00qek/ucode-analyzer/actions/workflows/ci.yml)
+
 A language server and linter for [ucode](https://github.com/jow-/ucode), the
 scripting language of OpenWrt, written in ucode itself.
 
