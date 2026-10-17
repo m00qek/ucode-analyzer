@@ -10,6 +10,23 @@ import { stringLiteralText } from 'ucode_analyzer.code_analysis.ast_text';
 let _scriptParser   = ts.newParser(ts.ucode());
 let _templateParser = ts.newParser(ts.markup());
 
+// A string literal delimited by q, with backslash escapes; unterminated, it
+// runs to the end.
+function quoted(q) {
+	return q + '([^' + q + '\\\\]|\\\\.)*(' + q + '|\\\\?$)';
+}
+
+// One token per match: a comment or string literal is consumed whole, so an
+// opener inside it is never seen, and an unterminated one runs to the end.
+// Built from strings: the quotes of a regex literal would derail the scan of
+// this very file, which would then read as a template.
+const TOKENS = regexp(join('|', [
+	'//[^\n]*',
+	'/\\*([^*]|\\*+[^*/])*(\\*+/|\\**$)',
+	quoted('"'), quoted("'"), quoted('`'),
+	'\\{[%{#]',
+]), 'g');
+
 // Scan the source as if it were a script, skipping string literals ('...',
 // "...", `...`) and comments (// and block comments), and report whether a
 // template tag opener ({% / {{ / {#) appears in *code* position. In a valid raw
@@ -22,41 +39,11 @@ let _templateParser = ts.newParser(ts.markup());
 // (e.g. `<a href="{{ url }}">` with no other tag) is skipped, because the scan
 // treats the quotes as a string. Vanishingly rare and unobserved in the corpus.
 function hasCodePositionTag(text) {
-	// Most scripts contain no opener at all; the byte scan below is ~1 µs per
-	// byte (75 ms on fw4.uc), so skip it when no opener exists anywhere.
+	// Most scripts contain no opener at all.
 	if (index(text, '{%') < 0 && index(text, '{{') < 0 && index(text, '{#') < 0)
 		return false;
-	let n = length(text);
-	let i = 0;
-	while (i < n) {
-		let c = substr(text, i, 1);
-		if (c === '/' && substr(text, i + 1, 1) === '/') {           // line comment
-			i += 2;
-			while (i < n && substr(text, i, 1) !== "\n") i++;
-			continue;
-		}
-		if (c === '/' && substr(text, i + 1, 1) === '*') {           // block comment
-			i += 2;
-			while (i < n && !(substr(text, i, 1) === '*' && substr(text, i + 1, 1) === '/')) i++;
-			i += 2;
-			continue;
-		}
-		if (c === '"' || c === "'" || c === '`') {                   // string literal
-			i++;
-			while (i < n) {
-				let d = substr(text, i, 1);
-				if (d === '\\') { i += 2; continue; }                // skip escape
-				if (d === c) { i++; break; }
-				i++;
-			}
-			continue;
-		}
-		if (c === '{') {
-			let d = substr(text, i + 1, 1);
-			if (d === '%' || d === '{' || d === '#') return true;    // {% / {{ / {#
-		}
-		i++;
-	}
+	for (let m in match(text, TOKENS))
+		if (substr(m[0], 0, 1) === '{') return true;
 	return false;
 }
 

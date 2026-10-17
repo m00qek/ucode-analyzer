@@ -68,6 +68,20 @@ describe('mode — isTemplate detection', () => {
 		assert.match(false, isTemplate("let s = `a {{ b }} c`;\n"));
 	});
 
+	it('ends strings and comments where the language does', () => {
+		assert.match(false, isTemplate("let s = 'it\\'s {{ x }}';\n"));
+		assert.match(true,  isTemplate("let s = 'a\\\\'; {{ x }}\n"));
+		assert.match(true,  isTemplate("/** a {% b **/ {{ x }}\n"));
+		assert.match(true,  isTemplate("let s = \"a\\\nb\"; {# c #}\n"));
+	});
+
+	it('runs an unterminated string or comment to the end', () => {
+		assert.match(false, isTemplate("let s = 'a {{ b }}\n"));
+		assert.match(false, isTemplate("/* a {{ b }}\n"));
+		assert.match(false, isTemplate("/* a {{ b }} *"));
+		assert.match(false, isTemplate("let s = \"{{ b \\"));
+	});
+
 	// ── shebang-driven mode (matches how ucode is actually invoked) ──────────
 	it('treats a utpl shebang as template', () => {
 		assert.match(true, isTemplate("#!/usr/bin/utpl\nplain text no tags\n"));

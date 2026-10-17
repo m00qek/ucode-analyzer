@@ -2,7 +2,7 @@ import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
-import { buildLineTable, offsetToPosition, docBefore, docBeforeMap } from 'ucode_analyzer.code_analysis.positions';
+import { buildLineTable, offsetToPosition, docBeforeMap } from 'ucode_analyzer.code_analysis.positions';
 import { topLevelStatements, importStmtSpecifier, importBindings, importRemoteName } from 'ucode_analyzer.code_analysis.mode';
 import { stringLiteralText, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
 
@@ -22,7 +22,8 @@ function dotToSlash(s) {
 // index instead of re-walking the tree per name — that re-walk was O(fields²)
 // on large modules (fw4.uc's 88-field return object ≈ 67ms per reindex).
 // First declaration of a name wins, matching the old first-match scan.
-function buildDeclIndex(root, text) {
+// docOf(stmt) is the text of the /** */ before a top-level statement, or null.
+function buildDeclIndex(root, text, docOf) {
 	let index = {};
 	for (let stmt in topLevelStatements(root)) {
 		let nt = ts.nodeType(stmt);
@@ -31,7 +32,7 @@ function buildDeclIndex(root, text) {
 			if (!nameNode) continue;
 			let name = ts.text(nameNode, text);
 			if (exists(index, name)) continue;
-			let docText = docBefore(stmt, root, text);
+			let docText = docOf(stmt);
 			index[name] = { kind: 'function', doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
 		} else if (nt === 'lexical_declaration') {
 			for (let j = 0; j < ts.namedChildCount(stmt); j++) {
@@ -44,7 +45,7 @@ function buildDeclIndex(root, text) {
 				let init = ts.childByField(vd, 'value');
 				let it = init ? ts.nodeType(init) : null;
 				let kind = (it === 'arrow_function' || it === 'function_expression') ? 'function' : 'let';
-				let docText = docBefore(stmt, root, text);
+				let docText = docOf(stmt);
 				index[name] = { kind, doc: docText ? parseDoc(docText) : null, startByte: ts.startByte(nameNode) };
 			}
 		}
@@ -118,12 +119,20 @@ export function extractExports(text, tree) {
 		return offsetToPosition(text, lineTable, startByte);
 	}
 
+	// The docs of all top-level statements, from one pass over the root's
+	// children: per-statement docBefore rescans them, O(statements²).
+	let _docs = null;
+	function docOf(stmt) {
+		if (_docs === null) _docs = docBeforeMap(root, text);
+		return _docs[ts.startByte(stmt)];
+	}
+
 	// The declaration index is only needed for `export { ... }` clauses and the
 	// legacy return object; pure `export function`/`export let` files never touch
 	// it. Build it at most once, on first use.
 	let _declIndex = null;
 	function declIndex() {
-		if (_declIndex === null) _declIndex = buildDeclIndex(root, text);
+		if (_declIndex === null) _declIndex = buildDeclIndex(root, text, docOf);
 		return _declIndex;
 	}
 
@@ -164,7 +173,7 @@ export function extractExports(text, tree) {
 		}
 		if (stmtType !== 'export_statement') continue;
 
-		let docText = docBefore(stmt, root, text);
+		let docText = docOf(stmt);
 		let doc = docText ? parseDoc(docText) : null;
 
 		let value = ts.childByField(stmt, 'value');
@@ -342,12 +351,15 @@ export function extractModuleDoc(text, tree) {
 // Removes stale entries for this uri first so re-indexing stays consistent.
 export function extractTypedefs(uri, text, tree) {
 	type_registry.removeUri(uri);
+	if (index(text, '@typedef') < 0) return;
 	let root = ts.rootNode(tree);
 	let children = ts.namedChildren(root);
 	for (let i = 0; i < length(children); i++) {
 		let c = children[i];
 		if (ts.nodeType(c) !== 'doc_comment') continue;
-		let doc = parseDoc(ts.text(c, text));
+		let raw = ts.text(c, text);
+		if (index(raw, '@typedef') < 0) continue;
+		let doc = parseDoc(raw);
 		if (doc.typedef && doc.typedef.name && doc.typedef.type)
 			type_registry.register(doc.typedef.name, doc.typedef.type, uri, doc.template);
 	}
