@@ -26,13 +26,16 @@ function enclosingCall(root, offset) {
 	return walk(root);
 }
 
-// Count arguments (named children of arguments node) whose start byte is
-// strictly before offset — gives the 0-based active parameter index.
+// The 0-based index of the argument at offset: the separating commas before
+// it. Those of nested calls belong to deeper nodes; a comma not yet followed by
+// an argument (`f(1, |)`) sits in an ERROR.
 function activeParam(argsNode, offset) {
 	let count = 0;
-	let args = ts.namedChildren(argsNode);
-	for (let i = 0; i < length(args); i++)
-		if (ts.startByte(args[i]) < offset) count++;
+	for (let c in ts.children(argsNode)) {
+		let commas = (ts.nodeType(c) === 'ERROR') ? ts.children(c) : [c];
+		for (let t in commas)
+			if (!ts.isNamed(t) && ts.nodeType(t) === ',' && ts.startByte(t) < offset) count++;
+	}
 	return count;
 }
 
