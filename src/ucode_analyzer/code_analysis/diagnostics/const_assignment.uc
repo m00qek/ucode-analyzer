@@ -1,8 +1,8 @@
 import * as ts from 'tree_sitter';
 import { firstNamed, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
-let SEVERITY_ERROR = 1;
 
 // Scope: { decls: { name: 'const'|'let' }, parent }
 function makeScope(parent) { return { decls: {}, parent }; }
@@ -34,6 +34,15 @@ function addParams(node, source, scope) {
 		if (param && ts.nodeType(param) === 'identifier')
 			scope.decls[ts.text(param, source)] = { kind: 'let' };
 	}
+}
+
+// The quick fix turns the declaration's `const` into `let`: data carries
+// where that keyword is.
+function constAssignment(source, lineTable, target, name, entry) {
+	let d = diagnostic(rangeOf(source, lineTable, target), Severity.ERROR, 'const-assignment',
+		sprintf("Cannot assign to '%s' — it is declared const", name));
+	d.data = { constKeywordRange: entry.kwRange };
+	return d;
 }
 
 let _walk;
@@ -120,16 +129,8 @@ _walk = function(node, scope, source, lineTable, diags) {
 		if (left && ts.nodeType(left) === 'identifier') {
 			let name  = ts.text(left, source);
 			let entry = declEntry(scope, name);
-			if (entry?.kind === 'const') {
-				push(diags, {
-					range:    rangeOf(source, lineTable, left),
-					severity: SEVERITY_ERROR,
-					source:   'ucode-analyzer',
-					code:     'const-assignment',
-					message:  sprintf("Cannot assign to '%s' — it is declared const", name),
-					data:     { constKeywordRange: entry.kwRange },
-				});
-			}
+			if (entry?.kind === 'const')
+				push(diags, constAssignment(source, lineTable, left, name, entry));
 		}
 		let right = ts.childByField(node, 'right');
 		if (right) _walk(right, scope, source, lineTable, diags);
@@ -141,16 +142,8 @@ _walk = function(node, scope, source, lineTable, diags) {
 		if (operand && ts.nodeType(operand) === 'identifier') {
 			let name  = ts.text(operand, source);
 			let entry = declEntry(scope, name);
-			if (entry?.kind === 'const') {
-				push(diags, {
-					range:    rangeOf(source, lineTable, operand),
-					severity: SEVERITY_ERROR,
-					source:   'ucode-analyzer',
-					code:     'const-assignment',
-					message:  sprintf("Cannot assign to '%s' — it is declared const", name),
-					data:     { constKeywordRange: entry.kwRange },
-				});
-			}
+			if (entry?.kind === 'const')
+				push(diags, constAssignment(source, lineTable, operand, name, entry));
 		}
 		return;
 	}

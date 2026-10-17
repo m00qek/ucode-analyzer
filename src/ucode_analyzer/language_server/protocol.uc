@@ -50,7 +50,18 @@ export function startListening(onFrames, onEof) {
 	}, onEof);
 };
 
-export function write_message(obj) {
+// JSON-RPC and LSP error codes.
+export const ErrorCode = {
+	PARSE_ERROR:            -32700,
+	INVALID_REQUEST:        -32600,
+	METHOD_NOT_FOUND:       -32601,
+	INTERNAL_ERROR:         -32603,
+	SERVER_NOT_INITIALIZED: -32002,
+	REQUEST_CANCELLED:      -32800,
+	CONTENT_MODIFIED:       -32801,
+};
+
+function write_message(obj) {
 	let body = sprintf('%J', obj);
 	fs.stdout.write(sprintf('Content-Length: %d\r\n\r\n%s', length(body), body));
 	fs.stdout.flush();

@@ -1,8 +1,7 @@
 import * as ts from 'tree_sitter';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { identifierOccurrences } from 'ucode_analyzer.code_analysis.ast_text';
-
-let SEVERITY_WARNING = 2;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // Collect the set of all identifier texts that appear in the tree
 // at any position OTHER than their own declaration site.
@@ -74,13 +73,8 @@ export function unusedVars(doc) {
 			if (allBytes[j] !== decl.declByte) { hasUse = true; break; }
 		}
 		if (!hasUse)
-			push(diags, {
-				range:    rangeOf(source, lineTable, decl.nameNode),
-				severity: SEVERITY_WARNING,
-				source:   'ucode-analyzer',
-				code:     'unused-var',
-				message:  sprintf("'%s' is declared but never used", decl.name),
-			});
+			push(diags, diagnostic(rangeOf(source, lineTable, decl.nameNode), Severity.WARNING, 'unused-var',
+				sprintf("'%s' is declared but never used", decl.name)));
 	}
 	return diags;
 };

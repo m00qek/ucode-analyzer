@@ -29,11 +29,6 @@ export function documentDiagnostics(uri, doc, previousResultId) {
 
 // --- workspace/diagnostic (all workspace files, background fork) ------------
 
-// LSP error code: the request could not be served because the content changed.
-// Clients treat it as "obsolete, re-request" rather than a hard failure.
-let CONTENT_MODIFIED = -32801;
-let REQUEST_CANCELLED = -32800;
-
 // The forked workers of the current scan (one per shard). Held so a supersede or
 // teardown can kill every one of them, not just a single task.
 let _activeTasks = [];
@@ -59,7 +54,7 @@ export function workspaceDiagnostics(requestId, params, config) {
 	// ContentModified so the client re-pulls.
 	if (_pendingReqId !== null) {
 		killAll();
-		protocol.error(_pendingReqId, CONTENT_MODIFIED,
+		protocol.error(_pendingReqId, protocol.ErrorCode.CONTENT_MODIFIED,
 			'workspace/diagnostic superseded by a newer request');
 		_pendingReqId = null;
 		_report = [];
@@ -114,7 +109,7 @@ export function cancelRequest(id) {
 	if (id === null || id !== _pendingReqId) return false;
 	killAll();
 	_scanGen += 1;
-	protocol.error(id, REQUEST_CANCELLED, 'workspace/diagnostic cancelled');
+	protocol.error(id, protocol.ErrorCode.REQUEST_CANCELLED, 'workspace/diagnostic cancelled');
 	_pendingReqId = null;
 	_report = [];
 	return true;

@@ -1,7 +1,6 @@
 import * as ts from 'tree_sitter';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
-
-let SEVERITY_WARNING = 2;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // Terminator statement types: once one of these appears in a block, all
 // subsequent siblings in the same block are unreachable.
@@ -24,13 +23,8 @@ function checkBlock(node, source, lineTable, out) {
 		if (st === 'comment' || st === 'doc_comment')
 			continue;
 		if (terminator) {
-			push(out, {
-				range:    rangeOf(source, lineTable, stmt),
-				severity: SEVERITY_WARNING,
-				source:   'ucode-analyzer',
-				code:     'unreachable-code',
-				message:  'Unreachable code',
-			});
+			push(out, diagnostic(rangeOf(source, lineTable, stmt), Severity.WARNING, 'unreachable-code',
+				'Unreachable code'));
 		} else if (TERMINATORS[st]) {
 			terminator = stmt;
 		}

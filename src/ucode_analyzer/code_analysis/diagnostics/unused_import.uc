@@ -2,8 +2,7 @@ import * as ts from 'tree_sitter';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { identifierOccurrences } from 'ucode_analyzer.code_analysis.ast_text';
-
-let SEVERITY_HINT = 4;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // Collect import-introduced local names: named specifiers and namespace aliases.
 // Each entry: { name, declByte, nameNode }
@@ -39,13 +38,8 @@ export function unusedImports(doc) {
 			if (allBytes[j] !== b.declByte) { hasUse = true; break; }
 		}
 		if (!hasUse)
-			push(diags, {
-				range:    rangeOf(source, lineTable, b.nameNode),
-				severity: SEVERITY_HINT,
-				source:   'ucode-analyzer',
-				code:     'unused-import',
-				message:  sprintf("'%s' is imported but never used", b.name),
-			});
+			push(diags, diagnostic(rangeOf(source, lineTable, b.nameNode), Severity.HINT, 'unused-import',
+				sprintf("'%s' is imported but never used", b.name)));
 	}
 	return diags;
 };

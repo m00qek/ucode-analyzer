@@ -6,8 +6,7 @@ import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { globalUri } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { makeScope, scopeHas, scopeSet } from 'ucode_analyzer.code_analysis.types.scope';
 import { matchPattern } from 'ucode_analyzer.code_analysis.glob';
-
-let SEVERITY_WARNING = 2;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // Names a runtime injects into a file's scope. LuCI runs controllers with its
 // request environment as their scope and templates with that environment as
@@ -118,13 +117,8 @@ function walk(node, scope, source, globals, lineTable, out) {
 	if (nt === 'identifier') {
 		let name = ts.text(node, source);
 		if (!scopeHas(scope, name) && !exists(globals, name))
-			push(out, {
-				range:    rangeOf(source, lineTable, node),
-				severity: SEVERITY_WARNING,
-				source:   'ucode-analyzer',
-				code:     'undefined-var',
-				message:  sprintf("'%s' is not defined", name),
-			});
+			push(out, diagnostic(rangeOf(source, lineTable, node), Severity.WARNING, 'undefined-var',
+				sprintf("'%s' is not defined", name)));
 		return;
 	}
 
@@ -132,13 +126,8 @@ function walk(node, scope, source, globals, lineTable, out) {
 	if (nt === 'shorthand_property_identifier') {
 		let name = ts.text(node, source);
 		if (!scopeHas(scope, name) && !exists(globals, name))
-			push(out, {
-				range:    rangeOf(source, lineTable, node),
-				severity: SEVERITY_WARNING,
-				source:   'ucode-analyzer',
-				code:     'undefined-var',
-				message:  sprintf("'%s' is not defined", name),
-			});
+			push(out, diagnostic(rangeOf(source, lineTable, node), Severity.WARNING, 'undefined-var',
+				sprintf("'%s' is not defined", name)));
 		return;
 	}
 

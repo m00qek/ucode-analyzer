@@ -5,9 +5,7 @@ import { UNKNOWN, resolveRef } from 'ucode_analyzer.code_analysis.types.type_uti
 import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { stringLiteralText, isComment, firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
-
-let SEVERITY_ERROR   = 1;
-let SEVERITY_WARNING = 2;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 function isNonIterable(type) {
 	if (!type || type.kind === 'unknown') return false;
@@ -161,25 +159,15 @@ function nullDiag(obj, objType, optChain, source, lineTable, diags, strict) {
 	if (optChain) return false;
 	if (isDefinitelyNull(objType)) {
 		// The value can only ever be null — dereferencing it always fails.
-		push(diags, {
-			range:    rangeOf(source, lineTable, obj),
-			severity: SEVERITY_ERROR,
-			source:   'ucode-analyzer',
-			code:     'null-access',
-			message:  sprintf("'%s' is null", ts.text(obj, source)),
-		});
+		push(diags, diagnostic(rangeOf(source, lineTable, obj), Severity.ERROR, 'null-access',
+			sprintf("'%s' is null", ts.text(obj, source))));
 		return true;
 	}
 	if (isNullLike(objType)) {
 		// `T | null`: null is only one possibility, so this is a warning by
 		// default. Under `'use strict';` it is escalated to an error.
-		push(diags, {
-			range:    rangeOf(source, lineTable, obj),
-			severity: strict ? SEVERITY_ERROR : SEVERITY_WARNING,
-			source:   'ucode-analyzer',
-			code:     'may-be-null',
-			message:  sprintf("'%s' may be null", ts.text(obj, source)),
-		});
+		push(diags, diagnostic(rangeOf(source, lineTable, obj), strict ? Severity.ERROR : Severity.WARNING, 'may-be-null',
+			sprintf("'%s' may be null", ts.text(obj, source))));
 		return true;
 	}
 	return false;
@@ -214,13 +202,8 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 				let scope = scopeAtOffset(scopeMap, ts.startByte(callee));
 				let calleeType = scopeGet(scope, ts.text(callee, source)) ?? UNKNOWN;
 				if (!isCallable(calleeType)) {
-					push(diags, {
-						range:    rangeOf(source, lineTable, callee),
-						severity: SEVERITY_ERROR,
-						source:   'ucode-analyzer',
-						code:     'not-a-function',
-						message:  sprintf("'%s' is not a function (type: %s)", ts.text(callee, source), calleeType.kind),
-					});
+					push(diags, diagnostic(rangeOf(source, lineTable, callee), Severity.ERROR, 'not-a-function',
+						sprintf("'%s' is not a function (type: %s)", ts.text(callee, source), calleeType.kind)));
 				}
 			} else {
 				_walk(callee, source, uri, scopeMap, lineTable, diags, strict);
@@ -248,13 +231,8 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 			           && !(ts.nodeType(obj) === 'identifier' && _written[ts.text(obj, source) + '.' + ts.text(prop, source)])) {
 				let field = unknownFieldOf(objType, ts.text(prop, source));
 				if (field !== null) {
-					push(diags, {
-						range:    rangeOf(source, lineTable, prop),
-						severity: SEVERITY_WARNING,
-						source:   'ucode-analyzer',
-						code:     'unknown-property',
-						message:  sprintf("Property '%s' does not exist on this type", field),
-					});
+					push(diags, diagnostic(rangeOf(source, lineTable, prop), Severity.WARNING, 'unknown-property',
+						sprintf("Property '%s' does not exist on this type", field)));
 				}
 			}
 			// Recurse into the object to catch errors nested within it.
@@ -283,14 +261,9 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 			let scope = scopeAtOffset(scopeMap, ts.startByte(right));
 			let iterType = inferNode(right, source, uri, scope, 0);
 			if (isNonIterable(iterType)) {
-				push(diags, {
-					range:    rangeOf(source, lineTable, right),
-					severity: SEVERITY_WARNING,
-					source:   'ucode-analyzer',
-					code:     'for-in-non-iterable',
-					message:  sprintf("Cannot iterate over type '%s'",
-					    iterType.kind === 'primitive' ? iterType.name : iterType.kind),
-				});
+				push(diags, diagnostic(rangeOf(source, lineTable, right), Severity.WARNING, 'for-in-non-iterable',
+					sprintf("Cannot iterate over type '%s'",
+					    iterType.kind === 'primitive' ? iterType.name : iterType.kind)));
 			}
 			_walk(right, source, uri, scopeMap, lineTable, diags, strict);
 		}

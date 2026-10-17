@@ -1,17 +1,10 @@
 import * as ts from 'tree_sitter';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { appendedClosers } from 'ucode_analyzer.code_analysis.mode';
-
-let SEVERITY_ERROR = 1;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 function syntaxError(node, text, lineTable, message) {
-	return {
-		range:    rangeOf(text, lineTable, node),
-		severity: SEVERITY_ERROR,
-		source:   'ucode-analyzer',
-		code:     'syntax-error',
-		message,
-	};
+	return diagnostic(rangeOf(text, lineTable, node), Severity.ERROR, 'syntax-error', message);
 }
 
 // Walk the AST and collect all ERROR and MISSING nodes.

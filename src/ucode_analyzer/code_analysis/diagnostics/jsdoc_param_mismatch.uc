@@ -22,8 +22,7 @@ import * as ts from 'tree_sitter';
 import { firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import { precedingDocNode, offsetToPosition } from 'ucode_analyzer.code_analysis.positions';
-
-let SEVERITY_WARNING = 2;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // The set of formal parameter names of a function node (identifiers and the inner
 // identifier of a `...rest` element).
@@ -60,16 +59,10 @@ function checkFn(fn, source, lineTable, out) {
 		if (prm.name === null || exists(formals, prm.name)) continue;
 		let s = base + (prm.nameStart ?? 0);
 		let e = base + (prm.nameEnd ?? prm.nameStart ?? 0);
-		push(out, {
-			range: {
+		push(out, diagnostic({
 				start: offsetToPosition(source, lineTable, s),
 				end:   offsetToPosition(source, lineTable, e),
-			},
-			severity: SEVERITY_WARNING,
-			source:   'ucode-analyzer',
-			code:     'jsdoc-param-mismatch',
-			message:  sprintf("@param '%s' does not match any parameter of this function", prm.name),
-		});
+			}, Severity.WARNING, 'jsdoc-param-mismatch', sprintf("@param '%s' does not match any parameter of this function", prm.name)));
 	}
 }
 

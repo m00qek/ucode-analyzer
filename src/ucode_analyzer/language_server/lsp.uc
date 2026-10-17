@@ -349,7 +349,7 @@ export function run(config) {
 		// Response messages (no method) are also silently ignored.
 		if (shutdown_requested && msg.method !== 'exit') {
 			if ('id' in msg && msg.method)
-				protocol.error(msg.id, -32600, 'server is shutting down');
+				protocol.error(msg.id, protocol.ErrorCode.INVALID_REQUEST, 'server is shutting down');
 			return;
 		}
 
@@ -358,7 +358,7 @@ export function run(config) {
 		if (!initialized && msg.method !== 'initialize' && msg.method !== 'initialized' &&
 		    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
 			if ('id' in msg && msg.method)
-				protocol.error(msg.id, -32002, 'server not yet initialized');
+				protocol.error(msg.id, protocol.ErrorCode.SERVER_NOT_INITIALIZED, 'server not yet initialized');
 			return;
 		}
 
@@ -371,13 +371,13 @@ export function run(config) {
 				// Logged for notifications too: nothing else would report them.
 				warn(sprintf('ucode-analyzer: %s failed: %s\n', msg.method, e));
 				if ('id' in msg)
-					protocol.error(msg.id, -32603, sprintf('internal error: %s', e));
+					protocol.error(msg.id, protocol.ErrorCode.INTERNAL_ERROR, sprintf('internal error: %s', e));
 			}
 		} else if ('id' in msg && msg.method) {
 			// Only unknown *requests* (have both id and method) get MethodNotFound.
 			// Response messages (client replies to our outbound requests) have id but
 			// no method — ignore them silently.
-			protocol.error(msg.id, -32601, sprintf('method not found: %s', msg.method));
+			protocol.error(msg.id, protocol.ErrorCode.METHOD_NOT_FOUND, sprintf('method not found: %s', msg.method));
 		}
 	}
 
@@ -388,7 +388,7 @@ export function run(config) {
 				try {
 					push(msgs, json(body));
 				} catch(e) {
-					protocol.error(null, -32700, 'Parse error');
+					protocol.error(null, protocol.ErrorCode.PARSE_ERROR, 'Parse error');
 				}
 			}
 
@@ -401,7 +401,7 @@ export function run(config) {
 
 			for (let msg in msgs) {
 				if (msg?.method && 'id' in msg && cancelled[msg.id])
-					protocol.error(msg.id, -32800, 'request cancelled');
+					protocol.error(msg.id, protocol.ErrorCode.REQUEST_CANCELLED, 'request cancelled');
 				else
 					dispatch(msg);
 			}

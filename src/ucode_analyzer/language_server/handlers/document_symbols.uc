@@ -1,10 +1,8 @@
 import * as ts from 'tree_sitter';
 import { buildLineTable, rangeOf, isStatementList } from 'ucode_analyzer.code_analysis.positions';
+import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // LSP SymbolKind constants
-let KIND_FUNCTION  = 12;
-let KIND_VARIABLE  = 13;
-let KIND_CONSTANT  = 14;
 
 // Recursively collect DocumentSymbol entries from node, returning an array.
 // Nested symbols appear as children of their enclosing symbol rather than
@@ -46,7 +44,7 @@ function walkSymbols(node, text, lineTable) {
 		let children = body ? walkSymbols(body, text, lineTable) : [];
 		let sym = {
 			name:           ts.text(nameNode, text),
-			kind:           KIND_FUNCTION,
+			kind:           SymbolKind.FUNCTION,
 			range:          rangeOf(text, lineTable, node),
 			selectionRange: rangeOf(text, lineTable, nameNode),
 		};
@@ -65,12 +63,12 @@ function walkSymbols(node, text, lineTable) {
 			let nameNode = ts.childByField(vd, 'name');
 			if (!nameNode) continue;
 			let valNode = ts.childByField(vd, 'value');
-			let kind = isConst ? KIND_CONSTANT : KIND_VARIABLE;
+			let kind = isConst ? SymbolKind.CONSTANT : SymbolKind.VARIABLE;
 			let children = [];
 			if (valNode) {
 				let vt = ts.nodeType(valNode);
 				if (vt === 'arrow_function' || vt === 'function_expression') {
-					kind = KIND_FUNCTION;
+					kind = SymbolKind.FUNCTION;
 					let body = ts.childByField(valNode, 'body');
 					if (body && ts.nodeType(body) === 'statement_block')
 						children = walkSymbols(body, text, lineTable);
@@ -106,7 +104,7 @@ function walkSymbols(node, text, lineTable) {
 					? walkSymbols(body, text, lineTable) : [];
 				let sym = {
 					name:           ts.text(keyNode, text),
-					kind:           KIND_FUNCTION,
+					kind:           SymbolKind.FUNCTION,
 					range:          rangeOf(text, lineTable, pair),
 					selectionRange: rangeOf(text, lineTable, keyNode),
 				};

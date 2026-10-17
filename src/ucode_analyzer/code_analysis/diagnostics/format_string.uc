@@ -3,8 +3,8 @@ import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
-let SEVERITY_WARNING = 2;
 
 // Numeric/char conversions: their argument must be a scalar. %s and %J accept
 // any value, so they are never type-checked.
@@ -106,11 +106,8 @@ function checkCall(args, source, uri, scopeMap, lineTable, diags) {
 	let range   = rangeOf(source, lineTable, fmtNode);
 
 	for (let spec in info.lengthMods)
-		push(diags, {
-			range, severity: SEVERITY_WARNING, source: 'ucode-analyzer',
-			code: 'invalid-format-specifier',
-			message: sprintf("Format specifier '%s' uses a length modifier, which ucode does not support — it is printed literally", spec),
-		});
+		push(diags, diagnostic(range, Severity.WARNING, 'invalid-format-specifier',
+			sprintf("Format specifier '%s' uses a length modifier, which ucode does not support — it is printed literally", spec)));
 
 	// Argument count + type checks: only when the mapping is reliable — no length
 	// modifiers (they consume no argument and signal the real problem already) and
@@ -122,11 +119,8 @@ function checkCall(args, source, uri, scopeMap, lineTable, diags) {
 
 	let given = length(args) - 1;
 	if (length(info.convChars) !== given)
-		push(diags, {
-			range, severity: SEVERITY_WARNING, source: 'ucode-analyzer',
-			code: 'format-argument-count',
-			message: sprintf("Format string expects %d argument(s) but %d given", length(info.convChars), given),
-		});
+		push(diags, diagnostic(range, Severity.WARNING, 'format-argument-count',
+			sprintf("Format string expects %d argument(s) but %d given", length(info.convChars), given)));
 
 	// Type check: a numeric/char conversion whose argument is a structured value
 	// (list/dict/record/function/module) is a real bug — ucode renders it as 0/nan.
@@ -138,12 +132,8 @@ function checkCall(args, source, uri, scopeMap, lineTable, diags) {
 		let scope = scopeAtOffset(scopeMap, ts.startByte(argNode));
 		let t = inferNode(argNode, source, uri, scope, 0);
 		if (isStructured(t))
-			push(diags, {
-				range: rangeOf(source, lineTable, argNode),
-				severity: SEVERITY_WARNING, source: 'ucode-analyzer',
-				code: 'format-argument-type',
-				message: sprintf("Conversion '%%%s' expects a number but its argument is a %s", c, typeName(resolveRef(t))),
-			});
+			push(diags, diagnostic(rangeOf(source, lineTable, argNode), Severity.WARNING, 'format-argument-type',
+				sprintf("Conversion '%%%s' expects a number but its argument is a %s", c, typeName(resolveRef(t)))));
 	}
 }
 

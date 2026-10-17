@@ -7,12 +7,9 @@ import { typeToString } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import * as platform from 'ucode_analyzer.language_server.platform';
+import { CompletionItemKind } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // LSP CompletionItemKind constants
-let KIND_FUNCTION = 3;
-let KIND_VARIABLE  = 6;
-let KIND_MODULE    = 9;
-let KIND_KEYWORD   = 14;
 
 // All ucode keywords offered in non-member, non-import contexts.
 let KEYWORDS = [
@@ -127,7 +124,7 @@ function exportsOfModule(resolvedUri) {
 		let isFn = (r.kind === 'function');
 		let item = {
 			label:         exp.name,
-			kind:          isFn ? KIND_FUNCTION : KIND_VARIABLE,
+			kind:          isFn ? CompletionItemKind.FUNCTION : CompletionItemKind.VARIABLE,
 			detail:        detail(r),
 			documentation: (r.doc && r.doc.description) ? r.doc.description : null,
 		};
@@ -172,7 +169,7 @@ function membersOfType(type) {
 			let isFn = (f.type && f.type.kind === 'function');
 			let item = {
 				label:         f.name,
-				kind:          isFn ? KIND_FUNCTION : KIND_VARIABLE,
+				kind:          isFn ? CompletionItemKind.FUNCTION : CompletionItemKind.VARIABLE,
 				detail:        f.type ? typeToString(f.type) : null,
 				documentation: (f.doc && f.doc.description) ? f.doc.description : null,
 			};
@@ -202,7 +199,7 @@ function importedItems(uri) {
 		if (!imp.resolvedUri) continue;
 		if (imp.alias) {
 			// Namespace import: offer the alias itself as a MODULE item.
-			push(items, { label: imp.alias, kind: KIND_MODULE, detail: imp.specifier });
+			push(items, { label: imp.alias, kind: CompletionItemKind.MODULE, detail: imp.specifier });
 		} else {
 			// Named imports: offer each imported symbol under its local binding name.
 			let exps = dag.exportsOf(imp.resolvedUri);
@@ -225,7 +222,7 @@ function importedItems(uri) {
 				let isFn = (r.kind === 'function');
 				let item = {
 					label:         localName,
-					kind:          isFn ? KIND_FUNCTION : KIND_VARIABLE,
+					kind:          isFn ? CompletionItemKind.FUNCTION : CompletionItemKind.VARIABLE,
 					detail:        detail(r),
 					documentation: (r.doc && r.doc.description) ? r.doc.description : null,
 				};
@@ -255,7 +252,7 @@ function scopeItems(uri, doc, offset) {
 			let isFn = (t && t.kind === 'function');
 			let item = {
 				label:  name,
-				kind:   isFn ? KIND_FUNCTION : KIND_VARIABLE,
+				kind:   isFn ? CompletionItemKind.FUNCTION : CompletionItemKind.VARIABLE,
 				detail: t ? typeToString(t) : null,
 			};
 			if (isFn) {
@@ -299,6 +296,6 @@ export function completion(uri, doc, position) {
 	let imported = importedItems(uri);
 	for (let i = 0; i < length(imported); i++) push(items, imported[i]);
 	for (let i = 0; i < length(KEYWORDS); i++)
-		push(items, { label: KEYWORDS[i], kind: KIND_KEYWORD });
+		push(items, { label: KEYWORDS[i], kind: CompletionItemKind.KEYWORD });
 	return items;
 };

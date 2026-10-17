@@ -2,8 +2,7 @@ import * as ts from 'tree_sitter';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
-
-let SEVERITY_ERROR = 1;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // Build a set of exported names for a resolved module URI.
 // Triggers a disk index if the module has not been loaded yet.
@@ -49,13 +48,8 @@ export function unknownImportSymbols(uri, doc) {
 		for (let s in specs) {
 			let remoteName = mode.importRemoteName(s, doc.text);
 			if (!exists(exported, remoteName))
-				push(diags, {
-					range:    rangeOf(doc.text, lineTable, s.remoteNode ?? s.localNode),
-					severity: SEVERITY_ERROR,
-					source:   'ucode-analyzer',
-					code:     'unknown-import-symbol',
-					message:  sprintf("Module has no export named '%s'", remoteName),
-				});
+				push(diags, diagnostic(rangeOf(doc.text, lineTable, s.remoteNode ?? s.localNode), Severity.ERROR, 'unknown-import-symbol',
+					sprintf("Module has no export named '%s'", remoteName)));
 		}
 	}
 

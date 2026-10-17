@@ -6,9 +6,8 @@ import { positionToOffset, rangeOf, buildLineTable, nodeAtOffset } from 'ucode_a
 import { referencesOf } from 'ucode_analyzer.language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.language_server.cross_file_refs';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
+import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
 
-let KIND_FUNCTION = 12;
-let KIND_MODULE   = 2;  // used for module-level call sites (no enclosing function)
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -39,7 +38,7 @@ function makeItem(name, fnNode, nameNode, uri, text, lineTable) {
 		: fnRange;
 	return {
 		name,
-		kind: KIND_FUNCTION,
+		kind: SymbolKind.FUNCTION,
 		uri,
 		range: fnRange,
 		selectionRange: nameRange,
@@ -54,7 +53,7 @@ function makeItem(name, fnNode, nameNode, uri, text, lineTable) {
 function moduleItem(uri) {
 	return {
 		name: fs.basename(uri),
-		kind: KIND_MODULE,
+		kind: SymbolKind.MODULE,   // a call site outside any function
 		uri,
 		range:          { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
 		selectionRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },

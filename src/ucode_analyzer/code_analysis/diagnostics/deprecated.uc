@@ -3,9 +3,8 @@ import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { resolveDoc } from 'ucode_analyzer.code_analysis.doc_resolver';
 import { globalUri } from 'ucode_analyzer.code_analysis.types.dag_bridge';
+import { Severity, DiagnosticTag, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
-let SEVERITY_HINT  = 4;
-let TAG_DEPRECATED = 2;
 
 // Returns true when the identifier node is the binding name at its declaration
 // site, not a reference.  These must not emit deprecated warnings.
@@ -83,15 +82,10 @@ export function deprecatedUsage(uri, doc) {
 	for (let node in ts.descendants(ts.rootNode(doc.tree), ['identifier'])) {
 		if (!candidates[ts.text(node, source)] || isDeclSite(node)) continue;
 		let resolved = resolveDoc(uri, node, source, null);
-		if (resolved.doc && resolved.doc.deprecated)
-			push(diags, {
-				range:    rangeOf(source, doc.lineTable, node),
-				severity: SEVERITY_HINT,
-				source:   'ucode-analyzer',
-				code:     'deprecated',
-				tags:     [ TAG_DEPRECATED ],
-				message:  'Deprecated',
-			});
+		if (!resolved.doc?.deprecated) continue;
+		let d = diagnostic(rangeOf(source, doc.lineTable, node), Severity.HINT, 'deprecated', 'Deprecated');
+		d.tags = [ DiagnosticTag.DEPRECATED ];
+		push(diags, d);
 	}
 	return diags;
 };

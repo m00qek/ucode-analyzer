@@ -2,8 +2,7 @@ import * as ts from 'tree_sitter';
 import { rangeOf, precedingDoc } from 'ucode_analyzer.code_analysis.positions';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import { namedNonComments, firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
-
-let SEVERITY_WARNING = 2;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // Returns true when type is a documented non-void return type.
 function hasConcreteReturn(doc) {
@@ -162,13 +161,8 @@ function checkFunction(node, source, lineTable, diags) {
 	// opening keyword token (function_expression / arrow_function).
 	let target = ts.childByField(node, 'name') ?? node;
 
-	push(diags, {
-		range:    rangeOf(source, lineTable, target),
-		severity: SEVERITY_WARNING,
-		source:   'ucode-analyzer',
-		code:     'missing-return',
-		message:  "Not all code paths return a value",
-	});
+	push(diags, diagnostic(rangeOf(source, lineTable, target), Severity.WARNING, 'missing-return',
+		"Not all code paths return a value"));
 }
 
 const FUNCTION_TYPES = ['function_declaration', 'function_expression', 'arrow_function'];

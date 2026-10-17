@@ -3,6 +3,7 @@ import { positionToOffset, offsetToPosition } from 'ucode_analyzer.code_analysis
 import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { typeToString } from 'ucode_analyzer.code_analysis.types.doc_parser';
+import { InlayHintKind } from 'ucode_analyzer.code_analysis.lsp_types';
 
 let LITERAL_TYPES = {
 	number: true, string: true, 'true': true, 'false': true, 'null': true,
@@ -42,7 +43,7 @@ function walk(node, source, uri, scopeMap, lineTable, rangeStart, rangeEnd, hint
 					push(hints, {
 						position:    offsetToPosition(source, lineTable, nameEnd),
 						label:       ': ' + label,
-						kind:        1,
+						kind:        InlayHintKind.TYPE,
 						paddingLeft: true,
 					});
 				}
@@ -70,7 +71,7 @@ function walk(node, source, uri, scopeMap, lineTable, rangeStart, rangeEnd, hint
 						push(hints, {
 							position:     offsetToPosition(source, lineTable, argStart),
 							label:        param.name + ':',
-							kind:         2,
+							kind:         InlayHintKind.PARAMETER,
 							paddingRight: true,
 						});
 					}

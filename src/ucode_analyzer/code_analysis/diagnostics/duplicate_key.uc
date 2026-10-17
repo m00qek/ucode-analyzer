@@ -1,7 +1,6 @@
 import * as ts from 'tree_sitter';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
-
-let SEVERITY_WARNING = 2;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // Extract a string key from a pair's key node, or null for computed keys.
 function keyText(keyNode, source) {
@@ -33,13 +32,8 @@ function checkObject(node, source, lineTable, diags) {
 		}
 		if (key === null) continue;
 		if (exists(seen, key)) {
-			push(diags, {
-				range:    rangeOf(source, lineTable, rangeNode),
-				severity: SEVERITY_WARNING,
-				source:   'ucode-analyzer',
-				code:     'duplicate-key',
-				message:  sprintf("Duplicate key '%s' in object literal", key),
-			});
+			push(diags, diagnostic(rangeOf(source, lineTable, rangeNode), Severity.WARNING, 'duplicate-key',
+				sprintf("Duplicate key '%s' in object literal", key)));
 		} else {
 			seen[key] = true;
 		}

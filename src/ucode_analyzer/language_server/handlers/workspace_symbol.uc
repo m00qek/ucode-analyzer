@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
 
-let KIND_FUNCTION = 12;
-let KIND_VARIABLE = 13;
 
 export function workspaceSymbol(query) {
 	let q = lc(query ?? '');
@@ -30,7 +29,7 @@ export function workspaceSymbol(query) {
 
 			push(results, {
 				name:          exp.name,
-				kind:          exp.kind === 'function' ? KIND_FUNCTION : KIND_VARIABLE,
+				kind:          exp.kind === 'function' ? SymbolKind.FUNCTION : SymbolKind.VARIABLE,
 				containerName: container,
 				location,
 			});

@@ -2,8 +2,7 @@ import * as ts from 'tree_sitter';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { stringLiteralText } from 'ucode_analyzer.code_analysis.ast_text';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
-
-let SEVERITY_ERROR = 1;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 export function unknownImports(uri, doc) {
 	let imps = dag.importsOf(uri);
@@ -27,13 +26,8 @@ export function unknownImports(uri, doc) {
 			let specifier = stringLiteralText(c, doc.text);
 			if (unresolved[specifier] && !exists(reported, specifier)) {
 				reported[specifier] = true;
-				push(diags, {
-					range:    rangeOf(doc.text, lineTable, c),
-					severity: SEVERITY_ERROR,
-					source:   'ucode-analyzer',
-					code:     'unknown-import',
-					message:  sprintf("Cannot find module '%s'", specifier),
-				});
+				push(diags, diagnostic(rangeOf(doc.text, lineTable, c), Severity.ERROR, 'unknown-import',
+					sprintf("Cannot find module '%s'", specifier)));
 			}
 		}
 	}

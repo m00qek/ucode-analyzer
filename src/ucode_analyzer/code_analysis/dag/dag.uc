@@ -278,10 +278,6 @@ export function specifierOf(uri) {
 	return best;
 };
 
-export function resolveSpecifierIn(paths, specifier) {
-	return resolveModule(specifier, paths, '/');
-};
-
 // Follow member-access re-export chains and return { exp, uri, name } for the
 // final definition, or null if name is not exported from uri at all.
 // `visited` guards against circular re-export chains (A re-exports B re-exports A).

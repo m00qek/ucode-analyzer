@@ -1,7 +1,6 @@
 import * as ts from 'tree_sitter';
 import { rangeOf, STATEMENT_LISTS } from 'ucode_analyzer.code_analysis.positions';
-
-let SEVERITY_ERROR = 1;
+import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // Check direct-child lexical_declarations of a block node for duplicate names.
 // "Direct child" means declared in this block, not in a nested sub-block — a
@@ -22,13 +21,8 @@ function checkBlock(node, source, lineTable, diags) {
 
 			let name = ts.text(nameNode, source);
 			if (exists(seen, name)) {
-				push(diags, {
-					range:    rangeOf(source, lineTable, nameNode),
-					severity: SEVERITY_ERROR,
-					source:   'ucode-analyzer',
-					code:     'redeclared-var',
-					message:  sprintf("'%s' is already declared in this scope", name),
-				});
+				push(diags, diagnostic(rangeOf(source, lineTable, nameNode), Severity.ERROR, 'redeclared-var',
+					sprintf("'%s' is already declared in this scope", name)));
 			} else {
 				seen[name] = true;
 			}
