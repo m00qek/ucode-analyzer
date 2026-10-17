@@ -20,6 +20,7 @@ import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prep
 import { codeAction as codeActionDoc } from 'language_server.handlers.code_actions';
 import { selectionRanges as selectionRangesDoc } from 'language_server.handlers.selection_range';
 import { linkedEditingRanges } from 'language_server.handlers.linked_editing';
+import { documentLinks } from 'language_server.handlers.document_link';
 import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'language_server.handlers.call_hierarchy';
 import * as platform from 'language_server.platform';
 
@@ -64,6 +65,7 @@ export function run(config) {
 					foldingRangeProvider: true,
 					selectionRangeProvider: true,
 					linkedEditingRangeProvider: true,
+					documentLinkProvider: { resolveProvider: false },
 					callHierarchyProvider: true,
 					diagnosticProvider: {
 						interFileDependencies: true,
@@ -209,6 +211,11 @@ export function run(config) {
 		'textDocument/linkedEditingRange': function(msg) {
 			let doc = documents.get(msg.params.textDocument.uri);
 			protocol.respond(msg.id, doc ? linkedEditingRanges(doc, msg.params.position) : null);
+		},
+
+		'textDocument/documentLink': function(msg) {
+			let doc = documents.get(msg.params.textDocument.uri);
+			protocol.respond(msg.id, doc ? documentLinks(doc) : null);
 		},
 
 		'textDocument/selectionRange': function(msg) {
