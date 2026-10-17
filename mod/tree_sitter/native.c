@@ -5,7 +5,7 @@
  * This is deliberately a thin, mechanical FFI layer: one function per
  * tree-sitter call, minimal validation. Ergonomics (argument-checking with
  * friendly messages, structured results, collection helpers) live in the
- * companion src/ts.uc module, which is the module consumers should actually
+ * companion src/tree_sitter.uc module, which is the module consumers should actually
  * import. The checks kept here are the ones that prevent a null-pointer
  * dereference or undefined behavior in C; ucode's own value accessors
  * (ucv_string_get, ucv_int64_get, ...) already fail safe (return NULL/0)
@@ -570,7 +570,7 @@ static uc_value_t *uc_ts_query_pattern_count(uc_vm_t *vm, size_t nargs) {
  * { type: "capture"|"string"|"done", value: <name or literal text> }.
  * Grouping steps into individual predicates (splitting on "done") and
  * evaluating standard predicates (#eq?, #match?, ...) is policy, not
- * mechanism, and belongs in ts.uc.
+ * mechanism, and belongs in tree_sitter.uc.
  */
 static uc_value_t *uc_ts_query_predicate_steps(uc_vm_t *vm, size_t nargs) {
   TSQuery *query = ucv_resource_data(uc_fn_arg(0), "ts.query");
@@ -582,6 +582,13 @@ static uc_value_t *uc_ts_query_predicate_steps(uc_vm_t *vm, size_t nargs) {
 
   if (!query) {
     uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a query handle");
+    return NULL;
+  }
+
+  /* tree-sitter indexes the pattern without checking it. */
+  if (ucv_type(patternval) != UC_INTEGER || ucv_int64_get(patternval) < 0 ||
+      ucv_int64_get(patternval) >= ts_query_pattern_count(query)) {
+    uc_vm_raise_exception(vm, EXCEPTION_TYPE, "expecting a pattern index");
     return NULL;
   }
 

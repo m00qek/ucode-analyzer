@@ -1,5 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
+import * as native from 'tree_sitter.native';
 
 describe('ts (node/tree lifecycle)', () => {
 	it('parses and walks a tree', () => {
@@ -202,6 +203,13 @@ describe('ts (child lists and descendant lookup)', () => {
 });
 
 describe('ts (query API)', () => {
+	it('rejects a pattern index out of range', () => {
+		let q = ts.newQuery(ts.ucode(), '(identifier) @id');
+		assert.match([], native.ts_query_predicate_steps(q, 0));
+		assert.throws(() => native.ts_query_predicate_steps(q, 1));
+		assert.throws(() => native.ts_query_predicate_steps(q, -1));
+	});
+
 	function declarations(src) {
 		return ts.rootNode(ts.parse(ts.newParser(ts.ucode()), src));
 	}
