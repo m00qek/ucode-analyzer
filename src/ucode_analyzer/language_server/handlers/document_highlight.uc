@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, rangeOf } from 'ucode_analyzer.code_analysis.positions';
-import { referencesOf } from 'ucode_analyzer.language_server.scope_references';
+import { referencesOf } from 'ucode_analyzer.code_analysis.scope_references';
 import { HighlightKind } from 'ucode_analyzer.code_analysis.lsp_types';
 
 export function documentHighlight(uri, doc, position) {

@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition } from 'ucode_analyzer.code_analysis.positions';
-import { referencesOf } from 'ucode_analyzer.language_server.scope_references';
+import { referencesOf } from 'ucode_analyzer.code_analysis.scope_references';
 
 export function prepareRename(uri, doc, position) {
 	let offset = positionToOffset(doc.text, doc.lineTable, position);

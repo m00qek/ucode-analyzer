@@ -3,8 +3,8 @@ import * as fs from 'fs';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { positionToOffset, rangeOf, nodeAtOffset } from 'ucode_analyzer.code_analysis.positions';
-import { referencesOf } from 'ucode_analyzer.language_server.scope_references';
-import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.language_server.cross_file_refs';
+import { referencesOf } from 'ucode_analyzer.code_analysis.scope_references';
+import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.code_analysis.cross_file_refs';
 import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
 import { declarators } from 'ucode_analyzer.code_analysis.ast_text';
 

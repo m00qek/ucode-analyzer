@@ -2,7 +2,7 @@ import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { positionToOffset, rangeOf, findAncestor } from 'ucode_analyzer.code_analysis.positions';
-import { referencesOf, anchorOf } from 'ucode_analyzer.language_server.scope_references';
+import { referencesOf, anchorOf } from 'ucode_analyzer.code_analysis.scope_references';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 
 // Walk up parent chain looking for a node of the given type.

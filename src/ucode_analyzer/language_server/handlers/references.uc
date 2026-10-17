@@ -1,8 +1,8 @@
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { positionToOffset, rangeOf } from 'ucode_analyzer.code_analysis.positions';
-import { referencesOf } from 'ucode_analyzer.language_server.scope_references';
-import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.language_server.cross_file_refs';
+import { referencesOf } from 'ucode_analyzer.code_analysis.scope_references';
+import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.code_analysis.cross_file_refs';
 
 export function references(uri, doc, position, includeDeclaration) {
 	let offset = positionToOffset(doc.text, doc.lineTable, position);
