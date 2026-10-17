@@ -159,11 +159,39 @@ _walk = function(node, scope, source, lineTable, diags) {
 		_walk(ts.namedChild(node, i), scope, source, lineTable, diags);
 };
 
+// Could the file assign to a const at all: is a name declared const anywhere
+// also the target of an assignment or update anywhere? Most files answer no,
+// and skip the scoped walk.
+function mayAssignConst(root, source) {
+	let consts = {};
+	let targets = [];
+	for (let node in ts.descendants(root, ['lexical_declaration', 'assignment_expression',
+	                                       'augmented_assignment_expression', 'update_expression'])) {
+		let nt = ts.nodeType(node);
+		if (nt === 'lexical_declaration') {
+			let kw = ts.child(node, 0);
+			if (!kw || ts.text(kw, source) !== 'const') continue;
+			for (let vd in ts.namedChildren(node)) {
+				let nameNode = ts.nodeType(vd) === 'variable_declarator' ? ts.childByField(vd, 'name') : null;
+				if (nameNode && ts.nodeType(nameNode) === 'identifier')
+					consts[ts.text(nameNode, source)] = true;
+			}
+		} else {
+			let target = ts.childByField(node, nt === 'update_expression' ? 'argument' : 'left');
+			if (target && ts.nodeType(target) === 'identifier')
+				push(targets, ts.text(target, source));
+		}
+	}
+	for (let name in targets)
+		if (consts[name]) return true;
+	return false;
+}
+
 export function assignmentToConst(doc) {
 	let root      = ts.rootNode(doc.tree);
 	let source    = doc.text;
-	let lineTable = doc.lineTable;
 	let diags     = [];
-	_walkBlock(root, makeScope(null), source, lineTable, diags);
+	if (mayAssignConst(root, source))
+		_walkBlock(root, makeScope(null), source, doc.lineTable, diags);
 	return diags;
 };
