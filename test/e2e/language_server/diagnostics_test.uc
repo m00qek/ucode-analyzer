@@ -105,7 +105,7 @@ describe('textDocument/diagnostic', () => {
 		let src = cursors("/**\n * @param {string} name\n */\nfunction greet(name) { $1name$2(); }\ngreet('x');\n");
 		let diags = diagnose('file:///t.uc', src.text);
 		assert.match([
-			diagnostic(src, 1, 2, 1, 'not-a-function', "'name' is not a function (type: primitive)"),
+			diagnostic(src, 1, 2, 1, 'not-a-function', "'name' is not a function (type: string)"),
 		], diags);
 	});
 
@@ -113,7 +113,7 @@ describe('textDocument/diagnostic', () => {
 		let src = cursors("let x = 'hello';\n$1x$2();\nx;\n");
 		let diags = diagnose('file:///t.uc', src.text);
 		assert.match([
-			diagnostic(src, 1, 2, 1, 'not-a-function', "'x' is not a function (type: primitive)"),
+			diagnostic(src, 1, 2, 1, 'not-a-function', "'x' is not a function (type: string)"),
 		], diags);
 	});
 

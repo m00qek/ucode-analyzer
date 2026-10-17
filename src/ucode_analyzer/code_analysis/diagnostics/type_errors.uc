@@ -6,6 +6,7 @@ import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { stringLiteralText, isComment, firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
 import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
+import { typeToString } from 'ucode_analyzer.code_analysis.types.doc_parser';
 
 function isNonIterable(type) {
 	if (!type || type.kind === 'unknown') return false;
@@ -203,7 +204,7 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 				let calleeType = scopeGet(scope, ts.text(callee, source)) ?? UNKNOWN;
 				if (!isCallable(calleeType)) {
 					push(diags, diagnostic(rangeOf(source, lineTable, callee), Severity.ERROR, 'not-a-function',
-						sprintf("'%s' is not a function (type: %s)", ts.text(callee, source), calleeType.kind)));
+						sprintf("'%s' is not a function (type: %s)", ts.text(callee, source), typeToString(calleeType))));
 				}
 			} else {
 				_walk(callee, source, uri, scopeMap, lineTable, diags, strict);

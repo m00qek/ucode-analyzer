@@ -31,13 +31,13 @@ describe('diagnostics — type errors: call non-function', () => {
 
 	it('reports error when calling a string variable', () => {
 		let src = cursors("let x = 'hello';\n$0x$1();\n");
-		assert.match([diag(src, 1, 'not-a-function', "'x' is not a function (type: primitive)")],
+		assert.match([diag(src, 1, 'not-a-function', "'x' is not a function (type: string)")],
 			typeErrors(URI, open(src.text)));
 	});
 
 	it('reports error when calling a null variable', () => {
 		let src = cursors("let x = null;\n$0x$1();\n");
-		assert.match([diag(src, 1, 'not-a-function', "'x' is not a function (type: primitive)")],
+		assert.match([diag(src, 1, 'not-a-function', "'x' is not a function (type: null)")],
 			typeErrors(URI, open(src.text)));
 	});
 
@@ -116,7 +116,7 @@ describe('diagnostics — type errors: flow sensitivity (guard clause)', () => {
 describe('diagnostics — type errors: JSDoc @param type checking', () => {
 	it('reports not-a-function when @param {string} param is called', () => {
 		let src = cursors("/** @param {string} name */\nfunction greet(name) { $0name$1(); }\n");
-		assert.match([diag(src, 1, 'not-a-function', "'name' is not a function (type: primitive)")],
+		assert.match([diag(src, 1, 'not-a-function', "'name' is not a function (type: string)")],
 			typeErrors(URI, open(src.text)));
 	});
 
@@ -127,7 +127,7 @@ describe('diagnostics — type errors: JSDoc @param type checking', () => {
 
 	it('reports not-a-function when @param {string} function declaration is used via multiline JSDoc', () => {
 		let src = cursors("/**\n * @param {string} name\n */\nfunction greet(name) { $0name$1(); }\n");
-		assert.match([diag(src, 1, 'not-a-function', "'name' is not a function (type: primitive)")],
+		assert.match([diag(src, 1, 'not-a-function', "'name' is not a function (type: string)")],
 			typeErrors(URI, open(src.text)));
 	});
 });
