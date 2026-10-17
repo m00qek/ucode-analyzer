@@ -161,6 +161,10 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 		let shard = shards[idx];
 		let task  = uloop.task(
 			function(pipe) {
+				// The worker inherits the server's uloop SIGTERM handler, which
+				// here only queues the signal for a loop that never runs: without
+				// the default action, kill() leaves the worker running.
+				signal('SIGTERM', 'default');
 				for (let item in shard)
 					pipe.send(runItem(item));
 				pipe.send({ done: true });

@@ -135,6 +135,7 @@ export function initAsync(declVersions, onComplete) {
 	_index = {};
 	_pkgTask = uloop.task(
 		function(pipe) {
+			signal('SIGTERM', 'default');  // so cancel() can kill it; see parallel.uc
 			pipe.send(computeIndex(declVersions, packageQuery()));
 		},
 		function(idxMap) {

@@ -121,6 +121,28 @@ describe('parallel — fanOut across worker processes', () => {
 		// Worker 0 (items 0, 2, 4) finishes; worker 1 dies at its first item.
 		assert.match([0, 2, 4], sort(r.results));
 	});
+
+	it('kill() stops a worker while the parent handles SIGTERM', () => {
+		// As the LSP does: its workers inherit this handler.
+		uloop.init();
+		let sig = uloop.signal('SIGTERM', () => uloop.end());
+		let doneCount = 0;
+		let tasks = fanOut([0], 1,
+			(x) => { for (let i = 0; i < 1000000000; i++); return x; },
+			(_) => null,
+			()  => { doneCount++; uloop.end(); });
+		uloop.timer(100, () => tasks[0].kill());
+		// The watchdog completes the fan-out once the killed worker has exited.
+		let timeout = uloop.timer(3000, () => uloop.end());
+		uloop.run();
+		if (timeout) timeout.cancel();
+		if (sig) sig.delete();
+		let stopped = tasks[0].finished();
+		// A surviving worker would keep the test run from exiting.
+		if (!stopped) system(sprintf('kill -9 %d', tasks[0].pid()));
+		assert.match(true, stopped);
+		assert.match(1, doneCount);
+	});
 });
 
 describe('parallel — jobsFor', () => {
