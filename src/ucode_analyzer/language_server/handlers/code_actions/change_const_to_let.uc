@@ -8,12 +8,14 @@ export function actionsFor(uri, doc, diagnostics) {
 		let kwRange = diag.data?.constKeywordRange;
 		if (!kwRange) continue;
 
-		// Deduplicate: multiple assignments to the same const produce one fix.
+		// Several assignments to the same const: one fix, which resolves them all.
 		let key = sprintf('%d:%d', kwRange.start.line, kwRange.start.character);
-		if (exists(seen, key)) continue;
-		seen[key] = true;
+		if (exists(seen, key)) {
+			push(seen[key].diagnostics, diag);
+			continue;
+		}
 
-		push(actions, {
+		seen[key] = {
 			title:       "Change 'const' to 'let'",
 			kind:        'quickfix',
 			diagnostics: [diag],
@@ -21,7 +23,8 @@ export function actionsFor(uri, doc, diagnostics) {
 			edit: {
 				changes: { [uri]: [{ range: kwRange, newText: 'let' }] },
 			},
-		});
+		};
+		push(actions, seen[key]);
 	}
 
 	return actions;

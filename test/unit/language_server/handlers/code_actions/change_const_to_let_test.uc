@@ -73,8 +73,10 @@ describe('change_const_to_let', () => {
 		let doc = open(src.text);
 		let diags = assignmentToConst(doc);
 		assert.match(2, length(diags));
-		// the action carries the first of the two diagnostics
-		assert.match([ constFix(src, 0, 1, diags[0]) ], actionsFor(URI, doc, diags));
+		// the action resolves, and lists, both diagnostics
+		let fix = constFix(src, 0, 1, diags[0]);
+		fix.diagnostics = diags;
+		assert.match([ fix ], actionsFor(URI, doc, diags));
 	});
 
 	it('produces separate actions for two different const variables', () => {

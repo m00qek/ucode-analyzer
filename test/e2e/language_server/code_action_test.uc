@@ -143,13 +143,11 @@ describe('textDocument/codeAction', () => {
 		assert.match(2, length(diags));
 
 		let resp = actionsFor(uri, 8, diags);
-		// Two diagnostics but only one action (deduplication by const keyword
-		// position). Current behaviour: it lists only the first diagnostic,
-		// though changing the keyword resolves both.
-		assert.match([
-			quickfix("Change 'const' to 'let'", diags[0], false, uri,
-				{ start: src.at[1], end: src.at[2] }, 'let'),
-		], resp.result);
+		// Two diagnostics, one action, which resolves (and lists) both.
+		let fix = quickfix("Change 'const' to 'let'", diags[0], false, uri,
+			{ start: src.at[1], end: src.at[2] }, 'let');
+		fix.diagnostics = diags;
+		assert.match([ fix ], resp.result);
 	});
 
 	it('generate_jsdoc: offers a refactoring at a function with no doc', () => {
