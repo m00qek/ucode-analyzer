@@ -145,6 +145,32 @@ describe('parallel — fanOut across worker processes', () => {
 	});
 });
 
+describe('parallel — killing a worker as it starts', () => {
+	it("never reaches the parent's SIGTERM handler", () => {
+		// Killed right after the fork, a worker can relay the signal to the
+		// parent's uloop handler until it has reset its own (the LSP then shut
+		// down mid-scan). kill() waits for the worker to be ready instead.
+		uloop.init();
+		let relayed = 0, rounds = 0, completed = 0;
+		let sig = uloop.signal('SIGTERM', () => { relayed++; });
+		function round() {
+			if (rounds++ >= 30) { uloop.end(); return; }
+			let tasks = fanOut([0], 1,
+				(x) => { for (let i = 0; i < 1000000000; i++); return x; },
+				(_) => null,
+				()  => { completed++; uloop.timer(1, round); });
+			tasks[0].kill();
+		}
+		uloop.timer(1, round);
+		let timeout = uloop.timer(60000, () => uloop.end());
+		uloop.run();
+		if (timeout) timeout.cancel();
+		if (sig) sig.delete();
+		assert.match(0, relayed);
+		assert.match(30, completed);
+	});
+});
+
 describe('parallel — jobsFor', () => {
 	it('counts the CPUs in the affinity mask, not every host CPU', () => {
 		let cpuinfo = join('', map(nums(16), (i) => sprintf('processor\t: %d\n', i)));

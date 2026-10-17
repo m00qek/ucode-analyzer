@@ -96,8 +96,8 @@ export function detectJobs() {
 //   onDone()     runs in the parent exactly once, after every worker has finished
 //
 // A work(item) that throws is reported on stderr and skipped; its worker goes
-// on with the rest of its shard. Returns the array of task handles so the
-// caller can `kill()` them (e.g. to abort a superseded scan). `jobs` is clamped
+// on with the rest of its shard. Returns a handle per worker so the caller can
+// `kill()` them (e.g. to abort a superseded scan). `jobs` is clamped
 // to `[1, length(items)]`. An empty `items` forks nothing and invokes `onDone()`
 // immediately, so the caller's completion path fires uniformly regardless of
 // workload size.
@@ -109,6 +109,11 @@ export function detectJobs() {
 // as finished once its process has exited; uloop delivers everything the
 // worker sent before it marks the task finished. Results are wrapped, so a null
 // result cannot be mistaken for the end of a worker either.
+//
+// A worker is not signalled before it reports ready. Until its first statement
+// restores the default SIGTERM action, a SIGTERM it receives can reach the
+// parent's uloop signal handler instead -- in the LSP, the one that shuts the
+// server down -- so kill() on a worker still starting is held until then.
 //
 // Each call owns its own completion state, so overlapping fan-outs (a new scan
 // started before an old one drains) never cross-count. Note `kill()` does not
@@ -145,6 +150,20 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 			onItem(msg.result);
 	}
 
+	let ready = [], killed = [];
+
+	// What the caller gets for worker idx: kill() is held until it is ready.
+	function handle(idx) {
+		return {
+			kill: function() {
+				killed[idx] = true;
+				return ready[idx] ? tasks[idx].kill() : true;
+			},
+			finished: () => tasks[idx].finished(),
+			pid: () => tasks[idx].pid(),
+		};
+	}
+
 	function finish(s) {
 		if (finished[s]) return;
 		finished[s] = true;
@@ -165,6 +184,7 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 				// here only queues the signal for a loop that never runs: without
 				// the default action, kill() leaves the worker running.
 				signal('SIGTERM', 'default');
+				pipe.send({ ready: true });
 				for (let item in shard)
 					pipe.send(runItem(item));
 				pipe.send({ done: true });
@@ -172,6 +192,11 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 			function(msg) {
 				// null: uloop's implicit end-of-task message, superseded by `done`.
 				if (msg === null) return;
+				if (msg.ready) {
+					ready[idx] = true;
+					if (killed[idx]) tasks[idx].kill();
+					return;
+				}
 				if (msg.done) return finish(idx);
 				deliver(msg);
 			}
@@ -196,7 +221,8 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 		watchdog = uloop.timer(250, function() {
 			for (let s = 0; s < jobs; s++) {
 				if (finished[s] || !tasks[s] || !tasks[s].finished()) continue;
-				warn(sprintf('ucode-analyzer: worker %d exited before finishing its shard\n', s));
+				if (!killed[s])
+					warn(sprintf('ucode-analyzer: worker %d exited before finishing its shard\n', s));
 				finish(s);
 			}
 			// finish() cleared it if this tick completed the fan-out.
@@ -204,5 +230,8 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 		});
 	}
 
-	return filter(tasks, (t) => t !== null);
+	let handles = [];
+	for (let s = 0; s < jobs; s++)
+		if (tasks[s]) push(handles, handle(s));
+	return handles;
 };
