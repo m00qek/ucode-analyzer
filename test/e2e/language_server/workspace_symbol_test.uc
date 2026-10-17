@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, contains, not } from 'utest';
 import * as lsp from 'client';
 
 let proc;
@@ -37,8 +37,8 @@ describe('workspace/symbol', () => {
 		assert.match(1, resp.id);
 		assert.match(true, type(resp.result) === 'array');
 		let names = map(resp.result, (s) => s.name);
-		assert.match(true, index(names, 'greet') >= 0);
-		assert.match(true, index(names, 'count') >= 0);
+		assert.match(contains(['greet']), names);
+		assert.match(contains(['count']), names);
 	});
 
 	it('substring query filters results', () => {
@@ -52,8 +52,8 @@ describe('workspace/symbol', () => {
 
 		assert.match(1, resp.id);
 		let names = map(resp.result, (s) => s.name);
-		assert.match(true, index(names, 'handleRequest') >= 0);
-		assert.match(false, index(names, 'init') >= 0);
+		assert.match(contains(['handleRequest']), names);
+		assert.match(not(contains(['init'])), names);
 	});
 
 	it('result includes location with uri and range', () => {
@@ -82,7 +82,7 @@ describe('workspace/symbol', () => {
 		let resp = lsp.receive(proc);
 
 		let names = map(resp.result, (s) => s.name);
-		assert.match(false, index(names, 'hidden') >= 0);
-		assert.match(true, index(names, 'visible') >= 0);
+		assert.match(not(contains(['hidden'])), names);
+		assert.match(contains(['visible']), names);
 	});
 });

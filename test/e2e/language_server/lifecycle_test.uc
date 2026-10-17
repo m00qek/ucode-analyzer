@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, contains } from 'utest';
 import * as lsp from 'client';
 import * as fs from 'fs';
 
@@ -201,7 +201,7 @@ describe('failing notification', () => {
 		let stderr = fs.readfile(log) ?? '';
 		system(['rm', '-rf', fs.dirname(log)]);
 		assert.match(42, ok.id);
-		assert.match(true, index(stderr, 'ucode-analyzer: textDocument/didOpen failed: ') >= 0);
+		assert.match(contains('ucode-analyzer: textDocument/didOpen failed: '), stderr);
 	});
 });
 

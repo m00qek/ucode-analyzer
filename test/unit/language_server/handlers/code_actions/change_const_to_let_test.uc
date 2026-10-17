@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.change_const_to_let';
 import { assignmentToConst } from 'ucode_analyzer.code_analysis.diagnostics.assignment_const';
@@ -38,8 +38,8 @@ describe('change_const_to_let', () => {
 		let doc = open("const x = 1;\nx = 2;\n");
 		let diags = assignmentToConst(doc);
 		let action = actionsFor(URI, doc, diags)[0];
-		assert.match(true, index(action.title, 'const') >= 0);
-		assert.match(true, index(action.title, 'let') >= 0);
+		assert.match(contains('const'), action.title);
+		assert.match(contains('let'), action.title);
 	});
 
 	it('action isPreferred is false (prefer fixing the assignment instead)', () => {

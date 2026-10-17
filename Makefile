@@ -81,17 +81,11 @@ test/mod/compile_flags.txt: $(BUILD_DIR)/include
 
 test: test-unit test-integration test-e2e
 
+# utest does not recurse into subdirectories: list every one holding tests.
+UNIT_DIRS := $(sort $(dir $(shell find test/unit -name '*_test.uc')))
+
 test-unit: .docker-image $(BUILD_DIR)/tree_sitter_native.so
-	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) \
-		test/unit/ \
-		test/unit/linter/ \
-		test/unit/code_analysis/ \
-		test/unit/code_analysis/dag/ \
-		test/unit/code_analysis/diagnostics/ \
-		test/unit/code_analysis/types/ \
-		test/unit/language_server/ \
-		test/unit/language_server/handlers/ \
-		test/unit/language_server/handlers/code_actions/
+	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) $(UNIT_DIRS)
 
 test-e2e: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/utest.config.uc $(REPORTER) -j 8 test/e2e/language_server/

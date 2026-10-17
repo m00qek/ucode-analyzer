@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, contains } from 'utest';
 import * as lsp from 'client';
 
 let proc;
@@ -28,7 +28,7 @@ describe('template type parameter propagation', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.contents.value, 'list<int>') >= 0);
+		assert.match(contains('list<int>'), resp.result.contents.value);
 	});
 
 	it('slice of string array from split yields ?list<string>', () => {
@@ -44,7 +44,7 @@ describe('template type parameter propagation', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.contents.value, 'list<string>') >= 0);
+		assert.match(contains('list<string>'), resp.result.contents.value);
 	});
 
 	it('slice inside @template K function preserves K in return type', () => {
@@ -67,7 +67,7 @@ describe('template type parameter propagation', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.contents.value, 'list<K>') >= 0);
+		assert.match(contains('list<K>'), resp.result.contents.value);
 	});
 
 	it('filter inside @template K function preserves K in return type', () => {
@@ -90,7 +90,7 @@ describe('template type parameter propagation', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.contents.value, 'list<K>') >= 0);
+		assert.match(contains('list<K>'), resp.result.contents.value);
 	});
 });
 
@@ -108,7 +108,7 @@ describe('export function visible to later code in same file', () => {
 		}});
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+		assert.match(contains('string'), resp.result.contents.value);
 	});
 });
 
@@ -126,7 +126,7 @@ describe('nested block scope — let inside for-in body', () => {
 		}});
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+		assert.match(contains('string'), resp.result.contents.value);
 	});
 
 	it('let declared inside a doubly-nested for-in body resolves correctly', () => {
@@ -142,6 +142,6 @@ describe('nested block scope — let inside for-in body', () => {
 		}});
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+		assert.match(contains('string'), resp.result.contents.value);
 	});
 });

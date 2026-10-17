@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from 'utest';
+import { describe, it, assert, beforeEach, contains } from 'utest';
 import * as reg from 'ucode_analyzer.code_analysis.types.registry';
 
 let T_STRING = { kind: 'primitive', name: 'string' };
@@ -31,8 +31,8 @@ describe('type_registry', () => {
 		reg.register('Foo', T_STRING, 'file:///a.uc');
 		reg.register('Bar', T_INT, 'file:///b.uc');
 		let names = reg.allNames();
-		assert.match(true, index(names, 'Foo') >= 0);
-		assert.match(true, index(names, 'Bar') >= 0);
+		assert.match(contains(['Foo']), names);
+		assert.match(contains(['Bar']), names);
 	});
 
 	it('removeUri clears all entries from that file', () => {

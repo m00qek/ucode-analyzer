@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, contains, not } from 'utest';
 import * as native from 'rpc_client.native';
 import * as fs from 'fs';
 
@@ -24,26 +24,26 @@ describe('ucode-analyzer lint — workspace mode', () => {
 	it('reports errors and warnings and exits 1 on errors', () => {
 		let r = runLinter([ '--workspace', WS ]);
 		assert.match(1, r.code);
-		assert.match(true, index(r.out, 'src/errs.uc') >= 0);
-		assert.match(true, index(r.out, '[error]') >= 0);
-		assert.match(true, index(r.out, '(redeclared-var)') >= 0);
-		assert.match(true, index(r.out, 'src/warns.uc') >= 0);
-		assert.match(true, index(r.out, '[warning]') >= 0);
-		assert.match(true, index(r.out, '(duplicate-key)') >= 0);
+		assert.match(contains('src/errs.uc'), r.out);
+		assert.match(contains('[error]'), r.out);
+		assert.match(contains('(redeclared-var)'), r.out);
+		assert.match(contains('src/warns.uc'), r.out);
+		assert.match(contains('[warning]'), r.out);
+		assert.match(contains('(duplicate-key)'), r.out);
 		// clean.uc has no diagnostics, so it never appears.
-		assert.match(true, index(r.out, 'clean.uc') < 0);
+		assert.match(not(contains('clean.uc')), r.out);
 	});
 
 	it('emits 1-based line:col positions', () => {
 		let r = runLinter([ '--workspace', WS ]);
 		// redeclared `let x` is on the second line, column 5 (1-based).
-		assert.match(true, index(r.out, 'src/errs.uc:2:5: [error]') >= 0);
+		assert.match(contains('src/errs.uc:2:5: [error]'), r.out);
 	});
 
 	it('exits 0 with --fail-on none despite findings', () => {
 		let r = runLinter([ '--workspace', WS, '--fail-on', 'none' ]);
 		assert.match(0, r.code);
-		assert.match(true, index(r.out, '[error]') >= 0);  // still reported
+		assert.match(contains('[error]'), r.out);  // still reported
 	});
 
 	it('emits a JSON array with --format json', () => {
@@ -65,7 +65,7 @@ describe('ucode-analyzer lint — workspace mode', () => {
 		// Its files (buggy.uc, a redeclared-var error) must not surface in the
 		// parent scan, even though buggy.uc lives under the scanned src/ tree.
 		let r = runLinter([ '--workspace', WS ]);
-		assert.match(true, index(r.out, 'buggy.uc') < 0);
+		assert.match(not(contains('buggy.uc')), r.out);
 	});
 
 	it('serial and parallel modes produce identical output', () => {
@@ -79,8 +79,8 @@ describe('ucode-analyzer lint — workspace mode', () => {
 describe('ucode-analyzer lint — file mode', () => {
 	it('lints a single file passed positionally', () => {
 		let r = runLinter([ WS + '/src/warns.uc' ]);
-		assert.match(true, index(r.out, 'warns.uc') >= 0);
-		assert.match(true, index(r.out, '[warning]') >= 0);
+		assert.match(contains('warns.uc'), r.out);
+		assert.match(contains('[warning]'), r.out);
 		// A warning is below the default error threshold, so the run passes.
 		assert.match(0, r.code);
 	});
@@ -92,7 +92,7 @@ describe('ucode-analyzer lint — file mode', () => {
 
 	it('produces no output and exits 0 for a clean file', () => {
 		let r = runLinter([ WS + '/src/clean.uc' ]);
-		assert.match(true, index(r.out, '[') < 0);
+		assert.match(not(contains('[')), r.out);
 		assert.match(0, r.code);
 	});
 });
@@ -106,8 +106,8 @@ describe('ucode-analyzer lint — workspace layout', () => {
 		let r = runLinter([ '--workspace', dir ]);
 		let created = fs.stat(dir + '/.lsp');
 		system(['rm', '-rf', dir]);
-		assert.match(true, index(r.out, "main.uc:1:1: [warning] 'ghost' is not defined") >= 0);
-		assert.match(true, index(r.out, "sub/deep.uc:1:1: [warning] 'phantom' is not defined") >= 0);
+		assert.match(contains("main.uc:1:1: [warning] 'ghost' is not defined"), r.out);
+		assert.match(contains("sub/deep.uc:1:1: [warning] 'phantom' is not defined"), r.out);
 		assert.match(null, created);
 	});
 

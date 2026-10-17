@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { unusedImports } from 'ucode_analyzer.code_analysis.diagnostics.unused_imports';
 
@@ -21,7 +21,7 @@ describe('diagnostics — unused imports', () => {
 		assert.match(1, length(diags));
 		assert.match(4, diags[0].severity);   // HINT
 		assert.match('unused-import', diags[0].code);
-		assert.match(true, index(diags[0].message, "'foo'") >= 0);
+		assert.match(contains("'foo'"), diags[0].message);
 	});
 
 	it('does not hint for a named import that is used', () => {
@@ -33,7 +33,7 @@ describe('diagnostics — unused imports', () => {
 		let diags = unusedImports(open("import * as ts from 'tree_sitter';\n"));
 		assert.match(1, length(diags));
 		assert.match('unused-import', diags[0].code);
-		assert.match(true, index(diags[0].message, "'ts'") >= 0);
+		assert.match(contains("'ts'"), diags[0].message);
 	});
 
 	it('does not hint for a namespace alias that is used', () => {
@@ -47,7 +47,7 @@ describe('diagnostics — unused imports', () => {
 		let unused = unusedImports(open("import { foo as bar } from 'tree_sitter';\n"));
 		assert.match(0, length(used));
 		assert.match(1, length(unused));
-		assert.match(true, index(unused[0].message, "'bar'") >= 0);
+		assert.match(contains("'bar'"), unused[0].message);
 	});
 
 	it('reports each unused specifier individually', () => {
@@ -59,7 +59,7 @@ describe('diagnostics — unused imports', () => {
 		// 'a' used, 'b' not — only 'b' warned
 		let diags = unusedImports(open("import { a, b } from 'tree_sitter';\na();\n"));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'b'") >= 0);
+		assert.match(contains("'b'"), diags[0].message);
 	});
 
 	it('range points at the local identifier token', () => {

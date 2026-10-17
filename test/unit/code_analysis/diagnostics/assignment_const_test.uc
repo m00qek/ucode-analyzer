@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { assignmentToConst } from 'ucode_analyzer.code_analysis.diagnostics.assignment_const';
 
@@ -21,7 +21,7 @@ describe('diagnostics — assignment to const', () => {
 		assert.match(1, length(diags));
 		assert.match(1, diags[0].severity);  // ERROR
 		assert.match('const-assignment', diags[0].code);
-		assert.match(true, index(diags[0].message, "'x'") >= 0);
+		assert.match(contains("'x'"), diags[0].message);
 	});
 
 	it('errors on augmented assignment to const', () => {
@@ -52,7 +52,7 @@ describe('diagnostics — assignment to const', () => {
 		let text = "function f() {\n  const y = 1;\n  y = 2;\n}\n";
 		let diags = assignmentToConst(open(text));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'y'") >= 0);
+		assert.match(contains("'y'"), diags[0].message);
 	});
 
 	it('reports range on the identifier being assigned', () => {
@@ -69,6 +69,6 @@ describe('diagnostics — assignment to const', () => {
 	it('checks the right side of an assignment after a comment', () => {
 		let diags = assignmentToConst(open("const y = 1;\nlet x;\nx /* c */ = (y = 2);\n"));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'y'") >= 0);
+		assert.match(contains("'y'"), diags[0].message);
 	});
 });

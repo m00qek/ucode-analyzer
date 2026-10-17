@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, contains, not } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { workspaceSymbol } from 'ucode_analyzer.language_server.handlers.workspace_symbol';
@@ -73,8 +73,8 @@ describe('workspace/symbol', () => {
 	it('empty query returns all exported symbols', () => {
 		addDoc(URI_A, "export function a() {};\nexport function b() {};\n");
 		let names = map(workspaceSymbol(''), (s) => s.name);
-		assert.match(true, index(names, 'a') >= 0);
-		assert.match(true, index(names, 'b') >= 0);
+		assert.match(contains(['a']), names);
+		assert.match(contains(['b']), names);
 	});
 
 	it('filters by case-insensitive substring match', () => {
@@ -95,15 +95,15 @@ describe('workspace/symbol', () => {
 		addDoc(URI_A, "export function fromA() {};\n");
 		addDoc(URI_B, "export function fromB() {};\n");
 		let names = map(workspaceSymbol(''), (s) => s.name);
-		assert.match(true, index(names, 'fromA') >= 0);
-		assert.match(true, index(names, 'fromB') >= 0);
+		assert.match(contains(['fromA']), names);
+		assert.match(contains(['fromB']), names);
 	});
 
 	it('non-exported declarations are not included', () => {
 		addDoc(URI_A, "function hidden() {}\nexport function visible() {};\n");
 		let names = map(workspaceSymbol(''), (s) => s.name);
-		assert.match(false, index(names, 'hidden') >= 0);
-		assert.match(true, index(names, 'visible') >= 0);
+		assert.match(not(contains(['hidden'])), names);
+		assert.match(contains(['visible']), names);
 	});
 
 	it('query with no matches returns empty list', () => {

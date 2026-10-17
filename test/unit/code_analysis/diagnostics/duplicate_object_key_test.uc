@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_object_key';
 
@@ -21,13 +21,13 @@ describe('diagnostics — duplicate object keys', () => {
 		assert.match(1, length(diags));
 		assert.match(2, diags[0].severity);   // WARNING
 		assert.match('duplicate-key', diags[0].code);
-		assert.match(true, index(diags[0].message, "'a'") >= 0);
+		assert.match(contains("'a'"), diags[0].message);
 	});
 
 	it('warns for a duplicate quoted key', () => {
 		let diags = duplicateObjectKey(open("let o = { \"x\": 1, \"x\": 2 };\n"));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'x'") >= 0);
+		assert.match(contains("'x'"), diags[0].message);
 	});
 
 	it('does not warn for mixed quoted and unquoted keys with different names', () => {
@@ -56,21 +56,21 @@ describe('diagnostics — duplicate object keys', () => {
 		let text = "let o = { a: 1, b: { x: 1, x: 2 } };\n";
 		let diags = duplicateObjectKey(open(text));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'x'") >= 0);
+		assert.match(contains("'x'"), diags[0].message);
 	});
 
 	it('detects a shorthand key duplicated', () => {
 		let text = "let foo = 1;\nlet o = { foo, foo };\n";
 		let diags = duplicateObjectKey(open(text));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'foo'") >= 0);
+		assert.match(contains("'foo'"), diags[0].message);
 	});
 
 	it('detects a shorthand colliding with an explicit pair', () => {
 		let text = "let foo = 1;\nlet o = { foo, foo: 3 };\n";
 		let diags = duplicateObjectKey(open(text));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'foo'") >= 0);
+		assert.match(contains("'foo'"), diags[0].message);
 	});
 
 	it('detects a shorthand colliding with a string key of the same name', () => {

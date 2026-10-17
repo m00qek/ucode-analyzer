@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach, prop, gen } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, prop, gen, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { deprecatedUsage } from 'ucode_analyzer.code_analysis.diagnostics.deprecated_usage';
@@ -44,7 +44,7 @@ describe('diagnostics — deprecated usage', () => {
 		let doc = open("/** @deprecated */\nexport function old() {};\nold();\n");
 		let diags = deprecatedUsage(URI, doc);
 		assert.match(true, length(diags) >= 1);
-		assert.match(true, index(diags[0].tags, 2) >= 0);
+		assert.match(contains([2]), diags[0].tags);
 	});
 
 	it('does not flag the declaration site itself', () => {

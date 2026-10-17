@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { preferStrictEquality } from 'ucode_analyzer.code_analysis.diagnostics.prefer_strict_equality';
 
@@ -27,8 +27,8 @@ describe('diagnostics — prefer strict equality', () => {
 
 		let d = preferStrictEquality(documents.get(URI))[0];
 
-		assert.match(true, index(d.message, '===') >= 0);
-		assert.match(true, index(d.message, '==') >= 0);
+		assert.match(contains('==='), d.message);
+		assert.match(contains('=='), d.message);
 	});
 
 	it('hints for != and suggests !==', () => {
@@ -36,7 +36,7 @@ describe('diagnostics — prefer strict equality', () => {
 
 		let d = preferStrictEquality(documents.get(URI))[0];
 
-		assert.match(true, index(d.message, '!==') >= 0);
+		assert.match(contains('!=='), d.message);
 	});
 
 	it('does not flag === or !==', () => {

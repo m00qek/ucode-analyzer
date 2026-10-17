@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { redeclaredVars } from 'ucode_analyzer.code_analysis.diagnostics.redeclared_var';
 
@@ -21,7 +21,7 @@ describe('diagnostics — redeclared variables', () => {
 		assert.match(1, length(diags));
 		assert.match(1, diags[0].severity);   // ERROR
 		assert.match('redeclared-var', diags[0].code);
-		assert.match(true, index(diags[0].message, "'x'") >= 0);
+		assert.match(contains("'x'"), diags[0].message);
 	});
 
 	it('does not error when same name is in a nested block', () => {
@@ -38,7 +38,7 @@ describe('diagnostics — redeclared variables', () => {
 		let text = "function f() {\n  let x = 1;\n  let x = 2;\n}\n";
 		let diags = redeclaredVars(open(text));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'x'") >= 0);
+		assert.match(contains("'x'"), diags[0].message);
 	});
 
 	it('reports the second (redeclaring) occurrence, not the first', () => {

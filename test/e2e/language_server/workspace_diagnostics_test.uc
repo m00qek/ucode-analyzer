@@ -72,17 +72,15 @@ describe('workspace/diagnostic', () => {
 		let byId = {};
 		for (let i = 0; i < 2; i++) {
 			let r = lsp.receive(proc);
-			if (r === null) die('missing a workspace/diagnostic response (leaked request)');
+			if (r === null) die(lsp.gone(proc, 'missing a workspace/diagnostic response'));
 			byId[sprintf('%d', r.id)] = r;
 		}
 
-		// Neither request is left unanswered — this is the regression the fix closes.
-		assert.match(true, exists(byId, '7001') && exists(byId, '7002'));
-		// When the first was still in flight (the usual case) it is aborted with
-		// ContentModified (-32801); the later one carries the report.
-		let first = byId['7001'];
-		if (first.error !== null)
-			assert.match(-32801, first.error.code);
+		// Neither request is left unanswered: the first, still scanning when the
+		// second arrives (a scan of this repository takes seconds), is aborted
+		// with ContentModified; the second carries the report.
+		assert.match(-32801, byId['7001']?.error?.code);
+		assert.match(true, length(byId['7002']?.result?.items ?? []) > 0);
 	});
 
 	it("reports the server's own sources when they are the workspace", () => {

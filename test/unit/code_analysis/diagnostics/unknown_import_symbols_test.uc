@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { unknownImportSymbols } from 'ucode_analyzer.code_analysis.diagnostics.unknown_import_symbols';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -40,7 +40,7 @@ describe('diagnostics — unknown import symbols', () => {
 
 		assert.match(1, length(diags));
 		assert.match(1, diags[0].severity);
-		assert.match(true, index(diags[0].message, 'noSuchExport') >= 0);
+		assert.match(contains('noSuchExport'), diags[0].message);
 	});
 
 	it('highlights the remote name node, not the whole import statement', () => {
@@ -96,7 +96,7 @@ describe('diagnostics — unknown import symbols', () => {
 		let diags = unknownImportSymbols(URI, documents.get(URI));
 
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, 'noSuch') >= 0);
+		assert.match(contains('noSuch'), diags[0].message);
 	});
 
 	it('accepts a default import of a module with `export default`', () => {
@@ -119,7 +119,7 @@ describe('diagnostics — unknown import symbols', () => {
 		dag.add(URI, text, documents.get(URI).tree);
 		let diags = unknownImportSymbols(URI, documents.get(URI));
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, "'default'") >= 0);
+		assert.match(contains("'default'"), diags[0].message);
 		assert.match(7, diags[0].range.start.character);   // on `x`
 	});
 });

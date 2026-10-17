@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { positionToOffset } from 'ucode_analyzer.code_analysis.positions';
@@ -58,7 +58,7 @@ describe('add_missing_import', () => {
 	it('imports a declaration-module function', () => {
 		let text = "readfile('/x');\n";
 		dag.addFromDisk(dag.resolveSpecifier('fs'));
-		assert.match(true, index(map(actions(text), (x) => x.title), "Import 'readfile' from 'fs'") >= 0);
+		assert.match(contains(["Import 'readfile' from 'fs'"]), map(actions(text), (x) => x.title));
 	});
 
 	it('offers nothing for a name no module exports, or in a template', () => {

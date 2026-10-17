@@ -1,4 +1,4 @@
-import { describe, it, assert, mock, beforeEach } from 'utest';
+import { describe, it, assert, mock, beforeEach, contains, not } from 'utest';
 import * as ts from 'tree_sitter';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -79,13 +79,13 @@ describe('dag nodes', () => {
 
 	it('allUris includes added nodes', () => {
 		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
-		assert.match(true, index(dag.allUris(), URI_B) >= 0);
+		assert.match(contains([URI_B]), dag.allUris());
 	});
 
 	it('allUris excludes removed nodes', () => {
 		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
 		dag.remove(URI_B);
-		assert.match(false, index(dag.allUris(), URI_B) >= 0);
+		assert.match(not(contains([URI_B])), dag.allUris());
 	});
 
 	it('shorthand property { foo } in exported object is indexed as a property', () => {
@@ -129,25 +129,25 @@ describe('dag edges', () => {
 		let imps = dag.importsOf(URI_A);
 		assert.match(1, length(imps));
 		assert.match(TS_URI, imps[0].resolvedUri);
-		assert.match(true, index(dag.reverseDeps(TS_URI), URI_A) >= 0);
+		assert.match(contains([URI_A]), dag.reverseDeps(TS_URI));
 	});
 
 	it('remove cleans up reverse edges', () => {
 		let text = "import * as ts from 'tree_sitter';";
 		dag.add(URI_A, text, parse(text));
-		assert.match(true, index(dag.reverseDeps(TS_URI), URI_A) >= 0);
+		assert.match(contains([URI_A]), dag.reverseDeps(TS_URI));
 
 		dag.remove(URI_A);
-		assert.match(false, index(dag.reverseDeps(TS_URI), URI_A) >= 0);
+		assert.match(not(contains([URI_A])), dag.reverseDeps(TS_URI));
 	});
 
 	it('update removes stale edges when imports change', () => {
 		let text1 = "import * as ts from 'tree_sitter';";
 		dag.add(URI_A, text1, parse(text1));
-		assert.match(true, index(dag.reverseDeps(TS_URI), URI_A) >= 0);
+		assert.match(contains([URI_A]), dag.reverseDeps(TS_URI));
 
 		dag.update(URI_A, TEXT_A_NO_IMPORT, parse(TEXT_A_NO_IMPORT));
-		assert.match(false, index(dag.reverseDeps(TS_URI), URI_A) >= 0);
+		assert.match(not(contains([URI_A])), dag.reverseDeps(TS_URI));
 	});
 
 	it('does not cascade when the interface is unchanged', () => {
@@ -176,7 +176,7 @@ describe('dag edges', () => {
 		let text_b_v2 = "export function b_new_export() {};";
 
 		dag.add(URI_B, text_b_v1, parse(text_b_v1));
-		assert.match(true, index(dag.reverseDeps(TS_URI), URI_B) >= 0);
+		assert.match(contains([URI_B]), dag.reverseDeps(TS_URI));
 
 		// Patch fs so the cascade re-read of URI_B returns v2 content.
 		mock.global.patch('fs', { data: { '/app/src/b.uc': text_b_v2 } });
@@ -381,7 +381,7 @@ describe('dag cascade pruning of deleted files', () => {
 		// A was re-indexed from disk with v2 exports.
 		let exps = dag.exportsOf(URI_A);
 		let names = map(exps ?? [], (e) => e.name);
-		assert.match(true, index(names, 'aNewFn') >= 0);
+		assert.match(contains(['aNewFn']), names);
 	});
 });
 
@@ -475,8 +475,8 @@ describe('dag markOpen / cascade skip', () => {
 
 		let exps = dag.exportsOf(URI_B);
 		let names = map(exps ?? [], (e) => e.name);
-		assert.match(true, index(names, 'openVersion') >= 0);
-		assert.match(false, index(names, 'diskVersion') >= 0);
+		assert.match(contains(['openVersion']), names);
+		assert.match(not(contains(['diskVersion'])), names);
 	});
 
 	it('cascade re-indexes open file from openDocs memory when provided', () => {
@@ -491,9 +491,9 @@ describe('dag markOpen / cascade skip', () => {
 
 		let exps = dag.exportsOf(URI_B);
 		let names = map(exps ?? [], (e) => e.name);
-		assert.match(true, index(names, 'memoryVersion') >= 0);
-		assert.match(false, index(names, 'diskVersion') >= 0);
-		assert.match(false, index(names, 'openVersion') >= 0);
+		assert.match(contains(['memoryVersion']), names);
+		assert.match(not(contains(['diskVersion'])), names);
+		assert.match(not(contains(['openVersion'])), names);
 	});
 
 	it('markClosed allows cascade to re-index from disk again', () => {
@@ -506,7 +506,7 @@ describe('dag markOpen / cascade skip', () => {
 
 		let exps = dag.exportsOf(URI_B);
 		let names = map(exps ?? [], (e) => e.name);
-		assert.match(true, index(names, 'diskVersion') >= 0);
+		assert.match(contains(['diskVersion']), names);
 	});
 });
 
@@ -530,7 +530,7 @@ describe('dag — template modules (markup-mode files)', () => {
 		let imps = dag.importsOf(URI_A);
 		assert.match(1, length(imps));
 		assert.match(TS_URI, imps[0].resolvedUri);
-		assert.match(true, index(dag.reverseDeps(TS_URI), URI_A) >= 0);
+		assert.match(contains([URI_A]), dag.reverseDeps(TS_URI));
 	});
 
 	it('addFromDisk parses an on-disk template with the markup grammar', () => {

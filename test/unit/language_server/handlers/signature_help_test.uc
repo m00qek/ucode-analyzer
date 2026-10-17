@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { signatureHelp } from 'ucode_analyzer.language_server.handlers.signature_help';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -60,7 +60,7 @@ describe('signatureHelp', () => {
 		let result = signatureHelp(URI, documents.get(URI), { line: 1, character: 7 });
 
 		assert.match(true, result !== null);
-		assert.match(true, index(result.signatures[0].label, 'greet') >= 0);
+		assert.match(contains('greet'), result.signatures[0].label);
 	});
 
 	it('activeParameter is 0 for first argument', () => {
@@ -126,7 +126,7 @@ describe('signatureHelp', () => {
 			assert.match(true, s >= 0 && e > s && e <= length(sig.label));
 			// The slice of the label must contain the param name.
 			let slice = substr(sig.label, s, e - s);
-			assert.match(true, index(slice, ['x', 'y'][i]) >= 0);
+			assert.match(contains(['x', 'y'][i]), slice);
 		}
 	});
 
@@ -169,6 +169,6 @@ describe('signatureHelp', () => {
 		let result = signatureHelp(URI, documents.get(URI), { line: 7, character: 7 });
 
 		assert.match(true, result !== null);
-		assert.match(true, index(result.signatures[0].label, 'int') >= 0);
+		assert.match(contains('int'), result.signatures[0].label);
 	});
 });

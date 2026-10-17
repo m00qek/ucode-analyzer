@@ -1,4 +1,4 @@
-import { describe, it, assert, mock, beforeEach, prop, gen } from 'utest';
+import { describe, it, assert, mock, beforeEach, prop, gen, contains } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
@@ -824,7 +824,7 @@ describe('inferrer — _collectReturns tracks local let bindings', () => {
 		assert.match('union', t.return.kind);
 		// Should be int | null (not unknown | null)
 		let kinds = map(t.return.members, (m) => m.kind + (m.name ? ':' + m.name : ''));
-		assert.match(true, index(kinds, 'primitive:int') >= 0);
+		assert.match(contains(['primitive:int']), kinds);
 	});
 
 	it('local let does not leak into outer scope', () => {
@@ -1428,8 +1428,8 @@ describe('inferrer — spread_element', () => {
 		assert.match('record', t.kind);
 		let names = sort(map(t.fields, (f) => f.name));
 		// x comes from spread, z from the pair
-		assert.match(true, index(names, 'x') >= 0);
-		assert.match(true, index(names, 'z') >= 0);
+		assert.match(contains(['x']), names);
+		assert.match(contains(['z']), names);
 	});
 });
 
@@ -1452,8 +1452,8 @@ describe('inferrer — binary_expression &&/||', () => {
 		let t = infer("let x = 1 || 'hello';");
 		assert.match('union', t.kind);
 		let names = sort(map(t.members, (m) => m.name));
-		assert.match(true, index(names, 'int') >= 0);
-		assert.match(true, index(names, 'string') >= 0);
+		assert.match(contains(['int']), names);
+		assert.match(contains(['string']), names);
 	});
 
 	it('&& of same type returns that type', () => {
@@ -1493,7 +1493,7 @@ describe('inferrer — rest params', () => {
 		let t = inferFn("function f(...args) { return args; }");
 		assert.match('function', t.kind);
 		let names = map(t.params, (p) => p.name);
-		assert.match(true, index(names, 'args') >= 0);
+		assert.match(contains(['args']), names);
 	});
 
 	it('function_declaration: rest param has list type', () => {
@@ -1509,15 +1509,15 @@ describe('inferrer — rest params', () => {
 		let t = inferFn("function f(a, ...rest) { return rest; }");
 		assert.match('function', t.kind);
 		let names = map(t.params, (p) => p.name);
-		assert.match(true, index(names, 'a') >= 0);
-		assert.match(true, index(names, 'rest') >= 0);
+		assert.match(contains(['a']), names);
+		assert.match(contains(['rest']), names);
 	});
 
 	it('arrow function: rest param appears in inferred type params', () => {
 		let t = infer("let f = (...args) => args;");
 		assert.match('function', t.kind);
 		let names = map(t.params, (p) => p.name);
-		assert.match(true, index(names, 'args') >= 0);
+		assert.match(contains(['args']), names);
 	});
 
 	it('rest param is in scope inside function body', () => {
@@ -1537,8 +1537,8 @@ describe('inferrer — object with string-literal keys', () => {
 		let t = infer('let x = { "host": "localhost", "port": 8080 };');
 		assert.match('record', t.kind);
 		let names = sort(map(t.fields, (f) => f.name));
-		assert.match(true, index(names, 'host') >= 0);
-		assert.match(true, index(names, 'port') >= 0);
+		assert.match(contains(['host']), names);
+		assert.match(contains(['port']), names);
 	});
 
 	it('string-keyed field has the correct inferred value type', () => {

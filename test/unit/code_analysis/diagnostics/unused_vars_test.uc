@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains, not } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { unusedVars } from 'ucode_analyzer.code_analysis.diagnostics.unused_vars';
 
@@ -22,7 +22,7 @@ describe('diagnostics — unused variables', () => {
 
 		assert.match(1, length(diags));
 		assert.match(2, diags[0].severity);  // WARNING
-		assert.match(true, index(diags[0].message, 'unused') >= 0);
+		assert.match(contains('unused'), diags[0].message);
 	});
 
 	it('warns for a const binding that is never referenced', () => {
@@ -32,7 +32,7 @@ describe('diagnostics — unused variables', () => {
 		let diags = unusedVars(documents.get(URI));
 
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, 'MAX') >= 0);
+		assert.match(contains('MAX'), diags[0].message);
 	});
 
 	it('warns for a function declaration that is never called', () => {
@@ -42,7 +42,7 @@ describe('diagnostics — unused variables', () => {
 		let diags = unusedVars(documents.get(URI));
 
 		assert.match(1, length(diags));
-		assert.match(true, index(diags[0].message, 'helper') >= 0);
+		assert.match(contains('helper'), diags[0].message);
 	});
 
 	it('does not warn for an exported function (consumed externally)', () => {
@@ -81,7 +81,7 @@ describe('diagnostics — unused variables', () => {
 
 		// x is used inside the arrow; fn is used by... wait, fn is never called
 		// x: used → no warning. fn: never called → warning.
-		assert.match(false, index(names, "'x' is declared but never used") >= 0);
+		assert.match(not(contains(["'x' is declared but never used"])), names);
 	});
 
 	it('detects unused variables declared inside a function body', () => {
@@ -91,7 +91,7 @@ describe('diagnostics — unused variables', () => {
 		let diags = unusedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
 
-		assert.match(true, index(names, "'inner_unused' is declared but never used") >= 0);
+		assert.match(contains(["'inner_unused' is declared but never used"]), names);
 	});
 
 	it('warns for a variable declared inside an if-body that is never used', () => {
@@ -100,7 +100,7 @@ describe('diagnostics — unused variables', () => {
 
 		let diags = unusedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(true, index(names, "'inner_unused' is declared but never used") >= 0);
+		assert.match(contains(["'inner_unused' is declared but never used"]), names);
 	});
 
 	it('warns when outer variable is shadowed by inner function param and never used outside', () => {

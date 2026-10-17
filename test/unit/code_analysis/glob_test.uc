@@ -1,4 +1,4 @@
-import { describe, it, assert, prop, gen } from 'utest';
+import { describe, it, assert, prop, gen, contains, not } from 'utest';
 import { matchPattern, scan } from 'ucode_analyzer.code_analysis.glob';
 import * as fs from 'fs';
 
@@ -44,7 +44,7 @@ describe('glob.scan', () => {
 		let files = scan('/app/src', ['**/*.uc'], []);
 		assert.match(true, length(files) > 0);
 		for (let f in files)
-			assert.match(true, index(f, '.uc') >= 0);
+			assert.match(contains('.uc'), f);
 	});
 
 	it('excludes paths matching exclude pattern', () => {
@@ -53,7 +53,7 @@ describe('glob.scan', () => {
 
 		assert.match(true, length(excl) < length(all));
 		for (let f in excl)
-			assert.match(false, index(f, 'language_server') >= 0);
+			assert.match(not(contains('language_server')), f);
 	});
 
 	it('does not enter an excluded directory', () => {

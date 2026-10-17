@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { inlayHints } from 'ucode_analyzer.language_server.handlers.inlay_hints';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
@@ -33,7 +33,7 @@ describe('inlayHints — variable type hints', () => {
 		let hints = inlayHints(doc, fullRange());
 		let h = filter(hints, (h) => h.kind === 1)[0];
 		assert.match(true, h !== null);
-		assert.match(true, index(h.label, ':') >= 0);
+		assert.match(contains(':'), h.label);
 	});
 
 	it('does not emit a hint for a number literal', () => {
@@ -112,8 +112,8 @@ describe('inlayHints — parameter name hints', () => {
 		let paramHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 2);
 		assert.match(2, length(paramHints));
 		let labels = map(paramHints, (h) => h.label);
-		assert.match(true, index(labels, 'x:') >= 0);
-		assert.match(true, index(labels, 'y:') >= 0);
+		assert.match(contains(['x:']), labels);
+		assert.match(contains(['y:']), labels);
 	});
 
 	it('hint has kind 2 (Parameter) and paddingRight', () => {

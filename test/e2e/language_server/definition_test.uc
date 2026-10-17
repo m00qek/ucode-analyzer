@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, contains } from 'utest';
 import * as lsp from 'client';
 
 let proc;
@@ -94,7 +94,7 @@ describe('textDocument/definition', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.uri, 'tree_sitter') >= 0);
+		assert.match(contains('tree_sitter'), resp.result.uri);
 		assert.match(83, resp.result.range.start.line);
 		assert.match(16, resp.result.range.start.character);
 	});
@@ -113,7 +113,7 @@ describe('textDocument/definition', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.uri, 'greet') >= 0);
+		assert.match(contains('greet'), resp.result.uri);
 		assert.match(0, resp.result.range.start.line);
 		assert.match(9, resp.result.range.start.character);  // 'greet' after 'function '
 	});
@@ -188,7 +188,7 @@ describe('textDocument/definition', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.uri, 'tree_sitter') >= 0);
+		assert.match(contains('tree_sitter'), resp.result.uri);
 		assert.match(0, resp.result.range.start.line);
 		assert.match(0, resp.result.range.start.character);
 	});
@@ -207,7 +207,7 @@ describe('textDocument/definition', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.uri, 'tree_sitter') >= 0);
+		assert.match(contains('tree_sitter'), resp.result.uri);
 		assert.match(83, resp.result.range.start.line);
 		assert.match(16, resp.result.range.start.character);
 	});
@@ -241,7 +241,7 @@ describe('textDocument/definition', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, index(resp.result.uri, 'tree_sitter') >= 0);
+		assert.match(contains('tree_sitter'), resp.result.uri);
 		assert.match(83, resp.result.range.start.line);
 		assert.match(16, resp.result.range.start.character);
 	});
@@ -262,6 +262,6 @@ describe('textDocument/definition', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.uri, 'assert') >= 0);
+		assert.match(contains('assert'), resp.result.uri);
 	});
 });

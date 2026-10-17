@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains, not } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_vars';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -39,7 +39,7 @@ describe('diagnostics — undefined variables', () => {
 
 		assert.match(1, length(diags));
 		assert.match(2, diags[0].severity);  // WARNING
-		assert.match(true, index(diags[0].message, 'ghost') >= 0);
+		assert.match(contains('ghost'), diags[0].message);
 	});
 
 	it('does not warn for stdlib builtins', () => {
@@ -69,8 +69,8 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'a' is not defined") >= 0);
-		assert.match(false, index(names, "'b' is not defined") >= 0);
+		assert.match(not(contains(["'a' is not defined"])), names);
+		assert.match(not(contains(["'b' is not defined"])), names);
 	});
 
 	it('does not warn for a function parameter inside the function body', () => {
@@ -80,8 +80,8 @@ describe('diagnostics — undefined variables', () => {
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
 
-		assert.match(false, index(names, "'a' is not defined") >= 0);
-		assert.match(false, index(names, "'b' is not defined") >= 0);
+		assert.match(not(contains(["'a' is not defined"])), names);
+		assert.match(not(contains(["'b' is not defined"])), names);
 	});
 
 	it('does not warn for a for-in loop variable inside the loop body', () => {
@@ -90,7 +90,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'item' is not defined") >= 0);
+		assert.match(not(contains(["'item' is not defined"])), names);
 	});
 
 	it('does not warn for a namespace import alias', () => {
@@ -99,7 +99,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'ts' is not defined") >= 0);
+		assert.match(not(contains(["'ts' is not defined"])), names);
 	});
 
 	it('does not warn for a named import', () => {
@@ -108,7 +108,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'parse' is not defined") >= 0);
+		assert.match(not(contains(["'parse' is not defined"])), names);
 	});
 
 	it('does not warn for obj.prop — property identifiers are not variable refs', () => {
@@ -117,7 +117,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'nonExistentProp' is not defined") >= 0);
+		assert.match(not(contains(["'nonExistentProp' is not defined"])), names);
 	});
 
 	it('does warn for an undefined variable in a function body', () => {
@@ -126,7 +126,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(true, index(names, "'ghost' is not defined") >= 0);
+		assert.match(contains(["'ghost' is not defined"]), names);
 	});
 
 	it('does not warn for a variable declared in an outer scope used in inner', () => {
@@ -135,7 +135,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'x' is not defined") >= 0);
+		assert.match(not(contains(["'x' is not defined"])), names);
 	});
 
 	it('does not warn for the loop variable in a C-style for condition', () => {
@@ -144,7 +144,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'i' is not defined") >= 0);
+		assert.match(not(contains(["'i' is not defined"])), names);
 	});
 
 	it('does not warn for the loop variable in a C-style for increment', () => {
@@ -162,7 +162,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(true, index(names, "'ghost' is not defined") >= 0);
+		assert.match(contains(["'ghost' is not defined"]), names);
 	});
 
 	it('does not warn for the alias in export { foo as bar }', () => {
@@ -171,8 +171,8 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'bar' is not defined") >= 0);
-		assert.match(false, index(names, "'foo' is not defined") >= 0);
+		assert.match(not(contains(["'bar' is not defined"])), names);
+		assert.match(not(contains(["'foo' is not defined"])), names);
 	});
 
 	it('does warn when the local name in export { ghost as bar } is undefined', () => {
@@ -181,7 +181,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(true, index(names, "'ghost' is not defined") >= 0);
+		assert.match(contains(["'ghost' is not defined"]), names);
 	});
 
 	it('does not warn for a catch variable inside a catch block', () => {
@@ -190,7 +190,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'e' is not defined") >= 0);
+		assert.match(not(contains(["'e' is not defined"])), names);
 	});
 
 	it('does not warn for a rest parameter used in the function body', () => {
@@ -199,7 +199,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'args' is not defined") >= 0);
+		assert.match(not(contains(["'args' is not defined"])), names);
 	});
 
 	it('does not warn for a named function expression referring to itself recursively', () => {
@@ -208,7 +208,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'fact' is not defined") >= 0);
+		assert.match(not(contains(["'fact' is not defined"])), names);
 	});
 
 	it('does not warn for loop variable in a braceless for-in body', () => {
@@ -217,7 +217,7 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'x' is not defined") >= 0);
+		assert.match(not(contains(["'x' is not defined"])), names);
 	});
 
 	it('does not warn for the value variable in for (let k, v in obj)', () => {
@@ -226,8 +226,8 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'k' is not defined") >= 0);
-		assert.match(false, index(names, "'v' is not defined") >= 0);
+		assert.match(not(contains(["'k' is not defined"])), names);
+		assert.match(not(contains(["'v' is not defined"])), names);
 	});
 
 	it('does not warn for the loop variables of an alt-syntax for-in', () => {
@@ -236,8 +236,8 @@ describe('diagnostics — undefined variables', () => {
 
 		let diags = undefinedVars(documents.get(URI));
 		let names = map(diags, (d) => d.message);
-		assert.match(false, index(names, "'k' is not defined") >= 0);
-		assert.match(false, index(names, "'v' is not defined") >= 0);
+		assert.match(not(contains(["'k' is not defined"])), names);
+		assert.match(not(contains(["'v' is not defined"])), names);
 	});
 
 	it('treats a default import as defined', () => {

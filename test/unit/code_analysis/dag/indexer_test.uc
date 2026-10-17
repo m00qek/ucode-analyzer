@@ -1,4 +1,4 @@
-import { describe, it, assert, prop, gen } from 'utest';
+import { describe, it, assert, prop, gen, contains, not } from 'utest';
 import * as ts from 'tree_sitter';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'ucode_analyzer.code_analysis.dag.indexer';
@@ -255,8 +255,8 @@ describe('indexer.extractExports', () => {
 		let text = "return {\n\tread_state: function() { return 1; },\n\tversion: 2\n};\n";
 		let exps = extractExports(text, parse(text));
 		let names = map(exps, (e) => e.name);
-		assert.match(true, index(names, 'read_state') >= 0);
-		assert.match(true, index(names, 'version') >= 0);
+		assert.match(contains(['read_state']), names);
+		assert.match(contains(['version']), names);
 	});
 
 	it('types a return-object function field as a function export', () => {
@@ -293,27 +293,27 @@ describe('indexer.extractExports', () => {
 		let foos = filter(exps, (e) => e.name === 'foo');
 		assert.match(1, length(foos));          // the ES export, once
 		assert.match('function', foos[0].kind); // and it's the ES one (pushed first)
-		assert.match(true, index(map(exps, (e) => e.name), 'bar') >= 0);
+		assert.match(contains(['bar']), map(exps, (e) => e.name));
 	});
 
 	it('does not surface a return object nested inside a function', () => {
 		let text = "function f() { return { secret: 1 }; }\nexport { f };\n";
 		let names = map(extractExports(text, parse(text)), (e) => e.name);
-		assert.match(true, index(names, 'f') >= 0);
-		assert.match(false, index(names, 'secret') >= 0);
+		assert.match(contains(['f']), names);
+		assert.match(not(contains(['secret'])), names);
 	});
 
 	it('takes only the first top-level return object as the module value', () => {
 		let text = "return { a: 1 };\nreturn { b: 2 };\n";
 		let names = map(extractExports(text, parse(text)), (e) => e.name);
-		assert.match(true, index(names, 'a') >= 0);
-		assert.match(false, index(names, 'b') >= 0);
+		assert.match(contains(['a']), names);
+		assert.match(not(contains(['b'])), names);
 	});
 
 	it('surfaces a shorthand field of the return object', () => {
 		let text = "let helper = 1;\nreturn { helper };\n";
 		let names = map(extractExports(text, parse(text)), (e) => e.name);
-		assert.match(true, index(names, 'helper') >= 0);
+		assert.match(contains(['helper']), names);
 	});
 
 	// A return object is only the module's exports at the top level. Nested at any
@@ -324,8 +324,8 @@ describe('indexer.extractExports', () => {
 			let src = "return { a: 1, b: 2 };";
 			for (let i = 0; i < depth; i++) src = sprintf("function f%d() { %s }", i, src);
 			let names = map(extractExports(src, parse(src)), (e) => e.name);
-			assert.match(false, index(names, 'a') >= 0);
-			assert.match(false, index(names, 'b') >= 0);
+			assert.match(not(contains(['a'])), names);
+			assert.match(not(contains(['b'])), names);
 		});
 });
 
@@ -480,7 +480,7 @@ describe('indexer — template mode (imports/exports inside {% %})', () => {
 		let imps = extractImports(text, parseTpl(text));
 		assert.match(1, length(imps));
 		assert.match('lib.util', imps[0].specifier);
-		assert.match(true, index(imps[0].symbols, 'helper') >= 0);
+		assert.match(contains(['helper']), imps[0].symbols);
 	});
 
 	it('extracts a namespace import inside a statement tag', () => {

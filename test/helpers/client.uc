@@ -59,6 +59,14 @@ export function sendAll(proc, objs) {
 	write_all(proc, join('', map(objs, framed)));
 };
 
+// Why the server stopped answering: its exit status, collected (the process
+// is gone, so nothing else is lost by closing it).
+export function gone(proc, what) {
+	let status = proc.close();
+	return sprintf('%s: the server exited (%s)', what,
+		(status < 0) ? sprintf('killed by signal %d', -status) : sprintf('status %d', status));
+};
+
 export function close(proc) {
 	return proc.close();
 };
@@ -124,7 +132,7 @@ export function documentDiagnostics(proc, uri, previousResultId) {
 		params.previousResultId = previousResultId;
 	send(proc, { jsonrpc: '2.0', id: _diagId++, method: 'textDocument/diagnostic', params });
 	let resp = receive(proc);
-	if (resp === null) die('documentDiagnostics: no response');
+	if (resp === null) die(gone(proc, 'documentDiagnostics'));
 	return resp.result;
 };
 
@@ -133,7 +141,7 @@ export function workspaceDiagnostics(proc, previousResultIds) {
 	send(proc, { jsonrpc: '2.0', id: _diagId++, method: 'workspace/diagnostic',
 		params: { previousResultIds: previousResultIds ?? [] } });
 	let resp = receive(proc);
-	if (resp === null) die('workspaceDiagnostics: no response');
+	if (resp === null) die(gone(proc, 'workspaceDiagnostics'));
 	return resp.result;
 };
 
@@ -150,7 +158,7 @@ export function initialize(proc) {
 export function shutdown(proc) {
 	send(proc, { jsonrpc: '2.0', id: 0, method: 'shutdown', params: null });
 	let resp = receive(proc);
-	if (resp === null) die('shutdown: no response');
+	if (resp === null) die(gone(proc, 'shutdown'));
 	if (resp.error !== null)
 		die(sprintf('shutdown failed: %J', resp.error));
 	send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });

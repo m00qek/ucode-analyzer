@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, contains, not } from 'utest';
 import * as lsp from 'client';
 
 let proc;
@@ -30,7 +30,7 @@ describe('textDocument/signatureHelp', () => {
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
 		assert.match(1, length(resp.result.signatures));
-		assert.match(true, index(resp.result.signatures[0].label, 'f') >= 0);
+		assert.match(contains('f'), resp.result.signatures[0].label);
 	});
 
 	it('returns null when cursor is not inside a call', () => {
@@ -79,7 +79,7 @@ describe('textDocument/signatureHelp', () => {
 
 		assert.match(true, resp.result !== null);
 		assert.match(1, length(resp.result.signatures));
-		assert.match(true, index(resp.result.signatures[0].label, 'parse') >= 0);
+		assert.match(contains('parse'), resp.result.signatures[0].label);
 		assert.match(0, resp.result.activeParameter);
 	});
 
@@ -96,7 +96,7 @@ describe('textDocument/signatureHelp', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.signatures[0].label, 'parse') >= 0);
+		assert.match(contains('parse'), resp.result.signatures[0].label);
 		assert.match(0, resp.result.activeParameter);
 	});
 
@@ -114,7 +114,7 @@ describe('textDocument/signatureHelp', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.signatures[0].label, 'push') >= 0);
+		assert.match(contains('push'), resp.result.signatures[0].label);
 		assert.match(1, resp.result.activeParameter);
 	});
 
@@ -132,8 +132,8 @@ describe('textDocument/signatureHelp', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.signatures[0].label, 'g') >= 0);
-		assert.match(false, index(resp.result.signatures[0].label, 'f(') >= 0);
+		assert.match(contains('g'), resp.result.signatures[0].label);
+		assert.match(not(contains('f(')), resp.result.signatures[0].label);
 	});
 
 	it('shows outer call signature when cursor is on outer argument', () => {
@@ -150,7 +150,7 @@ describe('textDocument/signatureHelp', () => {
 		let resp = lsp.receive(proc);
 
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.signatures[0].label, 'f') >= 0);
+		assert.match(contains('f'), resp.result.signatures[0].label);
 		assert.match(1, resp.result.activeParameter);
 	});
 

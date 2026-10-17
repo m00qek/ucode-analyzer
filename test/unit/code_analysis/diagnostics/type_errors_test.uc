@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { typeErrors } from 'ucode_analyzer.code_analysis.diagnostics.type_errors';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -63,7 +63,7 @@ describe('diagnostics — type errors: member access on null', () => {
 		let d = filter(diags, (d) => d.code === 'null-access')[0];
 		assert.match(true, d !== null);
 		assert.match(1, d.severity);
-		assert.match(true, index(d.message, 'is null') >= 0);
+		assert.match(contains('is null'), d.message);
 	});
 
 	it('error range covers the object identifier', () => {
@@ -314,7 +314,7 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 		assert.match(true, d !== null);
 		assert.match('null-access', d.code);
 		assert.match(1, d.severity);   // ERROR
-		assert.match(true, index(d.message, 'is null') >= 0);
+		assert.match(contains('is null'), d.message);
 	});
 
 	it('a possibly-null (T | null) access is a warning, not an error', () => {
@@ -323,7 +323,7 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 		assert.match(true, d !== null);
 		assert.match('may-be-null', d.code);
 		assert.match(2, d.severity);   // WARNING
-		assert.match(true, index(d.message, 'may be null') >= 0);
+		assert.match(contains('may be null'), d.message);
 	});
 
 	it('flags indexing a value that may be null', () => {

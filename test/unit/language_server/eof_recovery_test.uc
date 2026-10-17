@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
@@ -92,7 +92,7 @@ function variantSuite(v) {
 		it('hover on x inside the innermost block shows int', () => {
 			let r = hover(open(v.text), { line: s + 3, character: 10 });
 			assert.match('object', type(r));
-			assert.match(true, index(r.contents.value, 'int') >= 0);
+			assert.match(contains('int'), r.contents.value);
 		});
 
 		it('definition of x inside the innermost block finds its let', () => {

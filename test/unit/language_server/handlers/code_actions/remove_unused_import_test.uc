@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.remove_unused_import';
 import { unusedImports } from 'ucode_analyzer.code_analysis.diagnostics.unused_imports';
@@ -38,7 +38,7 @@ describe('remove_unused_import', () => {
 		let doc = open("import * as ts from 'tree_sitter';\nlet x = 1;\n");
 		let diags = unusedImports(doc);
 		let action = actionsFor(URI, doc, diags)[0];
-		assert.match(true, index(action.title, 'ts') >= 0);
+		assert.match(contains('ts'), action.title);
 	});
 
 	it('action isPreferred is true', () => {

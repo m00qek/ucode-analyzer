@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, contains, not } from 'utest';
 import * as ts from 'tree_sitter';
 import { isTemplate, parse, topLevelStatements,
          importStmtSpecifier, importBindings, importBindingNodes,
@@ -102,16 +102,16 @@ describe('mode — parse dispatch', () => {
 describe('mode — topLevelStatements', () => {
 	it('returns a script\'s top-level statements directly', () => {
 		let types = stmtTypes("let a = 1;\nfunction f() {}\n");
-		assert.match(true, index(types, 'lexical_declaration') >= 0);
-		assert.match(true, index(types, 'function_declaration') >= 0);
+		assert.match(contains(['lexical_declaration']), types);
+		assert.match(contains(['function_declaration']), types);
 	});
 
 	it('surfaces a template\'s statements and drops the tag delimiters', () => {
 		let types = stmtTypes("{% import { helper } from 'lib.util'; %}\n{{ y }}\n");
 		// the import inside {% %} is surfaced; the delimiters are dropped
-		assert.match(true, index(types, 'import_statement') >= 0);
-		assert.match(false, index(types, 'statement_tag_open') >= 0);
-		assert.match(false, index(types, 'statement_tag_close') >= 0);
+		assert.match(contains(['import_statement']), types);
+		assert.match(not(contains('statement_tag_open')), types);
+		assert.match(not(contains('statement_tag_close')), types);
 	});
 
 	it('drops the trim and lstrip delimiter variants too', () => {
@@ -128,7 +128,7 @@ describe('mode — topLevelStatements', () => {
 
 	it('a spanning form is the ordinary statement', () => {
 		let types = stmtTypes("{% for (x in xs): %}\n{{ x }}\n{% endfor %}\n");
-		assert.match(true, index(types, 'for_in_alt_statement') >= 0);
+		assert.match(contains(['for_in_alt_statement']), types);
 	});
 });
 

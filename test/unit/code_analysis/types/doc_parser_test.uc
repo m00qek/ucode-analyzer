@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, contains } from 'utest';
 import { parseDoc, typeToString } from 'ucode_analyzer.code_analysis.types.doc_parser';
 
 // Helpers that build expected type objects.
@@ -88,7 +88,7 @@ describe('parseDoc — @returns and @throws', () => {
 describe('parseDoc — @template and type params', () => {
 	it('collects template param names', () => {
 		let doc = parseDoc("/** @template T */");
-		assert.match(true, index(doc.template, 'T') >= 0);
+		assert.match(contains(['T']), doc.template);
 	});
 
 	it('parses template type as param kind', () => {

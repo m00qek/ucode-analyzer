@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
 import * as fs from 'fs';
 import * as lsp from 'client';
 
@@ -52,7 +52,7 @@ describe('importers of a changed file', () => {
 		open(B, IMPORTER);
 		let before = lsp.documentDiagnostics(proc, B);
 		assert.match(['not-a-function'], codes(before));
-		assert.match(true, index(hoverS(), 'string') >= 0);
+		assert.match(contains('string'), hoverS());
 
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
 			textDocument: { uri: LIB, version: 2 }, contentChanges: [{ text: LIB_V2 }],
@@ -61,7 +61,7 @@ describe('importers of a changed file', () => {
 		let after = lsp.documentDiagnostics(proc, B, before.resultId);
 		assert.match('full', after.kind);
 		assert.match([], codes(after));
-		assert.match(true, index(hoverS(), 'function') >= 0);
+		assert.match(contains('function'), hoverS());
 	});
 
 	it('keep their diagnostics when only a function body changes', () => {
@@ -104,6 +104,6 @@ describe('importers of a changed file', () => {
 		let after = lsp.documentDiagnostics(proc, B, before.resultId);
 		assert.match('full', after.kind);
 		assert.match([], codes(after));
-		assert.match(true, index(hoverS(), 'function') >= 0);
+		assert.match(contains('function'), hoverS());
 	});
 });

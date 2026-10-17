@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { jsdocConsistency } from 'ucode_analyzer.code_analysis.diagnostics.jsdoc_consistency';
 
@@ -30,7 +30,7 @@ describe('diagnostics — jsdoc consistency: @param name mismatch', () => {
 	it('reports only the mismatching @param among several', () => {
 		let d = diags("/** @param {int} a @param {int} wrong */\nfunction f(a, b) {}\n");
 		assert.match(1, length(d));
-		assert.match(true, index(d[0].message, "'wrong'") >= 0);
+		assert.match(contains("'wrong'"), d[0].message);
 	});
 
 	it('anchors the range on the offending name', () => {

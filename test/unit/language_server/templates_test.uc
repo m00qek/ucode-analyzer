@@ -1,4 +1,4 @@
-import { describe, it, assert, mock, beforeEach } from 'utest';
+import { describe, it, assert, mock, beforeEach, contains, not } from 'utest';
 import * as templates from 'ucode_analyzer.language_server.templates';
 
 let SELF_SRC = '/app/src/ucode_analyzer';
@@ -59,21 +59,21 @@ describe('templates.renderTemplate — built-in defaults', () => {
 		let ctx = { label: 'x', typeStr: 'int', doc: null };
 		let md = templates.renderTemplate('hover/default', ctx, _config);
 		assert.match(true, md !== null);
-		assert.match(true, index(md, 'x') >= 0);
-		assert.match(true, index(md, 'int') >= 0);
+		assert.match(contains('x'), md);
+		assert.match(contains('int'), md);
 	});
 
 	it('default template: includes description when doc is present', () => {
 		let ctx = { label: 'x', typeStr: 'int', doc: { description: 'A count value.', examples: [] } };
 		let md = templates.renderTemplate('hover/default', ctx, _config);
-		assert.match(true, index(md, 'A count value.') >= 0);
+		assert.match(contains('A count value.'), md);
 	});
 
 	it('default template: includes @example blocks', () => {
 		let ctx = { label: 'x', typeStr: 'int', doc: { description: null, examples: ['let x = 1;'] } };
 		let md = templates.renderTemplate('hover/default', ctx, _config);
-		assert.match(true, index(md, 'let x = 1;') >= 0);
-		assert.match(true, index(md, '**Example:**') >= 0);
+		assert.match(contains('let x = 1;'), md);
+		assert.match(contains('**Example:**'), md);
 	});
 
 	it('function template: renders declaration-form signature in code fence', () => {
@@ -86,7 +86,7 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			returns: { typeStr: 'tree', description: null },
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
-		assert.match(true, index(md, 'function parse(src: string): tree') >= 0);
+		assert.match(contains('function parse(src: string): tree'), md);
 	});
 
 	it('function template: renders parameter list with each param on its own line', () => {
@@ -103,13 +103,13 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			returns: { typeStr: '?', description: null },
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
-		assert.match(true, index(md, '**Parameters:**') >= 0);
+		assert.match(contains('**Parameters:**'), md);
 		// Each param must be on its own line — check newline between items.
-		assert.match(true, index(md, '\n- `expected`') >= 0);
-		assert.match(true, index(md, '\n- `actual`') >= 0);
-		assert.match(true, index(md, '\n- `msg`') >= 0);
+		assert.match(contains('\n- `expected`'), md);
+		assert.match(contains('\n- `actual`'), md);
+		assert.match(contains('\n- `msg`'), md);
 		// Descriptions appear inline after em-dash.
-		assert.match(true, index(md, '— The expected value.') >= 0);
+		assert.match(contains('— The expected value.'), md);
 	});
 
 	it('function template: strips leading dash from descriptions', () => {
@@ -123,8 +123,8 @@ describe('templates.renderTemplate — built-in defaults', () => {
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
 		// Should not have "— - The value." — description already clean.
-		assert.match(true, index(md, '— The value.') >= 0);
-		assert.match(false, index(md, '— - ') >= 0);
+		assert.match(contains('— The value.'), md);
+		assert.match(not(contains('— - ')), md);
 	});
 
 	it('function template: includes returns description when present', () => {
@@ -137,8 +137,8 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			returns: { typeStr: 'int', description: 'The result.' },
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
-		assert.match(true, index(md, '**Returns:**') >= 0);
-		assert.match(true, index(md, 'The result.') >= 0);
+		assert.match(contains('**Returns:**'), md);
+		assert.match(contains('The result.'), md);
 	});
 
 	it('record template: lists fields each on its own line', () => {
@@ -152,11 +152,11 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			],
 		};
 		let md = templates.renderTemplate('hover/record', ctx, _config);
-		assert.match(true, index(md, 'assert') >= 0);
-		assert.match(true, index(md, '**Members:**') >= 0);
-		assert.match(true, index(md, '\n- `match`') >= 0);
-		assert.match(true, index(md, '— Assert equality.') >= 0);
-		assert.match(true, index(md, '\n- `throws`') >= 0);
+		assert.match(contains('assert'), md);
+		assert.match(contains('**Members:**'), md);
+		assert.match(contains('\n- `match`'), md);
+		assert.match(contains('— Assert equality.'), md);
+		assert.match(contains('\n- `throws`'), md);
 	});
 
 	it('module template: renders specifier and description', () => {
@@ -166,9 +166,9 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			module: { specifier: 'tree_sitter', description: 'Tree-sitter bindings.' },
 		};
 		let md = templates.renderTemplate('hover/module', ctx, _config);
-		assert.match(true, index(md, 'ts') >= 0);
-		assert.match(true, index(md, 'tree_sitter') >= 0);
-		assert.match(true, index(md, 'Tree-sitter bindings.') >= 0);
+		assert.match(contains('ts'), md);
+		assert.match(contains('tree_sitter'), md);
+		assert.match(contains('Tree-sitter bindings.'), md);
 	});
 
 	it('returns null for a nonexistent template name', () => {

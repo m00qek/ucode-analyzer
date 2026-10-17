@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, contains, not } from 'utest';
 import * as lsp from 'client';
 
 let proc;
@@ -29,9 +29,9 @@ describe('textDocument/hover — feature coverage', () => {
 		let val = resp.result.contents.value;
 
 		assert.match(1, resp.id);
-		assert.match(true, index(val, 'parse') >= 0);
-		assert.match(true, index(val, 'string') >= 0);
-		assert.match(true, index(val, 'Parameters') >= 0);
+		assert.match(contains('parse'), val);
+		assert.match(contains('string'), val);
+		assert.match(contains('Parameters'), val);
 	});
 
 	it('named import: prefers the re-export own JSDoc over the underlying definition', () => {
@@ -50,8 +50,8 @@ describe('textDocument/hover — feature coverage', () => {
 		let val = resp.result.contents.value;
 
 		assert.match(1, resp.id);
-		assert.match(true, index(val, 'Wrapper thing') >= 0);   // re-export's own doc
-		assert.match(true, index(val, 'Deep thing') < 0);       // not the drilled-through doc
+		assert.match(contains('Wrapper thing'), val);   // re-export's own doc
+		assert.match(not(contains('Deep thing')), val);       // not the drilled-through doc
 	});
 
 	it('named import: shows JSDoc description from source module', () => {
@@ -68,7 +68,7 @@ describe('textDocument/hover — feature coverage', () => {
 		let val = resp.result.contents.value;
 
 		assert.match(1, resp.id);
-		assert.match(true, index(val, 'tree-sitter') >= 0);
+		assert.match(contains('tree-sitter'), val);
 	});
 
 	it('namespace import alias: shows module type with specifier', () => {
@@ -85,7 +85,7 @@ describe('textDocument/hover — feature coverage', () => {
 		let val = resp.result.contents.value;
 
 		assert.match(1, resp.id);
-		assert.match(true, index(val, 'tree_sitter') >= 0);
+		assert.match(contains('tree_sitter'), val);
 	});
 
 	it('member expression property: shows type of accessed property with its parameters', () => {
@@ -102,9 +102,9 @@ describe('textDocument/hover — feature coverage', () => {
 		let val = resp.result.contents.value;
 
 		assert.match(1, resp.id);
-		assert.match(true, index(val, 'parse') >= 0);
-		assert.match(true, index(val, 'string') >= 0);
-		assert.match(true, index(val, 'Parameters') >= 0);
+		assert.match(contains('parse'), val);
+		assert.match(contains('string'), val);
+		assert.match(contains('Parameters'), val);
 	});
 
 	it('stdlib builtin: shows function signature and description', () => {
@@ -121,8 +121,8 @@ describe('textDocument/hover — feature coverage', () => {
 		let val = resp.result.contents.value;
 
 		assert.match(1, resp.id);
-		assert.match(true, index(val, 'push') >= 0);
-		assert.match(true, index(val, 'Pushes') >= 0);
+		assert.match(contains('push'), val);
+		assert.match(contains('Pushes'), val);
 	});
 
 	it('exported function with JSDoc: shows signature, description and Parameters section', () => {
@@ -139,10 +139,10 @@ describe('textDocument/hover — feature coverage', () => {
 		let val = resp.result.contents.value;
 
 		assert.match(1, resp.id);
-		assert.match(true, index(val, 'add') >= 0);
-		assert.match(true, index(val, 'int') >= 0);
-		assert.match(true, index(val, 'Add two numbers') >= 0);
-		assert.match(true, index(val, 'Parameters') >= 0);
+		assert.match(contains('add'), val);
+		assert.match(contains('int'), val);
+		assert.match(contains('Add two numbers'), val);
+		assert.match(contains('Parameters'), val);
 	});
 
 	it('optional-chain member obj?.prop: hover shows inner type, not nullable wrapper', () => {
@@ -179,9 +179,9 @@ describe('textDocument/hover — feature coverage', () => {
 		let val = resp.result.contents.value;
 
 		assert.match(1, resp.id);
-		assert.match(true, index(val, 'x') >= 0);
-		assert.match(true, index(val, 'y') >= 0);
-		assert.match(true, index(val, 'Members') >= 0);
+		assert.match(contains('x'), val);
+		assert.match(contains('y'), val);
+		assert.match(contains('Members'), val);
 	});
 
 	it('named import record: hover shows JSDoc description and member list', () => {
@@ -201,9 +201,9 @@ describe('textDocument/hover — feature coverage', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(val, 'Assertion utilities') >= 0);
-		assert.match(true, index(val, 'Members') >= 0);
-		assert.match(true, index(val, 'match') >= 0);
+		assert.match(contains('Assertion utilities'), val);
+		assert.match(contains('Members'), val);
+		assert.match(contains('match'), val);
 	});
 
 	it('consecutive hover requests on the same position return consistent results without a file change', () => {
@@ -230,8 +230,8 @@ describe('textDocument/hover — feature coverage', () => {
 		assert.match(2, resp2.id);
 		assert.match(true, resp1.result !== null);
 		assert.match(true, resp2.result !== null);
-		assert.match(true, index(resp1.result.contents.value, 'int') >= 0);
-		assert.match(true, index(resp2.result.contents.value, 'int') >= 0);
+		assert.match(contains('int'), resp1.result.contents.value);
+		assert.match(contains('int'), resp2.result.contents.value);
 	});
 
 	it('namespace import: hover shows module description from header comment', () => {
@@ -251,7 +251,7 @@ describe('textDocument/hover — feature coverage', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(val, 'Hover fixture') >= 0);
+		assert.match(contains('Hover fixture'), val);
 	});
 
 	it('nested record member: hover shows record type with inner fields', () => {
@@ -271,8 +271,8 @@ describe('textDocument/hover — feature coverage', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(val, 'Members') >= 0);
-		assert.match(true, index(val, 'upper') >= 0);
+		assert.match(contains('Members'), val);
+		assert.match(contains('upper'), val);
 	});
 
 	it('nested record member function: hover shows JSDoc description of inner method', () => {
@@ -292,8 +292,8 @@ describe('textDocument/hover — feature coverage', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(val, 'Converts the input') >= 0);
-		assert.match(true, index(val, 'Parameters') >= 0);
+		assert.match(contains('Converts the input'), val);
+		assert.match(contains('Parameters'), val);
 	});
 
 	it('named import record member: hover shows function JSDoc description', () => {
@@ -312,9 +312,9 @@ describe('textDocument/hover — feature coverage', () => {
 
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(val, 'Asserts that a value') >= 0);
-		assert.match(true, index(val, 'Parameters') >= 0);
-		assert.match(true, index(val, 'expected') >= 0);
+		assert.match(contains('Asserts that a value'), val);
+		assert.match(contains('Parameters'), val);
+		assert.match(contains('expected'), val);
 	});
 
 	it('for-in loop variable at declaration site shows element type', () => {
@@ -329,7 +329,7 @@ describe('textDocument/hover — feature coverage', () => {
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.contents.value, 'int') >= 0);
+		assert.match(contains('int'), resp.result.contents.value);
 	});
 
 	it('for-in over record: loop variable at declaration site shows string key type', () => {
@@ -344,7 +344,7 @@ describe('textDocument/hover — feature coverage', () => {
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+		assert.match(contains('string'), resp.result.contents.value);
 	});
 
 	it('for-in iterable (the collection) shows its own type, not empty', () => {
@@ -359,7 +359,7 @@ describe('textDocument/hover — feature coverage', () => {
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);   // used to be null (routed to the loop-var path)
-		assert.match(true, index(resp.result.contents.value, 'int') >= 0);
+		assert.match(contains('int'), resp.result.contents.value);
 	});
 
 	it('catch variable hover shows string type', () => {
@@ -374,7 +374,7 @@ describe('textDocument/hover — feature coverage', () => {
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+		assert.match(contains('string'), resp.result.contents.value);
 	});
 
 	it('type() narrowing: variable shows narrowed type inside if-branch', () => {
@@ -390,7 +390,7 @@ describe('textDocument/hover — feature coverage', () => {
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+		assert.match(contains('string'), resp.result.contents.value);
 	});
 
 	it('type() narrowing: variable shows narrowed type in else branch after !== check', () => {
@@ -405,6 +405,6 @@ describe('textDocument/hover — feature coverage', () => {
 		let resp = lsp.receive(proc);
 		assert.match(1, resp.id);
 		assert.match(true, resp.result !== null);
-		assert.match(true, index(resp.result.contents.value, 'string') >= 0);
+		assert.match(contains('string'), resp.result.contents.value);
 	});
 });

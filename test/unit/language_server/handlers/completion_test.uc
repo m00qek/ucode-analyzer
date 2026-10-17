@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, contains, not } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { completion } from 'ucode_analyzer.language_server.handlers.completion';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -32,7 +32,7 @@ describe('completion — scope', () => {
 		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
 
 		let labels = map(items, (i) => i.label);
-		assert.match(true, index(labels, 'count') >= 0);
+		assert.match(contains(['count']), labels);
 	});
 
 	it('completion item for a variable has VARIABLE kind (6)', () => {
@@ -71,8 +71,8 @@ describe('completion — scope', () => {
 		let items = completion(URI, documents.get(URI), { line: 1, character: 0 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(true, index(labels, 'a') >= 0);
-		assert.match(false, index(labels, 'b') >= 0);
+		assert.match(contains(['a']), labels);
+		assert.match(not(contains(['b'])), labels);
 	});
 });
 
@@ -104,8 +104,8 @@ describe('completion — import context', () => {
 		let items = completion(URI, documents.get(URI), { line: 2, character: 0 });
 
 		let labels = map(items, (i) => i.label);
-		assert.match(true, index(labels, 'x') >= 0);      // local binding
-		assert.match(true, index(labels, 'parse') >= 0);  // named import
+		assert.match(contains(['x']), labels);      // local binding
+		assert.match(contains(['parse']), labels);  // named import
 	});
 });
 
@@ -124,8 +124,8 @@ describe('completion — member (cursor on property)', () => {
 		let items = completion(URI, documents.get(URI), { line: 2, character: 3 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(true, index(labels, 'parse') >= 0);   // ts export
-		assert.match(false, index(labels, 'x') >= 0);      // local binding — must NOT appear
+		assert.match(contains(['parse']), labels);   // ts export
+		assert.match(not(contains(['x'])), labels);      // local binding — must NOT appear
 	});
 
 	it('namespace import: items include the function kind for function exports', () => {
@@ -149,7 +149,7 @@ describe('completion — member (cursor on property)', () => {
 		let items = completion(URI, documents.get(URI), { line: 1, character: 3 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(true, index(labels, 'parse') >= 0);
+		assert.match(contains(['parse']), labels);
 	});
 
 	it('record type: offers field names of an object literal', () => {
@@ -162,8 +162,8 @@ describe('completion — member (cursor on property)', () => {
 		let items = completion(URI, documents.get(URI), { line: 1, character: 4 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(true, index(labels, 'foo') >= 0);
-		assert.match(true, index(labels, 'bar') >= 0);
+		assert.match(contains(['foo']), labels);
+		assert.match(contains(['bar']), labels);
 	});
 
 	it('record type: does not include scope locals', () => {
@@ -174,8 +174,8 @@ describe('completion — member (cursor on property)', () => {
 		let items = completion(URI, documents.get(URI), { line: 2, character: 4 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(true,  index(labels, 'foo') >= 0);
-		assert.match(false, index(labels, 'x') >= 0);
+		assert.match(contains(['foo']), labels);
+		assert.match(not(contains(['x'])), labels);
 	});
 
 	it('union of records: offers fields from all branches', () => {
@@ -187,8 +187,8 @@ describe('completion — member (cursor on property)', () => {
 		let items = completion(URI, documents.get(URI), { line: 1, character: 2 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(true, index(labels, 'alpha') >= 0);
-		assert.match(true, index(labels, 'beta') >= 0);
+		assert.match(contains(['alpha']), labels);
+		assert.match(contains(['beta']), labels);
 	});
 
 	it('union of records: deduplicates fields present in multiple branches', () => {
@@ -203,8 +203,8 @@ describe('completion — member (cursor on property)', () => {
 		let count = 0;
 		for (let l in labels) if (l === 'shared') count++;
 		assert.match(1, count);
-		assert.match(true, index(labels, 'a') >= 0);
-		assert.match(true, index(labels, 'b') >= 0);
+		assert.match(contains(['a']), labels);
+		assert.match(contains(['b']), labels);
 	});
 
 	it('union containing non-record members: still offers record fields', () => {
@@ -217,7 +217,7 @@ describe('completion — member (cursor on property)', () => {
 		let items = completion(URI, documents.get(URI), { line: 1, character: 2 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(true, index(labels, 'omega') >= 0);
+		assert.match(contains(['omega']), labels);
 	});
 
 	it('non-member position still returns general items', () => {
@@ -229,8 +229,8 @@ describe('completion — member (cursor on property)', () => {
 		let items = completion(URI, documents.get(URI), { line: 2, character: 0 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(true, index(labels, 'x') >= 0);
-		assert.match(true, index(labels, 'ts') >= 0);  // namespace alias is in scope
+		assert.match(contains(['x']), labels);
+		assert.match(contains(['ts']), labels);  // namespace alias is in scope
 	});
 });
 
@@ -246,14 +246,14 @@ describe('completion — keywords', () => {
 		let labels = map(items, (i) => i.label);
 
 		// A selection of expected keywords
-		assert.match(true, index(labels, 'if') >= 0);
-		assert.match(true, index(labels, 'for') >= 0);
-		assert.match(true, index(labels, 'while') >= 0);
-		assert.match(true, index(labels, 'return') >= 0);
-		assert.match(true, index(labels, 'let') >= 0);
-		assert.match(true, index(labels, 'function') >= 0);
-		assert.match(true, index(labels, 'true') >= 0);
-		assert.match(true, index(labels, 'null') >= 0);
+		assert.match(contains(['if']), labels);
+		assert.match(contains(['for']), labels);
+		assert.match(contains(['while']), labels);
+		assert.match(contains(['return']), labels);
+		assert.match(contains(['let']), labels);
+		assert.match(contains(['function']), labels);
+		assert.match(contains(['true']), labels);
+		assert.match(contains(['null']), labels);
 	});
 
 	it('keyword items have KEYWORD kind (14)', () => {
@@ -278,8 +278,8 @@ describe('completion — keywords', () => {
 		let items = completion(URI, documents.get(URI), { line: 1, character: 4 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(false, index(labels, 'if') >= 0);
-		assert.match(false, index(labels, 'return') >= 0);
+		assert.match(not(contains(['if'])), labels);
+		assert.match(not(contains(['return'])), labels);
 	});
 
 	it('does not include keywords inside import statement context', () => {
@@ -292,7 +292,7 @@ describe('completion — keywords', () => {
 		let items = completion(URI, documents.get(URI), { line: 0, character: 19 });
 		let labels = map(items, (i) => i.label);
 
-		assert.match(false, index(labels, 'if') >= 0);
+		assert.match(not(contains(['if'])), labels);
 	});
 });
 
@@ -317,8 +317,8 @@ describe('completion — snippets', () => {
 
 		let items = completion(URI, documents.get(URI), { line: 5, character: 0 });
 		let item = filter(items, (i) => i.label === 'add')[0];
-		assert.match(true, index(item.insertText, 'x') >= 0);
-		assert.match(true, index(item.insertText, 'y') >= 0);
+		assert.match(contains('x'), item.insertText);
+		assert.match(contains('y'), item.insertText);
 		assert.match('add(${1:x}, ${2:y})', item.insertText);
 	});
 

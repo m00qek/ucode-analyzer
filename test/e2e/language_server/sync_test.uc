@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, contains } from 'utest';
 import * as lsp from 'client';
 
 const DOC = {
@@ -37,7 +37,7 @@ describe('LSP document sync', () => {
 
 		assert.match(1, resp.id);
 		assert.match('markdown', resp.result.contents.kind);
-		assert.match(true, index(resp.result.contents.value, 'int') >= 0);
+		assert.match(contains('int'), resp.result.contents.value);
 	});
 
 	it('textDocument/hover returns null for unopened document', () => {

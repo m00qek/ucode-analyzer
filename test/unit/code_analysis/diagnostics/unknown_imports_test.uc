@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { unknownImports } from 'ucode_analyzer.code_analysis.diagnostics.unknown_imports';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -36,7 +36,7 @@ describe('diagnostics — unknown imports', () => {
 
 		assert.match(1, length(diags));
 		assert.match(1, diags[0].severity);
-		assert.match(true, index(diags[0].message, 'no_such_module') >= 0);
+		assert.match(contains('no_such_module'), diags[0].message);
 	});
 
 	it('highlights the module string node, not the whole statement', () => {

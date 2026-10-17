@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { codeAction } from 'ucode_analyzer.language_server.handlers.code_actions';
 import { preferStrictEquality } from 'ucode_analyzer.code_analysis.diagnostics.prefer_strict_equality';
@@ -89,8 +89,8 @@ describe('codeAction', () => {
 	it('action title mentions both the old and new operator', () => {
 		let doc = open("let x = 1 == 2;\n");
 		let action = codeAction(URI, doc, preferStrictEquality(doc))[0];
-		assert.match(true, index(action.title, '==') >= 0);
-		assert.match(true, index(action.title, '===') >= 0);
+		assert.match(contains('=='), action.title);
+		assert.match(contains('==='), action.title);
 	});
 
 	it('action carries back the originating diagnostic', () => {

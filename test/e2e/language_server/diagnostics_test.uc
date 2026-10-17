@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, contains } from 'utest';
 import * as lsp from 'client';
 
 let proc;
@@ -50,7 +50,7 @@ describe('textDocument/diagnostic', () => {
 		let diags = diagnose('file:///t.uc', "let neverUsed = 42;\n");
 		assert.match(1, length(diags));
 		assert.match(2, diags[0].severity);  // WARNING
-		assert.match(true, index(diags[0].message, 'neverUsed') >= 0);
+		assert.match(contains('neverUsed'), diags[0].message);
 	});
 
 	it('reports error when a named import does not exist in the module', () => {
@@ -107,7 +107,7 @@ describe('textDocument/diagnostic', () => {
 		let d = filter(diags, (d) => d.code === 'null-access');
 		assert.match(true, length(d) >= 1);
 		assert.match(1, d[0].severity);   // ERROR
-		assert.match(true, index(d[0].message, 'is null') >= 0);
+		assert.match(contains('is null'), d[0].message);
 	});
 
 	it('suppresses null member access warning inside if (x) { } guard body', () => {
@@ -127,7 +127,7 @@ describe('textDocument/diagnostic', () => {
 		let depDiags = filter(diags, (d) => d.message === 'Deprecated');
 		assert.match(true, length(depDiags) >= 1);
 		assert.match(4, depDiags[0].severity);  // HINT
-		assert.match(true, index(depDiags[0].tags, 2) >= 0);  // TAG_DEPRECATED
+		assert.match(contains([2]), depDiags[0].tags);  // TAG_DEPRECATED
 	});
 
 	it('does not report deprecated hint for non-deprecated imported symbol', () => {
@@ -141,7 +141,7 @@ describe('textDocument/diagnostic', () => {
 		let d = filter(diags, (d) => d.code === 'unused-import');
 		assert.match(1, length(d));
 		assert.match(4, d[0].severity);   // HINT
-		assert.match(true, index(d[0].message, "'ts'") >= 0);
+		assert.match(contains("'ts'"), d[0].message);
 	});
 
 	it('does not report unused-import for an import that is used', () => {
@@ -155,7 +155,7 @@ describe('textDocument/diagnostic', () => {
 		let d = filter(diags, (d) => d.code === 'redeclared-var');
 		assert.match(1, length(d));
 		assert.match(1, d[0].severity);   // ERROR
-		assert.match(true, index(d[0].message, "'x'") >= 0);
+		assert.match(contains("'x'"), d[0].message);
 	});
 
 	it('reports duplicate-key warning for duplicate object keys', () => {
@@ -163,7 +163,7 @@ describe('textDocument/diagnostic', () => {
 		let d = filter(diags, (d) => d.code === 'duplicate-key');
 		assert.match(1, length(d));
 		assert.match(2, d[0].severity);   // WARNING
-		assert.match(true, index(d[0].message, "'a'") >= 0);
+		assert.match(contains("'a'"), d[0].message);
 	});
 
 	it('reports const-assignment error for reassigning a const variable', () => {
@@ -171,7 +171,7 @@ describe('textDocument/diagnostic', () => {
 		let d = filter(diags, (d) => d.code === 'const-assignment');
 		assert.match(1, length(d));
 		assert.match(1, d[0].severity);   // ERROR
-		assert.match(true, index(d[0].message, "'x'") >= 0);
+		assert.match(contains("'x'"), d[0].message);
 	});
 
 	it('reports missing-return warning for @returns function missing a path', () => {

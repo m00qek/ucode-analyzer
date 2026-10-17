@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach } from 'utest';
+import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.remove_duplicate_key';
 import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_object_key';
@@ -38,7 +38,7 @@ describe('remove_duplicate_key', () => {
 		let doc = open("let x = { a: 1, a: 2 };\n");
 		let diags = duplicateObjectKey(doc);
 		let action = actionsFor(URI, doc, diags)[0];
-		assert.match(true, index(action.title, 'a') >= 0);
+		assert.match(contains('a'), action.title);
 	});
 
 	it('action isPreferred is true', () => {
