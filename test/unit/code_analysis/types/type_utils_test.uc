@@ -50,11 +50,17 @@ describe('type_utils.unionOf', () => {
 		assert.match({ kind: 'union', members: [pass, fail] }, unionOf([pass, fail]));
 	});
 
-	it('collapses records with the same field-name set', () => {
+	it('merges records with the same field-name set, field by field', () => {
 		let a = { kind: 'record', fields: [{ name: 'kind', type: STR }] };
 		let b = { kind: 'record', fields: [{ name: 'kind', type: INT }] };
-		// The first record stands for both.
-		assert.match(a, unionOf([a, b]));
+		assert.match({ kind: 'record', fields: [{ name: 'kind', type: { kind: 'union', members: [STR, INT] } }] },
+			unionOf([a, b]));
+	});
+
+	it('keeps a merged record open if either is', () => {
+		let a = { kind: 'record', fields: [{ name: 'x', type: INT }] };
+		let b = { kind: 'record', fields: [{ name: 'x', type: INT }], open: true };
+		assert.match({ kind: 'record', fields: [{ name: 'x', type: INT }], open: true }, unionOf([a, b]));
 	});
 
 	it('is order-insensitive when comparing field names', () => {

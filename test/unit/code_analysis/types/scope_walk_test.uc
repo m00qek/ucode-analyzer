@@ -180,10 +180,12 @@ describe('buildScopeMap assignment widening', () => {
 	});
 
 	it('if/else assigning on both paths drops the old type', () => {
-		// Current behaviour: same-shaped records collapse into the first, so the
-		// field keeps the then-branch literal (1) although the else assigns 2.
+		// Same-shaped records merge: the field is either literal.
 		let t = xAt("function f(c) {\n\tlet x = null;\n\tif (c) x = { a: 1 }; else x = { a: 2 };\n\treturn x;\n}\n");
-		assert.match(recA1(14), t);
+		let want = recA1(14);
+		want.fields[0].type = { kind: 'union', members: [
+			{ kind: 'primitive', name: 'int', value: 1 }, { kind: 'primitive', name: 'int', value: 2 } ] };
+		assert.match(want, t);
 	});
 
 	it('a branch that returns does not reach the end', () => {

@@ -37,6 +37,17 @@ function sameFieldNames(a, b) {
 	return true;
 }
 
+// Two records of the same field names as one: each field's type is the union
+// of both (`{ a: 1 }` and `{ a: 2 }` give `{ a: 1 | 2 }`). `union` is unionOf.
+function mergeRecords(a, b, union) {
+	let bt = {};
+	for (let f in (b.fields ?? [])) bt[f.name] = f.type;
+	let r = { ...a, fields: map(a.fields ?? [], (f) =>
+		(f.type && bt[f.name]) ? { ...f, type: union([f.type, bt[f.name]]) } : f) };
+	if (b.open) r.open = true;
+	return r;
+}
+
 // Reduce a list of Types to a single type: UNKNOWN for empty, the sole element
 // for a singleton, or a union of distinct types otherwise.
 // Nested unions are flattened: `(a | b) | c` is `a | b | c`, so a member
@@ -65,7 +76,10 @@ export function unionOf(types) {
 			}
 			if (t.kind === 'ref' && m.name !== t.name) continue;
 			// Distinct record shapes are kept apart so tagged unions survive.
-			if (t.kind === 'record' && !sameFieldNames(m, t)) continue;
+			if (t.kind === 'record') {
+				if (!sameFieldNames(m, t)) continue;
+				members[j] = mergeRecords(m, t, unionOf);
+			}
 			seen = true; break;
 		}
 		if (!seen) push(members, t);
