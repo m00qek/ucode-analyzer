@@ -211,8 +211,6 @@ describe('completion — keywords', () => {
 		assert.match([ { label: 'if', kind: 14 } ], filter(items, (i) => i.label === 'if'));
 	});
 
-	// Suspected bug: KEYWORDS offers these, but ucode rejects each one with a
-	// syntax error (`typeof 1`, `void 0`, `[] instanceof Array`).
 	it('offers ucode\'s keywords, not JavaScript\'s', () => {
 		let labels = map(completeAt("let x = 1;\n$0"), (i) => i.label);
 		assert.match([], filter(labels, (l) => l in [ 'do', 'finally', 'instanceof', 'throw', 'typeof', 'void' ]));

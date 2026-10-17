@@ -208,11 +208,7 @@ describe('crossFileRefsOf', () => {
 		assert.match([ entry(wrapper, [ { start, end } ]) ], crossFileRefsOf(deep, 'thing', deep));
 	});
 
-	// BUG: the tests below assert the correct behaviour and fail today.
-
 	it('lists each reference once for a file importing the module twice', () => {
-		// reverseDeps() lists the file once per import statement, and each
-		// visit adds all its imports again: every range comes out twice.
 		let src = cursors("import { $1foo$2 } from 'cfr_lib';\nimport * as ns from 'cfr_lib';\n$3foo$4(ns.$5foo$6);\n");
 		index({ 'cfr_lib.uc': LIB, 'cfr_both.uc': src });
 		assert.match([ entry(fixture.uri('cfr_both.uc'), [ span(src, 1, 2), span(src, 3, 4), span(src, 5, 6) ]) ],
@@ -222,7 +218,7 @@ describe('crossFileRefsOf', () => {
 	it('renames only the exported name of an aliased export', () => {
 		// `export { a as b }`, renamed from an importer of b: the lib's local `a`
 		// must stay, or `export { c as b }` no longer exports what is imported.
-		// (Its references are a's, as today.)
+		// Its references are a's.
 		let lib = cursors("let $1a$2 = 2;\nexport { $3a$4 as $5b$6 };\n");
 		let user = cursors("import { b } from 'cfr_alias';\nb;\n");
 		index({ 'cfr_alias.uc': lib, 'cfr_alias_user.uc': user });

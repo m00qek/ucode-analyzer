@@ -155,7 +155,7 @@ function importedCallee(name, callerUri) {
 		if (!doc) continue;
 		let byteOff = positionToOffset(doc.text, doc.lineTable, exp.position);
 		let r = findFnAt(ts.rootNode(doc.tree), doc.text, byteOff);
-		if (r) return { fnNode: r.fnNode, nameNode: r.nameNode, uri: imp.resolvedUri, doc };
+		if (r && isFunctionNode(r.fnNode)) return { fnNode: r.fnNode, nameNode: r.nameNode, uri: imp.resolvedUri, doc };
 	}
 	return null;
 }
@@ -280,6 +280,13 @@ export function prepareCallHierarchy(uri, doc, position) {
 			}
 		}
 	}
+
+	// An aliased import (`import { greet as hi }`) has no export identity, which
+	// keeps rename local; it still calls the function it imports.
+	let callee = resolveCalleeIdent(node, uri, doc);
+	if (callee && callee.uri !== uri)
+		return [makeItem(ts.text(callee.nameNode, callee.doc.text), callee.fnNode, callee.nameNode,
+		                 callee.uri, callee.doc.text, callee.doc.lineTable)];
 	return null;
 };
 

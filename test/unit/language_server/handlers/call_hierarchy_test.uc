@@ -153,11 +153,9 @@ describe('prepareCallHierarchy — imported functions', () => {
 		assert.match(null, prepareAt(cursors("import { VERSION } from 'settings';\n$0VERSION;\n"), fixture.uri('ch_user.uc')));
 	});
 
-	it('returns null on an aliased import', () => {
-		// Suspected bug: hi() calls greet, and outgoingCalls() resolves the alias,
-		// but resolveExportIdentity keeps an alias local (as rename needs).
+	it('on a call through an aliased import: the imported function', () => {
 		fromDisk(GREET);
-		assert.match(null, prepareAt(cursors("import { greet as hi } from 'greet';\n$0hi();\n"), fixture.uri('ch_user.uc')));
+		assert.match([ greetItem() ], prepareAt(cursors("import { greet as hi } from 'greet';\n$0hi();\n"), fixture.uri('ch_user.uc')));
 	});
 });
 
@@ -244,9 +242,7 @@ describe('incomingCalls — across files', () => {
 		]), incomingCalls(item));
 	});
 
-	// BUG: asserts the correct behaviour and fails today. A namespace call's
-	// reference is the property `greet` of `g.greet`, whose parent is the
-	// member expression, so isCallSite() rejects it.
+	// The reference is the property `greet` of the called `g.greet`.
 	it('finds a call through a namespace import', () => {
 		fromDisk(GREET);
 		let src = cursors("import * as g from 'greet';\ng.$1greet$2();\n");
@@ -312,9 +308,7 @@ describe('outgoingCalls', () => {
 		assert.match(null, outgoingCalls(fnItem('f', 'file:///nowhere.uc', ZERO, ZERO, 0)));
 	});
 
-	// BUG: these assert the correct behaviour and fail today: callees are
-	// looked up by name among the imports and the top-level declarations,
-	// ignoring scope.
+	// Callees resolve by scope, not by name.
 
 	it('resolves a call of a nested function', () => {
 		let src = cursors("function $0run() {\n\t$1function $2inner$3() {}$4\n\t$5inner$6();\n}\n");

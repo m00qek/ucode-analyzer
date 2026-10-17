@@ -67,8 +67,6 @@ describe('signatureHelp', () => {
 		assert.match(1, result.activeParameter);
 	});
 
-	// Suspected bug: the handler counts arguments that START before the cursor,
-	// so a cursor inside or right after the first argument reports parameter 1.
 	it('activeParameter is 0 with the cursor inside the first argument', () => {
 		assert.match(0, sigAt("let f = (a, b) => a;\nf(12$03, 4);\n").activeParameter);
 	});
