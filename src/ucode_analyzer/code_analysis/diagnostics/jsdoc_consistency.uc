@@ -86,15 +86,12 @@ function isAssignedFn(node) {
 	return length(filter(ts.namedChildren(decl), (c) => ts.nodeType(c) === 'variable_declarator')) === 1;
 }
 
-function walk(node, source, lineTable, out) {
-	if (ts.nodeType(node) === 'function_declaration' || isAssignedFn(node))
-		checkFn(node, source, lineTable, out);
-	for (let c in ts.namedChildren(node))
-		walk(c, source, lineTable, out);
-}
+const FUNCTION_TYPES = ['function_declaration', 'function_expression', 'arrow_function'];
 
 export function jsdocConsistency(doc) {
 	let out = [];
-	walk(ts.rootNode(doc.tree), doc.text, doc.lineTable, out);
+	for (let node in ts.descendants(ts.rootNode(doc.tree), FUNCTION_TYPES))
+		if (ts.nodeType(node) === 'function_declaration' || isAssignedFn(node))
+			checkFn(node, doc.text, doc.lineTable, out);
 	return out;
 };

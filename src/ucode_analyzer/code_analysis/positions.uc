@@ -12,6 +12,9 @@ export function findAncestor(node, type) {
 
 // True for nodes whose named children are statements: a script's `program`, a
 // template's `markup`, a `{ }` block, or an alt-syntax body.
+// The node types that hold a list of statements (isStatementList).
+export const STATEMENT_LISTS = ['program', 'markup', 'statement_block', 'statement_list'];
+
 export function isStatementList(nodeType) {
 	return nodeType === 'program' || nodeType === 'markup' ||
 	       nodeType === 'statement_block' || nodeType === 'statement_list';

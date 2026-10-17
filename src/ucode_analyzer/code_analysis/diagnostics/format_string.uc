@@ -147,28 +147,18 @@ function checkCall(args, source, uri, scopeMap, lineTable, diags) {
 	}
 }
 
-let _walk;
-_walk = function(node, source, uri, scopeMap, lineTable, diags) {
-	if (ts.nodeType(node) === 'call_expression') {
+export function formatString(uri, doc) {
+	let source = doc.text;
+	let diags = [];
+	for (let node in ts.descendants(ts.rootNode(doc.tree), ['call_expression'])) {
 		let callee   = ts.childByField(node, 'function');
 		let argsNode = ts.childByField(node, 'arguments');
-		if (callee && ts.nodeType(callee) === 'identifier' && argsNode) {
-			let name = ts.text(callee, source);
-			if (name === 'sprintf' || name === 'printf') {
-				let args = [];
-				for (let i = 0; i < ts.namedChildCount(argsNode); i++)
-					push(args, ts.namedChild(argsNode, i));
-				if (length(args) >= 1 && ts.nodeType(args[0]) === 'string')
-					checkCall(args, source, uri, scopeMap, lineTable, diags);
-			}
-		}
+		if (!callee || ts.nodeType(callee) !== 'identifier' || !argsNode) continue;
+		let name = ts.text(callee, source);
+		if (name !== 'sprintf' && name !== 'printf') continue;
+		let args = ts.namedChildren(argsNode);
+		if (length(args) >= 1 && ts.nodeType(args[0]) === 'string')
+			checkCall(args, source, uri, doc.scopeMap, doc.lineTable, diags);
 	}
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		_walk(ts.namedChild(node, i), source, uri, scopeMap, lineTable, diags);
-};
-
-export function formatString(uri, doc) {
-	let diags = [];
-	_walk(ts.rootNode(doc.tree), doc.text, uri, doc.scopeMap, doc.lineTable, diags);
 	return diags;
 };

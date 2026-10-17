@@ -46,18 +46,20 @@ export function stringLiteralText(node, source) {
 // subtrees are skipped so an inner function's parameters don't count as uses of an
 // outer name (the unused-variable pass needs that; the unused-import pass does not).
 export function identifierOccurrences(root, source, skipParams) {
+	let types = ['identifier', 'shorthand_property_identifier'];
+	if (skipParams) push(types, 'formal_parameters');
 	let idx = {};
-	function walk(node) {
-		let nt = ts.nodeType(node);
-		if (skipParams && nt === 'formal_parameters') return;
-		if (nt === 'identifier' || nt === 'shorthand_property_identifier') {
-			let name = ts.text(node, source);
-			if (!exists(idx, name)) idx[name] = [];
-			push(idx[name], ts.startByte(node));
+	let skipEnd = -1;  // end of the formal_parameters being skipped
+	for (let node in ts.descendants(root, types)) {
+		let start = ts.startByte(node);
+		if (start < skipEnd) continue;
+		if (ts.nodeType(node) === 'formal_parameters') {
+			skipEnd = ts.endByte(node);
+			continue;
 		}
-		for (let i = 0; i < ts.namedChildCount(node); i++)
-			walk(ts.namedChild(node, i));
+		let name = ts.text(node, source);
+		if (!exists(idx, name)) idx[name] = [];
+		push(idx[name], start);
 	}
-	walk(root);
 	return idx;
 };

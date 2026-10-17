@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
-import { identifierOccurrences, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
+import { identifierOccurrences } from 'ucode_analyzer.code_analysis.ast_text';
 
 let SEVERITY_WARNING = 2;
 
@@ -24,59 +24,28 @@ function isExported(node) {
 	return false;
 }
 
-// Collect all top-level and nested declarations.
+// Collect every declaration, nested ones included, but not those inside
+// parameter lists. Import-introduced names are handled by unused_imports.uc.
 // Each entry: { name, declByte, nameNode }
 function collectDeclarations(root, source, out) {
-	function walk(node) {
-		let nt = ts.nodeType(node);
-
-		// Import-introduced names are handled by unused_imports.uc — skip here.
-		if (nt === 'import_statement') return;
-
-		if (nt === 'lexical_declaration') {
-			for (let i = 0; i < ts.namedChildCount(node); i++) {
-				let vd = ts.namedChild(node, i);
-				if (ts.nodeType(vd) !== 'variable_declarator') continue;
-				let nameNode = ts.childByField(vd, 'name');
-				if (nameNode && ts.nodeType(nameNode) === 'identifier')
-					push(out, { name: ts.text(nameNode, source), declByte: ts.startByte(nameNode), nameNode });
-			}
-			// Walk the initializer values for nested declarations.
-			for (let i = 0; i < ts.namedChildCount(node); i++) {
-				let vd = ts.namedChild(node, i);
-				if (ts.nodeType(vd) !== 'variable_declarator') continue;
-				let val = ts.childByField(vd, 'value');
-				if (val) walk(val);
-			}
-			return;
-		}
-
-		if (nt === 'function_declaration') {
-			let nameNode = ts.childByField(node, 'name');
-			if (nameNode && ts.nodeType(nameNode) === 'identifier')
-				push(out, { name: ts.text(nameNode, source), declByte: ts.startByte(nameNode), nameNode });
-			let body = ts.childByField(node, 'body');
-			if (body) walk(body);
-			return;
-		}
-
-		if (nt === 'export_statement') {
-			for (let inner in namedNonComments(node)) walk(inner);
-			return;
-		}
-
-		if (nt === 'arrow_function' || nt === 'function_expression') {
-			let body = ts.childByField(node, 'body');
-			if (body) walk(body);
-			return;
-		}
-
-		// Default: recurse into all named children so declarations inside
-		// if/while/for/try bodies are not missed.
-		for (let i = 0; i < ts.namedChildCount(node); i++)
-			walk(ts.namedChild(node, i));
+	function add(nameNode) {
+		if (nameNode && ts.nodeType(nameNode) === 'identifier')
+			push(out, { name: ts.text(nameNode, source), declByte: ts.startByte(nameNode), nameNode });
 	}
-	walk(root);
+	let skipEnd = -1;  // end of the formal_parameters being skipped
+	for (let node in ts.descendants(root, ['lexical_declaration', 'function_declaration', 'formal_parameters'])) {
+		if (ts.startByte(node) < skipEnd) continue;
+		let nt = ts.nodeType(node);
+		if (nt === 'formal_parameters') {
+			skipEnd = ts.endByte(node);
+		} else if (nt === 'function_declaration') {
+			add(ts.childByField(node, 'name'));
+		} else {
+			for (let vd in ts.namedChildren(node))
+				if (ts.nodeType(vd) === 'variable_declarator')
+					add(ts.childByField(vd, 'name'));
+		}
+	}
 }
 
 export function unusedVars(doc) {

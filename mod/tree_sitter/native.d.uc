@@ -128,6 +128,14 @@ export function ts_node_children_by_field(node, name) {};
  */
 export function ts_node_descendant_offsets(node, types) {};
 
+/**
+ * @param {Node} node
+ * @param {string[]} types - Node type names.
+ * @returns {Node[]} Every descendant (node included) of one of the types, in
+ *   document order.
+ */
+export function ts_node_descendants(node, types) {};
+
 /** @param {Node} node @param {int} offset @returns {Node} Smallest descendant containing the byte at offset, else node. */
 export function ts_node_descendant_at(node, offset) {};
 

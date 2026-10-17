@@ -426,12 +426,13 @@ static uc_value_t *descendant_at(uc_vm_t *vm, size_t nargs, bool named) {
 }
 
 /*
- * The start bytes of every descendant of `node` (itself included) whose type
- * is one of `types`, in document order (a preorder walk, so non-decreasing).
- * Offsets rather than nodes: a caller can test "does this subtree hold any of
- * these?" with a binary search instead of visiting it.
+ * Every descendant of `node` (itself included) whose type is one of `types`,
+ * in document order (a preorder walk, so start bytes are non-decreasing): as
+ * nodes, or as start bytes when `offsets` is set. Offsets let a caller test
+ * "does this subtree hold any of these?" with a binary search instead of
+ * visiting it.
  */
-static uc_value_t *uc_ts_node_descendant_offsets(uc_vm_t *vm, size_t nargs) {
+static uc_value_t *descendants(uc_vm_t *vm, size_t nargs, bool offsets) {
   uc_ts_node_t *node = node_arg(vm, nargs, 0);
   uc_value_t *typesval = uc_fn_arg(1);
   uc_value_t *result, *item;
@@ -463,7 +464,9 @@ static uc_value_t *uc_ts_node_descendant_offsets(uc_vm_t *vm, size_t nargs) {
         want = ucv_string_get(item);
 
         if (want && !strcmp(type, want)) {
-          ucv_array_push(result, ucv_int64_new(ts_node_start_byte(current)));
+          ucv_array_push(result,
+                         offsets ? ucv_int64_new(ts_node_start_byte(current))
+                                 : node_wrap(node->tree_ref, current));
           break;
         }
       }
@@ -487,6 +490,14 @@ static uc_value_t *uc_ts_node_descendant_offsets(uc_vm_t *vm, size_t nargs) {
   ts_tree_cursor_delete(&cursor);
 
   return result;
+}
+
+static uc_value_t *uc_ts_node_descendants(uc_vm_t *vm, size_t nargs) {
+  return descendants(vm, nargs, false);
+}
+
+static uc_value_t *uc_ts_node_descendant_offsets(uc_vm_t *vm, size_t nargs) {
+  return descendants(vm, nargs, true);
 }
 
 static uc_value_t *uc_ts_node_descendant_at(uc_vm_t *vm, size_t nargs) {
@@ -675,6 +686,7 @@ static const uc_function_list_t global_fns[] = {
     {"ts_node_children_by_field", uc_ts_node_children_by_field},
     {"ts_node_descendant_at", uc_ts_node_descendant_at},
     {"ts_node_descendant_offsets", uc_ts_node_descendant_offsets},
+    {"ts_node_descendants", uc_ts_node_descendants},
     {"ts_node_named_descendant_at", uc_ts_node_named_descendant_at},
     {"ts_query_new", uc_ts_query_new},
     {"ts_query_pattern_count", uc_ts_query_pattern_count},

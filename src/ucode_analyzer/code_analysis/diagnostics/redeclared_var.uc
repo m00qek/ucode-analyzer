@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { rangeOf, isStatementList } from 'ucode_analyzer.code_analysis.positions';
+import { rangeOf, STATEMENT_LISTS } from 'ucode_analyzer.code_analysis.positions';
 
 let SEVERITY_ERROR = 1;
 
@@ -36,21 +36,9 @@ function checkBlock(node, source, lineTable, diags) {
 	}
 }
 
-// Recursively walk the tree; call checkBlock for every scope container.
-function walk(node, source, lineTable, diags) {
-	let nt = ts.nodeType(node);
-	if (isStatementList(nt))
-		checkBlock(node, source, lineTable, diags);
-
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		walk(ts.namedChild(node, i), source, lineTable, diags);
-}
-
 export function redeclaredVars(doc) {
-	let root      = ts.rootNode(doc.tree);
-	let source    = doc.text;
-	let lineTable = doc.lineTable;
-	let diags     = [];
-	walk(root, source, lineTable, diags);
+	let diags = [];
+	for (let node in ts.descendants(ts.rootNode(doc.tree), STATEMENT_LISTS))
+		checkBlock(node, doc.text, doc.lineTable, diags);
 	return diags;
 };

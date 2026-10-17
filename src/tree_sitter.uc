@@ -272,6 +272,18 @@ export function childrenByField(node, name) {
 };
 
 /**
+ * Return every descendant of node (node included) whose type is in `types`,
+ * in document order, without visiting the others from ucode.
+ * @param {Node} node
+ * @param {string[]} types
+ * @returns {Node[]}
+ */
+export function descendants(node, types) {
+	expect(type(types) === 'array', 'descendants() expects an array of type names');
+	return native.ts_node_descendants(node, types);
+};
+
+/**
  * Return the start bytes of every descendant of node (node included) whose
  * type is in `types`, in document order, without visiting them from ucode.
  * @param {Node} node

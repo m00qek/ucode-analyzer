@@ -171,20 +171,11 @@ function checkFunction(node, source, lineTable, diags) {
 	});
 }
 
-function walk(node, source, lineTable, diags) {
-	let nt = ts.nodeType(node);
-	if (nt === 'function_declaration' || nt === 'function_expression' || nt === 'arrow_function')
-		checkFunction(node, source, lineTable, diags);
-
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		walk(ts.namedChild(node, i), source, lineTable, diags);
-}
+const FUNCTION_TYPES = ['function_declaration', 'function_expression', 'arrow_function'];
 
 export function missingReturn(doc) {
-	let root      = ts.rootNode(doc.tree);
-	let source    = doc.text;
-	let lineTable = doc.lineTable;
-	let diags     = [];
-	walk(root, source, lineTable, diags);
+	let diags = [];
+	for (let node in ts.descendants(ts.rootNode(doc.tree), FUNCTION_TYPES))
+		checkFunction(node, doc.text, doc.lineTable, diags);
 	return diags;
 };

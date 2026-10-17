@@ -11,47 +11,44 @@ let TERMINATORS = {
 	continue_statement: true,
 };
 
-function walk(node, source, lineTable, out) {
-	let nt = ts.nodeType(node);
-
-	if (nt === 'statement_block' || nt === 'statement_list') {
-		let hitTerminator = false;
-		for (let i = 0; i < ts.namedChildCount(node); i++) {
-			let stmt = ts.namedChild(node, i);
-			// Comments are extra nodes, not code: a trailing `return x; // note`
-			// must not be reported as unreachable, and a comment never terminates
-			// or revives a block. Skip without touching hitTerminator.
-			let st = ts.nodeType(stmt);
-			if (st === 'comment' || st === 'doc_comment')
-				continue;
-			if (hitTerminator) {
-				push(out, {
-					range:    rangeOf(source, lineTable, stmt),
-					severity: SEVERITY_WARNING,
-					source:   'ucode-analyzer',
-					code:     'unreachable-code',
-					message:  'Unreachable code',
-				});
-				// Still recurse so we don't hide nested terminators, but skip
-				// emitting for inner blocks — their parent statement is already flagged.
-				continue;
-			}
-			if (TERMINATORS[ts.nodeType(stmt)]) {
-				hitTerminator = true;
-			} else {
-				walk(stmt, source, lineTable, out);
-			}
+// Report the statements after a terminator in one block. Returns the byte
+// range they and the terminator cover, which the caller skips; or null.
+function checkBlock(node, source, lineTable, out) {
+	let terminator = null;
+	for (let i = 0; i < ts.namedChildCount(node); i++) {
+		let stmt = ts.namedChild(node, i);
+		// Comments are extra nodes, not code: a trailing `return x; // note`
+		// must not be reported as unreachable, and a comment never terminates
+		// or revives a block.
+		let st = ts.nodeType(stmt);
+		if (st === 'comment' || st === 'doc_comment')
+			continue;
+		if (terminator) {
+			push(out, {
+				range:    rangeOf(source, lineTable, stmt),
+				severity: SEVERITY_WARNING,
+				source:   'ucode-analyzer',
+				code:     'unreachable-code',
+				message:  'Unreachable code',
+			});
+		} else if (TERMINATORS[st]) {
+			terminator = stmt;
 		}
-		return;
 	}
-
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		walk(ts.namedChild(node, i), source, lineTable, out);
+	return terminator ? [ts.startByte(terminator), ts.endByte(node)] : null;
 }
 
 export function unreachableCode(doc) {
-	let lineTable = doc.lineTable;
-	let diags     = [];
-	walk(ts.rootNode(doc.tree), doc.text, lineTable, diags);
+	let diags   = [];
+	// Blocks inside a flagged statement are not reported again: their parent
+	// statement already is. The skipped ranges nest, innermost on top.
+	let skipped = [];
+	for (let node in ts.descendants(ts.rootNode(doc.tree), ['statement_block', 'statement_list'])) {
+		let start = ts.startByte(node);
+		while (length(skipped) && skipped[-1][1] <= start) pop(skipped);
+		if (length(skipped) && skipped[-1][0] <= start) continue;
+		let range = checkBlock(node, doc.text, doc.lineTable, diags);
+		if (range) push(skipped, range);
+	}
 	return diags;
 };

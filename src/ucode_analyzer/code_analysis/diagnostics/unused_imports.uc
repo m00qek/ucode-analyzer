@@ -24,6 +24,7 @@ export function unusedImports(doc) {
 
 	let bindings = [];
 	collectImportBindings(root, source, bindings);
+	if (!length(bindings)) return [];
 
 	// Import clauses are intentionally included so their bytes match a binding's
 	// declByte; any reference outside the clause has a different byte.

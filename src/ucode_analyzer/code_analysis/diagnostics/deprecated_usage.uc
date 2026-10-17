@@ -72,13 +72,20 @@ function deprecatedNames(uri) {
 	return names;
 }
 
-function walk(node, source, uri, lineTable, candidates, diags) {
-	if (ts.nodeType(node) === 'identifier' &&
-	    candidates[ts.text(node, source)] && !isDeclSite(node)) {
+
+export function deprecatedUsage(uri, doc) {
+	let candidates = deprecatedNames(uri);
+	// Nothing in scope is deprecated → no identifier can be, skip the walk.
+	if (length(candidates) === 0) return [];
+
+	let source = doc.text;
+	let diags  = [];
+	for (let node in ts.descendants(ts.rootNode(doc.tree), ['identifier'])) {
+		if (!candidates[ts.text(node, source)] || isDeclSite(node)) continue;
 		let resolved = resolveDoc(uri, node, source, null);
 		if (resolved.doc && resolved.doc.deprecated)
 			push(diags, {
-				range:    rangeOf(source, lineTable, node),
+				range:    rangeOf(source, doc.lineTable, node),
 				severity: SEVERITY_HINT,
 				source:   'ucode-analyzer',
 				code:     'deprecated',
@@ -86,17 +93,5 @@ function walk(node, source, uri, lineTable, candidates, diags) {
 				message:  'Deprecated',
 			});
 	}
-	for (let i = 0; i < ts.namedChildCount(node); i++)
-		walk(ts.namedChild(node, i), source, uri, lineTable, candidates, diags);
-}
-
-export function deprecatedUsage(uri, doc) {
-	let candidates = deprecatedNames(uri);
-	// Nothing in scope is deprecated → no identifier can be, skip the walk.
-	if (length(candidates) === 0) return [];
-
-	let lineTable = doc.lineTable;
-	let diags     = [];
-	walk(ts.rootNode(doc.tree), doc.text, uri, lineTable, candidates, diags);
 	return diags;
 };
