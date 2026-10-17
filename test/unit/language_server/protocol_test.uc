@@ -63,6 +63,19 @@ describe('protocol — drainFrames (Content-Length reassembly)', () => {
 		assert.match('', r.rest);
 	});
 
+	it('drops a header without Content-Length and reads on', () => {
+		let r = drainFrames('Content-Type: x\r\n\r\n' + frame('{}'));
+		assert.match(['{}'], r.frames);
+		assert.match(['Content-Type: x'], r.bad);
+		assert.match('', r.rest);
+	});
+
+	it('reads the Content-Length header in any case', () => {
+		let r = drainFrames('content-length: 2\r\n\r\n{}');
+		assert.match(['{}'], r.frames);
+		assert.match([], r.bad);
+	});
+
 	it('returns no frames for an empty buffer', () => {
 		let r = drainFrames('');
 		assert.match(0, length(r.frames));

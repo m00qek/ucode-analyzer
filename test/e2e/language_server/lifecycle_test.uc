@@ -168,6 +168,23 @@ describe('malformed JSON resilience', () => {
 	});
 });
 
+describe('malformed header resilience', () => {
+	it('server drops a header without Content-Length and keeps reading', () => {
+		let proc = lsp.connect();
+		lsp.initialize(proc);
+
+		proc.write_raw('X-Garbage: 1\r\n\r\n');
+
+		lsp.send(proc, { jsonrpc: '2.0', id: 42, method: 'shutdown', params: null });
+		let ok = lsp.receive(proc);
+		assert.match(42, ok.id);
+		assert.match(null, ok.error);
+
+		lsp.send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });
+		assert.match(0, lsp.close(proc));
+	});
+});
+
 describe('post-shutdown guard', () => {
 	it('request after shutdown returns InvalidRequest (-32600)', () => {
 		let proc = lsp.connect();
