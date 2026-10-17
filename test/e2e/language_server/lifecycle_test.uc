@@ -185,6 +185,26 @@ describe('malformed header resilience', () => {
 	});
 });
 
+describe('failing notification', () => {
+	it('is logged to stderr and the server stays alive', () => {
+		let log = fs.mkdtemp('/tmp/lifecycle-XXXXXX') + '/stderr.log';
+		let proc = lsp.spawn('sh', ['-c',
+			sprintf('exec ucode -L /app/src /app/src/ucode-language-server.uc --config /tmp --workspace /app 2>%s', log)]);
+		lsp.initialize(proc);
+
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {} });
+
+		lsp.send(proc, { jsonrpc: '2.0', id: 42, method: 'shutdown', params: null });
+		let ok = lsp.receive(proc);
+		lsp.send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });
+		assert.match(0, lsp.close(proc));
+		let stderr = fs.readfile(log) ?? '';
+		system(['rm', '-rf', fs.dirname(log)]);
+		assert.match(42, ok.id);
+		assert.match(true, index(stderr, 'ucode-ls: textDocument/didOpen failed: ') >= 0);
+	});
+});
+
 describe('post-shutdown guard', () => {
 	it('request after shutdown returns InvalidRequest (-32600)', () => {
 		let proc = lsp.connect();

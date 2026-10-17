@@ -352,6 +352,8 @@ export function run(config) {
 				try {
 					handler(msg);
 				} catch(e) {
+					// Logged for notifications too: nothing else would report them.
+					warn(sprintf('ucode-ls: %s failed: %s\n', msg.method, e));
 					if ('id' in msg)
 						protocol.error(msg.id, -32603, sprintf('internal error: %s', e));
 				}
