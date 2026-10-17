@@ -84,6 +84,18 @@ export function receiveNotification(proc) {
 	}
 };
 
+// Read up to the response to request `id`. Returns it, with the methods of the
+// server-to-client requests read on the way (workspace/diagnostic/refresh, ...).
+export function receiveUntil(proc, id) {
+	let requests = [];
+	while (true) {
+		let msg = read_message(proc);
+		if (msg === null) return { response: null, requests };
+		if (msg.method === null && msg.id === id) return { response: msg, requests };
+		if (msg.method && msg.id !== null) push(requests, msg.method);
+	}
+};
+
 // Skip responses and notifications; return the next server-to-client request (id + method both set).
 export function receiveServerRequest(proc) {
 	while (true) {

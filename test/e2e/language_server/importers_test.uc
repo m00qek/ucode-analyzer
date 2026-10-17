@@ -77,6 +77,20 @@ describe('importers of a changed file', () => {
 		assert.match('unchanged', lsp.documentDiagnostics(proc, B, before.resultId).kind);
 	});
 
+	it('get one diagnostic refresh for a burst of edits', () => {
+		open(LIB, LIB_V1);
+		open(B, IMPORTER);
+		for (let v = 2; v <= 6; v++)
+			lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
+				textDocument: { uri: LIB, version: v },
+				contentChanges: [{ text: (v % 2) ? LIB_V1 : LIB_V2 }],
+			}});
+		system('sleep 1');  // past the refresh delay
+		lsp.send(proc, { jsonrpc: '2.0', id: 77, method: 'workspace/symbol', params: { query: 'zzz' } });
+		let r = lsp.receiveUntil(proc, 77);
+		assert.match(['workspace/diagnostic/refresh'], r.requests);
+	});
+
 	it('see an edit to the imported file on disk', () => {
 		open(B, IMPORTER);
 		let before = lsp.documentDiagnostics(proc, B);

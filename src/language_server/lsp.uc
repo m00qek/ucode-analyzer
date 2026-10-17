@@ -24,6 +24,9 @@ import { documentLinks } from 'language_server.handlers.document_link';
 import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'language_server.handlers.call_hierarchy';
 import * as platform from 'language_server.platform';
 
+// How long a diagnostic refresh waits for further changes, in ms.
+const REFRESH_DELAY = 500;
+
 // Drop everything derived from the files that import a changed file: type
 // caches, diagnostics and, for open ones, scope maps.
 function invalidateDependents(uris) {
@@ -55,14 +58,26 @@ export function run(config) {
 	}
 
 	let _refreshSeq = 0;
+	let _refreshTimer = null;
 
 	// Ask pull-model clients to re-request diagnostics. Sent when a change can
 	// affect files other than the one being edited (cross-file dependencies,
 	// on-disk changes); the edited document itself is re-pulled by the client
 	// automatically. Fire-and-forget: the client's empty response is ignored.
+	// Debounced, since each refresh can start a workspace scan: while changes
+	// keep coming (typing in a file others import), only the last one asks,
+	// REFRESH_DELAY ms after it.
 	let requestDiagnosticRefresh = function() {
-		protocol.request(sprintf('diag-refresh-%d', ++_refreshSeq),
-			'workspace/diagnostic/refresh', null);
+		if (_refreshTimer) {
+			_refreshTimer.set(REFRESH_DELAY);
+			return;
+		}
+		_refreshTimer = uloop.timer(REFRESH_DELAY, function() {
+			_refreshTimer = null;
+			if (!shutdown_requested)
+				protocol.request(sprintf('diag-refresh-%d', ++_refreshSeq),
+					'workspace/diagnostic/refresh', null);
+		});
 	};
 
 	const handlers = {
@@ -101,8 +116,9 @@ export function run(config) {
 			let declVersions = workspace.loadWorkspace(config);
 
 			// Package-manager queries are blocking subprocess calls; run them in a
-			// background task and refresh diagnostics once availability is known.
-			platform.initAsync(declVersions, requestDiagnosticRefresh);
+			// background task. Availability only shows in hover and completion,
+			// which read it when asked, so nothing needs refreshing when it lands.
+			platform.initAsync(declVersions, null);
 
 			// Ask the editor to notify us when .uc files change on disk.
 			protocol.request('cap-watch-uc', 'client/registerCapability', {
