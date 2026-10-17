@@ -161,10 +161,19 @@ function utf8Cp(text, i) {
 	return ((b0 & 0x07) << 18) | ((b1 & 0x3F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F);
 };
 
+// A byte that is not ASCII (or a NUL). Over ASCII, UTF-16 units are bytes, so
+// the conversions below skip decoding.
+const NOT_ASCII = /[^\x01-\x7f]/;
+
 // LSP { line, character } (character in UTF-16 units) → byte offset.
 export function positionToOffset(text, lineTable, position) {
 	let i = lineTable[position.line] ?? length(text);
 	let units = position.character;
+
+	if (units <= 0)
+		return i;
+	if (!match(substr(text, i, units), NOT_ASCII))
+		return min(i + units, length(text));
 
 	while (units > 0 && i < length(text)) {
 		let b0 = ord(substr(text, i, 1));
@@ -193,9 +202,11 @@ export function offsetToPosition(text, lineTable, offset) {
 	}
 
 	let line = lo;
-	let character = 0;
 	let i = lineTable[line];
+	if (!match(substr(text, i, offset - i), NOT_ASCII))
+		return { line, character: offset - i };
 
+	let character = 0;
 	while (i < offset) {
 		let b0 = ord(substr(text, i, 1));
 		character += utf8Cp(text, i) > 0xFFFF ? 2 : 1;
