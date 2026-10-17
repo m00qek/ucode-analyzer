@@ -37,7 +37,9 @@ describe('JSDoc comments in all source files parse without ucdocs errors', () =>
 
 	let files = sort(walkFiles('/app/src', '.uc'));
 
-	for (let path in files) {
+	for (let file in files) {
+		// A closure sees a loop variable's last value; a block's `let` is per pass.
+		let path = file;
 		it(path, () => {
 			let src = fs.readfile(path);
 			let tree = ts.parse(parser_ucode, src);

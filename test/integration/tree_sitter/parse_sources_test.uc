@@ -3,6 +3,7 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
 import * as fs from 'fs';
+import { isTemplate } from 'ucode_analyzer.code_analysis.mode';
 
 function walkFiles(dir, ext) {
 	let results = [];
@@ -23,22 +24,20 @@ function walkFiles(dir, ext) {
 	return results;
 }
 
-function hasErrors(node) {
-	if (ts.nodeType(node) === 'ERROR') return true;
-	for (let c in ts.namedChildren(node))
-		if (hasErrors(c)) return true;
-	return false;
-}
 
 describe('ucode source files parse without errors', () => {
-	let parser = ts.newParser(ts.ucode());
+	let script   = ts.newParser(ts.ucode());
+	let template = ts.newParser(ts.markup());
 	let files = sort(walkFiles('/app/src', '.uc'));
 
-	for (let path in files) {
+	for (let file in files) {
+		// A closure sees a loop variable's last value; a block's `let` is per pass.
+		let path = file;
 		it(path, () => {
 			let src = fs.readfile(path);
-			let tree = ts.parse(parser, src);
-			assert.match(false, hasErrors(ts.rootNode(tree)));
+			let tree = ts.parse(isTemplate(src) ? template : script, src);
+			// ERROR and MISSING nodes alike.
+			assert.match(false, ts.hasError(ts.rootNode(tree)));
 		});
 	}
 });
