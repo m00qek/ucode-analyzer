@@ -29,9 +29,7 @@ afterEach(() => {
 });
 
 function open(uri, text) {
-	lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-		textDocument: { uri, languageId: 'ucode', version: 1, text },
-	}});
+	lsp.open(proc, uri, text);
 }
 
 function codes(report) {
@@ -54,9 +52,7 @@ describe('importers of a changed file', () => {
 		assert.match(['not-a-function'], codes(before));
 		assert.match(contains('string'), hoverS());
 
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
-			textDocument: { uri: LIB, version: 2 }, contentChanges: [{ text: LIB_V2 }],
-		}});
+		lsp.change(proc, LIB, LIB_V2, 2);
 
 		let after = lsp.documentDiagnostics(proc, B, before.resultId);
 		assert.match('full', after.kind);
@@ -69,10 +65,7 @@ describe('importers of a changed file', () => {
 		open(B, IMPORTER);
 		let before = lsp.documentDiagnostics(proc, B);
 
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
-			textDocument: { uri: LIB, version: 2 },
-			contentChanges: [{ text: replace(LIB_V1, "return 'x';", "let y = 'y'; return y;") }],
-		}});
+		lsp.change(proc, LIB, replace(LIB_V1, "return 'x';", "let y = 'y'; return y;"), 2);
 
 		assert.match('unchanged', lsp.documentDiagnostics(proc, B, before.resultId).kind);
 	});
@@ -81,10 +74,7 @@ describe('importers of a changed file', () => {
 		open(LIB, LIB_V1);
 		open(B, IMPORTER);
 		for (let v = 2; v <= 6; v++)
-			lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
-				textDocument: { uri: LIB, version: v },
-				contentChanges: [{ text: (v % 2) ? LIB_V1 : LIB_V2 }],
-			}});
+			lsp.change(proc, LIB, (v % 2) ? LIB_V1 : LIB_V2, v);
 		system('sleep 1');  // past the refresh delay
 		lsp.send(proc, { jsonrpc: '2.0', id: 77, method: 'workspace/symbol', params: { query: 'zzz' } });
 		let r = lsp.receiveUntil(proc, 77);
@@ -105,5 +95,35 @@ describe('importers of a changed file', () => {
 		assert.match('full', after.kind);
 		assert.match([], codes(after));
 		assert.match(contains('function'), hoverS());
+	});
+
+	it('see a file they import appear on disk', () => {
+		open(B, "import { g } from 'newlib';\ng();\n");
+		let before = lsp.documentDiagnostics(proc, B);
+		assert.match(contains(['unknown-import']), codes(before));
+
+		fs.writefile(ws + '/src/newlib.uc', "export function g() {};\n");
+		lsp.send(proc, { jsonrpc: '2.0', method: 'workspace/didChangeWatchedFiles', params: {
+			changes: [{ uri: 'file://' + ws + '/src/newlib.uc', type: 1 }],
+		}});
+
+		let after = lsp.documentDiagnostics(proc, B, before.resultId);
+		assert.match('full', after.kind);
+		assert.match([], codes(after));
+	});
+
+	it('see a file they import deleted from disk', () => {
+		open(B, IMPORTER);
+		let before = lsp.documentDiagnostics(proc, B);
+		assert.match(['not-a-function'], codes(before));
+
+		fs.unlink(ws + '/src/lib.uc');
+		lsp.send(proc, { jsonrpc: '2.0', method: 'workspace/didChangeWatchedFiles', params: {
+			changes: [{ uri: LIB, type: 3 }],
+		}});
+
+		let after = lsp.documentDiagnostics(proc, B, before.resultId);
+		assert.match('full', after.kind);
+		assert.match(contains(['unknown-import']), codes(after));
 	});
 });

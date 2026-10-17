@@ -191,13 +191,44 @@ export function update(uri, text, tree, openDocs) {
 	return queue;
 };
 
+// Resolve the imports of `uris` again, after a file appeared or disappeared
+// on disk, and rewire their edges. Returns those whose resolution changed.
+function reresolve(uris) {
+	let changed = [];
+	for (let uri in uris) {
+		let node = _nodes[uri];
+		if (!node) continue;
+		let before = sprintf('%J', map(node.imports, (i) => i.resolvedUri));
+		resolveAll(node.imports);
+		if (sprintf('%J', map(node.imports, (i) => i.resolvedUri)) === before) continue;
+		removeOutEdges(uri);
+		addOutEdges(uri, node.imports);
+		push(changed, uri);
+	}
+	return changed;
+}
+
+// Forget a file. Its importers resolve their imports again: the specifier may
+// now name another file (a declaration stub), or nothing.
 export function remove(uri) {
+	let importers = _inEdges[uri] ?? [];
 	removeOutEdges(uri);
 	delete _nodes[uri];
 	delete _inEdges[uri];
 	delete _openUris[uri];
 	delete _diskStamp[uri];
 	type_registry.removeUri(uri);
+	reresolve(importers);
+};
+
+// Resolve again every import that resolved to nothing, as a new file on disk
+// may now satisfy it. Returns the files whose imports changed.
+export function resolveUnresolved() {
+	let pending = [];
+	for (let uri, node in _nodes)
+		for (let imp in node.imports)
+			if (!imp.resolvedUri) { push(pending, uri); break; }
+	return reresolve(pending);
 };
 
 export function exportsOf(uri) {

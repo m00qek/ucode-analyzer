@@ -269,6 +269,8 @@ export function run(config) {
 				} else if (!documents.isOpen(uri)) {  // created (1) or changed (2), not open in editor
 					let revDeps = dag.reverseDeps(uri);
 					dag.addFromDisk(uri);
+					// A new file can satisfy imports that resolved to nothing.
+					if (change.type === 1) push(revDeps, ...dag.resolveUnresolved());
 					invalidateUri(uri);
 					invalidateDiagnostics(uri);
 					invalidateDependents(revDeps);

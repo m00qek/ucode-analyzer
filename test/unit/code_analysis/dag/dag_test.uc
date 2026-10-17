@@ -1,4 +1,5 @@
 import { describe, it, assert, mock, beforeEach, contains, not } from 'utest';
+import * as fs from 'fs';
 import * as ts from 'tree_sitter';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -544,5 +545,48 @@ describe('dag — template modules (markup-mode files)', () => {
 		assert.match(1, length(exps));
 		assert.match('TITLE', exps[0].name);
 		assert.match('const', exps[0].kind);
+	});
+});
+
+describe('dag — files appearing and disappearing on disk', () => {
+	// Module resolution checks the disk, so these use a scratch workspace.
+	function workspace() {
+		let dir = fs.mkdtemp('/tmp/dag-XXXXXX');
+		fs.mkdir(dir + '/src');
+		dag.init({ workspaceDir: dir, workspace: { libraryPaths: ['src'] } });
+		return dir;
+	}
+	let IMPORTER = "import { g } from 'lib';\n";
+
+	it('resolveUnresolved() links an import to a file created since', () => {
+		let dir = workspace();
+		let a = 'file://' + dir + '/src/a.uc', lib = 'file://' + dir + '/src/lib.uc';
+		dag.add(a, IMPORTER, parse(IMPORTER));
+		let before = dag.importsOf(a)[0].resolvedUri;
+		fs.writefile(dir + '/src/lib.uc', 'export function g() {};\n');
+		dag.addFromDisk(lib);
+		let changed = dag.resolveUnresolved();
+		let after = dag.importsOf(a)[0].resolvedUri;
+		let deps = dag.reverseDeps(lib);
+		system(['rm', '-rf', dir]);
+		assert.match(null, before);
+		assert.match(contains([a]), changed);
+		assert.match(lib, after);
+		assert.match(contains([a]), deps);
+	});
+
+	it('remove() leaves the importers of a deleted file unresolved', () => {
+		let dir = workspace();
+		let a = 'file://' + dir + '/src/a.uc', lib = 'file://' + dir + '/src/lib.uc';
+		fs.writefile(dir + '/src/lib.uc', 'export function g() {};\n');
+		dag.addFromDisk(lib);
+		dag.add(a, IMPORTER, parse(IMPORTER));
+		let before = dag.importsOf(a)[0].resolvedUri;
+		fs.unlink(dir + '/src/lib.uc');
+		dag.remove(lib);
+		let after = dag.importsOf(a)[0].resolvedUri;
+		system(['rm', '-rf', dir]);
+		assert.match(lib, before);
+		assert.match(null, after);
 	});
 });
