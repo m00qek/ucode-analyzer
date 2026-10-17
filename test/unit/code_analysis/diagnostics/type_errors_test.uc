@@ -408,4 +408,18 @@ describe('diagnostics — type errors: values set elsewhere', () => {
 			"function g(u) { let doc = load(u); if (!doc) return null; return { doc: doc }; }\n" +
 			"let r = f([1]);\nif (r) print(r.doc.text);\nlet q = g(1);\nif (q) print(q.doc.text);\n"));
 	});
+
+	it('a variable filled with ??= or ||= is no longer null', () => {
+		assert.match([], codes("let e = null;\ne ??= {};\nprint(e.x);\nlet o = null;\no ||= [];\nprint(o[0]);\n"));
+		assert.match([], codes(
+			"function outer() {\n\tlet d = null;\n\tfunction get() { d ??= {}; return d.x; }\n\treturn get;\n}\nouter();\n"));
+	});
+
+	it('a ??= in one branch leaves the variable possibly null', () => {
+		assert.match([['may-be-null', 3]], codes("let e = null;\nlet c = time();\nif (c) e ??= {};\nprint(e.x);\n"));
+	});
+
+	it('other compound assignments do not fill a null variable', () => {
+		assert.match([['null-access', 2]], codes("let e = null;\ne += 1;\nprint(e.x);\n"));
+	});
 });

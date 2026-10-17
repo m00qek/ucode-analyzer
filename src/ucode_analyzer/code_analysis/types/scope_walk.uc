@@ -4,7 +4,7 @@ import { inferNode, inferParams, declaredType, setReturnScopes } from 'ucode_ana
 import { importScope } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork } from 'ucode_analyzer.code_analysis.types.scope';
 import { UNKNOWN, STR, unionOf } from 'ucode_analyzer.code_analysis.types.type_utils';
-import { parseGuard, applyGuard } from 'ucode_analyzer.code_analysis.types.narrowing';
+import { parseGuard, applyGuard, narrowToNonNull } from 'ucode_analyzer.code_analysis.types.narrowing';
 
 // Binary search: return the scope for the largest checkpoint.offset <= offset.
 export function scopeAtOffset(map, offset) {
@@ -56,18 +56,42 @@ function forkDecl(stmt, source, uri, scope) {
     return scope;
 }
 
+// The union of types, or UNKNOWN when any is unknown (stay silent, not guess).
+function joinTypes(types) {
+    let flat = [];
+    for (let t in types) {
+        if (!t || t.kind === 'unknown') return UNKNOWN;
+        if (t.kind === 'union') push(flat, ...t.members); else push(flat, t);
+    }
+    return unionOf(flat);
+}
+
+// The operators that assign only when the variable is null (or falsy).
+const FILLS = { '??=': true, '||=': true };
+
+// The type of x after `x ??= v` or `x ||= v`: its non-null part, or v's type.
+function filledType(old, v) {
+    if (old.kind === 'primitive' && old.name === 'null') return v;
+    return joinTypes([narrowToNonNull(old), v]);
+}
+
 // Advance scope when a statement reassigns an existing binding.
 function forkAssign(stmt, source, uri, scope) {
     let inner = firstNamed(stmt);
-    if (!inner || ts.nodeType(inner) !== 'assignment_expression') return scope;
+    let it = inner ? ts.nodeType(inner) : null;
+    if (it !== 'assignment_expression' && it !== 'augmented_assignment_expression') return scope;
     let lhs = ts.childByField(inner, 'left');
     let rhs = ts.childByField(inner, 'right');
     if (!lhs || !rhs || ts.nodeType(lhs) !== 'identifier') return scope;
     let name = ts.text(lhs, source);
+    if (!scopeHas(scope, name)) return scope;
     let newType = inferNode(rhs, source, uri, scope, 0);
-    if (scopeHas(scope, name) && newType.kind !== 'unknown')
-        return scopeFork(scope, name, newType);
-    return scope;
+    if (it === 'augmented_assignment_expression') {
+        let op = ts.childByField(inner, 'operator');
+        if (!op || !FILLS[ts.nodeType(op)]) return scope;
+        newType = filledType(scopeGet(scope, name) ?? UNKNOWN, newType);
+    }
+    return newType.kind !== 'unknown' ? scopeFork(scope, name, newType) : scope;
 }
 
 // Return the scope after processing stmt's own declarations (COW).
@@ -182,9 +206,11 @@ function applyGuardClause(stmt, source, scope) {
 // After a compound statement, a variable it assigns has the type of whichever
 // path reached the end: `let x = null; if (c) x = {};` leaves x `null | {}`.
 
-// One pass for both: pattern 0 is an assignment, the others declarations.
+// One pass for both: patterns 0 and 1 are assignments (`??=` and `||=` widen
+// like `=`), the others declarations.
 let BINDINGS = `
 (assignment_expression left: (identifier) @name right: (_) @rhs)
+(augmented_assignment_expression left: (identifier) @name operator: ["??=" "||="] right: (_) @rhs)
 (variable_declarator name: (identifier) @name)
 (for_in_statement variable: (identifier) @name)`;
 let _queries = {};
@@ -225,7 +251,7 @@ function collectBindings(root, source) {
         let c = {};
         for (let cap in m.captures) c[cap.name] = cap.node;
         let entry = { start: ts.startByte(c.name), name: ts.text(c.name, source) };
-        if (m.pattern !== 0) { push(_decls, entry); continue; }
+        if (m.pattern > 1) { push(_decls, entry); continue; }
         entry.rhs = c.rhs;
         entry.fnStart = entry.fnEnd = -1;
         for (let p = ts.parent(c.name); p; p = ts.parent(p))
@@ -268,16 +294,6 @@ function assignmentsIn(stmt, source) {
 
 function rhsType(rhs, source, uri, smap) {
     return inferNode(rhs, source, uri, scopeAtOffset(smap, ts.startByte(rhs)), 0);
-}
-
-// The union of types, or UNKNOWN when any is unknown (stay silent, not guess).
-function joinTypes(types) {
-    let flat = [];
-    for (let t in types) {
-        if (!t || t.kind === 'unknown') return UNKNOWN;
-        if (t.kind === 'union') push(flat, ...t.members); else push(flat, t);
-    }
-    return unionOf(flat);
 }
 
 function entryType(scope, name, guard, positive) {
