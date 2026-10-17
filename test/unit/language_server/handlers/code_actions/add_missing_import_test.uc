@@ -3,7 +3,7 @@ import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { positionToOffset } from 'ucode_analyzer.code_analysis.positions';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
-import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_vars';
+import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_var';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.add_missing_import';
 import * as fixture from 'fixture';
 

@@ -1,7 +1,7 @@
 import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.change_const_to_let';
-import { assignmentToConst } from 'ucode_analyzer.code_analysis.diagnostics.assignment_const';
+import { assignmentToConst } from 'ucode_analyzer.code_analysis.diagnostics.const_assignment';
 import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';

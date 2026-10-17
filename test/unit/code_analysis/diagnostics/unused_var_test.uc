@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach, contains, not } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
-import { unusedVars } from 'ucode_analyzer.code_analysis.diagnostics.unused_vars';
+import { unusedVars } from 'ucode_analyzer.code_analysis.diagnostics.unused_var';
 
 let URI = 'file:///test.uc';
 

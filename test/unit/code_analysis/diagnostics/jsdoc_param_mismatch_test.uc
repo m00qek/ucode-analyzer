@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
-import { jsdocConsistency } from 'ucode_analyzer.code_analysis.diagnostics.jsdoc_consistency';
+import { jsdocConsistency } from 'ucode_analyzer.code_analysis.diagnostics.jsdoc_param_mismatch';
 
 let URI = 'file:///test.uc';
 

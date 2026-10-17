@@ -1,6 +1,6 @@
 import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
-import { unknownImportSymbols } from 'ucode_analyzer.code_analysis.diagnostics.unknown_import_symbols';
+import { unknownImportSymbols } from 'ucode_analyzer.code_analysis.diagnostics.unknown_import_symbol';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { cursors } from 'cursor';
 import * as fixture from 'fixture';

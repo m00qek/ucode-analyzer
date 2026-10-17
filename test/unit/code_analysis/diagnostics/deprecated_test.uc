@@ -1,7 +1,7 @@
 import { describe, it, assert, beforeEach, afterEach, prop, gen, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
-import { deprecatedUsage } from 'ucode_analyzer.code_analysis.diagnostics.deprecated_usage';
+import { deprecatedUsage } from 'ucode_analyzer.code_analysis.diagnostics.deprecated';
 import { cursors } from 'cursor';
 import * as fixture from 'fixture';
 

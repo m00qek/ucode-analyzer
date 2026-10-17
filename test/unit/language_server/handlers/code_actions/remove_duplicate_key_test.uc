@@ -1,7 +1,7 @@
 import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.remove_duplicate_key';
-import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_object_key';
+import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_key';
 import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';

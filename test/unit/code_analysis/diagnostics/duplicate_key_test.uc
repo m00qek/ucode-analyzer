@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach, contains } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
-import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_object_key';
+import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_key';
 
 let URI = 'file:///test.uc';
 

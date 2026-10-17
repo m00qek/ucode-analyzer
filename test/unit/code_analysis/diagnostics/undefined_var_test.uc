@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach, contains, not } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
-import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_vars';
+import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_var';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import * as fixture from 'fixture';
