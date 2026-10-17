@@ -19,6 +19,7 @@ import { documentHighlight as documentHighlightDoc } from 'language_server.handl
 import { prepareRename as prepareRenameDoc } from 'language_server.handlers.prepare_rename';
 import { codeAction as codeActionDoc } from 'language_server.handlers.code_actions';
 import { selectionRanges as selectionRangesDoc } from 'language_server.handlers.selection_range';
+import { linkedEditingRanges } from 'language_server.handlers.linked_editing';
 import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'language_server.handlers.call_hierarchy';
 import * as platform from 'language_server.platform';
 
@@ -62,6 +63,7 @@ export function run(config) {
 					inlayHintProvider: true,
 					foldingRangeProvider: true,
 					selectionRangeProvider: true,
+					linkedEditingRangeProvider: true,
 					callHierarchyProvider: true,
 					diagnosticProvider: {
 						interFileDependencies: true,
@@ -202,6 +204,11 @@ export function run(config) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
 			protocol.respond(msg.id, doc ? foldingRangesDoc(doc) : null);
+		},
+
+		'textDocument/linkedEditingRange': function(msg) {
+			let doc = documents.get(msg.params.textDocument.uri);
+			protocol.respond(msg.id, doc ? linkedEditingRanges(doc, msg.params.position) : null);
 		},
 
 		'textDocument/selectionRange': function(msg) {
