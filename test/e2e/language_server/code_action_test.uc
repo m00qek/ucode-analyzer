@@ -17,10 +17,7 @@ describe('textDocument/codeAction', () => {
 
 	it('returns a quickfix for == that replaces it with ===', () => {
 		// Open a file with == so the server reports a hint diagnostic.
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\nlet y = x == 1;\ny;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let x = 1;\nlet y = x == 1;\ny;\n");
 		let diags = lsp.documentDiagnostics(proc, 'file:///t.uc').items;
 		let hint = filter(diags, (d) => d.severity === 4)[0];
 		assert.match(true, hint !== null);
@@ -44,10 +41,7 @@ describe('textDocument/codeAction', () => {
 	});
 
 	it('returns a quickfix for != that replaces it with !==', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t2.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\nlet y = x != 1;\ny;\n" },
-		}});
+		lsp.open(proc, 'file:///t2.uc', "let x = 1;\nlet y = x != 1;\ny;\n");
 		let diags = lsp.documentDiagnostics(proc, 'file:///t2.uc').items;
 		let hint = filter(diags, (d) => d.severity === 4)[0];
 
@@ -62,10 +56,7 @@ describe('textDocument/codeAction', () => {
 	});
 
 	it('returns null when context diagnostics are empty', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t3.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\nx;\n" },
-		}});
+		lsp.open(proc, 'file:///t3.uc', "let x = 1;\nx;\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 3, method: 'textDocument/codeAction', params: {
 			textDocument: { uri: 'file:///t3.uc' },
@@ -79,10 +70,7 @@ describe('textDocument/codeAction', () => {
 
 	it('remove_unused_import: removes the whole import statement', () => {
 		let uri = 'file:///t4.uc';
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri, languageId: 'ucode', version: 1,
-				text: "import { unusedFn } from 'utest';\nlet x = 1;\nx;\n" },
-		}});
+		lsp.open(proc, uri, "import { unusedFn } from 'utest';\nlet x = 1;\nx;\n");
 		let diags = lsp.documentDiagnostics(proc, uri).items;
 		let diag = filter(diags, (d) => d.code === 'unused-import')[0];
 		assert.match(true, diag !== null);
@@ -109,10 +97,7 @@ describe('textDocument/codeAction', () => {
 
 	it('remove_unused_import: removes only the unused specifier from a multi-import', () => {
 		let uri = 'file:///t5.uc';
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri, languageId: 'ucode', version: 1,
-				text: "import { describe, it } from 'utest';\nit;\n" },
-		}});
+		lsp.open(proc, uri, "import { describe, it } from 'utest';\nit;\n");
 		let diags = lsp.documentDiagnostics(proc, uri).items;
 		let diag = filter(diags, (d) => d.code === 'unused-import')[0];
 		assert.match(true, diag !== null);
@@ -134,10 +119,7 @@ describe('textDocument/codeAction', () => {
 
 	it('remove_duplicate_key: removes the duplicate pair', () => {
 		let uri = 'file:///t6.uc';
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri, languageId: 'ucode', version: 1,
-				text: "let x = { a: 1, b: 2, a: 3 };\nx;\n" },
-		}});
+		lsp.open(proc, uri, "let x = { a: 1, b: 2, a: 3 };\nx;\n");
 		let diags = lsp.documentDiagnostics(proc, uri).items;
 		let diag = filter(diags, (d) => d.code === 'duplicate-key')[0];
 		assert.match(true, diag !== null);
@@ -161,10 +143,7 @@ describe('textDocument/codeAction', () => {
 
 	it('change_const_to_let: replaces the const keyword with let', () => {
 		let uri = 'file:///t7.uc';
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri, languageId: 'ucode', version: 1,
-				text: "const x = 1;\nx = 2;\n" },
-		}});
+		lsp.open(proc, uri, "const x = 1;\nx = 2;\n");
 		let diags = lsp.documentDiagnostics(proc, uri).items;
 		let diag = filter(diags, (d) => d.code === 'const-assignment')[0];
 		assert.match(true, diag !== null);
@@ -189,10 +168,7 @@ describe('textDocument/codeAction', () => {
 
 	it('change_const_to_let: deduplicates when multiple assignments to same const', () => {
 		let uri = 'file:///t8.uc';
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri, languageId: 'ucode', version: 1,
-				text: "const x = 1;\nx = 2;\nx = 3;\n" },
-		}});
+		lsp.open(proc, uri, "const x = 1;\nx = 2;\nx = 3;\n");
 		let all = lsp.documentDiagnostics(proc, uri).items;
 		let diags = filter(all, (d) => d.code === 'const-assignment');
 		assert.match(2, length(diags));
@@ -210,10 +186,7 @@ describe('textDocument/codeAction', () => {
 	});
 
 	it('generate_jsdoc: offers a refactoring at a function with no doc', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///j.uc', languageId: 'ucode', version: 1,
-				text: "function add(a, b) {\n\treturn 1;\n}\n" },
-		}});
+		lsp.open(proc, 'file:///j.uc', "function add(a, b) {\n\treturn 1;\n}\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 7, method: 'textDocument/codeAction', params: {
 			textDocument: { uri: 'file:///j.uc' },
 			range: { start: { line: 0, character: 9 }, end: { line: 0, character: 9 } },

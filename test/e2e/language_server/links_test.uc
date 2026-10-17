@@ -14,9 +14,7 @@ teardown(() => {
 });
 
 function open(uri, text) {
-	lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-		textDocument: { uri, languageId: 'ucode', version: 1, text },
-	}});
+	lsp.open(proc, uri, text);
 }
 
 describe('textDocument/linkedEditingRange and documentLink', () => {

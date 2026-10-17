@@ -16,10 +16,7 @@ teardown(() => {
 describe('textDocument/rename', () => {
 
 	it('returns workspace edit replacing all occurrences', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let count = 0;\ncount;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let count = 0;\ncount;\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/rename', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 0, character: 4 },
@@ -36,9 +33,7 @@ describe('textDocument/rename', () => {
 	});
 
 	it('returns null when cursor is not on an identifier', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let x = 1;");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/rename', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 0, character: 0 },
@@ -54,9 +49,7 @@ describe('textDocument/rename', () => {
 	it('cross-file: rename from importer propagates edits to declaring module', () => {
 		let uri = 'file:///t_xrename.uc';
 		let text = "import { parse } from 'tree_sitter';\nparse();\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri, languageId: 'ucode', version: 1, text },
-		}});
+		lsp.open(proc, uri, text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 10, method: 'textDocument/rename', params: {
 			textDocument: { uri },
 			position: { line: 1, character: 0 },  // 'parse' in 'parse();'
@@ -84,9 +77,7 @@ describe('textDocument/rename', () => {
 	it('renames only the binding in scope, not same-named identifiers in other scopes', () => {
 		// Two functions each declare a local `n`.  Renaming one must not affect the other.
 		let text = "function a(n) { return n; }\nfunction b(n) { return n; }\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
-		}});
+		lsp.open(proc, 'file:///t.uc', text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/rename', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 0, character: 11 },  // `n` parameter in function a

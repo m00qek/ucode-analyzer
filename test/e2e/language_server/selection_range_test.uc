@@ -24,10 +24,7 @@ describe('textDocument/selectionRange', () => {
 	});
 
 	it('returns one SelectionRange per requested position', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\nlet y = 2;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let x = 1;\nlet y = 2;\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/selectionRange', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			positions: [
@@ -41,10 +38,7 @@ describe('textDocument/selectionRange', () => {
 	});
 
 	it('innermost range covers the identifier under the cursor', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let foo = 1;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let foo = 1;\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/selectionRange', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			positions: [{ line: 0, character: 4 }],
@@ -59,10 +53,7 @@ describe('textDocument/selectionRange', () => {
 	});
 
 	it('parent chain expands outward to the program', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "function f() {\n  return 42;\n}\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "function f() {\n  return 42;\n}\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/selectionRange', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			positions: [{ line: 1, character: 9 }],

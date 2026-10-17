@@ -16,10 +16,7 @@ teardown(() => {
 describe('textDocument/prepareCallHierarchy', () => {
 
 	it('returns a CallHierarchyItem when cursor is on a function declaration name', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "function greet(name) { return name; }\ngreet('x');\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "function greet(name) { return name; }\ngreet('x');\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t.uc' },
@@ -37,10 +34,7 @@ describe('textDocument/prepareCallHierarchy', () => {
 	});
 
 	it('returns null when cursor is not on a function identifier', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t2.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\nx;\n" },
-		}});
+		lsp.open(proc, 'file:///t2.uc', "let x = 1;\nx;\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t2.uc' },
@@ -51,10 +45,7 @@ describe('textDocument/prepareCallHierarchy', () => {
 	});
 
 	it('returns an item when cursor is on a call site for a local function', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t3.uc', languageId: 'ucode', version: 1,
-				text: "function foo() {}\nfoo();\n" },
-		}});
+		lsp.open(proc, 'file:///t3.uc', "function foo() {}\nfoo();\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 3, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t3.uc' },
@@ -65,14 +56,8 @@ describe('textDocument/prepareCallHierarchy', () => {
 	});
 
 	it('cross-file: cursor on a use of an imported function resolves to its declaration', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///app/test/fixtures/greet.uc', languageId: 'ucode', version: 1,
-				text: "function greet() {}\nexport { greet };\n" },
-		}});
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///app/pc_caller.uc', languageId: 'ucode', version: 1,
-				text: "import { greet } from 'fixtures.greet';\ngreet();\n" },
-		}});
+		lsp.open(proc, 'file:///app/test/fixtures/greet.uc', "function greet() {}\nexport { greet };\n");
+		lsp.open(proc, 'file:///app/pc_caller.uc', "import { greet } from 'fixtures.greet';\ngreet();\n");
 
 		// Cursor on the `greet` call in the importer — it has no local declaration.
 		lsp.send(proc, { jsonrpc: '2.0', id: 5, method: 'textDocument/prepareCallHierarchy', params: {
@@ -91,10 +76,7 @@ describe('textDocument/prepareCallHierarchy', () => {
 describe('callHierarchy/incomingCalls', () => {
 
 	it('returns the enclosing function for a call site', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t4.uc', languageId: 'ucode', version: 1,
-				text: "function foo() {}\nfunction bar() { foo(); }\nbar;\n" },
-		}});
+		lsp.open(proc, 'file:///t4.uc', "function foo() {}\nfunction bar() { foo(); }\nbar;\n");
 
 		// Prepare hierarchy for 'foo'
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
@@ -114,14 +96,8 @@ describe('callHierarchy/incomingCalls', () => {
 
 	it('cross-file: groups an importer\'s multiple call sites without duplicating ranges', () => {
 		// fixtures/greet.uc exports greet(); open it plus an importer that calls it 3×.
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///app/test/fixtures/greet.uc', languageId: 'ucode', version: 1,
-				text: "function greet() {}\nexport { greet };\n" },
-		}});
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///app/caller.uc', languageId: 'ucode', version: 1,
-				text: "import { greet } from 'fixtures.greet';\ngreet(); greet(); greet();\n" },
-		}});
+		lsp.open(proc, 'file:///app/test/fixtures/greet.uc', "function greet() {}\nexport { greet };\n");
+		lsp.open(proc, 'file:///app/caller.uc', "import { greet } from 'fixtures.greet';\ngreet(); greet(); greet();\n");
 
 		// Prepare the hierarchy on greet's declaration in the fixture.
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
@@ -141,10 +117,7 @@ describe('callHierarchy/incomingCalls', () => {
 	});
 
 	it('returns null when there are no callers', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t5.uc', languageId: 'ucode', version: 1,
-				text: "function unused() {}\n" },
-		}});
+		lsp.open(proc, 'file:///t5.uc', "function unused() {}\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t5.uc' },
@@ -158,10 +131,7 @@ describe('callHierarchy/incomingCalls', () => {
 	});
 
 	it('groups multiple call sites from the same caller', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t6.uc', languageId: 'ucode', version: 1,
-				text: "function foo() {}\nfunction bar() { foo(); foo(); }\nbar;\n" },
-		}});
+		lsp.open(proc, 'file:///t6.uc', "function foo() {}\nfunction bar() { foo(); foo(); }\nbar;\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t6.uc' },
@@ -180,10 +150,7 @@ describe('callHierarchy/incomingCalls', () => {
 describe('callHierarchy/outgoingCalls', () => {
 
 	it('returns functions called by the given function', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t7.uc', languageId: 'ucode', version: 1,
-				text: "function foo() {}\nfunction bar() { foo(); }\nbar;\n" },
-		}});
+		lsp.open(proc, 'file:///t7.uc', "function foo() {}\nfunction bar() { foo(); }\nbar;\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t7.uc' },
@@ -201,10 +168,7 @@ describe('callHierarchy/outgoingCalls', () => {
 	});
 
 	it('returns null when the function has no outgoing calls', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t8.uc', languageId: 'ucode', version: 1,
-				text: "function leaf() { return 42; }\nleaf;\n" },
-		}});
+		lsp.open(proc, 'file:///t8.uc', "function leaf() { return 42; }\nleaf;\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t8.uc' },
@@ -218,10 +182,7 @@ describe('callHierarchy/outgoingCalls', () => {
 	});
 
 	it('deduplicates repeated calls to the same function', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t9.uc', languageId: 'ucode', version: 1,
-				text: "function foo() {}\nfunction bar() { foo(); foo(); }\nbar;\n" },
-		}});
+		lsp.open(proc, 'file:///t9.uc', "function foo() {}\nfunction bar() { foo(); foo(); }\nbar;\n");
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/prepareCallHierarchy', params: {
 			textDocument: { uri: 'file:///t9.uc' },

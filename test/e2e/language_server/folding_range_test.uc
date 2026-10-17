@@ -24,10 +24,7 @@ describe('textDocument/foldingRange', () => {
 	});
 
 	it('returns empty list for a file with no blocks', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let x = 1;\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/foldingRange', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
@@ -37,10 +34,7 @@ describe('textDocument/foldingRange', () => {
 	});
 
 	it('returns a range for a multi-line function body', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "function foo() {\n  let x = 1;\n  return x;\n}\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "function foo() {\n  let x = 1;\n  return x;\n}\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/foldingRange', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
@@ -51,10 +45,7 @@ describe('textDocument/foldingRange', () => {
 	});
 
 	it('emits an imports range for multiple consecutive imports', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "import * as a from 'utest';\nimport * as b from 'utest';\n\nlet x = 1;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "import * as a from 'utest';\nimport * as b from 'utest';\n\nlet x = 1;\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/foldingRange', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});

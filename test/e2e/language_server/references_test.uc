@@ -16,10 +16,7 @@ teardown(() => {
 describe('textDocument/references', () => {
 
 	it('returns all occurrences of an identifier', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let z = 0;\nz;\nz;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let z = 0;\nz;\nz;\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/references', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 0, character: 4 },  // on 'z' declaration
@@ -34,9 +31,7 @@ describe('textDocument/references', () => {
 	});
 
 	it('returns null when cursor is not on an identifier', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let x = 1;");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/references', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 0, character: 0 },  // 'l' in 'let'
@@ -51,9 +46,7 @@ describe('textDocument/references', () => {
 	it('does not include same-named identifiers from a different scope', () => {
 		// Each function has a parameter `x`; references on one must not include the other.
 		let text = "function a(x) { return x; }\nfunction b(x) { return x; }\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
-		}});
+		lsp.open(proc, 'file:///t.uc', text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/references', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 0, character: 11 },  // `x` parameter in function a
@@ -72,9 +65,7 @@ describe('textDocument/references', () => {
 		// Open a file that imports `parse` from tree_sitter (which exists on disk).
 		let uri = 'file:///t_xref.uc';
 		let text = "import { parse } from 'tree_sitter';\nparse();\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri, languageId: 'ucode', version: 1, text },
-		}});
+		lsp.open(proc, uri, text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 3, method: 'textDocument/references', params: {
 			textDocument: { uri },
 			position: { line: 1, character: 0 },  // 'parse' in 'parse();'
@@ -98,15 +89,9 @@ describe('textDocument/references', () => {
 
 	it('cross-file: includeDeclaration:false excludes the export declaration', () => {
 		let fixUri = 'file:///app/test/fixtures/greet.uc';
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: fixUri, languageId: 'ucode', version: 1,
-				text: "function greet() {}\nexport { greet };\n" },
-		}});
+		lsp.open(proc, fixUri, "function greet() {}\nexport { greet };\n");
 		let uri = 'file:///app/ref_caller.uc';
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri, languageId: 'ucode', version: 1,
-				text: "import { greet } from 'fixtures.greet';\ngreet();\n" },
-		}});
+		lsp.open(proc, uri, "import { greet } from 'fixtures.greet';\ngreet();\n");
 
 		// The declaration is `function greet` on line 0 of the fixture.
 		let onDecl = (locs) => filter(locs,

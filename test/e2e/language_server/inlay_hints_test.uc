@@ -25,10 +25,7 @@ describe('textDocument/inlayHint', () => {
 	});
 
 	it('returns empty list for a file with no hints', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 42;\nlet y = 'hello';\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let x = 42;\nlet y = 'hello';\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/inlayHint', params: {
 			textDocument: { uri: 'file:///t.uc' }, range: FULL_RANGE,
 		}});
@@ -38,10 +35,7 @@ describe('textDocument/inlayHint', () => {
 	});
 
 	it('emits a type hint for a function-call initializer', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "function makeStr() { return 'hello'; }\nlet y = makeStr();\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "function makeStr() { return 'hello'; }\nlet y = makeStr();\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/inlayHint', params: {
 			textDocument: { uri: 'file:///t.uc' }, range: FULL_RANGE,
 		}});
@@ -53,10 +47,7 @@ describe('textDocument/inlayHint', () => {
 	});
 
 	it('emits parameter name hints for a documented call', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\nadd(1, 2);\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\nadd(1, 2);\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/inlayHint', params: {
 			textDocument: { uri: 'file:///t.uc' }, range: FULL_RANGE,
 		}});
@@ -69,10 +60,7 @@ describe('textDocument/inlayHint', () => {
 	});
 
 	it('skips param hint when arg identifier matches param name', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "/**\n * @param {int} x\n */\nfunction f(x) { return x; }\nlet x = 1;\nf(x);\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "/**\n * @param {int} x\n */\nfunction f(x) { return x; }\nlet x = 1;\nf(x);\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/inlayHint', params: {
 			textDocument: { uri: 'file:///t.uc' }, range: FULL_RANGE,
 		}});
@@ -82,10 +70,7 @@ describe('textDocument/inlayHint', () => {
 	});
 
 	it('respects range: hints outside visible range are not returned', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "function makeStr() { return 'x'; }\nlet a = makeStr();\nlet b = makeStr();\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "function makeStr() { return 'x'; }\nlet a = makeStr();\nlet b = makeStr();\n");
 		// Only line 1 is in range.
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/inlayHint', params: {
 			textDocument: { uri: 'file:///t.uc' },

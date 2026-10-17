@@ -22,9 +22,7 @@ let entryFor = function(report, uri) {
 describe('workspace/diagnostic', () => {
 
 	it('reports diagnostics for an open workspace file', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///app/ws_a.uc', languageId: 'ucode', version: 1, text: 'let unused = 1;' },
-		}});
+		lsp.open(proc, 'file:///app/ws_a.uc', 'let unused = 1;');
 
 		let report = lsp.workspaceDiagnostics(proc, []);
 		let mine = entryFor(report, 'file:///app/ws_a.uc');
@@ -35,9 +33,7 @@ describe('workspace/diagnostic', () => {
 	});
 
 	it('reports the version of open documents, and null for the others', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///app/ws_v.uc', languageId: 'ucode', version: 7, text: 'let unused = 1;' },
-		}});
+		lsp.open(proc, 'file:///app/ws_v.uc', 'let unused = 1;', 7);
 
 		let report = lsp.workspaceDiagnostics(proc, []);
 		assert.match(7, entryFor(report, 'file:///app/ws_v.uc')?.version);
@@ -46,9 +42,7 @@ describe('workspace/diagnostic', () => {
 	});
 
 	it('returns unchanged on re-pull with a current resultId', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///app/ws_b.uc', languageId: 'ucode', version: 1, text: 'let unused = 1;' },
-		}});
+		lsp.open(proc, 'file:///app/ws_b.uc', 'let unused = 1;');
 
 		let first = entryFor(lsp.workspaceDiagnostics(proc, []), 'file:///app/ws_b.uc');
 		if (first === null) die('no diagnostic entry for ws_b.uc');

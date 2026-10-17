@@ -15,9 +15,7 @@ teardown(() => {
 
 // Open a document and pull its diagnostics, returning the diagnostic array.
 let diagnose = function(uri, text) {
-	lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-		textDocument: { uri, languageId: 'ucode', version: 1, text },
-	}});
+	lsp.open(proc, uri, text);
 	return lsp.documentDiagnostics(proc, uri).items;
 };
 
@@ -257,10 +255,7 @@ describe('textDocument/diagnostic', () => {
 	it('re-pulls reflect edits made by didChange', () => {
 		diagnose('file:///t.uc', "let x = 1;\nx;\n");  // open clean, pull once
 
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
-			textDocument: { uri: 'file:///t.uc', version: 2 },
-			contentChanges: [{ text: "import { foo } from 'bad_module';" }],
-		}});
+		lsp.change(proc, 'file:///t.uc', "import { foo } from 'bad_module';", 2);
 
 		let diags = lsp.documentDiagnostics(proc, 'file:///t.uc').items;
 		// Expect at least one diagnostic (bad import error; unused-import hint may also appear).
@@ -268,9 +263,7 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('returns unchanged when the previous resultId is still current', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let neverUsed = 42;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let neverUsed = 42;\n");
 
 		let first = lsp.documentDiagnostics(proc, 'file:///t.uc');
 		assert.match('full', first.kind);

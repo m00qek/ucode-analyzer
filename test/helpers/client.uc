@@ -54,6 +54,20 @@ export function send(proc, obj) {
 	write_all(proc, framed(obj));
 };
 
+// Open a document, as the editor does with didOpen.
+export function open(proc, uri, text, version) {
+	send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+		textDocument: { uri, languageId: 'ucode', version: version ?? 1, text },
+	}});
+};
+
+// Replace an open document's whole text (the server syncs full documents).
+export function change(proc, uri, text, version) {
+	send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
+		textDocument: { uri, version }, contentChanges: [{ text }],
+	}});
+};
+
 // Send several messages in one write, so the server reads them as one batch.
 export function sendAll(proc, objs) {
 	write_all(proc, join('', map(objs, framed)));

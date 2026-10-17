@@ -16,10 +16,7 @@ teardown(() => {
 describe('textDocument/documentSymbol', () => {
 
 	it('returns symbols for all top-level declarations', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let count = 0;\nfunction greet() {}\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let count = 0;\nfunction greet() {}\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
@@ -34,9 +31,7 @@ describe('textDocument/documentSymbol', () => {
 	});
 
 	it('returns empty list for a file with no declarations', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
@@ -48,10 +43,7 @@ describe('textDocument/documentSymbol', () => {
 	});
 
 	it('finds nested function declarations inside a function body as children', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "function outer() {\n  function inner() {}\n}\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "function outer() {\n  function inner() {}\n}\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
@@ -65,10 +57,7 @@ describe('textDocument/documentSymbol', () => {
 	});
 
 	it('finds function-valued object properties as children of the variable', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "const M = { handle: x => x, value: 1 };\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "const M = { handle: x => x, value: 1 };\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});

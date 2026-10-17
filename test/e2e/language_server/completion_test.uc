@@ -16,9 +16,7 @@ teardown(() => {
 describe('textDocument/completion', () => {
 
 	it('includes declared local variable in results', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let answer = 42;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let answer = 42;\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 1, character: 0 },  // after the declaration
@@ -32,13 +30,8 @@ describe('textDocument/completion', () => {
 	});
 
 	it('reflects new declaration added by didChange', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text: "let x = 1;\n" },
-		}});
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didChange', params: {
-			textDocument: { uri: 'file:///t.uc', version: 2 },
-			contentChanges: [{ text: "let x = 1;\nlet y = 2;\n" }],
-		}});
+		lsp.open(proc, 'file:///t.uc', "let x = 1;\n");
+		lsp.change(proc, 'file:///t.uc', "let x = 1;\nlet y = 2;\n", 2);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 2, character: 0 },  // after both declarations
@@ -55,9 +48,7 @@ describe('textDocument/completion', () => {
 	it('namespace import: ts. offers only tree_sitter exports', () => {
 		// Cursor right after the dot — trigger-character path.
 		let text = "import * as ts from 'tree_sitter';\nlet x = 5;\nts.\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
-		}});
+		lsp.open(proc, 'file:///t.uc', text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 2, character: 3 },  // after 'ts.'
@@ -74,9 +65,7 @@ describe('textDocument/completion', () => {
 	it('namespace import: ts.pa offers only tree_sitter exports', () => {
 		// Cursor on a partially-typed property — member_expression primary path.
 		let text = "import * as ts from 'tree_sitter';\nts.pa\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
-		}});
+		lsp.open(proc, 'file:///t.uc', text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 1, character: 4 },  // on 'a' of 'ts.pa'
@@ -91,9 +80,7 @@ describe('textDocument/completion', () => {
 	it('named import record: assert. offers only assert members', () => {
 		// assert is imported as a named import whose type is a record.
 		let text = "import { assert } from 'utest';\nlet y = 1;\nassert.\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
-		}});
+		lsp.open(proc, 'file:///t.uc', text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 2, character: 7 },  // after 'assert.'
@@ -109,10 +96,7 @@ describe('textDocument/completion', () => {
 	});
 
 	it('general context includes language keywords with kind 14', () => {
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1,
-				text: "let x = 1;\n" },
-		}});
+		lsp.open(proc, 'file:///t.uc', "let x = 1;\n");
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 1, character: 0 },
@@ -138,9 +122,7 @@ describe('textDocument/completion', () => {
 
 	it('union of records: member completion offers fields from all branches', () => {
 		let text = "let x = true ? { alpha: 1 } : { beta: 2 };\nx.\n";
-		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
-			textDocument: { uri: 'file:///t.uc', languageId: 'ucode', version: 1, text },
-		}});
+		lsp.open(proc, 'file:///t.uc', text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/completion', params: {
 			textDocument: { uri: 'file:///t.uc' },
 			position: { line: 1, character: 2 },
