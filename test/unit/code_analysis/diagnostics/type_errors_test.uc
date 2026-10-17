@@ -379,3 +379,33 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 			"/** @param {?string} s */\nfunction f(s) { return s?.foo; }\n")));
 	});
 });
+
+describe('diagnostics — type errors: values set elsewhere', () => {
+	function codes(text) {
+		return map(typeErrors(URI, open(text)), (d) => [d.code, d.range.start.line]);
+	}
+
+	it('an outer variable assigned in another function may be null, not is null', () => {
+		assert.match([['may-be-null', 1]], codes(
+			"let marks = null;\nfunction use() { return marks[0]; }\nfunction init() { marks = [1]; return use(); }\ninit();\n"));
+	});
+
+	it('a guard on an outer variable assigned elsewhere clears it', () => {
+		assert.match([], codes(
+			"let marks = null;\nfunction use() { if (!marks) return 0; return marks[0]; }\nfunction init() { marks = [1]; return use(); }\ninit();\n"));
+	});
+
+	it('a field written elsewhere is not null-checked from its literal', () => {
+		assert.match([], codes(
+			"function parse(tags) {\n\tlet r = { typedef: null };\n\tfor (let t in tags)\n\t\tif (t) r.typedef = { type: null };\n" +
+			"\tif (r.typedef && length(tags))\n\t\tr.typedef.type = 1;\n\treturn r;\n}\nparse([1]);\n"));
+	});
+
+	it('a returned object keeps the narrowing at its return', () => {
+		assert.match([], codes(
+			"function load(u) { return u ? { text: 'x' } : null; }\n" +
+			"function f(us) { for (let u in us) { let doc = load(u); if (!doc) continue; return { u, doc }; } return null; }\n" +
+			"function g(u) { let doc = load(u); if (!doc) return null; return { doc: doc }; }\n" +
+			"let r = f([1]);\nif (r) print(r.doc.text);\nlet q = g(1);\nif (q) print(q.doc.text);\n"));
+	});
+});

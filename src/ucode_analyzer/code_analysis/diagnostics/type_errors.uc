@@ -185,6 +185,15 @@ function nullDiag(obj, objType, optChain, source, lineTable, diags, strict) {
 	return false;
 }
 
+// `x.p` where some `x.p = …` in the file may have replaced the value the
+// type describes (`{ p: null }`, then `x.p = {}` in a loop).
+function isWrittenMember(obj, source) {
+	if (ts.nodeType(obj) !== 'member_expression') return false;
+	let o = ts.childByField(obj, 'object'), p = ts.childByField(obj, 'property');
+	return o && p && ts.nodeType(o) === 'identifier'
+		&& _written[ts.text(o, source) + '.' + ts.text(p, source)] === true;
+}
+
 function objectType(obj, source, uri, scopeMap) {
 	let scope = scopeAtOffset(scopeMap, ts.startByte(obj));
 	return ts.nodeType(obj) === 'identifier'
@@ -233,7 +242,7 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 		// expected here and must not be flagged. Property checks still apply.
 		let optChain = ts.childByField(node, 'optional_chain') !== null;
 		if (obj) {
-			let objType = objectType(obj, source, uri, scopeMap);
+			let objType = isWrittenMember(obj, source) ? UNKNOWN : objectType(obj, source, uri, scopeMap);
 			if (!nullDiag(obj, objType, optChain, source, lineTable, diags, strict)
 			    && prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node) && !isDeleteTarget(node)
 			           && !(ts.nodeType(obj) === 'identifier' && _written[ts.text(obj, source) + '.' + ts.text(prop, source)])) {
@@ -258,8 +267,9 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 	if (nt === 'subscript_expression') {
 		let obj = ts.childByField(node, 'object');
 		if (obj) {
-			nullDiag(obj, objectType(obj, source, uri, scopeMap),
-			         ts.childByField(node, 'optional_chain') !== null, source, lineTable, diags, strict);
+			if (!isWrittenMember(obj, source))
+				nullDiag(obj, objectType(obj, source, uri, scopeMap),
+				         ts.childByField(node, 'optional_chain') !== null, source, lineTable, diags, strict);
 			if (ts.nodeType(obj) !== 'identifier') _walk(obj, source, uri, scopeMap, lineTable, diags, strict);
 		}
 		let idx = ts.childByField(node, 'index');

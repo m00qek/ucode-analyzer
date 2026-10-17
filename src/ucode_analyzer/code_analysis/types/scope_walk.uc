@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { firstNamed, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
-import { inferNode, inferParams, declaredType } from 'ucode_analyzer.code_analysis.types.inferrer';
+import { inferNode, inferParams, declaredType, setReturnScopes } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { importScope } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork } from 'ucode_analyzer.code_analysis.types.scope';
 import { UNKNOWN, STR, unionOf } from 'ucode_analyzer.code_analysis.types.type_utils';
@@ -22,6 +22,17 @@ export function scopeAtOffset(map, offset) {
     }
     return result;
 };
+
+// The checkpoint with the largest offset <= offset, or null.
+function checkpointAt(map, offset) {
+    let lo = 0, hi = length(map) - 1, found = null;
+    while (lo <= hi) {
+        let mid = int((lo + hi) / 2);
+        if (map[mid].offset <= offset) { found = map[mid]; lo = mid + 1; }
+        else hi = mid - 1;
+    }
+    return found;
+}
 
 // Emit a (offset, scope) checkpoint into the sorted map.
 function emit(map, offset, scope) {
@@ -185,28 +196,6 @@ function query(lang) {
 
 const FUNCTION_TYPES = { function_declaration: true, function_expression: true, arrow_function: true };
 
-// Every `name = …` and every declared name of the tree being mapped, sorted by
-// start, collected once: { start, name, rhs, fnStart } with fnStart the start
-// of the innermost enclosing function (-1 at top level).
-let _assigns = [], _decls = [];
-
-function collectBindings(root, source) {
-    let lang = ts.nodeType(root) === 'markup' ? 'markup' : 'ucode';
-    _assigns = [];
-    _decls = [];
-    for (let m in ts.queryMatches(query(lang), root, source)) {
-        let c = {};
-        for (let cap in m.captures) c[cap.name] = cap.node;
-        let entry = { start: ts.startByte(c.name), name: ts.text(c.name, source) };
-        if (m.pattern !== 0) { push(_decls, entry); continue; }
-        entry.rhs = c.rhs;
-        entry.fnStart = -1;
-        for (let p = ts.parent(c.name); p; p = ts.parent(p))
-            if (FUNCTION_TYPES[ts.nodeType(p)]) { entry.fnStart = ts.startByte(p); break; }
-        push(_assigns, entry);
-    }
-}
-
 // Index of the first entry of a start-sorted list at or after `start`.
 function lowerBound(list, start) {
     let lo = 0, hi = length(list);
@@ -216,6 +205,49 @@ function lowerBound(list, start) {
     }
     return lo;
 }
+
+// Every `name = …` and every declared name of the tree being mapped, sorted by
+// start, collected once: { start, name, rhs, fnStart, fnEnd } with fnStart and
+// fnEnd the range of the innermost enclosing function (-1 at top level).
+// _captured holds the right-hand sides, by name, of the variables another
+// function may see change (see widenCaptured); _capturedType caches its joins.
+let _assigns = [], _decls = [], _captured = {}, _capturedType = {};
+
+function collectBindings(root, source) {
+    let lang = ts.nodeType(root) === 'markup' ? 'markup' : 'ucode';
+    _assigns = [];
+    _decls = [];
+    _captured = {};
+    _capturedType = {};
+    let fns = ts.descendantOffsets(root, keys(FUNCTION_TYPES));
+    let firstFn = length(fns) ? fns[0] : -1;
+    for (let m in ts.queryMatches(query(lang), root, source)) {
+        let c = {};
+        for (let cap in m.captures) c[cap.name] = cap.node;
+        let entry = { start: ts.startByte(c.name), name: ts.text(c.name, source) };
+        if (m.pattern !== 0) { push(_decls, entry); continue; }
+        entry.rhs = c.rhs;
+        entry.fnStart = entry.fnEnd = -1;
+        for (let p = ts.parent(c.name); p; p = ts.parent(p))
+            if (FUNCTION_TYPES[ts.nodeType(p)]) { entry.fnStart = ts.startByte(p); entry.fnEnd = ts.endByte(p); break; }
+        push(_assigns, entry);
+    }
+    // Captured: assigned in a function that does not declare it (the variable is
+    // an enclosing one), or at top level once a function exists that can run
+    // later. A variable assigned only where it is declared, before any function,
+    // reads the same from every function, and the walk tracks it in order.
+    for (let a in _assigns) {
+        let local = false;
+        if (a.fnStart >= 0)
+            for (let i = lowerBound(_decls, a.fnStart); i < length(_decls) && _decls[i].start < a.fnEnd; i++)
+                if (_decls[i].name === a.name) { local = true; break; }
+        let captured = (a.fnStart >= 0) ? !local : (firstFn >= 0 && a.start > firstFn);
+        if (!captured) continue;
+        _captured[a.name] ??= [];
+        push(_captured[a.name], a.rhs);
+    }
+}
+
 
 // { name: [rhs nodes] } for `name = …` inside stmt, outside functions nested
 // in it, for names stmt does not declare itself.
@@ -614,10 +646,28 @@ function walkSwitch(node, source, uri, scope, map) {
     }
 }
 
+// A function body can run after any assignment in the file, so inside it an
+// outer variable the file assigns may hold any of the assigned types: `let x =
+// null; function init() { x = {}; }` makes x `null | object` in every function
+// that mentions it. Matched by name, so a shadowing variable only widens, never
+// narrows. The widened types go in the function's own frame (fnScope), not in a
+// chain of forks every later lookup would walk.
+function widenCaptured(fnScope, body, source, uri, smap) {
+    let text = ts.text(body, source);
+    for (let name, rhss in _captured) {
+        if (index(text, name) < 0) continue;
+        let t0 = scopeGet(fnScope, name);
+        if (!t0 || t0.kind === 'unknown') continue;
+        _capturedType[name] ??= joinTypes(map(rhss, (r) => rhsType(r, source, uri, smap)));
+        scopeSet(fnScope, name, joinTypes([t0, _capturedType[name]]));
+    }
+}
+
 function walkFn(node, source, uri, scope, map) {
     let fnScope = makeScope(scope);
-    addParams(node, source, uri, fnScope);
     let body = ts.childByField(node, 'body');
+    if (body) widenCaptured(fnScope, body, source, uri, map);
+    addParams(node, source, uri, fnScope);
     if (!body) return;
     if (ts.nodeType(body) === 'statement_block') {
         walkBlock(body, source, uri, fnScope, map);
@@ -695,8 +745,10 @@ const SCOPE_TYPES = [
 // moves forward; a query behind it falls back to a binary search.
 let _marks = null, _pos = 0;
 
-// Does [start, end) hold the start of a SCOPE_TYPES node?
+// Does [start, end) hold the start of a SCOPE_TYPES node? Without marks,
+// assume it does: nothing is skipped.
 function holdsMark(start, end) {
+    if (!_marks) return true;
     if (_pos > 0 && _marks[_pos - 1] >= start) {
         let lo = 0, hi = _pos;
         while (lo < hi) {
@@ -750,7 +802,7 @@ walkNode = function(node, source, uri, scope, map) {
         walkBinary(node, source, uri, scope, map);
     } else {
         for (let c in ts.namedChildren(node))
-            if (!_marks || holdsMark(ts.startByte(c), ts.endByte(c)))
+            if (holdsMark(ts.startByte(c), ts.endByte(c)))
                 walkNode(c, source, uri, scope, map);
     }
 };
@@ -765,8 +817,12 @@ export function buildScopeMap(uri, source, tree) {
     let outer = [_marks, _pos];
     _marks = ts.descendantOffsets(root, SCOPE_TYPES);
     _pos = 0;
-    let outerBindings = [_assigns, _decls];
+    let outerBindings = [_assigns, _decls, _captured, _capturedType];
     collectBindings(root, source);
+    let outerReturns = setReturnScopes({ uri, at: (offset, from) => {
+        let c = checkpointAt(map, offset);
+        return (c && c.offset >= from) ? c.scope : null;
+    } });
     emit(map, 0, scope);
     let n = ts.namedChildCount(root);
     for (let i = 0; i < n; i++)
@@ -781,6 +837,9 @@ export function buildScopeMap(uri, source, tree) {
     _pos = outer[1];
     _assigns = outerBindings[0];
     _decls = outerBindings[1];
+    _captured = outerBindings[2];
+    _capturedType = outerBindings[3];
+    setReturnScopes(outerReturns);
     return map;
 };
 

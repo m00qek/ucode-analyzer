@@ -34,6 +34,20 @@ function precedingDoc(node, source, uri) {
 let _infer;
 let _collectReturns;
 
+// While scope_walk builds a file's map, the checkpoint at a return statement
+// holds the narrowing that reaches it (an `if (!x) return;` above it), which a
+// single scope for the whole body cannot. { uri, at(offset, from) }: `at` gives
+// the scope at `offset` if a checkpoint at or after `from` (the function body's
+// start) covers it, else null.
+let _returnScopes = null;
+
+// Install the lookup for one file's map; returns the one it replaces.
+export function setReturnScopes(next) {
+	let prev = _returnScopes;
+	_returnScopes = next;
+	return prev;
+};
+
 // ── Internal helpers ───────────────────────────────────────────────────────
 
 // When fn is a callback argument in a call_expression, return the expected
@@ -92,18 +106,20 @@ export function processDecl(stmt, source, uri, scope, depth) {
 // Collect types of all return expressions within node, recursing into control
 // flow but not crossing nested function boundaries.  Tracks let declarations
 // encountered along the way so returns inside if-bodies can resolve local vars.
-_collectReturns = function(node, source, uri, scope, depth, out) {
+// `from`: the start of the function body being inferred (see _returnScopes).
+_collectReturns = function(node, source, uri, scope, depth, out, from) {
 	let n = ts.namedChildCount(node);
 	for (let i = 0; i < n; i++) {
 		let child = ts.namedChild(node, i);
 		let ct = ts.nodeType(child);
 		if (ct === 'return_statement') {
 			let expr = firstNamed(child);
-			push(out, expr ? _infer(expr, source, uri, scope, depth + 1) : NULL_T);
+			let at = (_returnScopes?.uri === uri) ? _returnScopes.at(ts.startByte(child), from) : null;
+			push(out, expr ? _infer(expr, source, uri, at ?? scope, depth + 1) : NULL_T);
 		} else if (ct === 'lexical_declaration') {
 			processDecl(child, source, uri, scope, depth);
 		} else if (ct !== 'function_declaration' && ct !== 'arrow_function' && ct !== 'function_expression') {
-			_collectReturns(child, source, uri, scope, depth, out);
+			_collectReturns(child, source, uri, scope, depth, out, from);
 		}
 	}
 };
@@ -169,7 +185,7 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 		let bt = ts.nodeType(bodyNode);
 		if (bt === 'statement_block' || bt === 'statement_list') {
 			let rets = [];
-			_collectReturns(bodyNode, source, uri, childScope, depth, rets);
+			_collectReturns(bodyNode, source, uri, childScope, depth, rets, ts.startByte(bodyNode));
 			ret = unionOf(rets);
 		} else {
 			ret = _infer(bodyNode, source, uri, childScope, depth + 1);
@@ -607,7 +623,7 @@ function inferFunctionDecl(node, source, uri, scope, depth) {
 			for (let i = 0; i < length(params); i++)
 				scopeSet(bodyScope, params[i].name, params[i].type ?? UNKNOWN);
 			let rets = [];
-			_collectReturns(body, source, uri, bodyScope, depth, rets);
+			_collectReturns(body, source, uri, bodyScope, depth, rets, ts.startByte(body));
 			ret = unionOf(rets);
 		}
 	}
