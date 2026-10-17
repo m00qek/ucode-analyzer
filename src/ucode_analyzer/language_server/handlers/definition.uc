@@ -9,6 +9,7 @@ import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { localBinding } from 'ucode_analyzer.code_analysis.bindings';
+import { toPath } from 'ucode_analyzer.code_analysis.uri';
 
 // Return an LSP Location object for byte offset inside uri.
 function location(uri, text, lineTable, byteOffset) {
@@ -113,7 +114,7 @@ function resolveExportDefinition(resolvedUri, name) {
 	if (exp && exp.position)
 		return { uri: resolvedUri, range: { start: exp.position, end: exp.position } };
 	// Fallback: re-parse from disk (handles export_clause or unindexed files).
-	let path = substr(resolvedUri, length('file://'));
+	let path = toPath(resolvedUri);
 	let text = fs.readfile(path);
 	if (!text) return null;
 	let tree = mode.parse(text);

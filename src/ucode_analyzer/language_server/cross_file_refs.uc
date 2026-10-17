@@ -1,8 +1,7 @@
 import * as ts from 'tree_sitter';
-import * as fs from 'fs';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
-import { positionToOffset, rangeOf, buildLineTable, findAncestor } from 'ucode_analyzer.code_analysis.positions';
+import { positionToOffset, rangeOf, findAncestor } from 'ucode_analyzer.code_analysis.positions';
 import { referencesOf, anchorOf } from 'ucode_analyzer.language_server.scope_references';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 
@@ -54,18 +53,6 @@ function memberPropertyNodesOf(root, text, alias, memberName) {
 	return result;
 }
 
-// Load a document from the editor (open files) or from disk.
-function loadDoc(uri) {
-	let doc = documents.get(uri);
-	if (doc) return doc;
-	let path = substr(uri, 7);
-	let f = fs.open(path, 'r');
-	if (!f) return null;
-	let text = f.read('all');
-	f.close();
-	let lineTable = buildLineTable(text);
-	return { text, tree: mode.parse(text), lineTable };
-}
 
 // Convert tree-sitter nodes to `[{ start, end }]` LSP ranges.
 function nodeRanges(nodes, text, lineTable) {
@@ -126,7 +113,7 @@ export function crossFileRefsOf(declaringUri, exportName, excludeUri) {
 
 	// Include the declaring file when the cursor is in an importing file.
 	if (declaringUri !== excludeUri) {
-		let doc = loadDoc(declaringUri);
+		let doc = documents.getOrRead(declaringUri);
 		if (doc) {
 			let root = ts.rootNode(doc.tree);
 			let lt = doc.lineTable;
@@ -148,7 +135,7 @@ export function crossFileRefsOf(declaringUri, exportName, excludeUri) {
 	for (let revUri in dag.reverseDeps(declaringUri)) {
 		if (revUri === excludeUri || revUri === declaringUri) continue;
 
-		let doc = loadDoc(revUri);
+		let doc = documents.getOrRead(revUri);
 		if (!doc) continue;
 		let root = ts.rootNode(doc.tree);
 		let lt = doc.lineTable;

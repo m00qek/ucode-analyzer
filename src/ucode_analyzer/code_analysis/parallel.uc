@@ -27,14 +27,6 @@ export function shardRoundRobin(items, jobs) {
 	return shards;
 };
 
-function readText(path) {
-	let f = fs.open(path, 'r');
-	if (!f) return null;
-	let text = f.read('all');
-	f.close();
-	return text;
-}
-
 // Count the CPUs in a Linux CPU list: "0-3,8,10-11" → 7.
 function countCpuList(list) {
 	let n = 0;
@@ -77,14 +69,14 @@ export function jobsFor(status, cpuMax, cpuinfo) {
 // interactive hot path never forks.
 export function detectJobs() {
 	// cgroup v2 exposes the quota as cpu.max; v1 as two files (-1 = unlimited).
-	let cpuMax = readText('/sys/fs/cgroup/cpu.max');
+	let cpuMax = fs.readfile('/sys/fs/cgroup/cpu.max');
 	if (cpuMax === null) {
-		let q = readText('/sys/fs/cgroup/cpu/cpu.cfs_quota_us');
-		let p = readText('/sys/fs/cgroup/cpu/cpu.cfs_period_us');
+		let q = fs.readfile('/sys/fs/cgroup/cpu/cpu.cfs_quota_us');
+		let p = fs.readfile('/sys/fs/cgroup/cpu/cpu.cfs_period_us');
 		if (q !== null && p !== null && int(q) > 0)
 			cpuMax = sprintf('%d %d', int(q), int(p));
 	}
-	return jobsFor(readText('/proc/self/status'), cpuMax, readText('/proc/cpuinfo'));
+	return jobsFor(fs.readfile('/proc/self/status'), cpuMax, fs.readfile('/proc/cpuinfo'));
 };
 
 // Fan `items` out across up to `jobs` worker processes on the CURRENT event loop

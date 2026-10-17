@@ -7,6 +7,7 @@ import { globalUri } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { makeScope, scopeHas, scopeSet } from 'ucode_analyzer.code_analysis.types.scope';
 import { matchPattern } from 'ucode_analyzer.code_analysis.glob';
 import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
+import { toPath } from 'ucode_analyzer.code_analysis.uri';
 
 // Names a runtime injects into a file's scope. LuCI runs controllers with its
 // request environment as their scope and templates with that environment as
@@ -28,7 +29,7 @@ const PRESETS = [
 // plus `workspace.globals` from the config — an array of names for every
 // file, or { "<glob>": [names] } matched against the workspace-relative path.
 function runtimeGlobals(uri) {
-	let path = substr(uri, 7);   // strip "file://"
+	let path = toPath(uri);
 	let cfg = dag.config() ?? {};
 	let ws = cfg.workspaceDir;
 	let rel = (ws && substr(path, 0, length(ws) + 1) === ws + '/') ? substr(path, length(ws) + 1) : path;

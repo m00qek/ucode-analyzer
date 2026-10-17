@@ -8,6 +8,7 @@ export const SymbolKind         = { MODULE: 2, FUNCTION: 12, VARIABLE: 13, CONST
 export const CompletionItemKind = { FUNCTION: 3, VARIABLE: 6, MODULE: 9, KEYWORD: 14 };
 export const HighlightKind      = { TEXT: 1, READ: 2, WRITE: 3 };
 export const InlayHintKind      = { TYPE: 1, PARAMETER: 2 };
+export const FileChangeType     = { CREATED: 1, CHANGED: 2, DELETED: 3 };
 
 // A diagnostic from this analyzer.
 export function diagnostic(range, severity, code, message) {

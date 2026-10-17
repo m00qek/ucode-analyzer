@@ -2,11 +2,8 @@ import * as fs from 'fs';
 import { scan } from 'ucode_analyzer.code_analysis.glob';
 
 function readJson(path) {
-	let f = fs.open(path, 'r');
-	if (!f) return null;
-	let content = f.read('all');
-	f.close();
-	return json(content);
+	let content = fs.readfile(path);
+	return (content === null) ? null : json(content);
 }
 
 function deepMerge(base, over) {

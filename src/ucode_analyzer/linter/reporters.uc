@@ -2,6 +2,8 @@
 // the shared [{ uri, diags }] result shape — no analysis or IO — so they can be
 // unit-tested in isolation and can never drift from what the editor reports.
 
+import { toPath } from 'ucode_analyzer.code_analysis.uri';
+
 const SEVERITY_NAME = { "1": 'error', "2": 'warning', "3": 'info', "4": 'hint' };
 const SEVERITY_NUM  = { error: 1, warning: 2, info: 3, hint: 4 };
 
@@ -11,7 +13,7 @@ function severityName(sev) {
 
 // Drop "file://" and make the path relative to root when it lives underneath it.
 function relativePath(uri, root) {
-	let path = (substr(uri, 0, 7) === 'file://') ? substr(uri, 7) : uri;
+	let path = toPath(uri);
 	if (root && length(root) > 0) {
 		let prefix = (substr(root, length(root) - 1) === '/') ? root : root + '/';
 		if (substr(path, 0, length(prefix)) === prefix)

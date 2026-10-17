@@ -3,6 +3,7 @@ import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { buildLineTable } from 'ucode_analyzer.code_analysis.positions';
 import { buildScopeMap } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import { toPath } from 'ucode_analyzer.code_analysis.uri';
 
 let _documents = {};
 
@@ -66,11 +67,19 @@ export function markStale(uri) {
 // Returns null if the file can't be read. The scopeMap must be attached later
 // with withScopeMap(), once the DAG is complete, because it resolves imports.
 export function readParsed(uri) {
-	let f = fs.open(substr(uri, 7), 'r');  // strip "file://"
-	if (!f) return null;
-	let text = f.read('all');
-	f.close();
-	return { uri, text, version: null, tree: mode.parse(text) };
+	let text = fs.readfile(toPath(uri));
+	return (text === null) ? null : { uri, text, version: null, tree: mode.parse(text) };
+};
+
+// The open document for uri, else one read from disk with its tree and line
+// table but no scope map, for features that need no types. Null if the file
+// can't be read.
+export function getOrRead(uri) {
+	let doc = get(uri);
+	if (doc) return doc;
+	doc = readParsed(uri);
+	if (doc) doc.lineTable = buildLineTable(doc.text);
+	return doc;
 };
 
 // Attach lineTable + scopeMap to a bare document (from readParsed) and return

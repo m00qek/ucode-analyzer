@@ -23,6 +23,7 @@ import { linkedEditingRanges } from 'ucode_analyzer.language_server.handlers.lin
 import { documentLinks } from 'ucode_analyzer.language_server.handlers.document_link';
 import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'ucode_analyzer.language_server.handlers.call_hierarchy';
 import * as platform from 'ucode_analyzer.language_server.platform';
+import { FileChangeType } from 'ucode_analyzer.code_analysis.lsp_types';
 
 // How long a diagnostic refresh waits for further changes, in ms.
 const REFRESH_DELAY = 500;
@@ -259,23 +260,20 @@ export function run(config) {
 			let changed = false;
 			for (let change in (msg.params.changes ?? [])) {
 				let uri = change.uri;
-				if (change.type === 3) {  // deleted
-					let revDeps = dag.reverseDeps(uri);
+				let deleted = change.type === FileChangeType.DELETED;
+				// The editor's text of an open file wins over the disk's.
+				if (!deleted && documents.isOpen(uri)) continue;
+				let revDeps = dag.reverseDeps(uri);
+				if (deleted)
 					dag.remove(uri);
-					invalidateUri(uri);
-					invalidateDiagnostics(uri);
-					invalidateDependents(revDeps);
-					changed = true;
-				} else if (!documents.isOpen(uri)) {  // created (1) or changed (2), not open in editor
-					let revDeps = dag.reverseDeps(uri);
+				else
 					dag.addFromDisk(uri);
-					// A new file can satisfy imports that resolved to nothing.
-					if (change.type === 1) push(revDeps, ...dag.resolveUnresolved());
-					invalidateUri(uri);
-					invalidateDiagnostics(uri);
-					invalidateDependents(revDeps);
-					changed = true;
-				}
+				// A new file can satisfy imports that resolved to nothing.
+				if (change.type === FileChangeType.CREATED) push(revDeps, ...dag.resolveUnresolved());
+				invalidateUri(uri);
+				invalidateDiagnostics(uri);
+				invalidateDependents(revDeps);
+				changed = true;
 			}
 			// On-disk changes can affect any file's diagnostics; prompt re-pull.
 			if (changed)

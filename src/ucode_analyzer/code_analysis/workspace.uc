@@ -4,6 +4,7 @@ import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { diagnosticsFor } from 'ucode_analyzer.code_analysis.diagnostics';
 import { libraryDirs } from 'ucode_analyzer.code_analysis.config';
+import { toPath } from 'ucode_analyzer.code_analysis.uri';
 
 // Directories under workspaceDir that carry their own .lsp/config.json. Each is
 // a self-contained nested workspace (e.g. the linter's test fixtures) and is
@@ -61,7 +62,7 @@ function sourceFiles(config) {
 // The server's own sources are only ever in a workspace as a checkout being
 // worked on: installed, they are a system library.
 export function isWorkspaceUri(uri, config, nestedRoots) {
-	let path = substr(uri, 7);  // strip "file://"
+	let path = toPath(uri);
 	let workdir = config.workspaceDir ?? '/';
 	if (!isUnder(path, workdir)) return false;
 

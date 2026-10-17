@@ -2,23 +2,14 @@ import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
-import { positionToOffset, rangeOf, buildLineTable, nodeAtOffset } from 'ucode_analyzer.code_analysis.positions';
+import { positionToOffset, rangeOf, nodeAtOffset } from 'ucode_analyzer.code_analysis.positions';
 import { referencesOf } from 'ucode_analyzer.language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.language_server.cross_file_refs';
-import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
 
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
-function loadDoc(uri) {
-	let doc = documents.get(uri);
-	if (doc) return doc;
-	let path = substr(uri, 7);
-	let text = fs.readfile(path);
-	if (!text) return null;
-	return { uri, text, tree: mode.parse(text), lineTable: buildLineTable(text) };
-}
 
 // True when refNode (an identifier) is the direct callee of a call_expression.
 function isCallSite(refNode) {
@@ -149,7 +140,7 @@ function resolveCalleeIdent(identNode, callerUri, callerDoc) {
 		let remoteName = (imp.renames && imp.renames[name]) ?? name;
 		let exp = dag.resolveExport(imp.resolvedUri, remoteName);
 		if (!exp || !exp.position) continue;
-		let doc = loadDoc(imp.resolvedUri);
+		let doc = documents.getOrRead(imp.resolvedUri);
 		if (!doc) continue;
 		let byteOff = positionToOffset(doc.text, doc.lineTable, exp.position);
 		let r = findFnAt(ts.rootNode(doc.tree), doc.text, byteOff);
@@ -260,7 +251,7 @@ export function prepareCallHierarchy(uri, doc, position) {
 		let loc = dag.resolveExportLocation(identity.declaringUri, identity.exportName);
 		let exp = dag.resolveExport(loc.uri, loc.name);
 		if (exp && exp.position) {
-			let declDoc = loadDoc(loc.uri);
+			let declDoc = documents.getOrRead(loc.uri);
 			if (declDoc) {
 				let declRoot = ts.rootNode(declDoc.tree);
 				let byteOff  = positionToOffset(declDoc.text, declDoc.lineTable, exp.position);
@@ -281,7 +272,7 @@ export function prepareCallHierarchy(uri, doc, position) {
 export function incomingCalls(item) {
 	let uri            = item.data.uri;
 	let nameByteOffset = item.data.nameByteOffset;
-	let doc = loadDoc(uri);
+	let doc = documents.getOrRead(uri);
 	if (!doc) return null;
 
 	// Collect { callerItem, fromRange } pairs, keyed by callerItem range to deduplicate.
@@ -309,7 +300,7 @@ export function incomingCalls(item) {
 	let identity = resolveExportIdentity(uri, doc, nameByteOffset);
 	if (identity) {
 		for (let cr in crossFileRefsOf(identity.declaringUri, identity.exportName, uri)) {
-			let refDoc = loadDoc(cr.uri);
+			let refDoc = documents.getOrRead(cr.uri);
 			if (!refDoc) continue;
 			let refRoot = ts.rootNode(refDoc.tree);
 			// cr.refRanges already enumerates every reference in this file. Map each
@@ -333,7 +324,7 @@ export function incomingCalls(item) {
 export function outgoingCalls(item) {
 	let uri            = item.data.uri;
 	let nameByteOffset = item.data.nameByteOffset;
-	let doc = loadDoc(uri);
+	let doc = documents.getOrRead(uri);
 	if (!doc) return null;
 
 	let root = ts.rootNode(doc.tree);

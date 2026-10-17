@@ -1,5 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
+import * as fixture from 'fixture';
 
 describe('documents', () => {
 	afterEach(() => {
@@ -71,5 +72,28 @@ describe('documents', () => {
 		assert.match(true, documents.isOpen('file:///x.uc'));
 		assert.match(null, doc.scopeMap);
 		assert.match(false, documents.isOpen('file:///unknown.uc'));
+	});
+});
+
+describe('documents — getOrRead', () => {
+	it('gives the open document when there is one', () => {
+		let uri = fixture.uri('greet.uc');
+		documents.open(uri, 'let open = 1;', 3);
+		let doc = documents.getOrRead(uri);
+		documents.close(uri);
+		assert.match('let open = 1;', doc.text);
+		assert.match(3, doc.version);
+	});
+
+	it('reads a file that is not open, without a scope map', () => {
+		let doc = documents.getOrRead(fixture.uri('greet.uc'));
+		assert.match(fixture.read('greet.uc'), doc.text);
+		assert.match(length(split(doc.text, "\n")), length(doc.lineTable));
+		assert.match(null, doc.scopeMap);
+		assert.match(false, documents.isOpen(fixture.uri('greet.uc')));
+	});
+
+	it('gives null for a file that cannot be read', () => {
+		assert.match(null, documents.getOrRead(fixture.uri('missing.uc')));
 	});
 });

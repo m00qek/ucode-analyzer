@@ -3,6 +3,7 @@ import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { offsetToPosition } from 'ucode_analyzer.code_analysis.positions';
 import { stringLiteralText } from 'ucode_analyzer.code_analysis.ast_text';
+import { toPath } from 'ucode_analyzer.code_analysis.uri';
 
 // Links from module names to their files: an import's source and a literal
 // require('…') argument, resolved like the import itself.
@@ -20,7 +21,7 @@ function link(doc, str, out) {
 			end:   offsetToPosition(doc.text, doc.lineTable, ts.endByte(str) - 1),
 		},
 		target,
-		tooltip: substr(target, 7),
+		tooltip: toPath(target),
 	});
 }
 

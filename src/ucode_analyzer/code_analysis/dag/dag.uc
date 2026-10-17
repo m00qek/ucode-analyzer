@@ -3,6 +3,7 @@ import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { extractExports, extractImports, extractTypedefs, extractModuleDoc, extractVersions, resolveModule } from 'ucode_analyzer.code_analysis.dag.indexer';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import { libraryDirs } from 'ucode_analyzer.code_analysis.config';
+import { toPath } from 'ucode_analyzer.code_analysis.uri';
 
 let _config = {};
 let _nodes = {};
@@ -14,10 +15,6 @@ let _openUris = {};
 // unchanged (the common case: editing one file cascades through dependents whose
 // own text hasn't moved). Same per-uri lifecycle as _nodes.
 let _diskStamp = {};
-
-function uriToPath(uri) {
-	return substr(uri, 7);
-}
 
 function resolvedLibPaths() {
 	let out = libraryDirs(_config);
@@ -91,11 +88,8 @@ function interfaceOf(uri) {
 }
 
 function readAndParse(path) {
-	let f = fs.open(path, 'r');
-	if (!f) return null;
-	let text = f.read('all');
-	f.close();
-	return { text, tree: mode.parse(text) };
+	let text = fs.readfile(path);
+	return (text === null) ? null : { text, tree: mode.parse(text) };
 }
 
 export function init(config) {
@@ -118,7 +112,7 @@ export function add(uri, text, tree) {
 
 // Index a file from disk (no cascade — used for initial workspace scan).
 export function addFromDisk(uri) {
-	let path = uriToPath(uri);
+	let path = toPath(uri);
 	let parsed = readAndParse(path);
 	if (parsed) {
 		indexNode(uri, parsed.text, parsed.tree);
@@ -153,7 +147,7 @@ export function update(uri, text, tree, openDocs) {
 			let mem = openDocs ? openDocs[next] : null;
 			if (mem) indexNode(next, mem.text, mem.tree);
 		} else {
-			let path = uriToPath(next);
+			let path = toPath(next);
 			let stamp = _diskStamp[next];
 			let st = stamp ? fs.stat(path) : null;
 			if (stamp && st && st.mtime === stamp.mtime && st.size === stamp.size) {
@@ -264,7 +258,7 @@ export function resolveSpecifier(specifier) {
 // `fs` for <self>/declarations/fs.d.uc), or null: the shortest one that
 // resolves back to `uri` from some library path.
 export function specifierOf(uri) {
-	let path = substr(uri, 7);
+	let path = toPath(uri);
 	let best = null;
 	for (let lib in resolvedLibPaths()) {
 		if (substr(path, 0, length(lib) + 1) !== lib + '/') continue;
