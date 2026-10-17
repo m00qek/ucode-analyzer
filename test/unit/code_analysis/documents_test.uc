@@ -60,6 +60,12 @@ describe('documents', () => {
 		assert.match(true, rebuilt !== null && rebuilt !== first);
 	});
 
+	it('versionOf() gives the version of an open document', () => {
+		documents.open('file:///x.uc', 'x', 3);
+		assert.match(3, documents.versionOf('file:///x.uc'));
+		assert.match(null, documents.versionOf('file:///unknown.uc'));
+	});
+
 	it('isOpen() reports open documents without building their scope map', () => {
 		let doc = documents.open('file:///x.uc', 'x', 1);
 		assert.match(true, documents.isOpen('file:///x.uc'));

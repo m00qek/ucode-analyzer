@@ -51,6 +51,11 @@ export function isOpen(uri) {
 	return exists(_documents, uri);
 };
 
+// The version of an open document; null if it is not open.
+export function versionOf(uri) {
+	return _documents[uri]?.version ?? null;
+};
+
 // Drop the scope map of an open document whose imports changed.
 export function markStale(uri) {
 	let doc = _documents[uri];

@@ -2,6 +2,7 @@ import * as protocol from 'language_server.protocol';
 import { diagnosticsFor } from 'code_analysis.diagnostics';
 import { workspaceUris, diagnoseFile } from 'code_analysis.workspace';
 import { fanOut, detectJobs } from 'code_analysis.parallel';
+import { versionOf } from 'code_analysis.documents';
 
 // Per-URI resultId generation. Bumped whenever a document's diagnostics may
 // have changed (edit, dependency cascade, watched-file change). A pull request
@@ -83,10 +84,13 @@ export function workspaceDiagnostics(requestId, params, config) {
 	_activeTasks = fanOut(
 		uris, detectJobs(),
 		function(uri) {
+			// The version the worker's snapshot holds, so the client can drop the
+			// result if the document has changed since.
+			let version = versionOf(uri);
 			let id = resultId(uri);
 			if (prevIds[uri] === id)
-				return { kind: 'unchanged', uri, version: null, resultId: id };
-			return { kind: 'full', uri, version: null, resultId: id, items: diagnoseFile(uri) };
+				return { kind: 'unchanged', uri, version, resultId: id };
+			return { kind: 'full', uri, version, resultId: id, items: diagnoseFile(uri) };
 		},
 		function(item) {
 			// Drop items from a scan that has since been superseded.

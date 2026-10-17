@@ -34,6 +34,17 @@ describe('workspace/diagnostic', () => {
 		assert.match(true, length(mine.items) >= 1);
 	});
 
+	it('reports the version of open documents, and null for the others', () => {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+			textDocument: { uri: 'file:///app/ws_v.uc', languageId: 'ucode', version: 7, text: 'let unused = 1;' },
+		}});
+
+		let report = lsp.workspaceDiagnostics(proc, []);
+		assert.match(7, entryFor(report, 'file:///app/ws_v.uc')?.version);
+		assert.match(null, entryFor(report, 'file:///app/test/fixtures/greet.uc')?.version);
+		assert.match(true, entryFor(report, 'file:///app/test/fixtures/greet.uc') !== null);
+	});
+
 	it('returns unchanged on re-pull with a current resultId', () => {
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
 			textDocument: { uri: 'file:///app/ws_b.uc', languageId: 'ucode', version: 1, text: 'let unused = 1;' },
