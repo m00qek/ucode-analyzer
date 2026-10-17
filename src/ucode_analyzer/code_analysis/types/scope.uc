@@ -17,9 +17,10 @@ export function scopeFork(scope, name, type) {
 	return s;
 };
 
+// A loop, not recursion: chains run 40 to 80 scopes deep in large files.
 export function scopeGet(scope, name) {
-	if (exists(scope.bindings, name)) return scope.bindings[name];
-	if (scope.parent) return scopeGet(scope.parent, name);
+	for (let s = scope; s; s = s.parent)
+		if (exists(s.bindings, name)) return s.bindings[name];
 	return null;
 };
 

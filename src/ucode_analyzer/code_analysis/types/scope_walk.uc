@@ -12,7 +12,7 @@ export function scopeAtOffset(map, offset) {
     let hi = length(map) - 1;
     let result = length(map) > 0 ? map[0].scope : makeScope(null);
     while (lo <= hi) {
-        let mid = int((lo + hi) / 2);
+        let mid = (lo + hi) >> 1;
         if (map[mid].offset <= offset) {
             result = map[mid].scope;
             lo = mid + 1;
@@ -27,7 +27,7 @@ export function scopeAtOffset(map, offset) {
 function checkpointAt(map, offset) {
     let lo = 0, hi = length(map) - 1, found = null;
     while (lo <= hi) {
-        let mid = int((lo + hi) / 2);
+        let mid = (lo + hi) >> 1;
         if (map[mid].offset <= offset) { found = map[mid]; lo = mid + 1; }
         else hi = mid - 1;
     }

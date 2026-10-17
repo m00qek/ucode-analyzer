@@ -194,7 +194,7 @@ export function offsetToPosition(text, lineTable, offset) {
 	let hi = length(lineTable) - 1;
 
 	while (lo < hi) {
-		let mid = int((lo + hi + 1) / 2);
+		let mid = (lo + hi + 1) >> 1;
 		if (lineTable[mid] <= offset)
 			lo = mid;
 		else
