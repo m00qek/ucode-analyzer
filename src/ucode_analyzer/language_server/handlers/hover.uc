@@ -4,6 +4,7 @@ import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { typeToString, parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import { UNKNOWN, STR, resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
+import { returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as templates from 'ucode_analyzer.language_server.templates';
 import { resolveDoc } from 'ucode_analyzer.code_analysis.doc_resolver';
@@ -38,8 +39,9 @@ function buildHoverCtx(label, type, doc) {
 		}));
 		// Only show the Parameters section when at least one @param is documented.
 		ctx.params = length(docParams) > 0 ? all : [];
-		ctx.returns = shape['return'] ? {
-			typeStr: typeToString(shape['return']),
+		let ret = returnOf(shape);
+		ctx.returns = ret ? {
+			typeStr: typeToString(ret),
 			description: doc?.returns?.description ?? null,
 		} : null;
 		// Pre-built declaration-form signature for the code fence.

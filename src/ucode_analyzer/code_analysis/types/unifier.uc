@@ -1,3 +1,17 @@
+const UNKNOWN_RETURN = { kind: 'unknown' };
+
+// The return type of a function type. Inferred function types compute it on
+// first read (see lazyFunction in inferrer.uc); read it only through here.
+export function returnOf(fnType) {
+	let infer = fnType.inferReturn;
+	if (infer) {
+		delete fnType.inferReturn;
+		fnType['return'] = UNKNOWN_RETURN;   // what a recursive read sees meanwhile
+		fnType['return'] = infer();
+	}
+	return fnType['return'];
+};
+
 // Match paramType against argType, populating bindings in place.
 // depth guards against recursive generic types — bail silently above 5.
 export function unify(paramType, argType, bindings, depth) {
@@ -40,7 +54,7 @@ export function unify(paramType, argType, bindings, depth) {
 		let n = min(length(paramType.params), length(argType.params));
 		for (let i = 0; i < n; i++)
 			unify(paramType.params[i].type, argType.params[i].type, bindings, depth + 1);
-		unify(paramType.return, argType.return, bindings, depth + 1);
+		unify(returnOf(paramType), returnOf(argType), bindings, depth + 1);
 		return;
 	}
 
@@ -86,7 +100,7 @@ export function substitute(type, bindings) {
 
 	if (k === 'function') {
 		let params = map(type.params, (p) => ({ name: p.name, type: substitute(p.type, bindings) }));
-		return { kind: 'function', params, return: substitute(type.return, bindings) };
+		return { kind: 'function', params, return: substitute(returnOf(type), bindings) };
 	}
 
 	return type;

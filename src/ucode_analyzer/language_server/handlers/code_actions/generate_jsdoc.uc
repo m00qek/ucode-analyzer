@@ -1,6 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, docBearingStatement, precedingDoc } from 'ucode_analyzer.code_analysis.positions';
 import { inferNode, inferParams } from 'ucode_analyzer.code_analysis.types.inferrer';
+import { returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
 
@@ -66,7 +67,8 @@ export function actionsFor(uri, doc, range) {
 		if (rest[p.name] && t?.kind === 'generic' && t.base === 'list') t = t.params[0];
 		push(lines, sprintf(' * @param {%s%s} %s', rest[p.name] ? '...' : '', docType(t), p.name));
 	}
-	let ret = inferNode(fn, doc.text, uri, scope, 0)?.return;
+	let fnType = inferNode(fn, doc.text, uri, scope, 0);
+	let ret = fnType ? returnOf(fnType) : null;
 	if (ret && ret.kind !== 'unknown' && !(ret.kind === 'primitive' && ret.name === 'null'))
 		push(lines, sprintf(' * @returns {%s}', docType(ret)));
 	if (!length(lines)) return [];

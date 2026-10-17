@@ -1,4 +1,5 @@
 import * as ts from 'tree_sitter';
+import { returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 
 let _parser = ts.newParser(ts.ucdocs());
 
@@ -337,7 +338,7 @@ export function typeToString(type) {
 	}
 	if (k === 'function') {
 		let ps = map(type.params, (p) => (p.rest ? '...' : '') + (p.name ? p.name + ': ' : '') + typeToString(p.type));
-		return '(' + join(', ', ps) + ') => ' + typeToString(type.return);
+		return '(' + join(', ', ps) + ') => ' + typeToString(returnOf(type));
 	}
 	return '?';
 };

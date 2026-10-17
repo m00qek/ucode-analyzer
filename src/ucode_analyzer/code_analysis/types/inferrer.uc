@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
-import { unify, substitute } from 'ucode_analyzer.code_analysis.types.unifier';
+import { unify, substitute, returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 import { memoGet, memoSet, docMapGet, docMapSet, lineTableFor } from 'ucode_analyzer.code_analysis.memo';
 import { makeScope, scopeGet, scopeSet, isRootBinding } from 'ucode_analyzer.code_analysis.types.scope';
 import { parseGuard, applyGuard, narrowToNonNull } from 'ucode_analyzer.code_analysis.types.narrowing';
@@ -47,6 +47,20 @@ export function setReturnScopes(next) {
 	_returnScopes = next;
 	return prev;
 };
+
+// A function type whose return type infer() computes on first read
+// (returnOf): the scope walk types every function it passes, but few of their
+// returns are ever read, and inferring one walks the whole body. infer() runs
+// with the checkpoint lookup installed now, so it gives what it would now.
+function lazyFunction(params, infer) {
+	let returnScopes = _returnScopes;
+	return { kind: 'function', params, return: null, inferReturn: () => {
+		let prev = setReturnScopes(returnScopes);
+		let ret = infer();
+		setReturnScopes(prev);
+		return ret;
+	} };
+}
 
 // ── Internal helpers ───────────────────────────────────────────────────────
 
@@ -175,23 +189,19 @@ function arrowParams(node, source, uri, scope, depth, expectedType) {
 
 function inferArrow(node, source, uri, scope, depth, expectedType) {
 	let params = arrowParams(node, source, uri, scope, depth, expectedType);
-	let childScope = makeScope(scope);
-	for (let i = 0; i < length(params); i++)
-		scopeSet(childScope, params[i].name, params[i].type);
-
 	let bodyNode = ts.childByField(node, 'body');
-	let ret = UNKNOWN;
-	if (bodyNode) {
+	if (!bodyNode) return { kind: 'function', params, return: UNKNOWN };
+	return lazyFunction(params, () => {
+		let childScope = makeScope(scope);
+		for (let i = 0; i < length(params); i++)
+			scopeSet(childScope, params[i].name, params[i].type);
 		let bt = ts.nodeType(bodyNode);
-		if (bt === 'statement_block' || bt === 'statement_list') {
-			let rets = [];
-			_collectReturns(bodyNode, source, uri, childScope, depth, rets, ts.startByte(bodyNode));
-			ret = unionOf(rets);
-		} else {
-			ret = _infer(bodyNode, source, uri, childScope, depth + 1);
-		}
-	}
-	return { kind: 'function', params, return: ret };
+		if (bt !== 'statement_block' && bt !== 'statement_list')
+			return _infer(bodyNode, source, uri, childScope, depth + 1);
+		let rets = [];
+		_collectReturns(bodyNode, source, uri, childScope, depth, rets, ts.startByte(bodyNode));
+		return unionOf(rets);
+	});
 }
 
 // True if `name` is bound in a non-root scope — a genuine local shadow, as
@@ -281,7 +291,7 @@ function inferCall(node, source, uri, scope, depth) {
 		push(argTypes, argType);
 		unify(paramType, argType, bindings, 0);
 	}
-	let ret = substitute(fnType.return, bindings);
+	let ret = substitute(returnOf(fnType), bindings);
 	if (ts.nodeType(fnNode) === 'identifier')
 		ret = builtinReturn(ts.text(fnNode, source), args, argTypes, ret, source, scope);
 	return ret;
@@ -615,19 +625,18 @@ function inferFunctionDecl(node, source, uri, scope, depth) {
 	let params = declParams(node, source, doc);
 
 	// Return type: declared via @returns, or infer from all return statements.
-	let ret = (doc && doc.returns && doc.returns.type) ? doc.returns.type : UNKNOWN;
-	if (ret === UNKNOWN) {
-		let body = ts.childByField(node, 'body');
-		if (body) {
-			let bodyScope = makeScope(scope);
-			for (let i = 0; i < length(params); i++)
-				scopeSet(bodyScope, params[i].name, params[i].type ?? UNKNOWN);
-			let rets = [];
-			_collectReturns(body, source, uri, bodyScope, depth, rets, ts.startByte(body));
-			ret = unionOf(rets);
-		}
-	}
-	return { kind: 'function', params, return: ret };
+	if (doc && doc.returns && doc.returns.type)
+		return { kind: 'function', params, return: doc.returns.type };
+	let body = ts.childByField(node, 'body');
+	if (!body) return { kind: 'function', params, return: UNKNOWN };
+	return lazyFunction(params, () => {
+		let bodyScope = makeScope(scope);
+		for (let i = 0; i < length(params); i++)
+			scopeSet(bodyScope, params[i].name, params[i].type ?? UNKNOWN);
+		let rets = [];
+		_collectReturns(body, source, uri, bodyScope, depth, rets, ts.startByte(body));
+		return unionOf(rets);
+	});
 }
 
 // The parameters a function binds, as full inference would type them,

@@ -3,7 +3,7 @@ import { positionToOffset } from 'ucode_analyzer.code_analysis.positions';
 import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { typeToString } from 'ucode_analyzer.code_analysis.types.doc_parser';
-import { unify, substitute } from 'ucode_analyzer.code_analysis.types.unifier';
+import { unify, substitute, returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 
 // Walk the tree depth-first; return the innermost call_expression whose
 // arguments node contains offset.
@@ -63,8 +63,8 @@ function buildSignature(name, fnType) {
 		let p = params[i];
 		push(parts, p.name + (p.type ? ': ' + typeToString(p.type) : ''));
 	}
-	let retStr = (fnType['return'] && fnType['return'].kind !== 'unknown')
-		? ': ' + typeToString(fnType['return']) : '';
+	let ret = returnOf(fnType);
+	let retStr = (ret && ret.kind !== 'unknown') ? ': ' + typeToString(ret) : '';
 	let label = name + '(' + join(', ', parts) + ')' + retStr;
 
 	let paramLabels = [];

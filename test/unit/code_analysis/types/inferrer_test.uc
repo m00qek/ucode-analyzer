@@ -2,6 +2,7 @@ import { describe, it, assert, mock, beforeEach, prop, gen, contains } from 'ute
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
+import { returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { buildScopeMap, scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { makeScope, scopeSet, scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
@@ -230,7 +231,7 @@ describe('inferrer — block-body function return type inference', () => {
 	it('infers return type from first return statement in a block body arrow', () => {
 		let t = infer('let f = (x) => { return 42; };');
 		assert.match('function', t.kind);
-		assert.match(prim('int'), t.return);
+		assert.match(prim('int'), returnOf(t));
 	});
 
 	it('infers return type from first return statement in a function_declaration', () => {
@@ -244,7 +245,7 @@ describe('inferrer — block-body function return type inference', () => {
 		let t = inferNode(fnNode, text, URI, scope, 0);
 
 		assert.match('function', t.kind);
-		assert.match(prim('string'), t.return);
+		assert.match(prim('string'), returnOf(t));
 	});
 
 	it('bare-expression arrow body still works', () => {
@@ -258,7 +259,7 @@ describe('inferrer — arrow functions', () => {
 	it('single-param arrow has one param and inferred return', () => {
 		let result = infer('let f = x => 42;');
 		assert.match('function', result.kind);
-		assert.match(prim('int'), result.return);
+		assert.match(prim('int'), returnOf(result));
 		assert.match(1, length(result.params));
 		assert.match('x', result.params[0].name);
 	});
@@ -266,7 +267,7 @@ describe('inferrer — arrow functions', () => {
 	it('multi-param arrow has correct param names and inferred return', () => {
 		let result = infer('let f = (a, b) => true;');
 		assert.match('function', result.kind);
-		assert.match(prim('boolean'), result.return);
+		assert.match(prim('boolean'), returnOf(result));
 		assert.match(2, length(result.params));
 		assert.match('a', result.params[0].name);
 		assert.match('b', result.params[1].name);
@@ -276,13 +277,13 @@ describe('inferrer — arrow functions', () => {
 		// No pushed-down type context → param type is unknown → body `a` is unknown
 		let result = infer('let f = a => a;');
 		assert.match('function', result.kind);
-		assert.match(unknown(), result.return);
+		assert.match(unknown(), returnOf(result));
 	});
 
 	it('arrow with literal body ignores param type', () => {
 		let result = infer("let f = x => 'hi';");
 		assert.match('function', result.kind);
-		assert.match(prim('string'), result.return);
+		assert.match(prim('string'), returnOf(result));
 	});
 });
 
@@ -589,7 +590,7 @@ describe('inferrer — JSDoc on nested function declarations', () => {
 
 		let t = scopeGet(scope, 'inner');
 		assert.match('function', t.kind);
-		assert.match(prim('int'), t.return);
+		assert.match(prim('int'), returnOf(t));
 	});
 
 	it('nested function_expression uses doc before its let, not the enclosing function doc', () => {
@@ -602,7 +603,7 @@ describe('inferrer — JSDoc on nested function declarations', () => {
 
 		let t = scopeGet(scope, 'f');
 		assert.match('function', t.kind);
-		assert.match(prim('int'), t.return);
+		assert.match(prim('int'), returnOf(t));
 	});
 });
 
@@ -647,7 +648,7 @@ describe('inferrer — function_expression', () => {
 		let t = inferNode(fnNode, text, URI, scope, 0);
 
 		assert.match('function', t.kind);
-		assert.match(prim('string'), t.return);
+		assert.match(prim('string'), returnOf(t));
 	});
 });
 
@@ -661,7 +662,7 @@ describe('inferrer — builtins', () => {
 		let t = scopeGet(scope, 'length');
 		assert.match(true, t !== null);
 		assert.match('function', t.kind);
-		assert.match({ kind: 'nullable', inner: prim('int') }, t.return);
+		assert.match({ kind: 'nullable', inner: prim('int') }, returnOf(t));
 	});
 
 	it('sprintf is in scope with string return type', () => {
@@ -672,7 +673,7 @@ describe('inferrer — builtins', () => {
 
 		let t = scopeGet(scope, 'sprintf');
 		assert.match('function', t.kind);
-		assert.match(prim('string'), t.return);
+		assert.match(prim('string'), returnOf(t));
 	});
 
 	it('keys is in scope with nullable list<string> return type', () => {
@@ -683,7 +684,7 @@ describe('inferrer — builtins', () => {
 
 		let t = scopeGet(scope, 'keys');
 		assert.match('function', t.kind);
-		assert.match({ kind: 'nullable', inner: { kind: 'generic', base: 'list', params: [{ kind: 'primitive', name: 'string' }] } }, t.return);
+		assert.match({ kind: 'nullable', inner: { kind: 'generic', base: 'list', params: [{ kind: 'primitive', name: 'string' }] } }, returnOf(t));
 	});
 
 	it('builtins do not pollute scope.bindings — they live in the parent chain', () => {
@@ -821,9 +822,9 @@ describe('inferrer — _collectReturns tracks local let bindings', () => {
 		let scope = scopeFor(text, tree, 0);
 		let t = inferNode(fnNode, text, URI, scope, 0);
 		assert.match('function', t.kind);
-		assert.match('union', t.return.kind);
+		assert.match('union', returnOf(t).kind);
 		// Should be int | null (not unknown | null)
-		let kinds = map(t.return.members, (m) => m.kind + (m.name ? ':' + m.name : ''));
+		let kinds = map(returnOf(t).members, (m) => m.kind + (m.name ? ':' + m.name : ''));
 		assert.match(contains(['primitive:int']), kinds);
 	});
 
@@ -894,7 +895,7 @@ describe('inferrer — property_identifier in member expression', () => {
 		let t = inferNode(propNode, text, URI, scope, 0);
 
 		assert.match('function', t.kind);
-		assert.match(prim('string'), t.return);
+		assert.match(prim('string'), returnOf(t));
 	});
 });
 
@@ -987,8 +988,8 @@ describe('inferrer — multiple return statement union', () => {
 		let scope = scopeFor(text, tree, 0);
 		let t = inferNode(fnNode, text, URI, scope, 0);
 		assert.match('function', t.kind);
-		assert.match('union', t.return.kind);
-		assert.match(2, length(t.return.members));
+		assert.match('union', returnOf(t).kind);
+		assert.match(2, length(returnOf(t).members));
 	});
 
 	it('function with one return keeps a plain type', () => {
@@ -1000,15 +1001,15 @@ describe('inferrer — multiple return statement union', () => {
 		let scope = scopeFor(text, tree, 0);
 		let t = inferNode(fnNode, text, URI, scope, 0);
 		assert.match('function', t.kind);
-		assert.match(prim('int'), t.return);
+		assert.match(prim('int'), returnOf(t));
 	});
 
 	it('arrow with two returns unions both types', () => {
 		let text = "let f = (x) => { if (x) return 1; return 'a'; };";
 		let t = infer(text);
 		assert.match('function', t.kind);
-		assert.match('union', t.return.kind);
-		assert.match(2, length(t.return.members));
+		assert.match('union', returnOf(t).kind);
+		assert.match(2, length(returnOf(t).members));
 	});
 });
 
