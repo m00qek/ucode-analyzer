@@ -6,45 +6,55 @@ import { invalidateUri } from 'code_analysis.memo';
 
 let _documents = {};
 
-// `deferScope`: leave scopeMap null for a caller that updates the DAG and
-// then calls refreshScopeMap, so the map is built once, on fresh imports.
+// An open document's scope map resolves its imports through the DAG, so it is
+// built on first use: new text, or a change to a file it imports (markStale),
+// only drops it, and get() rebuilds it. The caller can then update the DAG
+// first, and a burst of edits costs one rebuild.
 // The type caches are keyed by byte ranges, not content: any new text for a
 // uri must drop them, or a same-length text would read stale entries.
-export function open(uri, text, version, deferScope) {
+function store(uri, text, version) {
 	invalidateUri(uri);
-	let tree = mode.parse(text);
-	_documents[uri] = {
+	let doc = {
 		uri,
 		text,
 		version,
-		tree,
+		tree: mode.parse(text),
 		lineTable: buildLineTable(text),
-		scopeMap: deferScope ? null : buildScopeMap(uri, text, tree),
+		scopeMap: null,
 	};
+	_documents[uri] = doc;
+	return doc;
+}
+
+// Store an opened document; returns it, without its scope map.
+export function open(uri, text, version) {
+	return store(uri, text, version);
 };
 
-export function change(uri, changes, version, deferScope) {
-	let doc = _documents[uri];
-
-	if (!doc || !length(changes))
-		return;
-
-	let text = changes[0].text;
-	invalidateUri(uri);
-	let tree = mode.parse(text);
-
-	_documents[uri] = {
-		uri,
-		text,
-		version,
-		tree,
-		lineTable: buildLineTable(text),
-		scopeMap: deferScope ? null : buildScopeMap(uri, text, tree),
-	};
+// Replace an open document's text; returns it, without its scope map, or null
+// if the document is not open.
+export function change(uri, changes, version) {
+	if (!_documents[uri] || !length(changes))
+		return null;
+	return store(uri, changes[0].text, version);
 };
 
+// The open document for uri, with its scope map; null if it is not open.
 export function get(uri) {
-	return _documents[uri];
+	let doc = _documents[uri];
+	if (doc && !doc.scopeMap)
+		doc.scopeMap = buildScopeMap(uri, doc.text, doc.tree);
+	return doc;
+};
+
+export function isOpen(uri) {
+	return exists(_documents, uri);
+};
+
+// Drop the scope map of an open document whose imports changed.
+export function markStale(uri) {
+	let doc = _documents[uri];
+	if (doc) doc.scopeMap = null;
 };
 
 // Read and parse a file from disk into a bare document (no lineTable/scopeMap).
@@ -72,16 +82,11 @@ export function withScopeMap(doc) {
 // diagnostics path (the DAG is already complete there). Returns null if the
 // file can't be read.
 export function getOrLoad(uri) {
-	let doc = _documents[uri];
+	let doc = get(uri);
 	if (doc) return doc;
 
 	let parsed = readParsed(uri);
 	return parsed ? withScopeMap(parsed) : null;
-};
-
-export function refreshScopeMap(uri) {
-	let doc = _documents[uri];
-	if (doc) doc.scopeMap = buildScopeMap(uri, doc.text, doc.tree);
 };
 
 export function close(uri) {
@@ -89,6 +94,7 @@ export function close(uri) {
 	delete _documents[uri];
 };
 
+// Every open document, as stored: scope maps may be missing.
 export function all() {
 	return _documents;
 };

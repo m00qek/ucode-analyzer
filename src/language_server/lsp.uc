@@ -24,6 +24,25 @@ import { documentLinks } from 'language_server.handlers.document_link';
 import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'language_server.handlers.call_hierarchy';
 import * as platform from 'language_server.platform';
 
+// Drop everything derived from the files that import a changed file: type
+// caches, diagnostics and, for open ones, scope maps.
+function invalidateDependents(uris) {
+	for (let uri in uris) {
+		invalidateUri(uri);
+		invalidateDiagnostics(uri);
+		documents.markStale(uri);
+	}
+}
+
+// Index an opened or edited document into the DAG. Returns the files whose
+// view of it changed, already invalidated.
+function reindex(doc) {
+	invalidateDiagnostics(doc.uri);
+	let cascaded = dag.update(doc.uri, doc.text, doc.tree, documents.all());
+	invalidateDependents(cascaded);
+	return cascaded;
+}
+
 export function run(config) {
 	let shutdown_requested = false;
 	let initialized = false;
@@ -106,32 +125,21 @@ export function run(config) {
 
 		'textDocument/didOpen': function(msg) {
 			let td = msg.params.textDocument;
-			documents.open(td.uri, td.text, td.version, true);
+			let doc = documents.open(td.uri, td.text, td.version);
 			dag.markOpen(td.uri);
-			let doc = documents.get(td.uri);
-			invalidateUri(td.uri);
-			invalidateDiagnostics(td.uri);
-			let cascaded = dag.update(td.uri, doc.text, doc.tree, documents.all());
-			for (let dep in cascaded) { invalidateUri(dep); invalidateDiagnostics(dep); }
-			documents.refreshScopeMap(td.uri);
+			reindex(doc);
 			// Diagnostics are pulled: the client requests textDocument/diagnostic
 			// for the freshly opened file on its own.
 		},
 
 		'textDocument/didChange': function(msg) {
 			let uri = msg.params.textDocument.uri;
-			documents.change(uri, msg.params.contentChanges, msg.params.textDocument.version, true);
-			let doc = documents.get(uri);
+			let doc = documents.change(uri, msg.params.contentChanges, msg.params.textDocument.version);
 			if (!doc) return;
-			invalidateUri(uri);
-			invalidateDiagnostics(uri);
-			let cascaded = dag.update(uri, doc.text, doc.tree, documents.all());
-			for (let dep in cascaded) { invalidateUri(dep); invalidateDiagnostics(dep); }
-			documents.refreshScopeMap(uri);
 			// Document state is updated synchronously so hover/completion see fresh
 			// state; the client re-pulls this document's diagnostics itself. If the
 			// edit affected dependents, prompt a re-pull of everything.
-			if (length(cascaded) > 0)
+			if (length(reindex(doc)) > 0)
 				requestDiagnosticRefresh();
 		},
 
@@ -233,14 +241,14 @@ export function run(config) {
 					dag.remove(uri);
 					invalidateUri(uri);
 					invalidateDiagnostics(uri);
-					for (let dep in revDeps) { invalidateUri(dep); invalidateDiagnostics(dep); }
+					invalidateDependents(revDeps);
 					changed = true;
-				} else if (!documents.get(uri)) {  // created (1) or changed (2), not open in editor
+				} else if (!documents.isOpen(uri)) {  // created (1) or changed (2), not open in editor
 					let revDeps = dag.reverseDeps(uri);
 					dag.addFromDisk(uri);
 					invalidateUri(uri);
 					invalidateDiagnostics(uri);
-					for (let dep in revDeps) { invalidateUri(dep); invalidateDiagnostics(dep); }
+					invalidateDependents(revDeps);
 					changed = true;
 				}
 			}

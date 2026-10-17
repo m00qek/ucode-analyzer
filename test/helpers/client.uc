@@ -83,12 +83,13 @@ export function receiveServerRequest(proc) {
 	}
 };
 
-export function connect() {
+// Start a server on `workspace` (default: this repository).
+export function connect(workspace) {
 	return spawn('ucode', [
 		'-L', '/app/src',
 		'/app/src/ucode-language-server.uc',
 		'--config', '/tmp',
-		'--workspace', '/app',
+		'--workspace', workspace ?? '/app',
 	]);
 };
 

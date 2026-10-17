@@ -117,9 +117,7 @@ describe('completion — member (cursor on property)', () => {
 	it('namespace import: offers exports of the module, not all scope items', () => {
 		// Cursor on 'parse' in 'ts.parse' — should return ts members only.
 		let text = "import * as ts from 'tree_sitter';\nlet x = 5;\nts.parse";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		documents.refreshScopeMap(URI);
+		dag.add(URI, text, documents.open(URI, text, 1).tree);
 
 		// line 2, character 3 — on 'p' of 'parse'
 		let items = completion(URI, documents.get(URI), { line: 2, character: 3 });
@@ -131,9 +129,7 @@ describe('completion — member (cursor on property)', () => {
 
 	it('namespace import: items include the function kind for function exports', () => {
 		let text = "import * as ts from 'tree_sitter';\nts.parse";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		documents.refreshScopeMap(URI);
+		dag.add(URI, text, documents.open(URI, text, 1).tree);
 
 		let items = completion(URI, documents.get(URI), { line: 1, character: 3 });
 		let item = null;
@@ -146,9 +142,7 @@ describe('completion — member (cursor on property)', () => {
 	it('trigger character: cursor right after dot returns members', () => {
 		// 'ts.' — no property typed yet; offset is right after the dot.
 		let text = "import * as ts from 'tree_sitter';\nts.\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		documents.refreshScopeMap(URI);
+		dag.add(URI, text, documents.open(URI, text, 1).tree);
 
 		// line 1, character 3 — right after 'ts.'
 		let items = completion(URI, documents.get(URI), { line: 1, character: 3 });

@@ -247,9 +247,7 @@ describe('diagnostics — type errors: unknown-property', () => {
 	it('knows the fields of fs.stat(), including perm', () => {
 		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'] } });
 		function statProps(text) {
-			let doc = open(text);
-			dag.add(URI, text, doc.tree);
-			documents.refreshScopeMap(URI);
+			dag.add(URI, text, documents.open(URI, text, 1).tree);
 			let r = unknownProps(text);
 			dag.remove(URI);
 			return map(r, (d) => d.message);

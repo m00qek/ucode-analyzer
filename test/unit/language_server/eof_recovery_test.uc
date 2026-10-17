@@ -31,9 +31,7 @@ let VARIANTS = [
 let _config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
 
 function open(text) {
-	documents.open(URI, text, 1);
-	dag.add(URI, text, documents.get(URI).tree);
-	documents.refreshScopeMap(URI);
+	dag.add(URI, text, documents.open(URI, text, 1).tree);
 	return documents.get(URI);
 }
 

@@ -82,12 +82,10 @@ describe('hover — property_identifier in member expression', () => {
 	it('shows JSDoc for a property of a namespace-import module', () => {
 		dag.addFromDisk(TS_URI);
 		let text = "import * as ts from 'tree_sitter';\nts.parse;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
+		let doc = documents.open(URI, text, 1);
 		// Register the document in the DAG so importsOf resolves the namespace import.
 		dag.add(URI, doc.text, doc.tree);
-		// Rebuild scope map now that DAG knows the imports.
-		documents.refreshScopeMap(URI);
+		doc = documents.get(URI);  // builds the scope map, now with the imports
 		// line 1, character 3 → 'p' of 'parse'
 		let result = hover(doc, { line: 1, character: 3 });
 		assert.match('object', type(result));
@@ -104,10 +102,9 @@ describe('hover — via templates (selfSrcDir set)', () => {
 	it('function hover renders declaration-form signature and Parameters section', () => {
 		dag.addFromDisk(TS_URI);
 		let text = "import * as ts from 'tree_sitter';\nts.parse;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
+		let doc = documents.open(URI, text, 1);
 		dag.add(URI, doc.text, doc.tree);
-		documents.refreshScopeMap(URI);
+		doc = documents.get(URI);  // builds the scope map, now with the imports
 
 		// line 1, character 3 → 'parse' property_identifier
 		let result = hover(doc, { line: 1, character: 3 }, _full_config);
@@ -123,10 +120,9 @@ describe('hover — via templates (selfSrcDir set)', () => {
 	it('module hover renders module specifier from module template', () => {
 		dag.addFromDisk(TS_URI);
 		let text = "import * as ts from 'tree_sitter';\nts;";
-		documents.open(URI, text, 1);
-		let doc = documents.get(URI);
+		let doc = documents.open(URI, text, 1);
 		dag.add(URI, doc.text, doc.tree);
-		documents.refreshScopeMap(URI);
+		doc = documents.get(URI);  // builds the scope map, now with the imports
 
 		// line 1, character 0 → 'ts' namespace alias
 		let result = hover(doc, { line: 1, character: 0 }, _full_config);
@@ -206,9 +202,7 @@ describe('hover — parameter declaration site', () => {
 describe('hover — doc comment tags', () => {
 	// Hover shows docs of exports, so the functions under test are exported.
 	function hoverText(text, line, character) {
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-		documents.refreshScopeMap(URI);
+		dag.add(URI, text, documents.open(URI, text, 1).tree);
 		let r = hover(documents.get(URI), { line, character }, _full_config);
 		dag.remove(URI);
 		return r?.contents?.value ?? '';
