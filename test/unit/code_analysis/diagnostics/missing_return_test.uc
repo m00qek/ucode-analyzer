@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { missingReturn } from 'code_analysis.diagnostics.missing_return';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { missingReturn } from 'ucode_analyzer.code_analysis.diagnostics.missing_return';
 
 let URI = 'file:///test.uc';
 

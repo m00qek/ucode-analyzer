@@ -1,15 +1,15 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { hover } from 'language_server.handlers.hover';
-import { invalidateUri } from 'code_analysis.memo';
-import * as dag from 'code_analysis.dag.dag';
-import * as templates from 'language_server.templates';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { hover } from 'ucode_analyzer.language_server.handlers.hover';
+import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import * as templates from 'ucode_analyzer.language_server.templates';
 
 let URI = 'file:///test.uc';
 
-let _config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
+let _config = { workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } };
 // Config with selfSrcDir so hover uses the built-in templates (not the fallback).
-let _full_config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] }, selfSrcDir: '/app/src' };
+let _full_config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] }, selfSrcDir: '/app/src/ucode_analyzer' };
 
 dag.init(_config);
 

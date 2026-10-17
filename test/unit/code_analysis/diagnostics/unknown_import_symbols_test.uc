@@ -1,7 +1,7 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { unknownImportSymbols } from 'code_analysis.diagnostics.unknown_import_symbols';
-import * as dag from 'code_analysis.dag.dag';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { unknownImportSymbols } from 'ucode_analyzer.code_analysis.diagnostics.unknown_import_symbols';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 
 let URI    = 'file:///test.uc';
 let TS_URI = 'file:///app/src/tree_sitter.uc';
@@ -9,6 +9,7 @@ let DE_URI = 'file:///app/test/fixtures/default_export.uc';
 
 let _config = {
 	workspaceDir: '/app',
+	selfSrcDir: '/app/src/ucode_analyzer',
 	workspace: { libraryPaths: ['src', 'test'] },
 };
 

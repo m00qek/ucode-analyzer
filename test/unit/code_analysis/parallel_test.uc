@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as uloop from 'uloop';
-import { shardRoundRobin, fanOut, jobsFor } from 'code_analysis.parallel';
+import { shardRoundRobin, fanOut, jobsFor } from 'ucode_analyzer.code_analysis.parallel';
 
 // [0, 1, …, n-1]
 function nums(n) {

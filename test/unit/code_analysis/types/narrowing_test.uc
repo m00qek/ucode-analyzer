@@ -1,8 +1,8 @@
 import { describe, it, assert, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
-import { narrowToNonNull, parseGuard, applyGuard, narrowUnionByDiscriminant } from 'code_analysis.types.narrowing';
-import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
-import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL } from 'code_analysis.types.type_utils';
+import { narrowToNonNull, parseGuard, applyGuard, narrowUnionByDiscriminant } from 'ucode_analyzer.code_analysis.types.narrowing';
+import { makeScope, scopeGet, scopeSet } from 'ucode_analyzer.code_analysis.types.scope';
+import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL } from 'ucode_analyzer.code_analysis.types.type_utils';
 
 let NULLABLE_STR = { kind: 'nullable', inner: STR };
 let UNION_STR_NULL = { kind: 'union', members: [STR, NULL_T] };

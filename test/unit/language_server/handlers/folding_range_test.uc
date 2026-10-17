@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { foldingRanges } from 'language_server.handlers.folding_range';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { foldingRanges } from 'ucode_analyzer.language_server.handlers.folding_range';
 
 let URI = 'file:///test.uc';
 

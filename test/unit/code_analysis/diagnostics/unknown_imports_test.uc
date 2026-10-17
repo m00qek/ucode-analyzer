@@ -1,12 +1,13 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { unknownImports } from 'code_analysis.diagnostics.unknown_imports';
-import * as dag from 'code_analysis.dag.dag';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { unknownImports } from 'ucode_analyzer.code_analysis.diagnostics.unknown_imports';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 
 let URI = 'file:///test.uc';
 
 let _config = {
 	workspaceDir: '/app',
+	selfSrcDir: '/app/src/ucode_analyzer',
 	workspace: { libraryPaths: ['src'] },
 };
 

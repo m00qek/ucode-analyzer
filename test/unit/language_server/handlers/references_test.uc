@@ -1,13 +1,13 @@
 import { describe, it, assert, afterEach, beforeEach, mock } from 'utest';
 import * as ts from 'tree_sitter';
-import * as documents from 'code_analysis.documents';
-import * as dag from 'code_analysis.dag.dag';
-import { references } from 'language_server.handlers.references';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { references } from 'ucode_analyzer.language_server.handlers.references';
 
 let _parser = ts.newParser(ts.ucode());
 function parse(text) { return ts.parse(_parser, text); }
 
-let _dagCfg = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
+let _dagCfg = { workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } };
 
 let URI   = 'file:///test.uc';
 let URI_A = 'file:///app/src/a.uc';

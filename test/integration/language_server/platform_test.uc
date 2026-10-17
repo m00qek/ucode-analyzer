@@ -1,13 +1,13 @@
 import { describe, it, assert } from 'utest';
-import * as dag from 'code_analysis.dag.dag';
-import * as platform from 'language_server.platform';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import * as platform from 'ucode_analyzer.language_server.platform';
 
-const DECL_DIR = '/app/src/declarations';
+const DECL_DIR = '/app/src/ucode_analyzer/declarations';
 
 let _config = {
 	workspaceDir: '/app',
 	workspace: { libraryPaths: ['src'] },
-	selfSrcDir: '/app/src',
+	selfSrcDir: '/app/src/ucode_analyzer',
 };
 
 let V1 = '2025.07.18~3f64c808';

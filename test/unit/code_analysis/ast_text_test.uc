@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
-import { stringLiteralText, identifierOccurrences } from 'code_analysis.ast_text';
+import { stringLiteralText, identifierOccurrences } from 'ucode_analyzer.code_analysis.ast_text';
 
 let _parser = ts.newParser(ts.ucode());
 function parse(text) { return ts.parse(_parser, text); }

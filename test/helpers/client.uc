@@ -108,7 +108,7 @@ export function receiveServerRequest(proc) {
 export function connect(workspace) {
 	return spawn('ucode', [
 		'-L', '/app/src',
-		'/app/src/ucode-language-server.uc',
+		'/app/src/ucode-analyzer.uc',
 		'--config', '/tmp',
 		'--workspace', workspace ?? '/app',
 	]);

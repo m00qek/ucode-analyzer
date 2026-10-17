@@ -7,7 +7,7 @@ const WS = '/app/test/fixtures/linter';
 // Spawn the linter binary, drain stdout to EOF, return { out, code }. Diagnostics
 // go to stdout; the human summary goes to stderr (not captured here).
 function runLinter(extra) {
-	let args = [ '-L', '/app/src', '/app/src/ucode-linter.uc' ];
+	let args = [ '-L', '/app/src', '/app/src/ucode-analyzer.uc', 'lint' ];
 	for (let a in extra) push(args, a);
 	let proc = native.spawn('ucode', args);
 	if (proc === null) die('failed to spawn ucode');
@@ -20,7 +20,7 @@ function runLinter(extra) {
 	return { out, code: proc.close() };
 }
 
-describe('ucode-linter — workspace mode', () => {
+describe('ucode-analyzer lint — workspace mode', () => {
 	it('reports errors and warnings and exits 1 on errors', () => {
 		let r = runLinter([ '--workspace', WS ]);
 		assert.match(1, r.code);
@@ -76,7 +76,7 @@ describe('ucode-linter — workspace mode', () => {
 	});
 });
 
-describe('ucode-linter — file mode', () => {
+describe('ucode-analyzer lint — file mode', () => {
 	it('lints a single file passed positionally', () => {
 		let r = runLinter([ WS + '/src/warns.uc' ]);
 		assert.match(true, index(r.out, 'warns.uc') >= 0);
@@ -97,7 +97,7 @@ describe('ucode-linter — file mode', () => {
 	});
 });
 
-describe('ucode-linter — workspace layout', () => {
+describe('ucode-analyzer lint — workspace layout', () => {
 	it('lints files outside the library paths', () => {
 		let dir = fs.mkdtemp('/tmp/linter-flat-XXXXXX');
 		fs.mkdir(dir + '/sub');

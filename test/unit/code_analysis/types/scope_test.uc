@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import { makeScope, scopeGet, scopeSet } from 'code_analysis.types.scope';
+import { makeScope, scopeGet, scopeSet } from 'ucode_analyzer.code_analysis.types.scope';
 
 let INT = { kind: 'primitive', name: 'int' };
 let STR = { kind: 'primitive', name: 'string' };

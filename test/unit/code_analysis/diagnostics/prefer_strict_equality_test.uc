@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { preferStrictEquality } from 'code_analysis.diagnostics.prefer_strict_equality';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { preferStrictEquality } from 'ucode_analyzer.code_analysis.diagnostics.prefer_strict_equality';
 
 let URI = 'file:///test.uc';
 

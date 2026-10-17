@@ -1,7 +1,7 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { typeErrors } from 'code_analysis.diagnostics.type_errors';
-import * as dag from 'code_analysis.dag.dag';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { typeErrors } from 'ucode_analyzer.code_analysis.diagnostics.type_errors';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 
 let URI = 'file:///test.uc';
 
@@ -245,7 +245,7 @@ describe('diagnostics — type errors: unknown-property', () => {
 	});
 
 	it('knows the fields of fs.stat(), including perm', () => {
-		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'] } });
+		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } });
 		function statProps(text) {
 			dag.add(URI, text, documents.open(URI, text, 1).tree);
 			let r = unknownProps(text);

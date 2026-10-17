@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import * as reporters from 'linter.reporters';
+import * as reporters from 'ucode_analyzer.linter.reporters';
 
 // Two files: one with an error + a hint, one clean.
 function sample() {

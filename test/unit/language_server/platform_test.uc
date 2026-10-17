@@ -1,10 +1,10 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as platform from 'language_server.platform';
+import * as platform from 'ucode_analyzer.language_server.platform';
 
-let URI_FS   = 'file:///app/src/declarations/fs.d.uc';
-let URI_IO   = 'file:///app/src/declarations/io.d.uc';
-let URI_MATH = 'file:///app/src/declarations/math.d.uc';
-let URI_STD  = 'file:///app/src/declarations/global.d.uc';
+let URI_FS   = 'file:///app/src/ucode_analyzer/declarations/fs.d.uc';
+let URI_IO   = 'file:///app/src/ucode_analyzer/declarations/io.d.uc';
+let URI_MATH = 'file:///app/src/ucode_analyzer/declarations/math.d.uc';
+let URI_STD  = 'file:///app/src/ucode_analyzer/declarations/global.d.uc';
 
 let V1 = '2025.07.18~3f64c808';
 let V2 = '2026.01.16~85922056';

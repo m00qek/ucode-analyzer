@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import { drainFrames } from 'language_server.protocol';
+import { drainFrames } from 'ucode_analyzer.language_server.protocol';
 
 // A Content-Length framed message. length() is a byte count, so the header
 // carries the body's byte length (what the reassembler must honor).

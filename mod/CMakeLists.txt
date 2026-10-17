@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
-project(ucode_language_server_native C)
+project(ucode_analyzer_native C)
 
-# Populated by openwrt/ucode-language-server/Makefile's Build/Prepare step,
+# Populated by openwrt/ucode-analyzer/Makefile's Build/Prepare step,
 # which copies ./third_party alongside ./mod into the package build dir --
 # vendored rather than fetched, since none of this is available as an
 # OpenWrt feed package.
@@ -38,7 +38,7 @@ target_link_libraries(tree_sitter_native ${UCODE_LIB} tree-sitter-ucode tree-sit
 # Test-only (JSON-RPC client primitives for the e2e harness). Its source lives
 # under test/mod/rpc_client/ and is flattened into the build dir by Build/Prepare
 # so it resolves here at rpc_client/native.c. CMake-installed into the staging
-# tree so the separate ucode-mod-language-server-test-client package can pick it
+# tree so the separate ucode-analyzer-test-client package can pick it
 # up (and so it survives OpenWrt's build-dir autoremove, which keeps only
 # .pkgdir/). It is deliberately kept out of the production packages.
 add_library(rpc_client_native SHARED rpc_client/native.c)
@@ -46,7 +46,7 @@ set_target_properties(rpc_client_native PROPERTIES PREFIX "")
 target_link_libraries(rpc_client_native ${UCODE_LIB})
 
 if(NOT PKG_NAME)
-  set(PKG_NAME "ucode_language_server")
+  set(PKG_NAME "ucode_analyzer")
 endif()
 
 # Both targets are installed as native.so under their respective namespace

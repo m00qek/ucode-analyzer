@@ -1,5 +1,5 @@
 import { describe, it, assert, prop, gen } from 'utest';
-import { unify, substitute } from 'code_analysis.types.unifier';
+import { unify, substitute } from 'ucode_analyzer.code_analysis.types.unifier';
 
 function prim(name)          { return { kind: 'primitive', name }; }
 function param_(name)        { return { kind: 'param', name }; }

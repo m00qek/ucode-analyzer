@@ -1,11 +1,11 @@
 import { describe, it, assert, beforeEach, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
-import * as dag from 'code_analysis.dag.dag';
-import * as mode from 'code_analysis.mode';
-import { initBuiltinsFromDag } from 'code_analysis.types.dag_bridge';
-import { buildScopeMap, scopeAtOffset } from 'code_analysis.types.scope_walk';
-import { scopeGet } from 'code_analysis.types.scope';
-import { invalidateUri } from 'code_analysis.memo';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import * as mode from 'ucode_analyzer.code_analysis.mode';
+import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
+import { buildScopeMap, scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
+import { scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
+import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -17,6 +17,7 @@ let URI = 'file:///app/src/test_walk.uc';
 
 let _config = {
 	workspaceDir: '/app',
+	selfSrcDir: '/app/src/ucode_analyzer',
 	workspace: { libraryPaths: ['src'] },
 };
 

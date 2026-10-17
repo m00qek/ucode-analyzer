@@ -1,6 +1,6 @@
 import { describe, it, assert } from 'utest';
 import * as fs from 'fs';
-import { isWorkspaceUri, loadWorkspaceDocs } from 'code_analysis.workspace';
+import { isWorkspaceUri, loadWorkspaceDocs } from 'ucode_analyzer.code_analysis.workspace';
 
 // selfSrcDir and one systemLibPath sit UNDER the workspace so their exclusion
 // (and its boundary) is actually exercised — a path outside /app is already

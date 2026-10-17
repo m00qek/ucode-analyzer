@@ -2,7 +2,7 @@ import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
 import { isTemplate, parse, topLevelStatements,
          importStmtSpecifier, importBindings, importBindingNodes,
-         importRemoteName } from 'code_analysis.mode';
+         importRemoteName } from 'ucode_analyzer.code_analysis.mode';
 
 // The first top-level import_statement in `text`.
 function firstImport(text) {

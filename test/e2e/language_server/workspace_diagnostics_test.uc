@@ -86,9 +86,9 @@ describe('workspace/diagnostic', () => {
 	});
 
 	it("excludes the server's own bundled sources (selfSrcDir) from the report", () => {
-		// Nothing user-facing is open; /app/src is selfSrcDir and must be excluded.
+		// Nothing user-facing is open; /app/src/ucode_analyzer is selfSrcDir and must be excluded.
 		let report = lsp.workspaceDiagnostics(proc, []);
-		let fromSrc = filter(report.items, (item) => index(item.uri, 'file:///app/src/') === 0);
+		let fromSrc = filter(report.items, (item) => index(item.uri, 'file:///app/src/ucode_analyzer/') === 0);
 		assert.match(0, length(fromSrc));
 	});
 });

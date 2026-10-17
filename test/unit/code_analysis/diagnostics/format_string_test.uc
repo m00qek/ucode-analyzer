@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { formatString } from 'code_analysis.diagnostics.format_string';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { formatString } from 'ucode_analyzer.code_analysis.diagnostics.format_string';
 
 let URI = 'file:///test.uc';
 

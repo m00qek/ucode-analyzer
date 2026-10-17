@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { linkedEditingRanges } from 'language_server.handlers.linked_editing';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { linkedEditingRanges } from 'ucode_analyzer.language_server.handlers.linked_editing';
 
 let URI = 'file:///test.uc';
 

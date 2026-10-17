@@ -1,8 +1,8 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { positionToOffset } from 'code_analysis.positions';
-import { actionsFor } from 'language_server.handlers.code_actions.use_optional_chain';
-import { typeErrors } from 'code_analysis.diagnostics.type_errors';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { positionToOffset } from 'ucode_analyzer.code_analysis.positions';
+import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.use_optional_chain';
+import { typeErrors } from 'ucode_analyzer.code_analysis.diagnostics.type_errors';
 
 let URI = 'file:///test.uc';
 

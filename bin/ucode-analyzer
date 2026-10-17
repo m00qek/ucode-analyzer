@@ -1,0 +1,68 @@
+#!/bin/sh
+# Host-side launcher: bridges the editor's stdio into the container where
+# the LSP server runs. The editor (e.g. Neovim) calls this as its LSP cmd.
+#
+# Reads .lsp/config.json from the current directory (project config).
+# Requires: docker or podman. jq is optional; without it, docker settings
+# from the project config are ignored and defaults are used.
+
+set -eu
+
+USER_CONFIG_HOST="${HOME}/.config/ucode-analyzer"
+USER_CONFIG_CONTAINER="/root/.ucode-analyzer"
+WORKSPACE_HOST="$(pwd)"
+WORKSPACE_CONTAINER="/root/project"
+CONTAINER_IMAGE="openwrt/rootfs:x86-64-openwrt-25.12"
+CONTAINER_NAME=""
+
+# --- detect container runtime ---
+if command -v docker >/dev/null 2>&1; then
+    RUNTIME=docker
+elif command -v podman >/dev/null 2>&1; then
+    RUNTIME=podman
+else
+    printf 'error: docker or podman not found\n' >&2
+    exit 1
+fi
+
+# --- read docker settings from project config if jq is available ---
+PROJECT_CONFIG="${WORKSPACE_HOST}/.lsp/config.json"
+
+if [ -f "${PROJECT_CONFIG}" ] && command -v jq >/dev/null 2>&1; then
+    _NAME=$(jq -r '.docker.containerName // empty' "${PROJECT_CONFIG}" 2>/dev/null || true)
+    _IMAGE=$(jq -r '.docker.image // empty' "${PROJECT_CONFIG}" 2>/dev/null || true)
+    _WORKSPACE=$(jq -r '.docker.containerPath // empty' "${PROJECT_CONFIG}" 2>/dev/null || true)
+    [ -n "${_NAME}" ]      && CONTAINER_NAME="${_NAME}"
+    [ -n "${_IMAGE}" ]     && CONTAINER_IMAGE="${_IMAGE}"
+    [ -n "${_WORKSPACE}" ] && WORKSPACE_CONTAINER="${_WORKSPACE}"
+fi
+
+# --- derive container name from workspace path when not set in config ---
+if [ -z "${CONTAINER_NAME}" ]; then
+    _HASH=$(printf '%s' "${WORKSPACE_HOST}" | cksum | cut -d' ' -f1)
+    CONTAINER_NAME="ucode-analyzer-${_HASH}"
+fi
+
+# --- ensure user config directory exists on the host before mounting ---
+mkdir -p "${USER_CONFIG_HOST}"
+
+# --- ensure container is running ---
+_STATUS=$(${RUNTIME} inspect -f '{{.State.Running}}' "${CONTAINER_NAME}" 2>/dev/null) || _STATUS=""
+
+if [ -z "${_STATUS}" ]; then
+    ${RUNTIME} run -d \
+        --name "${CONTAINER_NAME}" \
+        -v "${USER_CONFIG_HOST}:${USER_CONFIG_CONTAINER}:ro" \
+        -v "${WORKSPACE_HOST}:${WORKSPACE_CONTAINER}" \
+        "${CONTAINER_IMAGE}" \
+        sleep infinity >/dev/null
+elif [ "${_STATUS}" = "false" ]; then
+    ${RUNTIME} start "${CONTAINER_NAME}" >/dev/null
+fi
+
+# --- exec the LSP server inside the container ---
+exec ${RUNTIME} exec -i "${CONTAINER_NAME}" \
+    ucode -L "${WORKSPACE_CONTAINER}/src" \
+    "${WORKSPACE_CONTAINER}/src/ucode-analyzer.uc" server \
+    --config "${USER_CONFIG_CONTAINER}" \
+    --workspace "${WORKSPACE_CONTAINER}"

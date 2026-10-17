@@ -1,12 +1,12 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { inlayHints } from 'language_server.handlers.inlay_hints';
-import { invalidateUri } from 'code_analysis.memo';
-import * as dag from 'code_analysis.dag.dag';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { inlayHints } from 'ucode_analyzer.language_server.handlers.inlay_hints';
+import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 
 let URI = 'file:///test.uc';
 
-let _config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
+let _config = { workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } };
 dag.init(_config);
 
 // Full-file range helper.

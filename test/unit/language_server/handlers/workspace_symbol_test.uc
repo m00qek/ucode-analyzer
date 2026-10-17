@@ -1,13 +1,14 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import * as dag from 'code_analysis.dag.dag';
-import { workspaceSymbol } from 'language_server.handlers.workspace_symbol';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { workspaceSymbol } from 'ucode_analyzer.language_server.handlers.workspace_symbol';
 
 let URI_A = 'file:///a.uc';
 let URI_B = 'file:///b.uc';
 
 let _config = {
 	workspaceDir: '/app',
+	selfSrcDir: '/app/src/ucode_analyzer',
 	workspace: { libraryPaths: ['src'] },
 };
 

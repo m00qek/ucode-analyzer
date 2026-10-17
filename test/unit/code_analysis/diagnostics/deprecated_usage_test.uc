@@ -1,13 +1,14 @@
 import { describe, it, assert, beforeEach, afterEach, prop, gen } from 'utest';
-import * as documents from 'code_analysis.documents';
-import * as dag from 'code_analysis.dag.dag';
-import { deprecatedUsage } from 'code_analysis.diagnostics.deprecated_usage';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { deprecatedUsage } from 'ucode_analyzer.code_analysis.diagnostics.deprecated_usage';
 
 let URI   = 'file:///test.uc';
 let URI_B = 'file:///dep.uc';
 
 let _config = {
 	workspaceDir: '/app',
+	selfSrcDir: '/app/src/ucode_analyzer',
 	workspace: { libraryPaths: ['src'] },
 };
 
@@ -54,7 +55,7 @@ describe('diagnostics — deprecated usage', () => {
 	it('flags a deprecated imported symbol but not a non-deprecated one', () => {
 		// fixtures/deprecated.uc exports oldFn (@deprecated) and newFn (not).
 		let DEP = 'file:///app/test/fixtures/deprecated.uc';
-		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src', 'test'] } });
+		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
 		dag.addFromDisk(DEP);
 		let src = "import { oldFn, newFn } from 'fixtures.deprecated';\noldFn();\nnewFn();\n";
 		documents.open(URI, src, 1);

@@ -1,7 +1,7 @@
 import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
-import * as mode from 'code_analysis.mode';
-import * as dag from 'code_analysis.dag.dag';
+import * as mode from 'ucode_analyzer.code_analysis.mode';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -11,6 +11,7 @@ function parse(text) {
 
 let _config = {
 	workspaceDir: '/app',
+	selfSrcDir: '/app/src/ucode_analyzer',
 	workspace: { libraryPaths: ['src'] },
 };
 
@@ -440,7 +441,7 @@ describe('dag circular re-export guard', () => {
 		let textA = "import { bFoo } from 'b';\nexport const aFoo = bFoo;";
 		let textB = "import { aFoo } from 'a';\nexport const bFoo = aFoo;";
 
-		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'] } });
+		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } });
 		dag.add(URI_A, textA, parse(textA));
 		dag.add(URI_B, textB, parse(textB));
 		dag.remove(URI_C);

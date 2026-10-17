@@ -1,11 +1,11 @@
 import { describe, it, assert, mock, beforeEach, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
-import * as dag from 'code_analysis.dag.dag';
-import { inferNode } from 'code_analysis.types.inferrer';
-import { initBuiltinsFromDag } from 'code_analysis.types.dag_bridge';
-import { buildScopeMap, scopeAtOffset } from 'code_analysis.types.scope_walk';
-import { makeScope, scopeSet, scopeGet } from 'code_analysis.types.scope';
-import { invalidateUri } from 'code_analysis.memo';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
+import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
+import { buildScopeMap, scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
+import { makeScope, scopeSet, scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
+import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -17,6 +17,7 @@ let URI = 'file:///app/src/test_main.uc';
 
 let _config = {
 	workspaceDir: '/app',
+	selfSrcDir: '/app/src/ucode_analyzer',
 	workspace: { libraryPaths: ['src'] },
 };
 
@@ -1078,7 +1079,7 @@ describe('inferrer — export clause carries doc', () => {
 	let GREET_URI = 'file:///app/test/fixtures/greet.uc';
 
 	it('exported name via export { name } has the function kind', () => {
-		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src', 'test'] } });
+		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
 		dag.addFromDisk(GREET_URI);
 		let exps = dag.exportsOf(GREET_URI);
 		assert.match(true, exps !== null && length(exps) > 0);
@@ -1131,7 +1132,7 @@ describe('inferrer — importScope: renamed imports', () => {
 
 describe('inferrer — require() module loader', () => {
 	beforeEach(() => {
-		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src', 'test'] } });
+		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
 		dag.remove(URI);
 		invalidateUri(URI);
 	});

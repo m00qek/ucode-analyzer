@@ -1,14 +1,14 @@
 import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as ts from 'tree_sitter';
-import * as dag from 'code_analysis.dag.dag';
-import { resolveDoc } from 'code_analysis.doc_resolver';
-import { makeScope } from 'code_analysis.types.scope';
-import { invalidateUri } from 'code_analysis.memo';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { resolveDoc } from 'ucode_analyzer.code_analysis.doc_resolver';
+import { makeScope } from 'ucode_analyzer.code_analysis.types.scope';
+import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 
 let _parser = ts.newParser(ts.ucode());
 function parse(text) { return ts.parse(_parser, text); }
 
-let _config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
+let _config = { workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } };
 
 let URI_A = 'file:///app/src/a.uc';
 let URI_B = 'file:///app/src/b.uc';

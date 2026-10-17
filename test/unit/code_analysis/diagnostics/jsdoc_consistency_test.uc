@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { jsdocConsistency } from 'code_analysis.diagnostics.jsdoc_consistency';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { jsdocConsistency } from 'ucode_analyzer.code_analysis.diagnostics.jsdoc_consistency';
 
 let URI = 'file:///test.uc';
 

@@ -1,13 +1,14 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { undefinedVars } from 'code_analysis.diagnostics.undefined_vars';
-import * as dag from 'code_analysis.dag.dag';
-import { initBuiltinsFromDag } from 'code_analysis.types.dag_bridge';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_vars';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 
 let URI = 'file:///test.uc';
 
 let _config = {
 	workspaceDir: '/app',
+	selfSrcDir: '/app/src/ucode_analyzer',
 	workspace: { libraryPaths: ['src'] },
 };
 
@@ -269,10 +270,10 @@ describe('diagnostics — undefined variables', () => {
 
 	it('reads extra globals from workspace.globals (list or glob map)', () => {
 		let saved = dag.config();
-		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'], globals: ['ext1'] } });
+		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'], globals: ['ext1'] } });
 		documents.open('file:///app/a.uc', "ext1; ext2;\n", 1);
 		assert.match(['ext2'], map(undefinedVars(documents.get('file:///app/a.uc')), (d) => match(d.message, /'([^']+)'/)?.[1]));
-		dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src'], globals: { 'www/**': ['uhttpd'] } } });
+		dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'], globals: { 'www/**': ['uhttpd'] } } });
 		documents.open('file:///app/www/h.uc', "uhttpd.recv;\n", 1);
 		assert.match(0, length(undefinedVars(documents.get('file:///app/www/h.uc'))));
 		documents.open('file:///app/other.uc', "uhttpd.recv;\n", 1);

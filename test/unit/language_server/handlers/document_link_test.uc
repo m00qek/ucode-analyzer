@@ -1,11 +1,11 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import * as dag from 'code_analysis.dag.dag';
-import { documentLinks } from 'language_server.handlers.document_link';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { documentLinks } from 'ucode_analyzer.language_server.handlers.document_link';
 
 let URI = 'file:///test.uc';
 
-dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src', 'test'] } });
+dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
 
 afterEach(() => documents.close(URI));
 
@@ -31,7 +31,7 @@ describe('documentLink', () => {
 	});
 
 	it('links a declaration module', () => {
-		assert.match([[0, 21, 23, 'file:///app/src/declarations/fs.d.uc']], links("import * as fs from 'fs';\n"));
+		assert.match([[0, 21, 23, 'file:///app/src/ucode_analyzer/declarations/fs.d.uc']], links("import * as fs from 'fs';\n"));
 	});
 
 	it('works in a template', () => {

@@ -1,6 +1,6 @@
 import { describe, it, assert, beforeEach } from 'utest';
-import { UNKNOWN, STR, INT, unionOf, memberOfType, resolveRef, literal, widen } from 'code_analysis.types.type_utils';
-import * as registry from 'code_analysis.types.registry';
+import { UNKNOWN, STR, INT, unionOf, memberOfType, resolveRef, literal, widen } from 'ucode_analyzer.code_analysis.types.type_utils';
+import * as registry from 'ucode_analyzer.code_analysis.types.registry';
 
 beforeEach(() => {
 	// Remove all registered types so ref-lookup tests start clean.

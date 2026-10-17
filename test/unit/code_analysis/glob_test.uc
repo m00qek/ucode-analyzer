@@ -1,5 +1,5 @@
 import { describe, it, assert, prop, gen } from 'utest';
-import { matchPattern, scan } from 'code_analysis.glob';
+import { matchPattern, scan } from 'ucode_analyzer.code_analysis.glob';
 import * as fs from 'fs';
 
 describe('glob.matchPattern', () => {
@@ -48,8 +48,8 @@ describe('glob.scan', () => {
 	});
 
 	it('excludes paths matching exclude pattern', () => {
-		let all  = scan('/app/src', ['**/*.uc'], []);
-		let excl = scan('/app/src', ['**/*.uc'], ['language_server/**']);
+		let all  = scan('/app/src/ucode_analyzer', ['**/*.uc'], []);
+		let excl = scan('/app/src/ucode_analyzer', ['**/*.uc'], ['language_server/**']);
 
 		assert.match(true, length(excl) < length(all));
 		for (let f in excl)

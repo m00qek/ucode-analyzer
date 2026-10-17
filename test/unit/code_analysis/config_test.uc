@@ -1,6 +1,6 @@
 import { describe, it, assert, mock } from 'utest';
 import * as fs from 'fs';
-import { load, init } from 'code_analysis.config';
+import { load, init } from 'ucode_analyzer.code_analysis.config';
 
 let CONFIG_DIR    = '/config';
 let WORKSPACE_DIR = '/workspace';

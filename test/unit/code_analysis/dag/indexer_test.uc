@@ -1,7 +1,7 @@
 import { describe, it, assert, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
-import * as mode from 'code_analysis.mode';
-import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'code_analysis.dag.indexer';
+import * as mode from 'ucode_analyzer.code_analysis.mode';
+import { extractExports, extractImports, extractModuleDoc, extractVersions, resolveModule } from 'ucode_analyzer.code_analysis.dag.indexer';
 
 let _parser = ts.newParser(ts.ucode());
 
@@ -386,8 +386,8 @@ describe('indexer.extractImports', () => {
 
 describe('indexer.resolveModule', () => {
 	it('resolves dot-separated module to slash path', () => {
-		let uri = resolveModule('code_analysis.documents', ['/app/src'], '/app');
-		assert.match('file:///app/src/code_analysis/documents.uc', uri);
+		let uri = resolveModule('ucode_analyzer.code_analysis.documents', ['/app/src'], '/app');
+		assert.match('file:///app/src/ucode_analyzer/code_analysis/documents.uc', uri);
 	});
 
 	it('resolves simple module name', () => {
@@ -407,13 +407,13 @@ describe('indexer.resolveModule', () => {
 
 	it('resolves declaration file directly under lib path (no extra declarations/ prefix)', () => {
 		// When libPath itself is a declarations dir, .d.uc lives at absLib/<name>.d.uc
-		let uri = resolveModule('uci', ['/app/src/declarations'], '/app');
-		assert.match('file:///app/src/declarations/uci.d.uc', uri);
+		let uri = resolveModule('uci', ['/app/src/ucode_analyzer/declarations'], '/app');
+		assert.match('file:///app/src/ucode_analyzer/declarations/uci.d.uc', uri);
 	});
 
 	it('resolves dot-separated declaration file directly under lib path', () => {
-		let uri = resolveModule('uci', ['/app/src'], '/app');
-		assert.match('file:///app/src/declarations/uci.d.uc', uri);
+		let uri = resolveModule('uci', ['/app/src/ucode_analyzer'], '/app');
+		assert.match('file:///app/src/ucode_analyzer/declarations/uci.d.uc', uri);
 	});
 });
 

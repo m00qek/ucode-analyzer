@@ -1,14 +1,14 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import * as dag from 'code_analysis.dag.dag';
-import { positionToOffset } from 'code_analysis.positions';
-import { initBuiltinsFromDag } from 'code_analysis.types.dag_bridge';
-import { undefinedVars } from 'code_analysis.diagnostics.undefined_vars';
-import { actionsFor } from 'language_server.handlers.code_actions.add_missing_import';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { positionToOffset } from 'ucode_analyzer.code_analysis.positions';
+import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
+import { undefinedVars } from 'ucode_analyzer.code_analysis.diagnostics.undefined_vars';
+import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.add_missing_import';
 
 let URI = 'file:///app/test/t.uc';
 
-dag.init({ workspaceDir: '/app', workspace: { libraryPaths: ['src', 'test'] } });
+dag.init({ workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src', 'test'] } });
 let _g = dag.resolveSpecifier('global');
 dag.addFromDisk(_g);
 initBuiltinsFromDag(_g);

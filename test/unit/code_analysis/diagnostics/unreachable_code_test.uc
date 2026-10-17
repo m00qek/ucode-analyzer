@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { unreachableCode } from 'code_analysis.diagnostics.unreachable_code';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { unreachableCode } from 'ucode_analyzer.code_analysis.diagnostics.unreachable_code';
 
 let URI = 'file:///test.uc';
 

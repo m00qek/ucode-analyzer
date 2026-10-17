@@ -1,13 +1,13 @@
 import { describe, it, assert, beforeEach, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import * as dag from 'code_analysis.dag.dag';
-import { invalidateUri } from 'code_analysis.memo';
-import { diagnosticsFor } from 'code_analysis.diagnostics';
-import { documentSymbols } from 'language_server.handlers.document_symbols';
-import { hover } from 'language_server.handlers.hover';
-import { definition } from 'language_server.handlers.definition';
-import { completion } from 'language_server.handlers.completion';
-import { foldingRanges } from 'language_server.handlers.folding_range';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import { diagnosticsFor } from 'ucode_analyzer.code_analysis.diagnostics';
+import { documentSymbols } from 'ucode_analyzer.language_server.handlers.document_symbols';
+import { hover } from 'ucode_analyzer.language_server.handlers.hover';
+import { definition } from 'ucode_analyzer.language_server.handlers.definition';
+import { completion } from 'ucode_analyzer.language_server.handlers.completion';
+import { foldingRanges } from 'ucode_analyzer.language_server.handlers.folding_range';
 
 // Blocks left open at the end of the file. tree-sitter closes each with a
 // MISSING `}`, except in a SMALL file: there one ERROR over the whole file
@@ -28,7 +28,7 @@ let VARIANTS = [
 	{ name: 'tiny open',  text: BODY,              shift: 0, open: true  },
 ];
 
-let _config = { workspaceDir: '/app', workspace: { libraryPaths: ['src'] } };
+let _config = { workspaceDir: '/app', selfSrcDir: '/app/src/ucode_analyzer', workspace: { libraryPaths: ['src'] } };
 
 function open(text) {
 	dag.add(URI, text, documents.open(URI, text, 1).tree);

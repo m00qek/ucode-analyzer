@@ -1,7 +1,7 @@
 'use strict';
 
 import { describe, it, assert } from 'utest';
-import * as dag from 'code_analysis.dag.dag';
+import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 
 import * as mod_bpf     from 'bpf';
 import * as mod_debug   from 'debug';
@@ -25,7 +25,7 @@ import * as mod_uline   from 'uline';
 import * as mod_uloop   from 'uloop';
 import * as mod_zlib    from 'zlib';
 
-const DECL = '/app/src/declarations';
+const DECL = '/app/src/ucode_analyzer/declarations';
 
 const RESERVED_WORDS = [ 'const', 'let', 'var', 'function', 'class', 'import', 'export',
                           'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case',

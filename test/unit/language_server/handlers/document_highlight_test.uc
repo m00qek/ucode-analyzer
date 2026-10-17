@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { documentHighlight } from 'language_server.handlers.document_highlight';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { documentHighlight } from 'ucode_analyzer.language_server.handlers.document_highlight';
 
 let URI = 'file:///test.uc';
 

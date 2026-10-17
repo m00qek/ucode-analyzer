@@ -1,10 +1,10 @@
-IMAGE        := ucode-language-server-test:latest
+IMAGE        := ucode-analyzer-test:latest
 SDK_VERSION  ?= 25.12.4
 SDK_ARCH     ?= x86-64
 GIT_COMMIT   ?= $(shell git rev-parse --short HEAD)
 
-PKG_NAME         := ucode-language-server
-UCODE_MOD_NAME   := language_server
+PKG_NAME         := ucode-analyzer
+UCODE_MOD_NAME   := ucode_analyzer
 PKG_VERSION_BASE := $(shell grep -oP 'PKG_VERSION:=\K.*' openwrt/$(PKG_NAME)/Makefile)
 PKG_VERSION      := $(if $(GIT_COMMIT),$(PKG_VERSION_BASE)~$(GIT_COMMIT),$(PKG_VERSION_BASE))
 
@@ -50,7 +50,7 @@ $(BUILD_DIR)/tree_sitter_native.so: $(shell find mod test/mod third_party/tree-s
 			./scripts/feeds update base && \
 			./scripts/feeds install ucode && \
 			make defconfig && \
-			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-mod-language-server-test-client ucode-code-analysis ucode-language-server ucode-linter >> .config && \
+			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-analyzer-test-client ucode-analyzer-core ucode-analyzer >> .config && \
 			make defconfig && \
 			make package/$(PKG_NAME)/compile V=s && \
 			find /builder/build_dir -path '*/tree_sitter/native.so' \
@@ -100,11 +100,11 @@ test-integration: .docker-image $(BUILD_DIR)/tree_sitter_native.so
 	@$(TEST_IMAGE) utest -c test/integration/language_server/utest.config.uc $(REPORTER) test/integration/language_server/
 	@$(TEST_IMAGE) utest -c test/integration/tree_sitter/utest.config.uc $(REPORTER) test/integration/tree_sitter/
 
-# Self-lint the repo with its own ucode-linter, using the committed shared
+# Self-lint the repo with its own linter (`ucode-analyzer lint`), using the committed shared
 # config at .lsp/config.json. Fails on any error or warning, enforcing the
 # zero-diagnostics invariant. Only needs the tree-sitter native module.
 lint: .docker-image $(BUILD_DIR)/tree_sitter_native.so
-	@$(TEST_IMAGE) ucode -L /app/src /app/src/ucode-linter.uc --workspace /app --fail-on=warning
+	@$(TEST_IMAGE) ucode -L /app/src /app/src/ucode-analyzer.uc lint --workspace /app --fail-on=warning
 
 shell: TEST_OPTS := -it
 shell: .docker-image
@@ -120,7 +120,7 @@ package:
 			./scripts/feeds update base && \
 			./scripts/feeds install ucode && \
 			make defconfig && \
-			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-code-analysis ucode-language-server ucode-linter >> .config && \
+			printf 'CONFIG_PACKAGE_%s=y\n' ucode-mod-tree-sitter ucode-analyzer-core ucode-analyzer >> .config && \
 			make defconfig && \
 			make package/$(PKG_NAME)/compile V=s \
 		"; EC=$$?; rm -f $(BUILD_DIR)/$(PKG_NAME)-Makefile; exit $$EC

@@ -1,6 +1,6 @@
 import { describe, it, assert, afterEach } from 'utest';
-import * as documents from 'code_analysis.documents';
-import { redeclaredVars } from 'code_analysis.diagnostics.redeclared_var';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
+import { redeclaredVars } from 'ucode_analyzer.code_analysis.diagnostics.redeclared_var';
 
 let URI = 'file:///test.uc';
 

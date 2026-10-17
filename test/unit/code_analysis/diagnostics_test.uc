@@ -1,5 +1,5 @@
 import { describe, it, assert } from 'utest';
-import { runPass } from 'code_analysis.diagnostics';
+import { runPass } from 'ucode_analyzer.code_analysis.diagnostics';
 
 // runPass isolates one diagnostic pass: a die()/runtime error in a pass must not
 // propagate (which would drop the other passes and abort a workspace scan). On

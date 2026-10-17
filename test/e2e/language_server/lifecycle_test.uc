@@ -17,7 +17,7 @@ describe('initialize response', () => {
 		assert.match(true, caps.renameProvider !== null && caps.renameProvider !== false);
 		assert.match(true, type(caps.completionProvider)    === 'object');
 		assert.match(true, type(caps.signatureHelpProvider) === 'object');
-		assert.match('ucode-language-server', resp.result.serverInfo.name);
+		assert.match('ucode-analyzer', resp.result.serverInfo.name);
 
 		let shutdownResp = lsp.shutdown(proc);
 		assert.match(null, shutdownResp.result);
@@ -73,7 +73,7 @@ describe('exit behavior', () => {
 
 		// A timeout returns a negative signal number instead of hanging the suite.
 		let status = system(sprintf(
-			'cat %s | ucode -L /app/src /app/src/ucode-language-server.uc ' +
+			'cat %s | ucode -L /app/src /app/src/ucode-analyzer.uc ' +
 			'--config /tmp --workspace /app >/dev/null 2>&1', path), 30000);
 		fs.unlink(path);
 		assert.match(0, status);
@@ -189,7 +189,7 @@ describe('failing notification', () => {
 	it('is logged to stderr and the server stays alive', () => {
 		let log = fs.mkdtemp('/tmp/lifecycle-XXXXXX') + '/stderr.log';
 		let proc = lsp.spawn('sh', ['-c',
-			sprintf('exec ucode -L /app/src /app/src/ucode-language-server.uc --config /tmp --workspace /app 2>%s', log)]);
+			sprintf('exec ucode -L /app/src /app/src/ucode-analyzer.uc --config /tmp --workspace /app 2>%s', log)]);
 		lsp.initialize(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', method: 'textDocument/didOpen', params: {} });
@@ -201,7 +201,7 @@ describe('failing notification', () => {
 		let stderr = fs.readfile(log) ?? '';
 		system(['rm', '-rf', fs.dirname(log)]);
 		assert.match(42, ok.id);
-		assert.match(true, index(stderr, 'ucode-ls: textDocument/didOpen failed: ') >= 0);
+		assert.match(true, index(stderr, 'ucode-analyzer: textDocument/didOpen failed: ') >= 0);
 	});
 });
 
