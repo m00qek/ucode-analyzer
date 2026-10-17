@@ -101,8 +101,8 @@ which point chunked startup becomes a safe, mechanical follow-up.
 ## Won't-do: builtin call validation (argument count / type / coercion)
 
 **Decision.** Do **not** add a diagnostic that validates call sites against
-declared signatures for argument *count* or argument *type* — the "builtin call
-validation" roadmap item (Tier 2). It is not precision-safe in ucode.
+declared signatures for argument *count* or argument *type*. It is not
+precision-safe in ucode.
 
 **Why.** The premise ("the typed `declarations/*.d.uc` files hold the raw
 material") is true but insufficient: ucode's runtime tolerates almost every

@@ -168,7 +168,8 @@ OpenWrt image. The layout:
 - `src/tree_sitter.uc` and `mod/tree_sitter/native.c`: the tree-sitter binding.
 - `test/unit`, `test/integration`, `test/e2e`: the suites, mirroring `src/`.
 
-[decisions.md](decisions.md) records what was decided against, and why.
+[docs/architecture.md](docs/architecture.md) explains how it works, and
+[docs/decisions.md](docs/decisions.md) what was decided against, and why.
 
 ## License
 

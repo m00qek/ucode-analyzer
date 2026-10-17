@@ -3,7 +3,7 @@
 //
 // This is a documentation-consistency check, NOT a runtime-error claim — which is
 // what makes it precision-safe in a language whose runtime tolerates almost every
-// call-shape mismatch (see decisions.md, "Won't-do: builtin call validation"). The
+// call-shape mismatch (see docs/decisions.md, "Won't-do: builtin call validation"). The
 // function's formal parameters are ground truth; a @param naming something else is
 // unambiguously wrong.
 //
