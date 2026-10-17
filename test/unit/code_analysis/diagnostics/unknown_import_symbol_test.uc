@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
+import { describe, it, assert, beforeEach, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { unknownImportSymbols } from 'ucode_analyzer.code_analysis.diagnostics.unknown_import_symbol';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -20,6 +20,20 @@ afterEach(() => {
 	dag.remove(DE_URI);
 });
 
+// The errors for a marked snippet: one per missing export, named in order by
+// `names`, on the marker pairs ($0,$1), ($2,$3), ….
+function check(marked, ...names) {
+	let src = cursors(marked), want = [];
+	for (let i = 0; i < length(names); i++)
+		push(want, {
+			range: { start: src.at[2 * i], end: src.at[2 * i + 1] }, severity: 1, source: 'ucode-analyzer',
+			code: 'unknown-import-symbol', message: sprintf("Module has no export named '%s'", names[i]),
+		});
+	documents.open(URI, src.text, 1);
+	dag.add(URI, src.text, documents.get(URI).tree);
+	return { want, got: unknownImportSymbols(URI, documents.get(URI)) };
+}
+
 describe('diagnostics — unknown import symbols', () => {
 	it('returns empty list when all named imports exist in the module', () => {
 		let text = "import { parse } from 'parser';\n";
@@ -29,34 +43,14 @@ describe('diagnostics — unknown import symbols', () => {
 		assert.match(0, length(unknownImportSymbols(URI, documents.get(URI))));
 	});
 
-	it('reports an error for a named import that is not exported', () => {
-		let text = "import { noSuchExport } from 'parser';\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-
-		let diags = unknownImportSymbols(URI, documents.get(URI));
-
-		assert.match(1, length(diags));
-		assert.match(1, diags[0].severity);
-		assert.match(contains('noSuchExport'), diags[0].message);
-	});
-
-	it('highlights the remote name node, not the whole import statement', () => {
-		let src = cursors("import { $0noSuchExport$1 } from 'parser';\n");
-		documents.open(URI, src.text, 1);
-		dag.add(URI, src.text, documents.get(URI).tree);
-
-		let r = unknownImportSymbols(URI, documents.get(URI))[0].range;
-
-		assert.match({ start: src.at[0], end: src.at[1] }, r);
+	it('errors on a named import that is not exported, on the remote name only', () => {
+		let r = check("import { $0noSuchExport$1 } from 'parser';\n", 'noSuchExport');
+		assert.match(r.want, r.got);
 	});
 
 	it('reports one error per bad symbol when multiple are wrong', () => {
-		let text = "import { bad1, bad2 } from 'parser';\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-
-		assert.match(2, length(unknownImportSymbols(URI, documents.get(URI))));
+		let r = check("import { $0bad1$1, $2bad2$3 } from 'parser';\n", 'bad1', 'bad2');
+		assert.match(r.want, r.got);
 	});
 
 	it('does not report an error for namespace imports (import * as x)', () => {
@@ -85,14 +79,8 @@ describe('diagnostics — unknown import symbols', () => {
 	});
 
 	it('reports error for renamed import when the remote name does not exist', () => {
-		let text = "import { noSuch as local } from 'parser';\n";
-		documents.open(URI, text, 1);
-		dag.add(URI, text, documents.get(URI).tree);
-
-		let diags = unknownImportSymbols(URI, documents.get(URI));
-
-		assert.match(1, length(diags));
-		assert.match(contains('noSuch'), diags[0].message);
+		let r = check("import { $0noSuch$1 as local } from 'parser';\n", 'noSuch');
+		assert.match(r.want, r.got);
 	});
 
 	it('accepts a default import of a module with `export default`', () => {
@@ -110,12 +98,7 @@ describe('diagnostics — unknown import symbols', () => {
 	});
 
 	it('reports a default import of a module without a default export', () => {
-		let src = cursors("import $0x$1 from 'parser';\n");
-		documents.open(URI, src.text, 1);
-		dag.add(URI, src.text, documents.get(URI).tree);
-		let diags = unknownImportSymbols(URI, documents.get(URI));
-		assert.match(1, length(diags));
-		assert.match(contains("'default'"), diags[0].message);
-		assert.match({ start: src.at[0], end: src.at[1] }, diags[0].range);
+		let r = check("import $0x$1 from 'parser';\n", 'default');
+		assert.match(r.want, r.got);
 	});
 });

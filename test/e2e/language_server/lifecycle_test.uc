@@ -1,4 +1,4 @@
-import { describe, it, assert, contains } from 'utest';
+import { describe, it, assert, contains, is_type } from 'utest';
 import * as lsp from 'client';
 import * as fs from 'fs';
 import * as fixture from 'fixture';
@@ -7,17 +7,27 @@ describe('initialize response', () => {
 	it('returns capabilities and serverInfo', () => {
 		let proc = lsp.connect();
 		let resp = lsp.initialize(proc);
-		let caps = resp.result.capabilities;
 
-		assert.match(true, type(caps) === 'object');
-		assert.match(1,    caps.textDocumentSync);
-		assert.match(true, caps.hoverProvider);
-		assert.match(true, caps.definitionProvider);
-		assert.match(true, caps.referencesProvider);
-		assert.match(true, caps.documentSymbolProvider);
-		assert.match(true, caps.renameProvider !== null && caps.renameProvider !== false);
-		assert.match(true, type(caps.completionProvider)    === 'object');
-		assert.match(true, type(caps.signatureHelpProvider) === 'object');
+		assert.match({
+			textDocumentSync: 1,   // full documents
+			hoverProvider: true,
+			definitionProvider: true,
+			completionProvider: { triggerCharacters: [ '.' ] },
+			signatureHelpProvider: { triggerCharacters: [ '(', ',' ] },
+			referencesProvider: true,
+			documentSymbolProvider: true,
+			documentHighlightProvider: true,
+			renameProvider: { prepareProvider: true },
+			codeActionProvider: { codeActionKinds: [ 'quickfix', 'refactor.rewrite' ] },
+			workspaceSymbolProvider: true,
+			inlayHintProvider: true,
+			foldingRangeProvider: true,
+			selectionRangeProvider: true,
+			linkedEditingRangeProvider: true,
+			documentLinkProvider: { resolveProvider: false },
+			callHierarchyProvider: true,
+			diagnosticProvider: { interFileDependencies: true, workspaceDiagnostics: true },
+		}, resp.result.capabilities);
 		assert.match('ucode-analyzer', resp.result.serverInfo.name);
 
 		let shutdownResp = lsp.shutdown(proc);
@@ -33,7 +43,7 @@ describe('exit behavior', () => {
 		lsp.initialize(proc);
 
 		lsp.send(proc, { jsonrpc: '2.0', method: 'exit', params: {} });
-		assert.match(true, lsp.close(proc) !== 0);
+		assert.match(1, lsp.close(proc));   // as the LSP specification asks
 	});
 
 	// close() closes the server's stdin and waits for it: end of stream must
@@ -43,7 +53,7 @@ describe('exit behavior', () => {
 		let proc = lsp.connect();
 		lsp.initialize(proc);
 
-		assert.match(true, lsp.close(proc) !== 0);
+		assert.match(1, lsp.close(proc));
 	});
 
 	it('stdin EOF after shutdown exits zero', () => {
@@ -116,9 +126,11 @@ describe('workspace file watcher', () => {
 
 		let req = lsp.receiveServerRequest(proc);
 		assert.match('client/registerCapability', req.method);
-		let reg = req.params.registrations[0];
-		assert.match('workspace/didChangeWatchedFiles', reg.method);
-		assert.match('**/*.uc', reg.registerOptions.watchers[0].globPattern);
+		assert.match({ registrations: [ {
+			id: is_type('string'),   // the server's choice
+			method: 'workspace/didChangeWatchedFiles',
+			registerOptions: { watchers: [ { globPattern: '**/*.uc' } ] },
+		} ] }, req.params);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'shutdown', params: null });
 		lsp.receive(proc);

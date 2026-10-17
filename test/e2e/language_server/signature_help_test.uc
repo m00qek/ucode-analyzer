@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown, contains, not } from 'utest';
+import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
 import { cursors } from 'cursor';
 
@@ -25,15 +25,30 @@ function signatureAt(marked) {
 	return lsp.receive(proc);
 }
 
+// The signature help for one signature, label, whose parameters are the
+// substrings `params` of it (in order), with `active` the active parameter.
+function help(label, params, active) {
+	let parameters = [], from = 0;
+	for (let p in params) {
+		let at = index(substr(label, from), p) + from;
+		push(parameters, { label: [ at, at + length(p) ] });
+		from = at + length(p);
+	}
+	return { signatures: [ { label, parameters } ], activeSignature: 0, activeParameter: active };
+}
+
+// The help for `let f = (a, b) => a;`.
+function helpF(active) {
+	return help('f(a: ?, b: ?)', [ 'a: ?', 'b: ?' ], active);
+}
+
 describe('textDocument/signatureHelp', () => {
 
 	it('returns signature when cursor is inside a known function call', () => {
 		let resp = signatureAt("let f = (a, b) => a;\nf($01, 2);\n");  // inside f(...)
 
 		assert.match(1, resp.id);
-		assert.match(true, resp.result !== null);
-		assert.match(1, length(resp.result.signatures));
-		assert.match(contains('f'), resp.result.signatures[0].label);
+		assert.match(helpF(0), resp.result);
 	});
 
 	it('returns null when cursor is not inside a call', () => {
@@ -54,52 +69,44 @@ describe('textDocument/signatureHelp', () => {
 		// The callee is a member_expression — most common real-world pattern.
 		let resp = signatureAt("import * as p from 'parser';\np.parse($0q, s);\n");  // on 'q', first arg
 
-		assert.match(true, resp.result !== null);
-		assert.match(1, length(resp.result.signatures));
-		assert.match(contains('parse'), resp.result.signatures[0].label);
-		assert.match(0, resp.result.activeParameter);
+		assert.match(help('p.parse(parser: object, source: string): object',
+			[ 'parser: object', 'source: string' ], 0), resp.result);
 	});
 
 	it('returns signature for a named import call (parse)', () => {
 		let resp = signatureAt("import { parse } from 'parser';\nparse($0q, s);\n");  // on 'q', first arg
 
-		assert.match(true, resp.result !== null);
-		assert.match(contains('parse'), resp.result.signatures[0].label);
-		assert.match(0, resp.result.activeParameter);
+		assert.match(help('parse(parser: object, source: string): object',
+			[ 'parser: object', 'source: string' ], 0), resp.result);
 	});
 
 	it('returns signature for a stdlib builtin call (push)', () => {
 		// push(arr, values) — declared in stdlib.d.uc, always in scope.
 		let resp = signatureAt("push([1], $02);\n");  // on '2', second arg
 
-		assert.match(true, resp.result !== null);
-		assert.match(contains('push'), resp.result.signatures[0].label);
-		assert.match(1, resp.result.activeParameter);
+		// T is bound from the arguments.
+		assert.match(help('push(arr: list<int>, values: int): ?int',
+			[ 'arr: list<int>', 'values: int' ], 1), resp.result);
 	});
 
 	it('shows innermost call signature when calls are nested', () => {
 		// f(g(1), 2) — cursor inside g() shows g's signature, not f's.
 		let resp = signatureAt("let f = (a, b) => a;\nlet g = (x) => x;\nf(g($01), 2);\n");  // on '1' inside g(...)
 
-		assert.match(true, resp.result !== null);
-		assert.match(contains('g'), resp.result.signatures[0].label);
-		assert.match(not(contains('f(')), resp.result.signatures[0].label);
+		assert.match(help('g(x: ?)', [ 'x: ?' ], 0), resp.result);
 	});
 
 	it('shows outer call signature when cursor is on outer argument', () => {
 		// f(g(1), 2) — cursor on '2' shows f's signature, not g's.
 		let resp = signatureAt("let f = (a, b) => a;\nlet g = (x) => x;\nf(g(1), $02);\n");  // on '2', second arg of f
 
-		assert.match(true, resp.result !== null);
-		assert.match(contains('f'), resp.result.signatures[0].label);
-		assert.match(1, resp.result.activeParameter);
+		assert.match(helpF(1), resp.result);
 	});
 
 	it('clamps activeParameter to last param when excess arguments are supplied', () => {
 		// f has 2 params; calling with 3 args — activeParameter must not exceed 1.
 		let resp = signatureAt("let f = (a, b) => a;\nf(1, 2, $03);\n");  // on '3', third arg
 
-		assert.match(true, resp.result !== null);
-		assert.match(1, resp.result.activeParameter);  // clamped from 2 to 1
+		assert.match(helpF(1), resp.result);  // clamped from 2 to 1
 	});
 });

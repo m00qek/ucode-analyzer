@@ -61,8 +61,9 @@ describe('textDocument/rename', () => {
 		let resp = renameAt(10, uri, src, 'parseDoc');
 
 		assert.match(10, resp.id);
-		assert.match(true, resp.result !== null);
+		// Edits in the importer and the declaring module, nowhere else.
 		let changes = resp.result.changes;
+		assert.match(any_order([ uri, fixture.uri('parser.uc') ]), keys(changes));
 
 		// Importing file must have edits (import specifier + call).
 		assert.match(any_order([

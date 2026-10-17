@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach, prop, gen, contains } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, prop, gen } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { deprecatedUsage } from 'ucode_analyzer.code_analysis.diagnostics.deprecated';
@@ -18,6 +18,12 @@ afterEach(() => {
 	dag.remove(URI_B);
 });
 
+// The whole hint for a deprecated reference between markers $0 and $1.
+function deprecated(src) {
+	return { range: { start: src.at[0], end: src.at[1] }, severity: 4, source: 'ucode-analyzer',
+		code: 'deprecated', message: 'Deprecated', tags: [ 2 ] };
+}
+
 function open(text) {
 	documents.open(URI, text, 1);
 	dag.add(URI, text, documents.get(URI).tree);
@@ -30,19 +36,9 @@ describe('diagnostics — deprecated usage', () => {
 		assert.match(0, length(deprecatedUsage(URI, doc)));
 	});
 
-	it('reports a hint for a call to a same-file @deprecated export', () => {
-		let doc = open("/** @deprecated */\nexport function old() {};\nold();\n");
-		let diags = deprecatedUsage(URI, doc);
-		assert.match(1, length(diags));
-		assert.match(4, diags[0].severity);  // HINT
-		assert.match('Deprecated', diags[0].message);
-	});
-
-	it('includes DiagnosticTag.Deprecated (tag=2) on the diagnostic', () => {
-		let doc = open("/** @deprecated */\nexport function old() {};\nold();\n");
-		let diags = deprecatedUsage(URI, doc);
-		assert.match(true, length(diags) >= 1);
-		assert.match(contains([2]), diags[0].tags);
+	it('reports a hint tagged Deprecated (tag=2) for a call to a same-file @deprecated export', () => {
+		let src = cursors("/** @deprecated */\nexport function old() {};\n$0old$1();\n");
+		assert.match([deprecated(src)], deprecatedUsage(URI, open(src.text)));
 	});
 
 	it('does not flag the declaration site itself', () => {
@@ -58,10 +54,8 @@ describe('diagnostics — deprecated usage', () => {
 		documents.open(URI, src.text, 1);
 		dag.add(URI, src.text, documents.get(URI).tree);
 
-		let diags = deprecatedUsage(URI, documents.get(URI));
 		// only the oldFn() call is flagged; newFn() and the import_specifier are not
-		assert.match(1, length(diags));
-		assert.match({ start: src.at[0], end: src.at[1] }, diags[0].range);
+		assert.match([deprecated(src)], deprecatedUsage(URI, documents.get(URI)));
 		dag.remove(DEP);
 	});
 
@@ -72,13 +66,6 @@ describe('diagnostics — deprecated usage', () => {
 		// Even if 'old' were deprecated, the import_specifier site must not be flagged.
 		// With an unresolvable module the DAG has no doc, so 0 diags expected.
 		assert.match(0, length(deprecatedUsage(URI, documents.get(URI))));
-	});
-
-	it('reports the correct range for the deprecated identifier', () => {
-		let src = cursors("/** @deprecated */\nexport function old() {};\n$0old$1();\n");
-		let diags = deprecatedUsage(URI, open(src.text));
-		assert.match(1, length(diags));
-		assert.match({ start: src.at[0], end: src.at[1] }, diags[0].range);
 	});
 });
 

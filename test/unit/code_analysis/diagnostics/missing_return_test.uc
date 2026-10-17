@@ -1,6 +1,7 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { missingReturn } from 'ucode_analyzer.code_analysis.diagnostics.missing_return';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -9,6 +10,19 @@ afterEach(() => documents.close(URI));
 function open(text) {
 	documents.open(URI, text, 1);
 	return documents.get(URI);
+}
+
+// The warning for a snippet whose function name is marked `$0name$1`, and
+// what the check reports.
+function check(marked) {
+	let src = cursors(marked);
+	return {
+		want: [{
+			range: { start: src.at[0], end: src.at[1] }, severity: 2, source: 'ucode-analyzer',
+			code: 'missing-return', message: 'Not all code paths return a value',
+		}],
+		got: missingReturn(open(src.text)),
+	};
 }
 
 describe('diagnostics — missing return', () => {
@@ -23,18 +37,15 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('warns for function with @returns that has no return', () => {
-		let text = "/**\n * @returns {int}\n */\nfunction f() {\n  let x = 1;\n}\n";
-		let diags = missingReturn(open(text));
-		assert.match(1, length(diags));
-		assert.match(2, diags[0].severity);  // WARNING
-		assert.match('missing-return', diags[0].code);
+		let text = "/**\n * @returns {int}\n */\nfunction $0f$1() {\n  let x = 1;\n}\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('warns when only one branch of if/else returns', () => {
-		let text = "/**\n * @returns {int}\n */\nfunction f(x) {\n  if (x) { return 1; }\n}\n";
-		let diags = missingReturn(open(text));
-		assert.match(1, length(diags));
-		assert.match('missing-return', diags[0].code);
+		let text = "/**\n * @returns {int}\n */\nfunction $0f$1(x) {\n  if (x) { return 1; }\n}\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('no warning when both if and else branches return', () => {
@@ -48,9 +59,9 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('warns for if/else-if chain without final else', () => {
-		let text = "/**\n * @returns {int}\n */\nfunction f(x, y) {\n  if (x) { return 1; } else if (y) { return 2; }\n}\n";
-		let diags = missingReturn(open(text));
-		assert.match(1, length(diags));
+		let text = "/**\n * @returns {int}\n */\nfunction $0f$1(x, y) {\n  if (x) { return 1; } else if (y) { return 2; }\n}\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('no warning for if/else-if/else chain where all branches return', () => {
@@ -59,10 +70,9 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('warning points at function name', () => {
-		let text = "/**\n * @returns {int}\n */\nfunction compute() {\n  let x = 1;\n}\n";
-		let diags = missingReturn(open(text));
-		assert.match(1, length(diags));
-		assert.match(3, diags[0].range.start.line);  // function declaration line
+		let text = "/**\n * @returns {int}\n */\nfunction $0compute$1() {\n  let x = 1;\n}\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('no warning when a path ends in die()', () => {
@@ -85,13 +95,15 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('warns when the catch clause does not return', () => {
-		let text = DOC + "function f(s) { try { return +s; } catch (e) { print(e); } }\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1(s) { try { return +s; } catch (e) { print(e); } }\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('warns when the try body does not return', () => {
-		let text = DOC + "function f(s) { try { print(s); } catch (e) { return 0; } }\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1(s) { try { print(s); } catch (e) { return 0; } }\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	// switch — ucode falls through C-style; a switch returns only with a default
@@ -107,13 +119,15 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('warns for a switch with no default', () => {
-		let text = DOC + "function f(x) { switch (x) { case 1: return 1; } }\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1(x) { switch (x) { case 1: return 1; } }\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('warns when a switch clause breaks without returning', () => {
-		let text = DOC + "function f(x) { switch (x) { case 1: break; default: return 0; } }\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1(x) { switch (x) { case 1: break; default: return 0; } }\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	// infinite loops — a body ending in `while(true)`/`for(;;)` never falls
@@ -136,18 +150,21 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('warns for a while loop with a non-constant condition', () => {
-		let text = DOC + "function f() { while (running) { doStuff(); } }\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1() { while (running) { doStuff(); } }\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('warns for a while (0) loop (never infinite)', () => {
-		let text = DOC + "function f() { while (0) { doStuff(); } }\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1() { while (0) { doStuff(); } }\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('warns for a finite C-style for loop', () => {
-		let text = DOC + "function f() { for (let i = 0; i < 10; i++) { doStuff(); } }\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1() { for (let i = 0; i < 10; i++) { doStuff(); } }\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('no warning when while (true) follows other non-returning statements', () => {
@@ -157,8 +174,9 @@ describe('diagnostics — missing return', () => {
 
 	it('still warns when a non-terminating statement follows the infinite loop', () => {
 		// The loop is not the last statement, so control can reach the tail.
-		let text = DOC + "function f() { while (true) { break; } let x = 1; }\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1() { while (true) { break; } let x = 1; }\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('no warning for a colon-form function that returns', () => {
@@ -167,8 +185,9 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('warns for a colon-form function that does not return', () => {
-		let text = DOC + "function f(): let x = 1; endfunction\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1(): let x = 1; endfunction\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('no warning when every branch of an alt-syntax if returns', () => {
@@ -177,8 +196,9 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('warns for an alt-syntax if without else', () => {
-		let text = DOC + "function f(x): if (x): return 1; endif endfunction\n";
-		assert.match(1, length(missingReturn(open(text))));
+		let text = DOC + "function $0f$1(x): if (x): return 1; endif endfunction\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 
 	it('no warning when a comment follows the final return', () => {
@@ -207,9 +227,8 @@ describe('diagnostics — missing return', () => {
 	});
 
 	it('points at the function name after a comment', () => {
-		let text = "/** @returns {int} */\nfunction /* c */ f() {\n  let x = 1;\n}\n";
-		let diags = missingReturn(open(text));
-		assert.match(1, length(diags));
-		assert.match(17, diags[0].range.start.character);
+		let text = "/** @returns {int} */\nfunction /* c */ $0f$1() {\n  let x = 1;\n}\n";
+		let r = check(text);
+		assert.match(r.want, r.got);
 	});
 });

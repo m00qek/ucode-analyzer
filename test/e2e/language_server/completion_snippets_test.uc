@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, any_order } from 'utest';
 import * as lsp from 'client';
 import { cursors } from 'cursor';
 
@@ -29,24 +29,24 @@ describe('completion — snippets and @deprecated', () => {
 
 	it('function item has insertTextFormat 2 and param snippet', () => {
 		let resp = completeAt("/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\n$0");
-		let item = filter(resp.result, (i) => i.label === 'add')[0];
-		assert.match(true, item !== null);
-		assert.match(2, item.insertTextFormat);
-		assert.match('add(${1:x}, ${2:y})', item.insertText);
+		assert.match([ {
+			label: 'add', kind: 3, detail: '(x: int, y: int) => int',
+			insertText: 'add(${1:x}, ${2:y})', insertTextFormat: 2,
+		} ], filter(resp.result, (i) => i.label === 'add'));
 	});
 
 	it('zero-param function gets empty-parens snippet', () => {
 		let resp = completeAt("function ping() { return true; }\n$0");
-		let item = filter(resp.result, (i) => i.label === 'ping')[0];
-		assert.match(true, item !== null);
-		assert.match('ping()', item.insertText);
+		assert.match([ {
+			label: 'ping', kind: 3, detail: '() => boolean',
+			insertText: 'ping()', insertTextFormat: 2,
+		} ], filter(resp.result, (i) => i.label === 'ping'));
 	});
 
 	it('variable items have no snippet', () => {
 		let resp = completeAt("let count = 0;\n$0");
-		let item = filter(resp.result, (i) => i.label === 'count')[0];
-		assert.match(true, item !== null);
-		assert.match(true, item.insertText === null);
+		assert.match([ { label: 'count', kind: 6, detail: 'int' } ],
+			filter(resp.result, (i) => i.label === 'count'));
 	});
 
 	it('@deprecated export gets tags: [1] in import-context completion', () => {
@@ -54,11 +54,13 @@ describe('completion — snippets and @deprecated', () => {
 		// Opening a file that imports from it and completing inside the import braces
 		// goes through exportsOfModule, which should mark oldFn with tags: [1].
 		let resp = completeAt("import { o$0ldFn, newFn } from 'deprecated';\n");
-		let oldItem = filter(resp.result, (i) => i.label === 'oldFn')[0];
-		let newItem = filter(resp.result, (i) => i.label === 'newFn')[0];
-		assert.match(true, oldItem !== null);
-		assert.match(true, type(oldItem.tags) === 'array' && oldItem.tags[0] === 1);
-		assert.match(true, newItem !== null);
-		assert.match(true, newItem.tags === null);
+		// Current behaviour: inside import braces each item inserts a call
+		// snippet (`oldFn($1)`, though both take no parameters), and carries no
+		// detail or documentation.
+		let item = (label) => ({
+			label, kind: 3, detail: null, documentation: null,
+			insertText: label + '($1)', insertTextFormat: 2,
+		});
+		assert.match(any_order([ { ...item('oldFn'), tags: [ 1 ] }, item('newFn') ]), resp.result);
 	});
 });

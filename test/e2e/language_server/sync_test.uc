@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown, contains } from 'utest';
+import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
 import { cursors } from 'cursor';
 
@@ -7,6 +7,10 @@ const URI = 'file:///test.uc';
 // The document most tests open, and the text didChange replaces it with.
 const SRC = cursors('let $0x = 5;');
 const CHANGED = cursors("let $0x = 'five';");
+
+// The hover texts of the x of SRC and of CHANGED.
+const INT = '```ucode\nx: int\n```';
+const STRING = '```ucode\nx: string\n```';
 
 let proc;
 
@@ -40,7 +44,7 @@ function close(uri) {
 describe('LSP document sync', () => {
 	it('didOpen makes the text available', () => {
 		lsp.open(proc, URI, SRC.text);
-		assert.match(contains('int'), hoverAt());
+		assert.match(INT, hoverAt());
 	});
 
 	it('hover is null for a document that was never opened', () => {
@@ -58,7 +62,7 @@ describe('LSP document sync', () => {
 	it('didChange replaces the text', () => {
 		lsp.open(proc, URI, SRC.text);
 		lsp.change(proc, URI, CHANGED.text, 2);
-		assert.match(contains('string'), hoverAt(CHANGED.at[0]));
+		assert.match(STRING, hoverAt(CHANGED.at[0]));
 	});
 
 	it('didClose forgets the document', () => {
@@ -78,7 +82,7 @@ describe('LSP document sync', () => {
 			jsonrpc: '2.0', method: 'textDocument/didChange',
 			params: { textDocument: { uri: URI, version: 2 }, contentChanges: [] },
 		});
-		assert.match(contains('int'), hoverAt());
+		assert.match(INT, hoverAt());
 	});
 
 	it('textDocument/diagnostic reports on the open text', () => {

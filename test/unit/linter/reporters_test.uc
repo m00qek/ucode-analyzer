@@ -36,11 +36,7 @@ describe('reporters.formatText', () => {
 describe('reporters.formatJson', () => {
 	it('produces [{ uri, diagnostics }] that round-trips through json()', () => {
 		let parsed = json(reporters.formatJson(sample()));
-		assert.match(2, length(parsed));
-		assert.match('file:///ws/src/a.uc', parsed[0].uri);
-		assert.match(2, length(parsed[0].diagnostics));
-		assert.match('redeclared-var', parsed[0].diagnostics[0].code);
-		assert.match(0, length(parsed[1].diagnostics));
+		assert.match(map(sample(), (f) => ({ uri: f.uri, diagnostics: f.diags })), parsed);
 	});
 });
 

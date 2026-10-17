@@ -1,4 +1,5 @@
-import { describe, it, assert, setup, teardown, contains } from 'utest';
+import { describe, it, assert, setup, teardown } from 'utest';
+import * as fs from 'fs';
 import * as lsp from 'client';
 import { cursors, locate } from 'cursor';
 import * as fixture from 'fixture';
@@ -144,8 +145,10 @@ describe('textDocument/definition', () => {
 		// Cursor on 'match' in 'assert.match' — should jump to 'match' key in assert.uc.
 		let resp = definitionAt(cursors("import { assert } from 'utest';\nassert.$0match;\n"));
 
+		let path = '/usr/share/ucode/utest/assert.uc';
 		assert.match(1, resp.id);
-		assert.match(true, resp.result !== null);
-		assert.match(contains('assert'), resp.result.uri);
+		assert.match('file://' + path, resp.result.uri);
+		assert.match(locate(fs.readfile(path), 'export function match(', 0, length('export function ')),
+			resp.result.range.start);
 	});
 });

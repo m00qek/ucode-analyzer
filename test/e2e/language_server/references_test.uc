@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown, contains, not, any_order } from 'utest';
+import { describe, it, assert, setup, teardown, any_order } from 'utest';
 import * as lsp from 'client';
 import { cursors, locate } from 'cursor';
 import * as fixture from 'fixture';
@@ -84,40 +84,43 @@ describe('textDocument/references', () => {
 		let locs = resp.result;
 
 		assert.match(3, resp.id);
-		assert.match(true, type(locs) === 'array');
 
-		// In parser.uc: the declaration and the call in parseString().
+		// In parser.uc: the declaration and the call in parseString(); in the
+		// importing file itself: the import specifier and the call.
 		let parser = fixture.read('parser.uc');
 		let decl = rangeAt(locate(parser, 'export function parse(', 0, length('export function ')), 'parse');
 		let call = rangeAt(locate(parser, 'return parse(', 0, length('return ')), 'parse');
-		assert.match(any_order([ decl, call ]),
-			map(filter(locs, (l) => l.uri === fixture.uri('parser.uc')), (l) => l.range));
-
-		// And in the importing file itself: the import specifier and the call.
-		assert.match(any_order([ span(src, 1, 2), span(src, 3, 4) ]),
-			map(filter(locs, (l) => l.uri === uri), (l) => l.range));
+		assert.match(any_order([
+			{ uri: fixture.uri('parser.uc'), range: decl },
+			{ uri: fixture.uri('parser.uc'), range: call },
+			{ uri, range: span(src, 1, 2) },
+			{ uri, range: span(src, 3, 4) },
+		]), locs);
 	});
 
 	it('cross-file: includeDeclaration:false excludes the export declaration', () => {
 		let fixUri = fixture.uri('greet.uc');
-		let greet = cursors("function $1greet$2() {}\nexport { greet };\n");
+		let greet = cursors("function $1greet$2() {}\nexport { $3greet$4 };\n");
 		lsp.open(proc, fixUri, greet.text);
 		let uri = fixture.uri('ref_caller.uc');
-		let src = cursors("import { greet } from 'greet';\n$0greet();\n");
+		let src = cursors("import { $1greet$2 } from 'greet';\n$0$3greet$4();\n");
 		lsp.open(proc, uri, src.text);
 
 		// The declaration is `function greet` in the fixture.
 		let decl = { uri: fixUri, range: span(greet, 1, 2) };
+		let exported = { uri: fixUri, range: span(greet, 3, 4) };
+		let call = { uri, range: span(src, 3, 4) };
 
 		// includeDeclaration:true → the declaration is present.
 		let withDecl = referencesAt(4, uri, src.at[0], { includeDeclaration: true });
 		assert.match(4, withDecl.id);
-		assert.match(contains([ decl ]), withDecl.result);
+		assert.match(any_order([ decl, exported, { uri, range: span(src, 1, 2) }, call ]),
+			withDecl.result);
 
 		// includeDeclaration:false → the declaration is dropped.
 		let noDecl = referencesAt(5, uri, src.at[0], { includeDeclaration: false });
 		assert.match(5, noDecl.id);
-		assert.match(true, type(noDecl.result) === 'array');
-		assert.match(not(contains([ decl ])), noDecl.result);
+		// The import specifier, which declares the importer's binding, goes too.
+		assert.match(any_order([ exported, call ]), noDecl.result);
 	});
 });

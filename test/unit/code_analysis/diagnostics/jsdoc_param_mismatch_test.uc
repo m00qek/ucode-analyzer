@@ -1,6 +1,7 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { jsdocConsistency } from 'ucode_analyzer.code_analysis.diagnostics.jsdoc_param_mismatch';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -10,8 +11,17 @@ function diags(text) {
 	documents.open(URI, text, 1);
 	return jsdocConsistency(documents.get(URI));
 }
-function count(text, code) {
-	return length(filter(diags(text), (d) => d.code === code));
+// The warnings for a snippet whose mismatching @param name is marked `$0name$1`.
+function check(marked) {
+	let src = cursors(marked);
+	let name = substr(src.text, src.offset[0], src.offset[1] - src.offset[0]);
+	return {
+		want: [{
+			range: { start: src.at[0], end: src.at[1] }, severity: 2, source: 'ucode-analyzer',
+			code: 'jsdoc-param-mismatch', message: sprintf("@param '%s' does not match any parameter of this function", name),
+		}],
+		got: diags(src.text),
+	};
 }
 
 describe('diagnostics — jsdoc consistency: @param name mismatch', () => {
@@ -20,26 +30,20 @@ describe('diagnostics — jsdoc consistency: @param name mismatch', () => {
 	});
 
 	it('flags a @param that names no parameter', () => {
-		assert.match(1, count("/** @param {int} y */\nfunction f(x) {}\n", 'jsdoc-param-mismatch'));
+		let r = check("/** @param {int} $0y$1 */\nfunction f(x) {}\n");
+		assert.match(r.want, r.got);
 	});
 
 	it('works through an export statement', () => {
-		assert.match(1, count("/** @param {int} wrong */\nexport function g(a) {}\n", 'jsdoc-param-mismatch'));
+		let r = check("/** @param {int} $0wrong$1 */\nexport function g(a) {}\n");
+		assert.match(r.want, r.got);
 	});
 
 	it('reports only the mismatching @param among several', () => {
-		let d = diags("/** @param {int} a @param {int} wrong */\nfunction f(a, b) {}\n");
-		assert.match(1, length(d));
-		assert.match(contains("'wrong'"), d[0].message);
+		let r = check("/** @param {int} a @param {int} $0wrong$1 */\nfunction f(a, b) {}\n");
+		assert.match(r.want, r.got);
 	});
 
-	it('anchors the range on the offending name', () => {
-		// `/** @param {int} y */` — 'y' is the 18th character (index 17) on line 0.
-		let d = diags("/** @param {int} y */\nfunction f(x) {}\n");
-		assert.match(0, d[0].range.start.line);
-		assert.match(17, d[0].range.start.character);
-		assert.match(18, d[0].range.end.character);
-	});
 });
 
 describe('diagnostics — jsdoc consistency: no false positives', () => {
@@ -71,34 +75,39 @@ describe('diagnostics — jsdoc consistency: no false positives', () => {
 
 	it('still flags a bad name when the parameter is a rest element', () => {
 		// `first` is not the rest parameter `args`, so it is a genuine mismatch.
-		assert.match(1, count("/** @param {int} first */\nfunction f(...args) {}\n", 'jsdoc-param-mismatch'));
+		let r = check("/** @param {int} $0first$1 */\nfunction f(...args) {}\n");
+		assert.match(r.want, r.got);
 	});
 
 	it('flags a mismatch on a const-assigned function expression', () => {
-		assert.match(1, count("/** @param {int} y */\nconst f = function(x) {};\n", 'jsdoc-param-mismatch'));
-		assert.match(0, count("/** @param {int} x */\nconst f = function(x) {};\n", 'jsdoc-param-mismatch'));
+		let r = check("/** @param {int} $0y$1 */\nconst f = function(x) {};\n");
+		assert.match(r.want, r.got);
+		assert.match([], diags("/** @param {int} x */\nconst f = function(x) {};\n"));
 	});
 
 	it('flags a mismatch on an assigned arrow function', () => {
-		assert.match(1, count("/** @param {int} y */\nlet f = (x) => x;\n", 'jsdoc-param-mismatch'));
-		assert.match(0, count("/** @param {int} x */\nlet f = (x, ...r) => x;\n", 'jsdoc-param-mismatch'));
+		let r = check("/** @param {int} $0y$1 */\nlet f = (x) => x;\n");
+		assert.match(r.want, r.got);
+		assert.match([], diags("/** @param {int} x */\nlet f = (x, ...r) => x;\n"));
 	});
 
 	it('accepts the bare parameter of `x => …`', () => {
-		assert.match(0, count("/** @param {int} x */\nlet f = x => x;\n", 'jsdoc-param-mismatch'));
-		assert.match(1, count("/** @param {int} y */\nlet f = x => x;\n", 'jsdoc-param-mismatch'));
+		assert.match([], diags("/** @param {int} x */\nlet f = x => x;\n"));
+		let r = check("/** @param {int} $0y$1 */\nlet f = x => x;\n");
+		assert.match(r.want, r.got);
 	});
 
 	it('works through an exported const', () => {
-		assert.match(1, count("/** @param {int} y */\nexport const f = function(x) {};\n", 'jsdoc-param-mismatch'));
+		let r = check("/** @param {int} $0y$1 */\nexport const f = function(x) {};\n");
+		assert.match(r.want, r.got);
 	});
 
 	it('skips a declaration with several declarators (the doc is ambiguous)', () => {
-		assert.match(0, count("/** @param {int} x */\nconst f = function(x) {}, g = function(y) {};\n", 'jsdoc-param-mismatch'));
+		assert.match([], diags("/** @param {int} x */\nconst f = function(x) {}, g = function(y) {};\n"));
 	});
 
 	it('skips a function expression that is not the initializer itself', () => {
-		assert.match(0, count("/** @param {int} y */\nconst f = wrap(function(x) {});\n", 'jsdoc-param-mismatch'));
+		assert.match([], diags("/** @param {int} y */\nconst f = wrap(function(x) {});\n"));
 	});
 });
 

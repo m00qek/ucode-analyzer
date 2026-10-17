@@ -187,7 +187,7 @@ describe('positions (docBefore)', () => {
 		let objNode = ts.childByField(varDecl, 'value');
 		let pair    = findChild(objNode, 'pair');
 		let docTxt  = pos.docBefore(pair, objNode, text);
-		assert.match(true, docTxt !== null && index(docTxt, 'greet') >= 0);
+		assert.match('/** greet */', docTxt);
 	});
 });
 

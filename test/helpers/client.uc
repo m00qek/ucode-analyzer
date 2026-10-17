@@ -85,15 +85,21 @@ export function close(proc) {
 	return proc.close();
 };
 
+// The methods of the server-to-client requests receive() skipped, for settle().
+let _skipped = [];
+
 // Return the next response. Skips server-to-client notifications (no id) and the
 // server-initiated workspace/diagnostic/refresh request, which can arrive
-// between a request and its response in the pull model.
+// between a request and its response in the pull model; settle() reports it.
 export function receive(proc) {
 	while (true) {
 		let msg = read_message(proc);
 		if (msg === null) return msg;
 		if (msg.id === null) continue;                                // notification
-		if (msg.method === 'workspace/diagnostic/refresh') continue;  // server-initiated
+		if (msg.method === 'workspace/diagnostic/refresh') {          // server-initiated
+			push(_skipped, msg.method);
+			continue;
+		}
 		return msg;
 	}
 };
@@ -124,6 +130,22 @@ export function receiveServerRequest(proc) {
 		let msg = read_message(proc);
 		if (msg === null || (msg.id !== null && msg.method)) return msg;
 	}
+};
+
+let _settleId = 90000;
+
+// Wait past the server's diagnostic-refresh delay (500 ms), then return the
+// methods of every server-to-client request it sent since the last settle():
+// those receive() skipped, and those that arrive now.
+export function settle(proc) {
+	system('sleep 1');   // busybox sleep takes whole seconds
+	let id = _settleId++;
+	send(proc, { jsonrpc: '2.0', id, method: 'workspace/symbol', params: { query: 'zzz' } });
+	let r = receiveUntil(proc, id);
+	if (r.response === null) die(gone(proc, 'settle'));
+	let seen = [ ..._skipped, ...r.requests ];
+	_skipped = [];
+	return seen;
 };
 
 // Start a server on `workspace` (default: the fixture workspace,

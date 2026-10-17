@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach, any_order } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { codeAction } from 'ucode_analyzer.language_server.handlers.code_actions';
 import { preferStrictEquality } from 'ucode_analyzer.code_analysis.diagnostics.prefer_strict_equality';
@@ -15,6 +15,21 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// The quickfix replacing the operator at marker pair a–b of `src` with `to`.
+function strictFix(src, a, b, from, to) {
+	let range = { start: src.at[a], end: src.at[b] };
+	return {
+		title: sprintf("Replace '%s' with '%s'", from, to),
+		kind: 'quickfix',
+		diagnostics: [ {
+			range, severity: 4, source: 'ucode-analyzer', code: 'prefer-strict-equality',
+			message: sprintf("Prefer '%s' over '%s'", to, from),
+		} ],
+		isPreferred: true,
+		edit: { changes: { [URI]: [ { range, newText: to } ] } },
+	};
+}
+
 describe('codeAction', () => {
 	it('returns null when no diagnostics are supplied', () => {
 		let doc = open("let x = 1 == 1;\n");
@@ -29,13 +44,10 @@ describe('codeAction', () => {
 	});
 
 	it('returns a quickfix action for ==', () => {
-		let doc = open("let x = 1 == 2;\n");
-		let diags = preferStrictEquality(doc);
-		assert.match(1, length(diags));
+		let src = cursors("let x = 1 $0==$1 2;\n");
+		let doc = open(src.text);
 
-		let actions = codeAction(URI, doc, diags);
-		assert.match(true, type(actions) === 'array');
-		assert.match(1, length(actions));
+		assert.match([ strictFix(src, 0, 1, '==', '===') ], codeAction(URI, doc, preferStrictEquality(doc)));
 	});
 
 	it('action kind is quickfix', () => {
@@ -75,29 +87,25 @@ describe('codeAction', () => {
 	});
 
 	it('produces one action per operator when multiple are present', () => {
-		let doc = open("let a = 1 == 2;\nlet b = 3 != 4;\n");
-		let diags = preferStrictEquality(doc);
-		assert.match(2, length(diags));
+		let src = cursors("let a = 1 $0==$1 2;\nlet b = 3 $2!=$3 4;\n");
+		let doc = open(src.text);
 
-		let actions = codeAction(URI, doc, diags);
-		assert.match(2, length(actions));
-		let texts = sort(map(actions, (a) => a.edit.changes[URI][0].newText));
-		assert.match('!==', texts[0]);
-		assert.match('===', texts[1]);
+		assert.match(any_order([
+			strictFix(src, 0, 1, '==', '==='),
+			strictFix(src, 2, 3, '!=', '!=='),
+		]), codeAction(URI, doc, preferStrictEquality(doc)));
 	});
 
 	it('action title mentions both the old and new operator', () => {
 		let doc = open("let x = 1 == 2;\n");
 		let action = codeAction(URI, doc, preferStrictEquality(doc))[0];
-		assert.match(contains('=='), action.title);
-		assert.match(contains('==='), action.title);
+		assert.match("Replace '==' with '==='", action.title);
 	});
 
 	it('action carries back the originating diagnostic', () => {
 		let doc = open("let x = 1 == 2;\n");
 		let diags = preferStrictEquality(doc);
 		let action = codeAction(URI, doc, diags)[0];
-		assert.match(1, length(action.diagnostics));
-		assert.match(diags[0].message, action.diagnostics[0].message);
+		assert.match(diags, action.diagnostics);
 	});
 });

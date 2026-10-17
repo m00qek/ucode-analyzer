@@ -25,6 +25,12 @@ let TEXT_A_IMPORTS_B = "import { foo } from 'b';\nexport function bar() {};";
 let TEXT_B_EXPORTS   = "export function foo() {};";
 let TEXT_A_NO_IMPORT = "export function bar() {};";
 
+// parser.uc's own export entry for name, which a re-export chain must land on.
+function parserExport(name) {
+	return filter(dag.exportsOf(PARSER_URI), (e) => e.name === name)[0];
+}
+let PARSE_POSITION = locate(fixture.read('parser.uc'), 'function parse', 0, 9);
+
 function reset() {
 	dag.init(_config);
 	dag.remove(URI_A);
@@ -39,8 +45,10 @@ describe('dag nodes', () => {
 		dag.addFromDisk(PARSER_URI);
 
 		let exps = dag.exportsOf(PARSER_URI);
-		assert.match(true, exps !== null);
-		assert.match(true, length(exps) > 0);
+		assert.match([
+			['newParser', 'function'], ['parse', 'function'], ['rootNode', 'const'],
+			['nodeType', 'const'], ['text', 'function'], ['parseString', 'function'],
+		], map(exps, (e) => [e.name, e.kind]));
 	});
 
 	it('addFromDisk is a no-op for a path that does not exist', () => {
@@ -52,11 +60,10 @@ describe('dag nodes', () => {
 	it('add makes exportsOf available', () => {
 		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
 
-		let exps = dag.exportsOf(URI_B);
-		assert.match(true, exps !== null);
-		assert.match(1, length(exps));
-		assert.match('foo', exps[0].name);
-		assert.match('function', exps[0].kind);
+		assert.match([{
+			name: 'foo', kind: 'function', doc: null, params: [],
+			position: locate(TEXT_B_EXPORTS, 'foo'),
+		}], dag.exportsOf(URI_B));
 	});
 
 	it('add overwrites an existing node', () => {
@@ -97,10 +104,10 @@ describe('dag nodes', () => {
 		let exps = dag.exportsOf(URI_B);
 		assert.match(1, length(exps));
 		assert.match('obj', exps[0].name);
-		assert.match(true, exps[0].properties !== null);
-		assert.match(1, length(exps[0].properties));
-		assert.match('foo', exps[0].properties[0].name);
-		assert.match('function', exps[0].properties[0].kind);
+		assert.match([{
+			name: 'foo', kind: 'function', doc: null, properties: null, params: [],
+			valueType: null, position: locate(text, 'foo }'),
+		}], exps[0].properties);
 	});
 });
 
@@ -110,18 +117,19 @@ describe('dag edges', () => {
 	it('records import specifier even when module does not resolve', () => {
 		dag.add(URI_A, TEXT_A_IMPORTS_B, parse(TEXT_A_IMPORTS_B));
 
-		let imps = dag.importsOf(URI_A);
-		assert.match(1, length(imps));
-		assert.match('b', imps[0].specifier);
-		assert.match(null, imps[0].resolvedUri);
+		assert.match([
+			{ specifier: 'b', symbols: ['foo'], renames: {}, alias: null, resolvedUri: null },
+		], dag.importsOf(URI_A));
 	});
 
 	it('importsOf returns all imports for files with multiple imports', () => {
 		let text = "import { foo } from 'b';\nimport * as ts from 'parser';";
 		dag.add(URI_A, text, parse(text));
 
-		let imps = dag.importsOf(URI_A);
-		assert.match(2, length(imps));
+		assert.match([
+			{ specifier: 'b', symbols: ['foo'], renames: {}, alias: null, resolvedUri: null },
+			{ specifier: 'parser', symbols: ['*'], alias: 'ts', resolvedUri: PARSER_URI },
+		], dag.importsOf(URI_A));
 	});
 
 	it('resolves imports for modules that exist on disk', () => {
@@ -131,25 +139,25 @@ describe('dag edges', () => {
 		let imps = dag.importsOf(URI_A);
 		assert.match(1, length(imps));
 		assert.match(PARSER_URI, imps[0].resolvedUri);
-		assert.match(contains([URI_A]), dag.reverseDeps(PARSER_URI));
+		assert.match([URI_A], dag.reverseDeps(PARSER_URI));
 	});
 
 	it('remove cleans up reverse edges', () => {
 		let text = "import * as ts from 'parser';";
 		dag.add(URI_A, text, parse(text));
-		assert.match(contains([URI_A]), dag.reverseDeps(PARSER_URI));
+		assert.match([URI_A], dag.reverseDeps(PARSER_URI));
 
 		dag.remove(URI_A);
-		assert.match(not(contains([URI_A])), dag.reverseDeps(PARSER_URI));
+		assert.match([], dag.reverseDeps(PARSER_URI));
 	});
 
 	it('update removes stale edges when imports change', () => {
 		let text1 = "import * as ts from 'parser';";
 		dag.add(URI_A, text1, parse(text1));
-		assert.match(contains([URI_A]), dag.reverseDeps(PARSER_URI));
+		assert.match([URI_A], dag.reverseDeps(PARSER_URI));
 
 		dag.update(URI_A, TEXT_A_NO_IMPORT, parse(TEXT_A_NO_IMPORT));
-		assert.match(not(contains([URI_A])), dag.reverseDeps(PARSER_URI));
+		assert.match([], dag.reverseDeps(PARSER_URI));
 	});
 
 	it('does not cascade when the interface is unchanged', () => {
@@ -178,7 +186,7 @@ describe('dag edges', () => {
 		let text_b_v2 = "export function b_new_export() {};";
 
 		dag.add(URI_B, text_b_v1, parse(text_b_v1));
-		assert.match(contains([URI_B]), dag.reverseDeps(PARSER_URI));
+		assert.match([URI_B], dag.reverseDeps(PARSER_URI));
 
 		// Patch fs so the cascade re-read of URI_B returns v2 content.
 		mock.global.patch('fs', { data: { [B_PATH]: text_b_v2 } });
@@ -199,10 +207,10 @@ describe('dag resolveExport / resolveExportLocation', () => {
 
 	it('resolveExport returns the entry for a direct export', () => {
 		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
-		let exp = dag.resolveExport(URI_B, 'foo');
-		assert.match(true, exp !== null);
-		assert.match('foo', exp.name);
-		assert.match('function', exp.kind);
+		assert.match({
+			name: 'foo', kind: 'function', doc: null, params: [],
+			position: locate(TEXT_B_EXPORTS, 'foo'),
+		}, dag.resolveExport(URI_B, 'foo'));
 	});
 
 	it('resolveExport returns null for an unknown export name', () => {
@@ -215,8 +223,8 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		let textA = "import * as ts from 'parser';\nexport const parse = ts.parse;";
 		dag.add(URI_A, textA, parse(textA));
 		let exp = dag.resolveExport(URI_A, 'parse');
-		assert.match(true, exp !== null);
-		assert.match('parse', exp.name);
+		assert.match(parserExport('parse'), exp);
+		assert.match(PARSE_POSITION, exp.position);
 	});
 
 	it('resolveExport follows a namespace re-export to a same-named export in the source module', () => {
@@ -225,16 +233,14 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		let textA = "import * as ts from 'parser';\nexport const parse = ts;";
 		dag.add(URI_A, textA, parse(textA));
 		let exp = dag.resolveExport(URI_A, 'parse');
-		assert.match(true, exp !== null);
-		assert.match('parse', exp.name);
-		assert.match('function', exp.kind);
+		assert.match(parserExport('parse'), exp);
+		assert.match(PARSE_POSITION, exp.position);
 	});
 
 	it('resolveExportLocation of namespace re-export points to the source module', () => {
 		let textA = "import * as ts from 'parser';\nexport const parse = ts;";
 		dag.add(URI_A, textA, parse(textA));
-		let loc = dag.resolveExportLocation(URI_A, 'parse');
-		assert.match(PARSER_URI, loc.uri);
+		assert.match({ uri: PARSER_URI, name: 'parse' }, dag.resolveExportLocation(URI_A, 'parse'));
 	});
 
 	it('resolveExport of namespace re-export synthesises module type when source is not indexed', () => {
@@ -243,9 +249,10 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		// Must not return null; must return a synthetic exp with _moduleSpecifier.
 		let textA = "import * as ts from 'unknown_module';\nexport const ns = ts;";
 		dag.add(URI_A, textA, parse(textA));
-		let exp = dag.resolveExport(URI_A, 'ns');
-		assert.match(true, exp !== null);
-		assert.match('unknown_module', exp._moduleSpecifier);
+		assert.match({
+			name: 'ns', kind: 'const', doc: null, _moduleSpecifier: 'unknown_module',
+			memberRef: null, localRef: null, properties: null,
+		}, dag.resolveExport(URI_A, 'ns'));
 	});
 
 	it('resolveExport follows a localRef chain (named import re-export with rename)', () => {
@@ -254,17 +261,15 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		let textA = "import { parse as _parse } from 'parser';\nexport const parse = _parse;";
 		dag.add(URI_A, textA, parse(textA));
 		let exp = dag.resolveExport(URI_A, 'parse');
-		assert.match(true, exp !== null);
-		assert.match('parse', exp.name);
-		assert.match('function', exp.kind);
+		assert.match(parserExport('parse'), exp);
+		assert.match(PARSE_POSITION, exp.position);
 	});
 
 	it('resolveExportLocation follows localRef chain to the final { uri, name }', () => {
 		let textA = "import { parse as _parse } from 'parser';\nexport const parse = _parse;";
 		dag.add(URI_A, textA, parse(textA));
 		let loc = dag.resolveExportLocation(URI_A, 'parse');
-		assert.match(PARSER_URI, loc.uri);
-		assert.match('parse', loc.name);
+		assert.match({ uri: PARSER_URI, name: 'parse' }, loc);
 	});
 
 	it('resolveExport follows localRef without rename (import { X } then export const X = X)', () => {
@@ -272,30 +277,25 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		let textA = "import { parse } from 'parser';\nexport const parse = parse;";
 		dag.add(URI_A, textA, parse(textA));
 		let exp = dag.resolveExport(URI_A, 'parse');
-		assert.match(true, exp !== null);
-		assert.match('function', exp.kind);
+		assert.match(parserExport('parse'), exp);
+		assert.match(PARSE_POSITION, exp.position);
 	});
 
 	it('resolveExportLocation returns { uri, name } for a direct export', () => {
 		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
-		let loc = dag.resolveExportLocation(URI_B, 'foo');
-		assert.match(URI_B, loc.uri);
-		assert.match('foo', loc.name);
+		assert.match({ uri: URI_B, name: 'foo' }, dag.resolveExportLocation(URI_B, 'foo'));
 	});
 
 	it('resolveExportLocation follows chain and returns the final { uri, name }', () => {
 		let textA = "import * as ts from 'parser';\nexport const parse = ts.parse;";
 		dag.add(URI_A, textA, parse(textA));
 		let loc = dag.resolveExportLocation(URI_A, 'parse');
-		assert.match(PARSER_URI, loc.uri);
-		assert.match('parse', loc.name);
+		assert.match({ uri: PARSER_URI, name: 'parse' }, loc);
 	});
 
 	it('resolveExportLocation falls back to { uri, name } for an unknown export', () => {
 		dag.add(URI_B, TEXT_B_EXPORTS, parse(TEXT_B_EXPORTS));
-		let loc = dag.resolveExportLocation(URI_B, 'nope');
-		assert.match(URI_B, loc.uri);
-		assert.match('nope', loc.name);
+		assert.match({ uri: URI_B, name: 'nope' }, dag.resolveExportLocation(URI_B, 'nope'));
 	});
 
 	it('resolveExport and resolveExportLocation agree on the chain destination', () => {
@@ -304,10 +304,8 @@ describe('dag resolveExport / resolveExportLocation', () => {
 		let exp = dag.resolveExport(URI_A, 'parse');
 		let loc = dag.resolveExportLocation(URI_A, 'parse');
 		// Both must land on the same export in PARSER_URI.
-		assert.match(PARSER_URI, loc.uri);
-		assert.match('parse', loc.name);
-		assert.match(true, exp !== null);
-		assert.match('parse', exp.name);
+		assert.match({ uri: PARSER_URI, name: 'parse' }, loc);
+		assert.match(parserExport(loc.name), exp);
 	});
 });
 
@@ -316,10 +314,8 @@ describe('dag.resolveMember', () => {
 
 	it('returns { exp, uri, name } for an existing export', () => {
 		let r = dag.resolveMember('parser', 'parse');
-		assert.match(true, r !== null);
-		assert.match(PARSER_URI, r.uri);
-		assert.match('parse', r.name);
-		assert.match('function', r.exp.kind);
+		assert.match({ exp: parserExport('parse'), uri: PARSER_URI, name: 'parse' }, r);
+		assert.match(PARSE_POSITION, r.exp.position);
 	});
 
 	it('returns null for an unknown specifier', () => {
@@ -334,9 +330,10 @@ describe('dag.resolveMember', () => {
 		// parser is not yet in the DAG after reset
 		assert.match(null, dag.exportsOf(PARSER_URI));
 		let r = dag.resolveMember('parser', 'parse');
-		assert.match(true, r !== null);
 		// Now the module is indexed as a side-effect
-		assert.match(true, dag.exportsOf(PARSER_URI) !== null);
+		assert.match(['newParser', 'parse', 'rootNode', 'nodeType', 'text', 'parseString'],
+			map(dag.exportsOf(PARSER_URI), (e) => e.name));
+		assert.match({ exp: parserExport('parse'), uri: PARSER_URI, name: 'parse' }, r);
 	});
 });
 
@@ -349,7 +346,7 @@ describe('dag cascade pruning of deleted files', () => {
 		let text_b = "import * as ts from 'parser';\nexport function bFn() {};";
 		dag.addFromDisk(PARSER_URI);
 		dag.add(URI_B, text_b, parse(text_b));
-		assert.match(true, dag.exportsOf(URI_B) !== null);
+		assert.match(['bFn'], map(dag.exportsOf(URI_B), (e) => e.name));
 
 		// Mock fs so b.uc is "missing" (open returns null).
 		mock.global.patch('fs', { data: {} });
@@ -381,9 +378,7 @@ describe('dag cascade pruning of deleted files', () => {
 		// B is gone.
 		assert.match(null, dag.exportsOf(URI_B));
 		// A was re-indexed from disk with v2 exports.
-		let exps = dag.exportsOf(URI_A);
-		let names = map(exps ?? [], (e) => e.name);
-		assert.match(contains(['aNewFn']), names);
+		assert.match(['aNewFn'], map(dag.exportsOf(URI_A), (e) => e.name));
 	});
 });
 
@@ -437,21 +432,27 @@ describe('dag circular re-export guard', () => {
 	beforeEach(reset);
 
 	it('resolveExport does not recurse infinitely on a circular re-export', () => {
-		// A re-exports from B, B re-exports from A — without a visited guard this
-		// would infinite-loop; with it we must return null cleanly.
+		// A re-exports from B, B re-exports from A, both on disk so the imports
+		// resolve. The visited guard stops the chain where it would revisit A,
+		// and the last link reached (B's bFoo) stands as the definition.
 		let URI_C = fixture.uri('c.uc');
 		let textA = "import { bFoo } from 'b';\nexport const aFoo = bFoo;";
 		let textB = "import { aFoo } from 'a';\nexport const bFoo = aFoo;";
 
 		dag.init(fixture.config());
+		mock.global.patch('fs', { data: { [A_PATH]: textA, [B_PATH]: textB } });
 		dag.add(URI_A, textA, parse(textA));
 		dag.add(URI_B, textB, parse(textB));
+		mock.global.unpatch('fs');
 		dag.remove(URI_C);
 
-		// Must return without hanging; result is null or a valid entry.
-		let result = dag.resolveExport(URI_A, 'aFoo');
-		// The important assertion is that we reached here at all (no infinite loop).
-		assert.match(true, result === null || result.name === 'aFoo');
+		assert.match(URI_B, dag.importsOf(URI_A)[0].resolvedUri);
+		assert.match(URI_A, dag.importsOf(URI_B)[0].resolvedUri);
+		assert.match({
+			name: 'bFoo', kind: 'const', doc: null, memberRef: null, localRef: 'aFoo',
+			properties: null, params: null, valueType: null, position: locate(textB, 'bFoo ='),
+		}, dag.resolveExport(URI_A, 'aFoo'));
+		assert.match({ uri: URI_B, name: 'bFoo' }, dag.resolveExportLocation(URI_A, 'aFoo'));
 	});
 });
 
@@ -475,10 +476,7 @@ describe('dag markOpen / cascade skip', () => {
 		dag.update(PARSER_URI, TEXT_PARSER_UPDATED, parse(TEXT_PARSER_UPDATED));
 		mock.global.unpatch('fs');
 
-		let exps = dag.exportsOf(URI_B);
-		let names = map(exps ?? [], (e) => e.name);
-		assert.match(contains(['openVersion']), names);
-		assert.match(not(contains(['diskVersion'])), names);
+		assert.match(['openVersion'], map(dag.exportsOf(URI_B), (e) => e.name));
 	});
 
 	it('cascade re-indexes open file from openDocs memory when provided', () => {
@@ -491,11 +489,7 @@ describe('dag markOpen / cascade skip', () => {
 		           { [URI_B]: { text: TEXT_B_V2, tree: parse(TEXT_B_V2) } });
 		mock.global.unpatch('fs');
 
-		let exps = dag.exportsOf(URI_B);
-		let names = map(exps ?? [], (e) => e.name);
-		assert.match(contains(['memoryVersion']), names);
-		assert.match(not(contains(['diskVersion'])), names);
-		assert.match(not(contains(['openVersion'])), names);
+		assert.match(['memoryVersion'], map(dag.exportsOf(URI_B), (e) => e.name));
 	});
 
 	it('markClosed allows cascade to re-index from disk again', () => {
@@ -506,9 +500,7 @@ describe('dag markOpen / cascade skip', () => {
 		dag.update(PARSER_URI, TEXT_PARSER_UPDATED, parse(TEXT_PARSER_UPDATED));
 		mock.global.unpatch('fs');
 
-		let exps = dag.exportsOf(URI_B);
-		let names = map(exps ?? [], (e) => e.name);
-		assert.match(contains(['diskVersion']), names);
+		assert.match(['diskVersion'], map(dag.exportsOf(URI_B), (e) => e.name));
 	});
 });
 
@@ -532,7 +524,7 @@ describe('dag — template modules (markup-mode files)', () => {
 		let imps = dag.importsOf(URI_A);
 		assert.match(1, length(imps));
 		assert.match(PARSER_URI, imps[0].resolvedUri);
-		assert.match(contains([URI_A]), dag.reverseDeps(PARSER_URI));
+		assert.match([URI_A], dag.reverseDeps(PARSER_URI));
 	});
 
 	it('addFromDisk parses an on-disk template with the markup grammar', () => {
@@ -569,11 +561,13 @@ describe('dag — files appearing and disappearing on disk', () => {
 		let changed = dag.resolveUnresolved();
 		let after = dag.importsOf(a)[0].resolvedUri;
 		let deps = dag.reverseDeps(lib);
+		dag.remove(a);
+		dag.remove(lib);
 		system(['rm', '-rf', dir]);
 		assert.match(null, before);
-		assert.match(contains([a]), changed);
+		assert.match([a], changed);
 		assert.match(lib, after);
-		assert.match(contains([a]), deps);
+		assert.match([a], deps);
 	});
 
 	it('remove() leaves the importers of a deleted file unresolved', () => {
@@ -586,6 +580,8 @@ describe('dag — files appearing and disappearing on disk', () => {
 		fs.unlink(dir + '/src/lib.uc');
 		dag.remove(lib);
 		let after = dag.importsOf(a)[0].resolvedUri;
+		// Unlinked, a later test's workspace could resolve this a.uc's 'lib'.
+		dag.remove(a);
 		system(['rm', '-rf', dir]);
 		assert.match(lib, before);
 		assert.match(null, after);

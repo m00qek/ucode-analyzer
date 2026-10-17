@@ -41,9 +41,7 @@ describe('textDocument/foldingRange', () => {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
 		let resp = lsp.receive(proc);
-		assert.match(1, length(resp.result));
-		assert.match(src.at[1].line, resp.result[0].startLine);
-		assert.match(src.at[2].line, resp.result[0].endLine);
+		assert.match([ { startLine: src.at[1].line, endLine: src.at[2].line } ], resp.result);
 	});
 
 	it('emits an imports range for multiple consecutive imports', () => {
@@ -53,9 +51,7 @@ describe('textDocument/foldingRange', () => {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
 		let resp = lsp.receive(proc);
-		let imp = filter(resp.result, (r) => r.kind === 'imports')[0];
-		assert.match(true, imp !== null);
-		assert.match(src.at[1].line, imp.startLine);
-		assert.match(src.at[2].line, imp.endLine);
+		assert.match([ { startLine: src.at[1].line, endLine: src.at[2].line, kind: 'imports' } ],
+			resp.result);
 	});
 });

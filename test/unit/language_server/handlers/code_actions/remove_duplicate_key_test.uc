@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.remove_duplicate_key';
 import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_key';
@@ -13,33 +13,43 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// The quickfix for `diag`, deleting marker pair a–b of `src`.
+function removeKeyFix(src, a, b, key, diag) {
+	return {
+		title: sprintf("Remove duplicate key '%s'", key),
+		kind: 'quickfix',
+		diagnostics: [ diag ],
+		isPreferred: true,
+		edit: { changes: { [URI]: [ { range: { start: src.at[a], end: src.at[b] }, newText: '' } ] } },
+	};
+}
+
 describe('remove_duplicate_key', () => {
 	it('returns empty list when no diagnostics', () => {
 		let doc = open("let x = { a: 1, b: 2 };\n");
-		assert.match(0, length(actionsFor(URI, doc, [])));
+		assert.match([], actionsFor(URI, doc, []));
 	});
 
 	it('returns empty list when diagnostics have no duplicate-key code', () => {
 		let src = cursors("$0l$1et x = { a: 1, a: 2 };\n");
 		let doc = open(src.text);
 		let diags = [{ range: { start: src.at[0], end: src.at[1] }, severity: 2, code: 'other', message: 'msg' }];
-		assert.match(0, length(actionsFor(URI, doc, diags)));
+		assert.match([], actionsFor(URI, doc, diags));
 	});
 
 	it('produces a quickfix action for a duplicate key', () => {
-		let doc = open("let x = { a: 1, a: 2 };\n");
+		let src = cursors("let x = { a: 1$0, a: 2$1 };\n");
+		let doc = open(src.text);
 		let diags = duplicateObjectKey(doc);
 		assert.match(1, length(diags));
-		let actions = actionsFor(URI, doc, diags);
-		assert.match(1, length(actions));
-		assert.match('quickfix', actions[0].kind);
+		assert.match([ removeKeyFix(src, 0, 1, 'a', diags[0]) ], actionsFor(URI, doc, diags));
 	});
 
 	it('action title mentions the duplicate key name', () => {
 		let doc = open("let x = { a: 1, a: 2 };\n");
 		let diags = duplicateObjectKey(doc);
 		let action = actionsFor(URI, doc, diags)[0];
-		assert.match(contains('a'), action.title);
+		assert.match("Remove duplicate key 'a'", action.title);
 	});
 
 	it('action isPreferred is true', () => {
@@ -75,16 +85,15 @@ describe('remove_duplicate_key', () => {
 		let doc = open("let x = { a: 1, a: 2 };\n");
 		let diags = duplicateObjectKey(doc);
 		let action = actionsFor(URI, doc, diags)[0];
-		assert.match(1, length(action.diagnostics));
-		assert.match(diags[0].code, action.diagnostics[0].code);
+		assert.match(diags, action.diagnostics);
 	});
 
 	it('handles multiline object — duplicate key on separate lines', () => {
-		let doc = open("let x = {\n\ta: 1,\n\tb: 2,\n\ta: 3,\n};\n");
+		// deletes ",\n\ta: 3", keeping the trailing comma after b
+		let src = cursors("let x = {\n\ta: 1,\n\tb: 2$0,\n\ta: 3$1,\n};\n");
+		let doc = open(src.text);
 		let diags = duplicateObjectKey(doc);
 		assert.match(1, length(diags));
-		let actions = actionsFor(URI, doc, diags);
-		assert.match(1, length(actions));
-		assert.match('', actions[0].edit.changes[URI][0].newText);
+		assert.match([ removeKeyFix(src, 0, 1, 'a', diags[0]) ], actionsFor(URI, doc, diags));
 	});
 });

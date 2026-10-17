@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
+import { describe, it, assert, beforeEach, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { signatureHelp } from 'ucode_analyzer.language_server.handlers.signature_help';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -38,75 +38,93 @@ describe('signatureHelp', () => {
 		// inside add(...)
 		let result = sigAt("let add = (x, y) => x + y;\nadd($01, 2);\n");
 
-		assert.match(true, result !== null);
-		assert.match(1, length(result.signatures));
-		assert.match(0, result.activeSignature);
+		assert.match({
+			signatures: [ {
+				label: 'add(x: ?, y: ?)',
+				parameters: [ { label: [ 4, 8 ] }, { label: [ 10, 14 ] } ],
+			} ],
+			activeSignature: 0,
+			activeParameter: 0,
+		}, result);
 	});
 
-	it('label contains the function name', () => {
+	it('label shows the name, parameters and inferred return type', () => {
 		let result = sigAt("let greet = (name) => 'hi';\ngreet('$0world');\n");
 
-		assert.match(true, result !== null);
-		assert.match(contains('greet'), result.signatures[0].label);
+		assert.match('greet(name: ?): string', result.signatures[0].label);
 	});
 
 	it('activeParameter is 0 for first argument', () => {
 		// right after '(' — on the first argument
 		let result = sigAt("let f = (a, b) => a;\nf($01, 2);\n");
 
-		assert.match(true, result !== null);
 		assert.match(0, result.activeParameter);
 	});
 
 	it('activeParameter is 1 for second argument', () => {
 		let result = sigAt("let f = (a, b) => a;\nf(1, $02);\n");
 
-		assert.match(true, result !== null);
 		assert.match(1, result.activeParameter);
+	});
+
+	// Suspected bug: the handler counts arguments that START before the cursor,
+	// so a cursor inside or right after the first argument reports parameter 1.
+	it('activeParameter is 0 with the cursor inside the first argument', () => {
+		assert.match(0, sigAt("let f = (a, b) => a;\nf(12$03, 4);\n").activeParameter);
+	});
+
+	it('activeParameter is 0 with the cursor right before the first comma', () => {
+		assert.match(0, sigAt("let f = (a, b) => a;\nf(1$0, 4);\n").activeParameter);
+	});
+
+	it('activeParameter does not count the commas of a nested call', () => {
+		assert.match(1, sigAt("let f = (a, b) => a;\nlet g = (x, y) => x;\nf(g(1, 2), $04);\n").activeParameter);
+	});
+
+	it('activeParameter moves past a comma not yet followed by an argument', () => {
+		assert.match(1, sigAt("let f = (a, b) => a;\nf(1, $0);\n").activeParameter);
+		assert.match(1, sigAt("let f = (a, b) => a;\nf(1, $0\nlet z = 2;\n").activeParameter);
 	});
 
 	it('parameters array has one entry per parameter', () => {
 		let result = sigAt("let f = (a, b, c) => a;\nf(1$0, 2, 3);\n");
 
-		assert.match(true, result !== null);
-		assert.match(3, length(result.signatures[0].parameters));
+		assert.match([ {
+			label: 'f(a: ?, b: ?, c: ?)',
+			parameters: [ { label: [ 2, 6 ] }, { label: [ 8, 12 ] }, { label: [ 14, 18 ] } ],
+		} ], result.signatures);
 	});
 
 	it('activeParameter is null for a zero-parameter function', () => {
 		let result = sigAt("function noParams() { return 1; }\nnoParams($0);\n");
 
-		assert.match(true, result !== null);
-		assert.match(null, result.activeParameter);
+		assert.match({
+			signatures: [ { label: 'noParams(): int', parameters: [] } ],
+			activeSignature: 0,
+			activeParameter: null,
+		}, result);
 	});
 
 	it('parameter label offsets point to the correct substrings in the label', () => {
 		// Each params[i].label = [s, e] must satisfy substr(label, s, e-s) == the param text.
 		let result = sigAt("let f = (x, y) => x;\nf(1$0, 2);\n");
 
-		assert.match(true, result !== null);
 		let sig = result.signatures[0];
-		assert.match(2, length(sig.parameters));
-		for (let i = 0; i < length(sig.parameters); i++) {
-			let s = sig.parameters[i].label[0];
-			let e = sig.parameters[i].label[1];
-			assert.match(true, s >= 0 && e > s && e <= length(sig.label));
-			// The slice of the label must contain the param name.
-			let slice = substr(sig.label, s, e - s);
-			assert.match(contains(['x', 'y'][i]), slice);
-		}
+		assert.match('f(x: ?, y: ?)', sig.label);
+		assert.match([ { label: [ 2, 6 ] }, { label: [ 8, 12 ] } ], sig.parameters);
+		let slices = map(sig.parameters, (p) => substr(sig.label, p.label[0], p.label[1] - p.label[0]));
+		assert.match([ 'x: ?', 'y: ?' ], slices);
 	});
 
 	it('parameter label offsets are correct for typed parameters', () => {
 		// JSDoc annotated: label will be "greet(name: string)" — "name: string" at [6,18]
 		let result = sigAt("/**\n * @param {string} name\n */\nfunction greet(name) {}\ngreet('$0x');\n");
 
-		assert.match(true, result !== null);
 		let label = result.signatures[0].label;
 		let params = result.signatures[0].parameters;
-		assert.match(1, length(params));
+		assert.match('greet(name: string)', label);
 		// "name: string" starts after "greet(" (6 chars)
-		assert.match(6, params[0].label[0]);
-		assert.match(18, params[0].label[1]);
+		assert.match([ { label: [ 6, 18 ] } ], params);
 		// verify the substring actually matches
 		assert.match('name: string', substr(label, params[0].label[0], params[0].label[1] - params[0].label[0]));
 	});
@@ -127,8 +145,7 @@ describe('signatureHelp', () => {
 		// in the second argument — T should be resolved to 'int' from the first
 		let result = sigAt(join('\n', text) + '\n');
 
-		assert.match(true, result !== null);
-		assert.match(contains('int'), result.signatures[0].label);
+		assert.match('pair(a: int, b: int): int', result.signatures[0].label);
 	});
 });
 

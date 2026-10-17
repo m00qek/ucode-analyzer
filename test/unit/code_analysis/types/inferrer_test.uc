@@ -1,4 +1,4 @@
-import { describe, it, assert, mock, beforeEach, prop, gen, contains } from 'utest';
+import { describe, it, assert, mock, beforeEach, prop, gen } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
@@ -197,11 +197,7 @@ describe('inferrer — array literals', () => {
 	});
 
 	it('mixed int/string array yields list<int | string>', () => {
-		let t = infer("let x = [1, 'a'];");
-		assert.match('generic', t.kind);
-		assert.match('list', t.base);
-		assert.match('union', t.params[0].kind);
-		assert.match(2, length(t.params[0].members));
+		assert.match(list_(union_(prim('int'), prim('string'))), infer("let x = [1, 'a'];"));
 	});
 
 	it('single-element array yields list<T>, not a union', () => {
@@ -333,9 +329,9 @@ describe('inferrer — buildScope', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, offset);
 
-		// Parameters must be in scope (even without JSDoc the bindings key exists)
-		assert.match(true, scopeGet(scope, 'x') !== null);
-		assert.match(true, scopeGet(scope, 'y') !== null);
+		// Parameters are in scope; without JSDoc their type is unknown.
+		assert.match(unknown(), scopeGet(scope, 'x'));
+		assert.match(unknown(), scopeGet(scope, 'y'));
 	});
 
 	it('uses JSDoc @param types when present', () => {
@@ -358,20 +354,17 @@ describe('inferrer — buildScope', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, offset);
 
-		assert.match(true, scopeGet(scope, 'x') !== null);
+		assert.match(unknown(), scopeGet(scope, 'x'));
 	});
 
 	it('inner parameters shadow outer ones of the same name', () => {
-		let text = "function outer(x) {\nfunction inner(x) {\nreturn x;\n}\n}";
-		let tree = parse(text);
-		// Offset inside inner(): after 'return '
-		let offset = length("function outer(x) {\nfunction inner(x) {\nreturn ");
+		let src = cursors("/** @param {int} x */\nfunction outer(x) {\n/** @param {string} x */\nfunction inner(x) {\nreturn $0x;\n}\n}");
+		let tree = parse(src.text);
 
-		dag.add(URI, text, tree);
-		let scope = scopeFor(text, tree, offset);
+		dag.add(URI, src.text, tree);
+		let scope = scopeFor(src.text, tree, src.offset[0]);
 
-		// The binding for 'x' should exist (the inner one wins — same key, last write wins)
-		assert.match(true, scopeGet(scope, 'x') !== null);
+		assert.match(prim('string'), scopeGet(scope, 'x'));
 	});
 });
 
@@ -398,7 +391,7 @@ describe('inferrer — buildScope: export function', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, offset);
 
-		assert.match(true, scopeGet(scope, 'tag') !== null);
+		assert.match({ kind: 'function', params: [{ name: 'x', type: unknown() }], return: prim('string') }, scopeGet(scope, 'tag'));
 		assert.match(prim('string'), scopeGet(scope, 'r'));
 	});
 });
@@ -413,10 +406,7 @@ describe('inferrer — buildScope: namespace import alias', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, offset);
 
-		let t = scopeGet(scope, 'ts');
-		assert.match(true, t !== null);
-		assert.match('module', t.kind);
-		assert.match('parser', t.path);
+		assert.match({ kind: 'module', path: 'parser' }, scopeGet(scope, 'ts'));
 	});
 
 	it('a local binding shadows a same-named namespace import in member access', () => {
@@ -453,7 +443,6 @@ describe('inferrer — buildScope: for_in loop variable', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, offset);
 
-		assert.match(true, scopeGet(scope, 'it') !== null);
 		// items is list<int>, so element type is int
 		assert.match(prim('int'), scopeGet(scope, 'it'));
 	});
@@ -656,10 +645,14 @@ describe('inferrer — builtins', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, 0);
 
-		let t = scopeGet(scope, 'length');
-		assert.match(true, t !== null);
-		assert.match('function', t.kind);
-		assert.match({ kind: 'nullable', inner: prim('int') }, returnOf(t));
+		let collection = { kind: 'union', members: [
+			{ kind: 'generic', base: 'dict', params: [unknown()] }, list_(unknown()), prim('string'),
+		] };
+		assert.match({
+			kind: 'function',
+			params: [{ name: 'x', type: collection }],
+			return: { kind: 'nullable', inner: prim('int') },
+		}, scopeGet(scope, 'length'));
 	});
 
 	it('sprintf is in scope with string return type', () => {
@@ -691,7 +684,12 @@ describe('inferrer — builtins', () => {
 		let scope = scopeFor(text, tree, 0);
 
 		// scopeGet finds builtins through the parent chain
-		assert.match(true, scopeGet(scope, 'push') !== null);
+		let T = { kind: 'param', name: 'T' };
+		assert.match({
+			kind: 'function',
+			params: [{ name: 'arr', type: list_(T) }, { name: 'values', type: T }],
+			return: { kind: 'nullable', inner: T },
+		}, scopeGet(scope, 'push'));
 		// but the immediate frame is empty (no local declarations)
 		assert.match(null, scope.bindings['push'] ?? null);
 	});
@@ -707,8 +705,9 @@ describe('inferrer — buildScope: local function declarations', () => {
 		let scope = scopeFor(text, tree, offset);
 
 		let t = scopeGet(scope, 'helper');
-		assert.match(true, t !== null);
 		assert.match('function', t.kind);
+		assert.match([{ name: 'x', type: unknown() }], t.params);
+		assert.match(prim('int'), returnOf(t));
 	});
 
 	it('top-level function_declaration is in scope', () => {
@@ -720,8 +719,9 @@ describe('inferrer — buildScope: local function declarations', () => {
 		let scope = scopeFor(text, tree, offset);
 
 		let t = scopeGet(scope, 'greet');
-		assert.match(true, t !== null);
 		assert.match('function', t.kind);
+		assert.match([], t.params);
+		assert.match(prim('string'), returnOf(t));
 	});
 });
 
@@ -779,9 +779,7 @@ describe('inferrer — union type member access', () => {
 		let tree = parse(text);
 		let expr = ts.childByField(ts.namedChild(ts.namedChild(ts.rootNode(tree), 0), 0), 'value');
 		dag.add(URI, text, tree);
-		let t = inferNode(expr, text, URI, s, 0);
-		assert.match('union', t.kind);
-		assert.match(2, length(t.members));
+		assert.match(union_(prim('int'), prim('string')), inferNode(expr, text, URI, s, 0));
 	});
 
 	it('member access on union where all members agree returns plain type', () => {
@@ -812,10 +810,8 @@ describe('inferrer — _collectReturns tracks local let bindings', () => {
 		let scope = scopeFor(text, tree, 0);
 		let t = inferNode(fnNode, text, URI, scope, 0);
 		assert.match('function', t.kind);
-		assert.match('union', returnOf(t).kind);
-		// Should be int | null (not unknown | null)
-		let kinds = map(returnOf(t).members, (m) => m.kind + (m.name ? ':' + m.name : ''));
-		assert.match(contains(['primitive:int']), kinds);
+		// int | null, not unknown | null
+		assert.match(union_(prim('int'), prim('null')), returnOf(t));
 	});
 
 	it('local let does not leak into outer scope', () => {
@@ -976,8 +972,7 @@ describe('inferrer — multiple return statement union', () => {
 		let scope = scopeFor(text, tree, 0);
 		let t = inferNode(fnNode, text, URI, scope, 0);
 		assert.match('function', t.kind);
-		assert.match('union', returnOf(t).kind);
-		assert.match(2, length(returnOf(t).members));
+		assert.match(union_(prim('int'), prim('string')), returnOf(t));
 	});
 
 	it('function with one return keeps a plain type', () => {
@@ -996,8 +991,7 @@ describe('inferrer — multiple return statement union', () => {
 		let text = "let f = (x) => { if (x) return 1; return 'a'; };";
 		let t = infer(text);
 		assert.match('function', t.kind);
-		assert.match('union', returnOf(t).kind);
-		assert.match(2, length(returnOf(t).members));
+		assert.match(union_(prim('int'), prim('string')), returnOf(t));
 	});
 });
 
@@ -1010,7 +1004,6 @@ describe('inferrer — buildScope: C-style for loop variable', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, offset);
 
-		assert.match(true, scopeGet(scope, 'i') !== null);
 		assert.match(prim('int'), scopeGet(scope, 'i'));
 	});
 
@@ -1035,7 +1028,9 @@ describe('inferrer — buildScope: catch clause variable', () => {
 		dag.add(URI, text, tree);
 		let scope = scopeFor(text, tree, offset);
 
-		assert.match(true, scopeGet(scope, 'e') !== null);
+		// Current behaviour: typed string. At runtime it is an object
+		// { type, message, stacktrace } (that prints as its message).
+		assert.match(prim('string'), scopeGet(scope, 'e'));
 	});
 
 	it('catch parameter is not in scope after the catch block', () => {
@@ -1070,14 +1065,22 @@ describe('inferrer — export clause carries doc', () => {
 	it('exported name via export { name } has the function kind', () => {
 		dag.init(_config);
 		dag.addFromDisk(GREET_URI);
-		let exps = dag.exportsOf(GREET_URI);
-		assert.match(true, exps !== null && length(exps) > 0);
-		assert.match('greet', exps[0].name);
-		assert.match('function', exps[0].kind);
+		assert.match([{
+			name: 'greet', kind: 'function', doc: null, params: [], valueType: null,
+			position: { line: 0, character: 9 },
+		}], dag.exportsOf(GREET_URI));
 	});
 });
 
 describe('inferrer — importScope: renamed imports', () => {
+	// parser.uc: @param {object} parser, @param {string} source, @returns {object}
+	let OBJECT = { kind: 'ref', name: 'object', params: [] };
+	let PARSE_FN = {
+		kind: 'function',
+		params: [{ name: 'parser', type: OBJECT }, { name: 'source', type: prim('string') }],
+		return: OBJECT,
+	};
+
 	beforeEach(() => {
 		dag.init(_config);
 		dag.remove(URI);
@@ -1092,7 +1095,7 @@ describe('inferrer — importScope: renamed imports', () => {
 		dag.add(URI, text, tree);
 		let offset = length(text) - 1;  // at 'p'
 		let scope = scopeFor(text, tree, offset);
-		assert.match(true, scopeGet(scope, 'p') !== null);
+		assert.match(PARSE_FN, scopeGet(scope, 'p'));
 		assert.match(null, scopeGet(scope, 'parse'));
 	});
 
@@ -1112,8 +1115,7 @@ describe('inferrer — importScope: renamed imports', () => {
 		dag.add(URI, text, tree);
 		let offset = length(text) - 1;
 		let scope = scopeFor(text, tree, offset);
-		assert.match(true, scopeGet(scope, 'parse') !== null);
-		assert.match('function', scopeGet(scope, 'parse').kind);
+		assert.match(PARSE_FN, scopeGet(scope, 'parse'));
 	});
 });
 
@@ -1148,23 +1150,23 @@ describe('inferrer — require() module loader', () => {
 		let scope = makeScope(makeScope(null));
 		scopeSet(scope, 'require', prim('string'));   // shadow the builtin
 		let t = inferNode(exprNode(text), text, URI, scope, 0);
-		assert.match(true, t.kind !== 'module');
+		assert.match(unknown(), t);
 	});
 
 	it('require with a non-literal specifier is not a module type', () => {
 		let t = infer('let m = require(dynamicName);');
-		assert.match(true, t.kind !== 'module');
+		assert.match(unknown(), t);
 	});
 
 	// ── guard branches ──────────────────────────────────────────────────────
 	it('a zero-argument require() is not a module type', () => {
 		let t = infer('let m = require();');
-		assert.match(true, t.kind !== 'module');
+		assert.match(unknown(), t);
 	});
 
 	it('an empty-string require("") is not a module type', () => {
 		let t = infer('let m = require("");');
-		assert.match(true, t.kind !== 'module');
+		assert.match(unknown(), t);
 	});
 
 	it('require of an unresolved specifier is still a module type (path preserved)', () => {
@@ -1275,8 +1277,11 @@ describe('inferrer — member access on record-typed expression (nested object e
 
 		let field = scopeGet(scope, 'api').fields[0];
 		assert.match('greet', field.name);
-		assert.match(true, field.doc !== null);
-		assert.match('s', field.doc.params[0].name);
+		assert.match([{
+			name: 's', type: prim('string'), optional: false, rest: false,
+			description: null, nameStart: 20, nameEnd: 21,
+		}], field.doc.params);
+		assert.match({ type: prim('int'), description: null }, field.doc.returns);
 	});
 });
 
@@ -1413,10 +1418,10 @@ describe('inferrer — spread_element', () => {
 		let node = exprNode(text);
 		let t = inferNode(node, text, URI, scope, 0);
 		assert.match('record', t.kind);
-		let names = sort(map(t.fields, (f) => f.name));
 		// x comes from spread, z from the pair
-		assert.match(contains(['x']), names);
-		assert.match(contains(['z']), names);
+		assert.match(['x', 'z'], sort(map(t.fields, (f) => f.name)));
+		assert.match(prim('int'), t.fields[0].type);
+		assert.match({ kind: 'primitive', name: 'string', value: 'hello' }, t.fields[1].type);
 	});
 });
 
@@ -1436,11 +1441,7 @@ describe('inferrer — shorthand_property_identifier', () => {
 
 describe('inferrer — binary_expression &&/||', () => {
 	it('|| returns union of operand types', () => {
-		let t = infer("let x = 1 || 'hello';");
-		assert.match('union', t.kind);
-		let names = sort(map(t.members, (m) => m.name));
-		assert.match(contains(['int']), names);
-		assert.match(contains(['string']), names);
+		assert.match(union_(prim('int'), prim('string')), infer("let x = 1 || 'hello';"));
 	});
 
 	it('&& of same type returns that type', () => {
@@ -1479,8 +1480,7 @@ describe('inferrer — rest params', () => {
 	it('function_declaration: rest param appears in inferred type params', () => {
 		let t = inferFn("function f(...args) { return args; }");
 		assert.match('function', t.kind);
-		let names = map(t.params, (p) => p.name);
-		assert.match(contains(['args']), names);
+		assert.match([{ name: 'args', type: list_(unknown()) }], t.params);
 	});
 
 	it('function_declaration: rest param has list type', () => {
@@ -1495,16 +1495,13 @@ describe('inferrer — rest params', () => {
 	it('function_declaration: plain and rest params both present', () => {
 		let t = inferFn("function f(a, ...rest) { return rest; }");
 		assert.match('function', t.kind);
-		let names = map(t.params, (p) => p.name);
-		assert.match(contains(['a']), names);
-		assert.match(contains(['rest']), names);
+		assert.match([{ name: 'a', type: unknown() }, { name: 'rest', type: list_(unknown()) }], t.params);
 	});
 
 	it('arrow function: rest param appears in inferred type params', () => {
 		let t = infer("let f = (...args) => args;");
 		assert.match('function', t.kind);
-		let names = map(t.params, (p) => p.name);
-		assert.match(contains(['args']), names);
+		assert.match([{ name: 'args', type: list_(unknown()) }], t.params);
 	});
 
 	it('rest param is in scope inside function body', () => {
@@ -1512,10 +1509,7 @@ describe('inferrer — rest params', () => {
 		// position inside the body (after the '{')
 		let bodyOffset = index(text, 'return');
 		let scope = scopeFor(text, parse(text), bodyOffset);
-		let t = scopeGet(scope, 'args');
-		assert.match(true, t !== null);
-		assert.match('generic', t.kind);
-		assert.match('list', t.base);
+		assert.match(list_(unknown()), scopeGet(scope, 'args'));
 	});
 });
 
@@ -1523,9 +1517,7 @@ describe('inferrer — object with string-literal keys', () => {
 	it('"key": value is indexed as a record field', () => {
 		let t = infer('let x = { "host": "localhost", "port": 8080 };');
 		assert.match('record', t.kind);
-		let names = sort(map(t.fields, (f) => f.name));
-		assert.match(contains(['host']), names);
-		assert.match(contains(['port']), names);
+		assert.match(['host', 'port'], sort(map(t.fields, (f) => f.name)));
 	});
 
 	it('string-keyed field has the correct inferred value type', () => {
@@ -1658,27 +1650,35 @@ describe('inferrer — builtins whose null depends on the arguments', () => {
 	}
 
 	it('clock() is never null; clock(true) may be', () => {
-		assert.match('generic', typeAfter("let t = clock();\nt;\n", 't')?.kind);
-		assert.match('nullable', typeAfter("let t = clock(true);\nt;\n", 't')?.kind);
+		assert.match(list_(prim('int')), typeAfter("let t = clock();\nt;\n", 't'));
+		assert.match({ kind: 'nullable', inner: list_(prim('int')) }, typeAfter("let t = clock(true);\nt;\n", 't'));
 	});
 
 	it('keys()/values() of a record are never null; of an unknown value may be', () => {
-		assert.match('generic', typeAfter("let o = { a: 1 };\nlet k = keys(o);\nk;\n", 'k')?.kind);
-		assert.match('generic', typeAfter("let o = { a: 1 };\nlet v = values(o);\nv;\n", 'v')?.kind);
+		assert.match(list_(prim('string')), typeAfter("let o = { a: 1 };\nlet k = keys(o);\nk;\n", 'k'));
+		assert.match(list_({ kind: 'any' }), typeAfter("let o = { a: 1 };\nlet v = values(o);\nv;\n", 'v'));
 		let text = "function f(x) {\n\tlet k = keys(x);\n\treturn k;\n}\n";
-		assert.match('nullable', scopeGet(scopeFor(text, parse(text), index(text, 'return k')), 'k')?.kind);
+		assert.match({ kind: 'nullable', inner: list_(prim('string')) },
+			scopeGet(scopeFor(text, parse(text), index(text, 'return k')), 'k'));
 	});
 
 	it('proto(val, p) is val with p\'s fields; proto(val) may be null', () => {
 		let o = typeAfter("let C = { m: function() {} };\nlet o = proto({ a: 1 }, C);\no;\n", 'o');
 		assert.match(['a', 'm'], map(o?.fields ?? [], (f) => f.name));
-		assert.match(true, typeAfter("function f(P) {\n\tlet o = proto({ a: 1 }, P);\n\treturn o;\n}\nlet q = proto({ a: 1 }, g());\nq;\n", 'q')?.open);
-		assert.match('nullable', typeAfter("let o = proto({ a: 1 });\no;\n", 'o')?.kind);
+		// An unknown prototype leaves the record open to more fields.
+		assert.match({
+			kind: 'record',
+			fields: [{ name: 'a', type: { kind: 'primitive', name: 'int', value: 1 }, position: { line: 4, character: 16 } }],
+			sourceUri: URI,
+			open: true,
+		}, typeAfter("function f(P) {\n\tlet o = proto({ a: 1 }, P);\n\treturn o;\n}\nlet q = proto({ a: 1 }, g());\nq;\n", 'q'));
+		assert.match({ kind: 'nullable', inner: { kind: 'generic', base: 'dict', params: [unknown()] } },
+			typeAfter("let o = proto({ a: 1 });\no;\n", 'o'));
 	});
 
 	it('a local named like a builtin is not refined', () => {
 		let t = typeAfter("/** @returns {?int[]} */\nfunction clock() { return null; }\nlet t = clock();\nt;\n", 't');
-		assert.match('nullable', t?.kind);
+		assert.match({ kind: 'nullable', inner: list_(prim('int')) }, t);
 	});
 });
 

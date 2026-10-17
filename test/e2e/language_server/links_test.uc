@@ -33,12 +33,15 @@ describe('textDocument/linkedEditingRange and documentLink', () => {
 	});
 
 	it('links an import to its module file', () => {
-		open('file:///dl.uc', "import * as fs from 'fs';\n");
+		let src = cursors("import * as fs from '$1fs$2';\n");
+		open('file:///dl.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/documentLink', params: {
 			textDocument: { uri: 'file:///dl.uc' },
 		}});
-		let links = lsp.receive(proc).result;
-		assert.match(1, length(links ?? []));
-		assert.match(true, substr(links[0].target, -8) === '/fs.d.uc');
+		// fs is a builtin module: the link goes to its bundled declarations.
+		let decl = '/app/src/ucode_analyzer/declarations/fs.d.uc';
+		assert.match([
+			{ range: { start: src.at[1], end: src.at[2] }, target: 'file://' + decl, tooltip: decl },
+		], lsp.receive(proc).result);
 	});
 });

@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown, contains } from 'utest';
+import { describe, it, assert, setup, teardown, any_order } from 'utest';
 import * as lsp from 'client';
 import { cursors } from 'cursor';
 
@@ -20,14 +20,23 @@ let diagnose = function(uri, text) {
 	return lsp.documentDiagnostics(proc, uri).items;
 };
 
+// The diagnostic the server reports from marker $from to marker $to of src.
+function diagnostic(src, from, to, severity, code, message) {
+	return {
+		range: { start: src.at[from], end: src.at[to] },
+		severity, source: 'ucode-analyzer', code, message,
+	};
+}
+
 describe('textDocument/diagnostic', () => {
 
 	it('reports an error diagnostic for unresolvable import', () => {
-		let diags = diagnose('file:///t.uc', "import { foo } from 'no_such_module';");
-		// Expect at least one ERROR-severity diagnostic for the bad import.
-		// (An unused-import HINT for 'foo' may also be present.)
-		let errDiags = filter(diags, (d) => d.severity === 1);
-		assert.match(true, length(errDiags) >= 1);
+		let src = cursors("import { $3foo$4 } from $1'no_such_module'$2;");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match(any_order([
+			diagnostic(src, 1, 2, 1, 'unknown-import', "Cannot find module 'no_such_module'"),
+			diagnostic(src, 3, 4, 4, 'unused-import', "'foo' is imported but never used"),
+		]), diags);
 	});
 
 	it('reports empty diagnostics for a valid file', () => {
@@ -37,41 +46,46 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('warns for an undefined identifier reference', () => {
-		let diags = diagnose('file:///t.uc', "let x = ghost;\n");
-		// Should include at least a warning for 'ghost' (undefined) and one for 'x' (unused)
-		let ghostDiag = null;
-		for (let d in diags) if (index(d.message, 'ghost') >= 0) { ghostDiag = d; break; }
-		if (ghostDiag === null) die('expected a diagnostic mentioning ghost');
-		assert.match(2, ghostDiag.severity);  // WARNING
+		let src = cursors("let $3x$4 = $1ghost$2;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match(any_order([
+			diagnostic(src, 1, 2, 2, 'undefined-var', "'ghost' is not defined"),
+			diagnostic(src, 3, 4, 2, 'unused-var', "'x' is declared but never used"),
+		]), diags);
 	});
 
 	it('warns for an unused variable with severity WARNING (2)', () => {
-		let diags = diagnose('file:///t.uc', "let neverUsed = 42;\n");
-		assert.match(1, length(diags));
-		assert.match(2, diags[0].severity);  // WARNING
-		assert.match(contains('neverUsed'), diags[0].message);
+		let src = cursors("let $1neverUsed$2 = 42;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 2, 'unused-var', "'neverUsed' is declared but never used"),
+		], diags);
 	});
 
 	it('reports error when a named import does not exist in the module', () => {
-		let diags = diagnose('file:///t.uc', "import { noSuchExport } from 'parser';\n");
-		// Expect at least one ERROR about the missing export.
-		let errDiags = filter(diags, (d) =>
-			d.severity === 1 && index(d.message, 'noSuchExport') >= 0);
-		assert.match(true, length(errDiags) >= 1);
+		let src = cursors("import { $1noSuchExport$2 } from 'parser';\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match(any_order([
+			diagnostic(src, 1, 2, 1, 'unknown-import-symbol', "Module has no export named 'noSuchExport'"),
+			diagnostic(src, 1, 2, 4, 'unused-import', "'noSuchExport' is imported but never used"),
+		]), diags);
 	});
 
 	it('hints for == with severity 4 (Hint)', () => {
-		let diags = diagnose('file:///t.uc', "let x = 1;\nlet y = x == 1;\ny;\n");
-		let eqDiag = null;
-		for (let d in diags) if (index(d.message, '===') >= 0) { eqDiag = d; break; }
-		if (eqDiag === null) die('expected a === hint diagnostic');
-		assert.match(4, eqDiag.severity);
+		let src = cursors("let x = 1;\nlet y = x $1==$2 1;\ny;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 4, 'prefer-strict-equality', "Prefer '===' over '=='"),
+		], diags);
 	});
 
 	it('reports syntax error for malformed code', () => {
-		let diags = diagnose('file:///t.uc', "let x = ;\n");
-		assert.match(true, length(diags) > 0);
-		assert.match(1, diags[0].severity);
+		let src = cursors("let $3x$4 $1=$2 ;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match(any_order([
+			diagnostic(src, 1, 2, 1, 'syntax-error', 'Syntax error'),
+			diagnostic(src, 3, 4, 2, 'unused-var', "'x' is declared but never used"),
+		]), diags);
 	});
 
 	// tree-sitter parses this small file as one ERROR; the server re-parses it
@@ -88,26 +102,27 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('reports not-a-function for @param {string} annotated param when called', () => {
-		let diags = diagnose('file:///t.uc',
-			"/**\n * @param {string} name\n */\nfunction greet(name) { name(); }\ngreet('x');\n");
-		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0);
-		assert.match(true, length(d) >= 1);
-		assert.match(1, d[0].severity);
+		let src = cursors("/**\n * @param {string} name\n */\nfunction greet(name) { $1name$2(); }\ngreet('x');\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 1, 'not-a-function', "'name' is not a function (type: primitive)"),
+		], diags);
 	});
 
 	it('reports error when calling a string variable', () => {
-		let diags = diagnose('file:///t.uc', "let x = 'hello';\nx();\nx;\n");
-		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0);
-		assert.match(true, length(d) >= 1);
-		assert.match(1, d[0].severity);
+		let src = cursors("let x = 'hello';\n$1x$2();\nx;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 1, 'not-a-function', "'x' is not a function (type: primitive)"),
+		], diags);
 	});
 
 	it('reports error for member access on a provably-null variable', () => {
-		let diags = diagnose('file:///t.uc', "let x = null;\nlet y = x.foo;\ny;\n");
-		let d = filter(diags, (d) => d.code === 'null-access');
-		assert.match(true, length(d) >= 1);
-		assert.match(1, d[0].severity);   // ERROR
-		assert.match(contains('is null'), d[0].message);
+		let src = cursors("let x = null;\nlet y = $1x$2.foo;\ny;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 1, 'null-access', "'x' is null"),
+		], diags);
 	});
 
 	it('suppresses null member access warning inside if (x) { } guard body', () => {
@@ -123,11 +138,11 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('reports deprecated hint for use of @deprecated imported symbol', () => {
-		let diags = diagnose('file:///t.uc', "import { oldFn } from 'deprecated';\noldFn();\n");
-		let depDiags = filter(diags, (d) => d.message === 'Deprecated');
-		assert.match(true, length(depDiags) >= 1);
-		assert.match(4, depDiags[0].severity);  // HINT
-		assert.match(contains([2]), depDiags[0].tags);  // TAG_DEPRECATED
+		let src = cursors("import { oldFn } from 'deprecated';\n$1oldFn$2();\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			{ ...diagnostic(src, 1, 2, 4, 'deprecated', 'Deprecated'), tags: [ 2 ] },  // TAG_DEPRECATED
+		], diags);
 	});
 
 	it('does not report deprecated hint for non-deprecated imported symbol', () => {
@@ -137,11 +152,11 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('reports unused-import hint for an import that is never used', () => {
-		let diags = diagnose('file:///t.uc', "import * as p from 'parser';\n");
-		let d = filter(diags, (d) => d.code === 'unused-import');
-		assert.match(1, length(d));
-		assert.match(4, d[0].severity);   // HINT
-		assert.match(contains("'p'"), d[0].message);
+		let src = cursors("import * as $1p$2 from 'parser';\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 4, 'unused-import', "'p' is imported but never used"),
+		], diags);
 	});
 
 	it('does not report unused-import for an import that is used', () => {
@@ -151,41 +166,45 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('reports redeclared-var error for duplicate let in same block', () => {
-		let diags = diagnose('file:///t.uc', "let x = 1;\nlet x = 2;\n");
-		let d = filter(diags, (d) => d.code === 'redeclared-var');
-		assert.match(1, length(d));
-		assert.match(1, d[0].severity);   // ERROR
-		assert.match(contains("'x'"), d[0].message);
+		let src = cursors("let x = 1;\nlet $1x$2 = 2;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 1, 'redeclared-var', "'x' is already declared in this scope"),
+		], diags);
 	});
 
 	it('reports duplicate-key warning for duplicate object keys', () => {
-		let diags = diagnose('file:///t.uc', "let o = { a: 1, a: 2 };\no;\n");
-		let d = filter(diags, (d) => d.code === 'duplicate-key');
-		assert.match(1, length(d));
-		assert.match(2, d[0].severity);   // WARNING
-		assert.match(contains("'a'"), d[0].message);
+		let src = cursors("let o = { a: 1, $1a$2: 2 };\no;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 2, 'duplicate-key', "Duplicate key 'a' in object literal"),
+		], diags);
 	});
 
 	it('reports const-assignment error for reassigning a const variable', () => {
-		let diags = diagnose('file:///t.uc', "const x = 1;\nx = 2;\n");
-		let d = filter(diags, (d) => d.code === 'const-assignment');
-		assert.match(1, length(d));
-		assert.match(1, d[0].severity);   // ERROR
-		assert.match(contains("'x'"), d[0].message);
+		let src = cursors("$3const$4 x = 1;\n$1x$2 = 2;\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([{
+			...diagnostic(src, 1, 2, 1, 'const-assignment', "Cannot assign to 'x' — it is declared const"),
+			data: { constKeywordRange: { start: src.at[3], end: src.at[4] } },  // for the quick fix
+		}], diags);
 	});
 
 	it('reports missing-return warning for @returns function missing a path', () => {
-		let diags = diagnose('file:///t.uc', "/**\n * @returns {int}\n */\nfunction f() {\n  let x = 1;\n}\n");
+		let src = cursors("/**\n * @returns {int}\n */\nfunction $1f$2() {\n  let x = 1;\n}\n");
+		let diags = diagnose('file:///t.uc', src.text);
 		let d = filter(diags, (d) => d.code === 'missing-return');
-		assert.match(1, length(d));
-		assert.match(2, d[0].severity);   // WARNING
+		assert.match([
+			diagnostic(src, 1, 2, 2, 'missing-return', 'Not all code paths return a value'),
+		], d);
 	});
 
 	it('reports for-in-non-iterable warning for iterating over an integer', () => {
-		let diags = diagnose('file:///t.uc', "for (let x in 42) { x; }\n");
-		let d = filter(diags, (d) => d.code === 'for-in-non-iterable');
-		assert.match(1, length(d));
-		assert.match(2, d[0].severity);   // WARNING
+		let src = cursors("for (let x in $142$2) { x; }\n");
+		let diags = diagnose('file:///t.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 2, 'for-in-non-iterable', "Cannot iterate over type 'int'"),
+		], diags);
 	});
 
 	it('no for-in-non-iterable warning when iterating over an array', () => {
@@ -210,10 +229,11 @@ describe('textDocument/diagnostic', () => {
 	});
 
 	it('still warns unknown-property when reading a missing key', () => {
-		let diags = diagnose('file:///read_missing_key.uc',
-			"let obj = { a: 1 };\nlet x = obj.b;\nx;\n");
-		let errs = filter(diags, (d) => d.code === 'unknown-property');
-		assert.match(1, length(errs));
+		let src = cursors("let obj = { a: 1 };\nlet x = obj.$1b$2;\nx;\n");
+		let diags = diagnose('file:///read_missing_key.uc', src.text);
+		assert.match([
+			diagnostic(src, 1, 2, 2, 'unknown-property', "Property 'b' does not exist on this type"),
+		], diags);
 	});
 
 	it('narrows to non-null in the true branch of type(x) === "object"', () => {
@@ -257,11 +277,14 @@ describe('textDocument/diagnostic', () => {
 	it('re-pulls reflect edits made by didChange', () => {
 		diagnose('file:///t.uc', "let x = 1;\nx;\n");  // open clean, pull once
 
-		lsp.change(proc, 'file:///t.uc', "import { foo } from 'bad_module';", 2);
+		let src = cursors("import { $3foo$4 } from $1'bad_module'$2;");
+		lsp.change(proc, 'file:///t.uc', src.text, 2);
 
 		let diags = lsp.documentDiagnostics(proc, 'file:///t.uc').items;
-		// Expect at least one diagnostic (bad import error; unused-import hint may also appear).
-		assert.match(true, length(diags) >= 1);
+		assert.match(any_order([
+			diagnostic(src, 1, 2, 1, 'unknown-import', "Cannot find module 'bad_module'"),
+			diagnostic(src, 3, 4, 4, 'unused-import', "'foo' is imported but never used"),
+		]), diags);
 	});
 
 	it('returns unchanged when the previous resultId is still current', () => {

@@ -1,7 +1,8 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, any_order, is_type } from 'utest';
 import * as lsp from 'client';
 import * as fs from 'fs';
 import * as fixture from 'fixture';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -21,17 +22,41 @@ let entryFor = function(report, uri) {
 	return null;
 };
 
+// The report entry of a file with these diagnostics; the resultId is opaque.
+function entry(uri, version, items) {
+	return { kind: 'full', uri, version, resultId: is_type('string'), items };
+}
+
+// The unused-var warning for the `let $1unused$2 = 1;` of src.
+function unusedVar(src) {
+	return {
+		range: { start: src.at[1], end: src.at[2] }, severity: 2,
+		source: 'ucode-analyzer', code: 'unused-var', message: "'unused' is declared but never used",
+	};
+}
+
+// The paths of the .uc files under dir, relative to it.
+function sources(dir, prefix) {
+	let found = [];
+	for (let name in fs.lsdir(dir)) {
+		let rel = (prefix ?? '') + name;
+		if (fs.stat(dir + '/' + name)?.type === 'directory')
+			push(found, ...sources(dir + '/' + name, rel + '/'));
+		else if (match(name, /\.uc$/))
+			push(found, rel);
+	}
+	return found;
+}
+
 describe('workspace/diagnostic', () => {
 
 	it('reports diagnostics for an open workspace file', () => {
-		lsp.open(proc, fixture.uri('ws_a.uc'), 'let unused = 1;');
+		let src = cursors('let $1unused$2 = 1;');
+		lsp.open(proc, fixture.uri('ws_a.uc'), src.text);
 
 		let report = lsp.workspaceDiagnostics(proc, []);
-		let mine = entryFor(report, fixture.uri('ws_a.uc'));
-		if (mine === null) die('no diagnostic entry for ws_a.uc');
-
-		assert.match('full', mine.kind);
-		assert.match(true, length(mine.items) >= 1);
+		assert.match(entry(fixture.uri('ws_a.uc'), 1, [ unusedVar(src) ]),
+			entryFor(report, fixture.uri('ws_a.uc')));
 	});
 
 	it('reports the version of open documents, and null for the others', () => {
@@ -39,8 +64,7 @@ describe('workspace/diagnostic', () => {
 
 		let report = lsp.workspaceDiagnostics(proc, []);
 		assert.match(7, entryFor(report, fixture.uri('ws_v.uc'))?.version);
-		assert.match(null, entryFor(report, fixture.uri('greet.uc'))?.version);
-		assert.match(true, entryFor(report, fixture.uri('greet.uc')) !== null);
+		assert.match(entry(fixture.uri('greet.uc'), null, []), entryFor(report, fixture.uri('greet.uc')));
 	});
 
 	it('returns unchanged on re-pull with a current resultId', () => {
@@ -79,7 +103,12 @@ describe('workspace/diagnostic', () => {
 		// second arrives, is aborted with ContentModified; the second carries the
 		// report.
 		assert.match(-32801, byId['7001']?.error?.code);
-		assert.match(true, length(byId['7002']?.result?.items ?? []) > 0);
+		// It covers every source on disk, plus the documents the other tests of
+		// this server opened (ws_*.uc, not on disk).
+		let onDisk = filter(byId['7002']?.result?.items ?? [],
+			(item) => !match(item.uri, /\/ws_[a-z]\.uc$/));
+		assert.match(any_order(map(sources(fixture.WORKSPACE), (rel) => fixture.uri(rel))),
+			map(onDisk, (item) => item.uri));
 	});
 
 	it("reports the server's own sources when they are the workspace", () => {
@@ -90,7 +119,8 @@ describe('workspace/diagnostic', () => {
 		fs.mkdir(ws + '/src');
 		fs.mkdir(ws + '/src/ucode_analyzer');
 		system(['cp', '-R', '/app/src/ucode_analyzer/declarations', ws + '/src/ucode_analyzer/']);
-		fs.writefile(ws + '/src/ucode_analyzer/own.uc', 'let unused = 1;\n');
+		let src = cursors('let $1unused$2 = 1;\n');
+		fs.writefile(ws + '/src/ucode_analyzer/own.uc', src.text);
 		fs.writefile(ws + '/src/server.uc',
 			"import { main } from 'ucode_analyzer.cli.server';\n" +
 			"main(ARGV, sourcepath(0, true) + '/ucode_analyzer');\n");
@@ -105,7 +135,8 @@ describe('workspace/diagnostic', () => {
 		system(['rm', '-rf', ws]);
 
 		assert.match(0, status);
-		let own = filter(report.items, (item) => item.uri === 'file://' + ws + '/src/ucode_analyzer/own.uc');
-		assert.match(1, length(own));
+		let uri = 'file://' + ws + '/src/ucode_analyzer/own.uc';
+		assert.match([ entry(uri, null, [ unusedVar(src) ]) ],
+			filter(report.items, (item) => item.uri === uri));
 	});
 });

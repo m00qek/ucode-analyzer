@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { typeErrors } from 'ucode_analyzer.code_analysis.diagnostics.type_errors';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -14,6 +14,11 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// The whole diagnostic for the range between markers $0 and $1.
+function diag(src, severity, code, message) {
+	return { range: { start: src.at[0], end: src.at[1] }, severity, source: 'ucode-analyzer', code, message };
+}
+
 function startsAt(d, pos) {
 	return d.range.start.line === pos.line && d.range.start.character === pos.character;
 }
@@ -25,20 +30,15 @@ describe('diagnostics — type errors: call non-function', () => {
 	});
 
 	it('reports error when calling a string variable', () => {
-		let doc = open("let x = 'hello';\nx();\n");
-		let diags = typeErrors(URI, doc);
-		assert.match(true, length(diags) >= 1);
-		let d = filter(diags, (d) => index(d.message, 'x') >= 0)[0];
-		assert.match(true, d !== null);
-		assert.match(1, d.severity);  // ERROR
+		let src = cursors("let x = 'hello';\n$0x$1();\n");
+		assert.match([diag(src, 1, 'not-a-function', "'x' is not a function (type: primitive)")],
+			typeErrors(URI, open(src.text)));
 	});
 
 	it('reports error when calling a null variable', () => {
-		let doc = open("let x = null;\nx();\n");
-		let diags = typeErrors(URI, doc);
-		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0)[0];
-		assert.match(true, d !== null);
-		assert.match(1, d.severity);
+		let src = cursors("let x = null;\n$0x$1();\n");
+		assert.match([diag(src, 1, 'not-a-function', "'x' is not a function (type: primitive)")],
+			typeErrors(URI, open(src.text)));
 	});
 
 	it('error range covers the callee identifier', () => {
@@ -60,12 +60,8 @@ describe('diagnostics — type errors: call non-function', () => {
 
 describe('diagnostics — type errors: member access on null', () => {
 	it('reports error for member access on a provably-null variable', () => {
-		let doc = open("let x = null;\nx.foo;\n");
-		let diags = typeErrors(URI, doc);
-		let d = filter(diags, (d) => d.code === 'null-access')[0];
-		assert.match(true, d !== null);
-		assert.match(1, d.severity);
-		assert.match(contains('is null'), d.message);
+		let src = cursors("let x = null;\n$0x$1.foo;\n");
+		assert.match([diag(src, 1, 'null-access', "'x' is null")], typeErrors(URI, open(src.text)));
 	});
 
 	it('error range covers the object identifier', () => {
@@ -75,67 +71,53 @@ describe('diagnostics — type errors: member access on null', () => {
 	});
 
 	it('does not report error for member access on non-null types', () => {
-		let doc = open("function f() {}\nlet x = f;\n");
-		// Accessing a property on an identifier typed as function is not null-like.
-		// (UNKNOWN-typed accesses are also suppressed.)
-		let diags = filter(typeErrors(URI, doc),
-			(d) => d.code === 'null-access' || d.code === 'may-be-null');
-		assert.match(0, length(diags));
+		// Accessing a property on an identifier typed as function is not null-like,
+		// and UNKNOWN-typed accesses are suppressed.
+		assert.match([], typeErrors(URI, open("function f() {}\nlet x = f;\nx.foo;\n")));
+		assert.match([], typeErrors(URI, open("function f(p) { p.foo; }\n")));
 	});
 });
 
 describe('diagnostics — type errors: flow sensitivity (if-body narrowing)', () => {
 	it('suppresses null warning inside if (x) { } body', () => {
 		let doc = open("let x = null;\nif (x) {\n  x.foo;\n}\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 
 	it('suppresses null warning inside if (x !== null) { } body', () => {
 		let doc = open("let x = null;\nif (x !== null) {\n  x.foo;\n}\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 
 	it('still warns OUTSIDE the if-body when no guard clause exits', () => {
-		let src = cursors("let x = null;\nif (x) {\n  x.foo;\n}\n$0x.bar;\n");
-		let diags = filter(typeErrors(URI, open(src.text)),
-			(d) => d.code === 'null-access' || d.code === 'may-be-null');
 		// the bar access is NOT guarded
-		let outsideWarning = filter(diags, (d) => startsAt(d, src.at[0]));
-		assert.match(1, length(outsideWarning));
+		let src = cursors("let x = null;\nif (x) {\n  x.foo;\n}\n$0x$1.bar;\n");
+		assert.match([diag(src, 1, 'null-access', "'x' is null")], typeErrors(URI, open(src.text)));
 	});
 });
 
 describe('diagnostics — type errors: flow sensitivity (guard clause)', () => {
 	it('suppresses null warning after if (!x) return guard clause', () => {
 		let doc = open("let x = null;\nif (!x) return;\nx.foo;\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 
 	it('suppresses null warning after if (!x) return guard clause', () => {
 		let doc = open("let x = null;\nif (!x) return;\nx.foo;\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 
 	it('still warns on line BEFORE the guard, where null is possible', () => {
-		let src = cursors("let x = null;\n$0x.foo;\nif (!x) return;\n");
-		let diags = filter(typeErrors(URI, open(src.text)),
-			(d) => d.code === 'null-access' || d.code === 'may-be-null');
-		let beforeGuard = filter(diags, (d) => startsAt(d, src.at[0]));
-		assert.match(1, length(beforeGuard));
+		let src = cursors("let x = null;\n$0x$1.foo;\nif (!x) return;\n");
+		assert.match([diag(src, 1, 'null-access', "'x' is null")], typeErrors(URI, open(src.text)));
 	});
 });
 
 describe('diagnostics — type errors: JSDoc @param type checking', () => {
 	it('reports not-a-function when @param {string} param is called', () => {
-		let doc = open("/** @param {string} name */\nfunction greet(name) { name(); }\n");
-		let diags = typeErrors(URI, doc);
-		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0)[0];
-		assert.match(true, d !== null);
-		assert.match(1, d.severity);
+		let src = cursors("/** @param {string} name */\nfunction greet(name) { $0name$1(); }\n");
+		assert.match([diag(src, 1, 'not-a-function', "'name' is not a function (type: primitive)")],
+			typeErrors(URI, open(src.text)));
 	});
 
 	it('does not report not-a-function for unannotated param (UNKNOWN stays callable)', () => {
@@ -144,69 +126,62 @@ describe('diagnostics — type errors: JSDoc @param type checking', () => {
 	});
 
 	it('reports not-a-function when @param {string} function declaration is used via multiline JSDoc', () => {
-		let doc = open("/**\n * @param {string} name\n */\nfunction greet(name) { name(); }\n");
-		let diags = typeErrors(URI, doc);
-		let d = filter(diags, (d) => index(d.message, 'not a function') >= 0)[0];
-		assert.match(true, d !== null);
+		let src = cursors("/**\n * @param {string} name\n */\nfunction greet(name) { $0name$1(); }\n");
+		assert.match([diag(src, 1, 'not-a-function', "'name' is not a function (type: primitive)")],
+			typeErrors(URI, open(src.text)));
 	});
 });
 
 describe('diagnostics — type errors: for-in non-iterable', () => {
 	it('no warning for for-in over an array', () => {
 		let doc = open("let arr = [1,2,3];\nfor (let x in arr) { x; }\n");
-		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 
 	it('no warning for for-in over a record', () => {
 		let doc = open("let obj = { a: 1 };\nfor (let k in obj) { k; }\n");
-		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 
 	it('no warning for for-in over unknown type', () => {
 		let doc = open("for (let x in mystery) { x; }\n");
-		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 
 	it('warns for for-in over an integer literal', () => {
-		let doc = open("for (let x in 42) { x; }\n");
-		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
-		assert.match(1, length(diags));
-		assert.match(2, diags[0].severity);  // WARNING
+		let src = cursors("for (let x in $042$1) { x; }\n");
+		assert.match([diag(src, 2, 'for-in-non-iterable', "Cannot iterate over type 'int'")],  // WARNING
+			typeErrors(URI, open(src.text)));
 	});
 
 	it('warns for for-in over a boolean literal', () => {
-		let doc = open("for (let x in true) { x; }\n");
-		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
-		assert.match(1, length(diags));
+		let src = cursors("for (let x in $0true$1) { x; }\n");
+		assert.match([diag(src, 2, 'for-in-non-iterable', "Cannot iterate over type 'boolean'")],
+			typeErrors(URI, open(src.text)));
 	});
 
 	it('warns for for-in over null', () => {
-		let doc = open("for (let x in null) { x; }\n");
-		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
-		assert.match(1, length(diags));
+		let src = cursors("for (let x in $0null$1) { x; }\n");
+		assert.match([diag(src, 2, 'for-in-non-iterable', "Cannot iterate over type 'null'")],
+			typeErrors(URI, open(src.text)));
 	});
 
 	it('warns for for-in over a const int variable', () => {
-		let doc = open("const n = 42;\nfor (let x in n) { x; }\n");
-		let diags = filter(typeErrors(URI, doc), (d) => d.code === 'for-in-non-iterable');
-		assert.match(1, length(diags));
+		let src = cursors("const n = 42;\nfor (let x in $0n$1) { x; }\n");
+		assert.match([diag(src, 2, 'for-in-non-iterable', "Cannot iterate over type 'int'")],
+			typeErrors(URI, open(src.text)));
 	});
 });
 
 describe('diagnostics — type errors: flow sensitivity (&& short-circuit)', () => {
 	it('suppresses null warning on RHS of x && x.foo', () => {
 		let doc = open("let x = null;\nlet y = x && x.foo;\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 
 	it('suppresses null warning on RHS of x !== null && x.foo', () => {
 		let doc = open("let x = null;\nlet y = x !== null && x.foo;\n");
-		let diags = filter(typeErrors(URI, doc), (d) => index(d.message, 'may be null') >= 0);
-		assert.match(0, length(diags));
+		assert.match([], typeErrors(URI, doc));
 	});
 });
 
@@ -216,7 +191,9 @@ describe('diagnostics — type errors: unknown-property', () => {
 	}
 
 	it('warns for a missing field on a closed record literal', () => {
-		assert.match(1, length(unknownProps("let o = { a: 1, b: 2 };\no.c;\n")));
+		let src = cursors("let o = { a: 1, b: 2 };\no.$0c$1;\n");
+		assert.match([diag(src, 2, 'unknown-property', "Property 'c' does not exist on this type")],
+			unknownProps(src.text));
 	});
 
 	it('no warning for delete of a possibly-absent property', () => {
@@ -232,7 +209,9 @@ describe('diagnostics — type errors: unknown-property', () => {
 	});
 
 	it('still warns on a record spread only from a known record', () => {
-		assert.match(1, length(unknownProps("let base = { a: 1 };\nlet m = { ...base };\nm.b;\n")));
+		let src = cursors("let base = { a: 1 };\nlet m = { ...base };\nm.$0b$1;\n");
+		assert.match([diag(src, 2, 'unknown-property', "Property 'b' does not exist on this type")],
+			unknownProps(src.text));
 	});
 
 	it('no warning reading a property the file writes (objects are open)', () => {
@@ -258,7 +237,9 @@ describe('diagnostics — type errors: unknown-property', () => {
 	});
 
 	it('still warns on a property written only on another object', () => {
-		assert.match(1, length(unknownProps("let o = { a: 1 };\nlet p = {};\np.b = 2;\no.b;\n")));
+		let src = cursors("let o = { a: 1 };\nlet p = {};\np.b = 2;\no.$0b$1;\n");
+		assert.match([diag(src, 2, 'unknown-property', "Property 'b' does not exist on this type")],
+			unknownProps(src.text));
 	});
 });
 
@@ -280,8 +261,9 @@ describe('diagnostics — type errors: discriminated unions', () => {
 	});
 
 	it('flags a field absent from the narrowed variant', () => {
-		assert.match(1, length(unknownProps(
-			VARIANT_FN + "let r = f(1);\nif (r.kind === 'fail') { r.nope; }\n")));
+		let src = cursors(VARIANT_FN + "let r = f(1);\nif (r.kind === 'fail') { r.$0nope$1; }\n");
+		assert.match([diag(src, 2, 'unknown-property', "Property 'nope' does not exist on this type")],
+			unknownProps(src.text));
 	});
 
 	it('allows a field present on some variant of the un-narrowed union', () => {
@@ -290,8 +272,9 @@ describe('diagnostics — type errors: discriminated unions', () => {
 	});
 
 	it('flags a field absent from every variant of the un-narrowed union', () => {
-		assert.match(1, length(unknownProps(
-			VARIANT_FN + "let r = f(1);\nr.nope;\n")));
+		let src = cursors(VARIANT_FN + "let r = f(1);\nr.$0nope$1;\n");
+		assert.match([diag(src, 2, 'unknown-property', "Property 'nope' does not exist on this type")],
+			unknownProps(src.text));
 	});
 
 	it('stays silent when any variant of the union is open', () => {
@@ -310,30 +293,26 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 	}
 
 	it('a provably-null access is an error (code null-access)', () => {
-		let d = nullDiags("let x = null;\nx.foo;\n")[0];
-		assert.match(true, d !== null);
-		assert.match('null-access', d.code);
-		assert.match(1, d.severity);   // ERROR
-		assert.match(contains('is null'), d.message);
+		let src = cursors("let x = null;\n$0x$1.foo;\n");
+		assert.match([diag(src, 1, 'null-access', "'x' is null")], nullDiags(src.text));   // ERROR
 	});
 
 	it('a possibly-null (T | null) access is a warning, not an error', () => {
 		// A `?string` param is nullable: null is only one of its inhabitants.
-		let d = nullDiags("/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
-		assert.match(true, d !== null);
-		assert.match('may-be-null', d.code);
-		assert.match(2, d.severity);   // WARNING
-		assert.match(contains('may be null'), d.message);
+		let src = cursors("/** @param {?string} s */\nfunction f(s) { return $0s$1.foo; }\n");
+		assert.match([diag(src, 2, 'may-be-null', "'s' may be null")], nullDiags(src.text));   // WARNING
 	});
 
 	it('flags indexing a value that may be null', () => {
-		let d = nullDiags("/** @param {?array} a */\nfunction f(a) { return a[0]; }\n");
-		assert.match(['may-be-null'], map(d, (x) => x.code));
+		let src = cursors("/** @param {?array} a */\nfunction f(a) { return $0a$1[0]; }\n");
+		assert.match([diag(src, 2, 'may-be-null', "'a' may be null")], nullDiags(src.text));
 	});
 
 	it('flags indexing a value that is null, read or write', () => {
-		assert.match(['null-access'], map(nullDiags("let a = null;\na[0];\n"), (x) => x.code));
-		assert.match(['null-access'], map(nullDiags("let a = null;\na[0] = 1;\n"), (x) => x.code));
+		let read = cursors("let a = null;\n$0a$1[0];\n");
+		assert.match([diag(read, 1, 'null-access', "'a' is null")], nullDiags(read.text));
+		let write = cursors("let a = null;\n$0a$1[0] = 1;\n");
+		assert.match([diag(write, 1, 'null-access', "'a' is null")], nullDiags(write.text));
 	});
 
 	it('does not flag ?.[ or an index after a null guard', () => {
@@ -343,29 +322,24 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 	});
 
 	it("escalates a possibly-null access to an error under 'use strict'", () => {
-		let d = nullDiags("'use strict';\n/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
-		assert.match(true, d !== null);
-		assert.match('may-be-null', d.code);
-		assert.match(1, d.severity);   // ERROR under strict
+		let src = cursors("'use strict';\n/** @param {?string} s */\nfunction f(s) { return $0s$1.foo; }\n");
+		assert.match([diag(src, 1, 'may-be-null', "'s' may be null")], nullDiags(src.text));   // ERROR under strict
 	});
 
 	it("finds 'use strict' after a leading comment", () => {
-		let d = nullDiags("// header\n'use strict';\n/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
-		assert.match(1, d.severity);
+		let src = cursors("// header\n'use strict';\n/** @param {?string} s */\nfunction f(s) { return $0s$1.foo; }\n");
+		assert.match([diag(src, 1, 'may-be-null', "'s' may be null")], nullDiags(src.text));
 	});
 
 	it("a provably-null access stays an error under 'use strict' too", () => {
-		let d = nullDiags("'use strict';\nlet x = null;\nx.foo;\n")[0];
-		assert.match(true, d !== null);
-		assert.match('null-access', d.code);
-		assert.match(1, d.severity);
+		let src = cursors("'use strict';\nlet x = null;\n$0x$1.foo;\n");
+		assert.match([diag(src, 1, 'null-access', "'x' is null")], nullDiags(src.text));
 	});
 
 	it('a non-directive leading string does not enable strict mode', () => {
 		// "hello" is not the strict directive, so possibly-null stays a warning.
-		let d = nullDiags("'hello';\n/** @param {?string} s */\nfunction f(s) { return s.foo; }\n")[0];
-		assert.match(true, d !== null);
-		assert.match(2, d.severity);   // still WARNING
+		let src = cursors("'hello';\n/** @param {?string} s */\nfunction f(s) { return $0s$1.foo; }\n");
+		assert.match([diag(src, 2, 'may-be-null', "'s' may be null")], nullDiags(src.text));   // still WARNING
 	});
 
 	it('optional chaining on a provably-null value is not flagged', () => {

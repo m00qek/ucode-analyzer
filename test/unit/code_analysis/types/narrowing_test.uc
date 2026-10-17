@@ -32,9 +32,7 @@ describe('narrowToNonNull', () => {
 
 	it('strips null from multi-member union, keeping rest', () => {
 		let u = { kind: 'union', members: [STR, INT, NULL_T] };
-		let result = narrowToNonNull(u);
-		assert.match('union', result.kind);
-		assert.match(2, length(result.members));
+		assert.match({ kind: 'union', members: [STR, INT] }, narrowToNonNull(u));
 	});
 
 	it('unwraps a nullable member of a union (`c ? match(…) : null`)', () => {
@@ -223,9 +221,7 @@ describe('applyGuard type() narrowing', () => {
 		let scope = makeScope(null);
 		scopeSet(scope, 'x', { kind: 'union', members: [STR, INT, NULL_T] });
 		applyGuard(scope, { kind: 'type', name: 'x', positive: true, toType: STR }, false);
-		let t = scopeGet(scope, 'x');
-		assert.match('union', t.kind);
-		assert.match(2, length(t.members));
+		assert.match({ kind: 'union', members: [INT, NULL_T] }, scopeGet(scope, 'x'));
 	});
 
 	it('negative typeof guard in true branch filters type from union', () => {

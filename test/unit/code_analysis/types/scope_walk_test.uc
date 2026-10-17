@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, prop, gen } from 'utest';
+import { describe, it, assert, beforeEach, prop, gen, any_order } from 'utest';
 import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
@@ -132,7 +132,8 @@ describe('buildScopeMap loops', () => {
 		let src = "for (let k, v in { a: 1 }) print(k, v);\n";
 		let scope = scopeAt(src, 'print');
 		assert.match('string', scopeGet(scope, 'k')?.name);
-		assert.match(true, scopeGet(scope, 'v') !== null);
+		// Bound, but a record's value type is not inferred.
+		assert.match({ kind: 'unknown' }, scopeGet(scope, 'v'));
 		let lsrc = "for (let i, v in ['a']) print(i, v);\n";
 		assert.match(['int', 'string'], map(['i', 'v'], (n) => scopeGet(scopeAt(lsrc, 'print'), n)?.name));
 	});
@@ -155,19 +156,31 @@ describe('buildScopeMap assignment widening', () => {
 		return scopeGet(scopeAt(src, 'return'), name ?? 'x');
 	}
 	let NUL = { kind: 'primitive', name: 'null' };
+	let INT = { kind: 'primitive', name: 'int' };
+	// The `{ a: 1 }` literal assigned at line 2, column `character`.
+	function recA1(character) {
+		return {
+			kind: 'record',
+			fields: [{ name: 'a', type: { kind: 'primitive', name: 'int', value: 1 }, position: { line: 2, character } }],
+			sourceUri: URI,
+		};
+	}
 
 	it('an if without else widens to both paths', () => {
 		let t = xAt("function f(c) {\n\tlet x = null;\n\tif (c) x = { a: 1 };\n\treturn x;\n}\n");
-		assert.match('union', t?.kind);
-		assert.match(['null', 'record'], sort(map(t.members, (m) => m.kind === 'primitive' ? m.name : m.kind)));
+		assert.match({ kind: 'union', members: [recA1(14), NUL] }, t);
 	});
 
 	it('the same through a block', () => {
-		assert.match('union', xAt("function f(c) {\n\tlet x = null;\n\tif (c) { x = { a: 1 }; }\n\treturn x;\n}\n")?.kind);
+		let t = xAt("function f(c) {\n\tlet x = null;\n\tif (c) { x = { a: 1 }; }\n\treturn x;\n}\n");
+		assert.match({ kind: 'union', members: [recA1(16), NUL] }, t);
 	});
 
 	it('if/else assigning on both paths drops the old type', () => {
-		assert.match('record', xAt("function f(c) {\n\tlet x = null;\n\tif (c) x = { a: 1 }; else x = { a: 2 };\n\treturn x;\n}\n")?.kind);
+		// Current behaviour: same-shaped records collapse into the first, so the
+		// field keeps the then-branch literal (1) although the else assigns 2.
+		let t = xAt("function f(c) {\n\tlet x = null;\n\tif (c) x = { a: 1 }; else x = { a: 2 };\n\treturn x;\n}\n");
+		assert.match(recA1(14), t);
 	});
 
 	it('a branch that returns does not reach the end', () => {
@@ -182,13 +195,13 @@ describe('buildScopeMap assignment widening', () => {
 
 	it('an else-if chain joins every branch', () => {
 		let t = xAt("function f(c, d) {\n\tlet x = 1;\n\tif (c) x = 's';\n\telse if (d) x = true;\n\treturn x;\n}\n");
-		assert.match('union', t?.kind);
-		assert.match(3, length(t.members));
+		let STR = { kind: 'primitive', name: 'string' }, BOOL = { kind: 'primitive', name: 'boolean' };
+		assert.match({ kind: 'union', members: any_order([STR, BOOL, INT]) }, t);
 	});
 
 	it('a loop widens with the type before it', () => {
 		let t = xAt("function f(xs) {\n\tlet x = null;\n\tfor (let v in [1, 2]) x = v;\n\treturn x;\n}\n");
-		assert.match('union', t?.kind);
+		assert.match({ kind: 'union', members: any_order([NUL, INT]) }, t);
 	});
 
 	it('an assignment in a nested function does not widen', () => {
@@ -509,7 +522,8 @@ describe('buildScopeMap template spanning forms', () => {
 		let src = "{% for (k, v in { a: 1 }): %}\n{{ k }}{{ v }}\n{% endfor %}\n";
 		let scope = scopeAtTpl(src, '{{ k');
 		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'k'));
-		assert.match(true, scopeGet(scope, 'v') !== null);
+		// Bound, but a record's value type is not inferred.
+		assert.match({ kind: 'unknown' }, scopeGet(scope, 'v'));
 		let lsrc = "{% for (i, s in ['a']): %}\n{{ i }}{{ s }}\n{% endfor %}\n";
 		let lscope = scopeAtTpl(lsrc, '{{ i');
 		assert.match({ kind: 'primitive', name: 'int' }, scopeGet(lscope, 'i'));
@@ -765,7 +779,7 @@ describe('scopeAtOffset — properties', () => {
 			for (let k = 0; k < n; k++) {
 				let sc = scopeAtOffset(map, index(src, 'let ' + NAMES[k]));
 				for (let i = 0; i < k; i++)
-					assert.match(true, scopeGet(sc, NAMES[i]) !== null,
+					assert.match({ kind: 'primitive', name: 'int' }, scopeGet(sc, NAMES[i]),
 						sprintf('%s should be visible at statement %d', NAMES[i], k));
 				for (let i = k; i < n; i++)
 					assert.match(null, scopeGet(sc, NAMES[i]),

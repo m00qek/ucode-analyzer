@@ -1,6 +1,7 @@
 import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
 import { stringLiteralText, identifierOccurrences } from 'ucode_analyzer.code_analysis.ast_text';
+import { cursors } from 'cursor';
 
 let _parser = ts.newParser(ts.ucode());
 function parse(text) { return ts.parse(_parser, text); }
@@ -40,15 +41,14 @@ describe('ast_text — identifierOccurrences', () => {
 	}
 
 	it('records every occurrence of a name with its start byte', () => {
-		let m = idx("let x = 1;\nx;\nx;\n", false);
-		assert.match(3, length(m.x));           // declaration + two uses
-		// strictly increasing byte offsets
-		assert.match(true, m.x[0] < m.x[1] && m.x[1] < m.x[2]);
+		let src = cursors("let $0x = 1;\n$1x;\n$2x;\n");
+		// declaration + two uses, in source order
+		assert.match({ x: src.offset }, idx(src.text, false));
 	});
 
 	it('counts shorthand property identifiers', () => {
-		let m = idx("let foo = 1;\nlet o = { foo };\n", false);
-		assert.match(true, length(m.foo) >= 2);
+		let src = cursors("let $0foo = 1;\nlet o = { $1foo };\n");
+		assert.match(src.offset, idx(src.text, false).foo);
 	});
 
 	it('skipParams=false counts a formal parameter', () => {
@@ -61,7 +61,8 @@ describe('ast_text — identifierOccurrences', () => {
 	});
 
 	it('skipParams=true still counts uses in the body', () => {
-		let m = idx("function f(a) { return a; }\n", true);
-		assert.match(1, length(m.a));           // the body use only, not the param decl
+		let src = cursors("function f(a) { return $0a; }\n");
+		// the body use only, not the param decl
+		assert.match(src.offset, idx(src.text, true).a);
 	});
 });

@@ -1,6 +1,7 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { redeclaredVars } from 'ucode_analyzer.code_analysis.diagnostics.redeclared_var';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -11,17 +12,26 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// The errors for a marked snippet: one per redeclaration of `name`, on the
+// marker pairs ($0,$1), ($2,$3), … in order.
+function check(marked, name) {
+	let src = cursors(marked), want = [];
+	for (let i = 0; i + 1 < length(src.at); i += 2)
+		push(want, {
+			range: { start: src.at[i], end: src.at[i + 1] }, severity: 1, source: 'ucode-analyzer',
+			code: 'redeclared-var', message: sprintf("'%s' is already declared in this scope", name),
+		});
+	return { want, got: redeclaredVars(open(src.text)) };
+}
+
 describe('diagnostics — redeclared variables', () => {
 	it('returns empty list when all names are unique', () => {
 		assert.match(0, length(redeclaredVars(open("let x = 1;\nlet y = 2;\n"))));
 	});
 
-	it('errors on duplicate let in the same block', () => {
-		let diags = redeclaredVars(open("let x = 1;\nlet x = 2;\n"));
-		assert.match(1, length(diags));
-		assert.match(1, diags[0].severity);   // ERROR
-		assert.match('redeclared-var', diags[0].code);
-		assert.match(contains("'x'"), diags[0].message);
+	it('errors on duplicate let in the same block, on the redeclaration', () => {
+		let r = check("let x = 1;\nlet $0x$1 = 2;\n", 'x');
+		assert.match(r.want, r.got);  // an ERROR
 	});
 
 	it('does not error when same name is in a nested block', () => {
@@ -35,21 +45,13 @@ describe('diagnostics — redeclared variables', () => {
 	});
 
 	it('errors when a function-scoped name is redeclared in the same function body', () => {
-		let text = "function f() {\n  let x = 1;\n  let x = 2;\n}\n";
-		let diags = redeclaredVars(open(text));
-		assert.match(1, length(diags));
-		assert.match(contains("'x'"), diags[0].message);
-	});
-
-	it('reports the second (redeclaring) occurrence, not the first', () => {
-		let diags = redeclaredVars(open("let x = 1;\nlet x = 2;\n"));
-		// The diagnostic range is on line 1 (the redeclaration).
-		assert.match(1, diags[0].range.start.line);
+		let r = check("function f() {\n  let x = 1;\n  let $0x$1 = 2;\n}\n", 'x');
+		assert.match(r.want, r.got);
 	});
 
 	it('reports each additional redeclaration separately', () => {
-		let diags = redeclaredVars(open("let x = 1;\nlet x = 2;\nlet x = 3;\n"));
-		assert.match(2, length(diags));
+		let r = check("let x = 1;\nlet $0x$1 = 2;\nlet $2x$3 = 3;\n", 'x');
+		assert.match(r.want, r.got);
 	});
 
 	it('does not confuse names across top-level and nested scope', () => {
@@ -59,8 +61,7 @@ describe('diagnostics — redeclared variables', () => {
 	});
 
 	it('errors on a duplicate let at a template\'s top level', () => {
-		let diags = redeclaredVars(open("{% let x = 1; %}\n<p>{{ x }}</p>\n{% let x = 2; %}\n"));
-		assert.match(1, length(diags));
-		assert.match('redeclared-var', diags[0].code);
+		let r = check("{% let x = 1; %}\n<p>{{ x }}</p>\n{% let $0x$1 = 2; %}\n", 'x');
+		assert.match(r.want, r.got);
 	});
 });

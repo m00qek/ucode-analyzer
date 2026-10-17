@@ -9,14 +9,14 @@ describe('rpc_client', () => {
 		assert.match(0, client.close(proc));
 	});
 
-	it('close() returns non-zero for a failed exit', () => {
+	it('close() returns the exit status of a failed exit', () => {
 		let proc = client.spawn('false', []);
-		assert.match(true, client.close(proc) !== 0);
+		assert.match(1, client.close(proc));
 	});
 
 	it('close() returns a negative signal code', () => {
 		let proc = client.spawn('sh', ['-c', 'kill -KILL $$']);
-		assert.match(true, client.close(proc) < 0);
+		assert.match(-9, client.close(proc));   // -SIGKILL
 	});
 
 	it('receive() returns null at EOF', () => {

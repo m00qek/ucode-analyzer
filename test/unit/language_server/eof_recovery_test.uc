@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach, contains } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, any_order } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
@@ -21,15 +21,29 @@ import * as fixture from 'fixture';
 let URI = 'file:///eof.uc';
 
 // $0 a use of x in the innermost block, $1 the function, $2 the declaration
-// of x, $3 the if block, $4 the end of the innermost block.
-let BODY   = "$1function f(a) {\n\tlet $2x = 1;\n\t$3if (a) {\n\t\tlet y = $0x;\n$4";
+// of x, $3 the if block, $4 the end of the innermost block, $5–$6 the
+// statement declaring x and $7 the end of its name, $8–$9 the name f.
+let BODY   = "$1function $8f$9(a) {\n\t$5let $2x$7 = 1;$6\n\t$3if (a) {\n\t\tlet y = $0x;\n$4";
 let PREFIX = "let p1 = 1;\nlet p2 = 2;\nlet p3 = 3;\nlet p4 = 4;\nlet p5 = 5;\n";
 
+// fEnd: where f's range ends (the end of the file when open); globals: the
+// other names completion offers; foldEnd: the last lines of the folds of f
+// and of the if block.
 let VARIANTS = [
-	{ name: 'closed',     src: cursors(BODY + "\t}\n}\n"), open: false },
-	{ name: 'large open', src: cursors(PREFIX + BODY),     open: true  },
-	{ name: 'tiny open',  src: cursors(BODY),              open: true  },
+	{ name: 'closed',     src: cursors(BODY + "\t}\n}\n"), open: false,
+	  fEnd: { line: 5, character: 1 }, globals: [], foldEnd: [ 5, 4 ] },
+	// a fold ends on the last line with text ...
+	{ name: 'large open', src: cursors(PREFIX + BODY),     open: true,
+	  globals: [ 'p1', 'p2', 'p3', 'p4', 'p5' ], foldEnd: [ 8, 8 ] },
+	// ... but on the empty last line when the whole file is one ERROR
+	{ name: 'tiny open',  src: cursors(BODY),              open: true,
+	  globals: [], foldEnd: [ 4, 4 ] },
 ];
+
+// The range from marker a to marker b of `src`.
+function span(src, a, b) {
+	return { start: src.at[a], end: src.at[b] };
+}
 
 function open(text) {
 	dag.add(URI, text, documents.open(URI, text, 1).tree);
@@ -57,8 +71,9 @@ function assertMissingAtEof(diags, eof, missing) {
 	assert.match(map(missing, (m) => sprintf("Syntax error: missing '%s'", m)), msgs);
 }
 
+// The completion labels other than keywords (kind 14), which are always offered.
 function labelsAt(text, position) {
-	return map(completion(URI, open(text), position), (i) => i.label);
+	return map(filter(completion(URI, open(text), position), (i) => i.kind !== 14), (i) => i.label);
 }
 
 beforeEach(() => dag.init(fixture.config()));
@@ -83,33 +98,32 @@ function variantSuite(v) {
 		});
 
 		it('document symbols list f with its local x', () => {
-			let syms = filter(documentSymbols(open(src.text)), (x) => x.name === 'f');
-			assert.match(1, length(syms));
-			assert.match(12, syms[0].kind);
-			assert.match(src.at[1], syms[0].range.start);
-			assert.match(['x'], map(syms[0].children ?? [], (c) => c.name));
+			assert.match([ {
+				name: 'f', kind: 12,
+				range: { start: src.at[1], end: v.fEnd ?? eof },
+				selectionRange: span(src, 8, 9),
+				children: [ { name: 'x', kind: 13, range: span(src, 5, 6), selectionRange: span(src, 2, 7) } ],
+			} ], filter(documentSymbols(open(src.text)), (x) => x.name === 'f'));
 		});
 
 		it('hover on x inside the innermost block shows int', () => {
-			let r = hover(open(src.text), src.at[0]);
-			assert.match('object', type(r));
-			assert.match(contains('int'), r.contents.value);
+			assert.match({ contents: { kind: 'markdown', value: "```ucode\nx: int\n```" } }, hover(open(src.text), src.at[0]));
 		});
 
 		it('definition of x inside the innermost block finds its let', () => {
-			let r = definition(URI, open(src.text), src.at[0]);
-			assert.match(URI, r?.uri);
-			assert.match(src.at[2], r?.range?.start);
+			assert.match({ uri: URI, range: { start: src.at[2], end: src.at[2] } }, definition(URI, open(src.text), src.at[0]));
 		});
 
 		it('completion at the end of the innermost block offers its locals, outer locals and parameters', () => {
 			let labels = labelsAt(src.text, eof);
-			assert.match([true, true, true], map(['a', 'x', 'y'], (n) => index(labels, n) >= 0));
+			assert.match(any_order([ 'a', 'x', 'y', ...v.globals ]), labels);
 		});
 
 		it('folding ranges cover the function body and the if block', () => {
-			let starts = map(foldingRanges(open(src.text)), (r) => r.startLine);
-			assert.match([true, true], [index(starts, src.at[1].line) >= 0, index(starts, src.at[3].line) >= 0]);
+			assert.match(any_order([
+				{ startLine: src.at[1].line, endLine: v.foldEnd[0] },
+				{ startLine: src.at[3].line, endLine: v.foldEnd[1] },
+			]), foldingRanges(open(src.text)));
 		});
 	});
 }
@@ -137,7 +151,7 @@ describe('blocks open at EOF — tiny file, other cases', () => {
 		let src = cursors("{%\nfunction f(a) {\n\tlet x = 1;\n\tif (a) {\n\t\tlet y = x;\n$0");
 		assertMissingAtEof(diagnosticsFor(URI, open(src.text)), src.at[0], ['}', '}']);
 		let labels = labelsAt(src.text, src.at[0]);
-		assert.match([true, true], [index(labels, 'a') >= 0, index(labels, 'x') >= 0]);
+		assert.match(any_order([ 'a', 'x', 'y' ]), labels);
 	});
 
 	it('ignores braces inside strings, comments and regexes', () => {

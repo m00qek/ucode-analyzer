@@ -44,34 +44,34 @@ describe('rename', () => {
 	});
 
 	it('returns WorkspaceEdit with changes for the current uri', () => {
-		let edit = renameAt(cursors("let $0x = 1;\n"), 'y');
+		let src = cursors("let $0$1x$2 = 1;\n");
+		let edit = renameAt(src, 'y');
 
-		assert.match(true, edit !== null);
-		assert.match(true, edit.changes !== null);
-		assert.match(true, edit.changes[URI] !== null);
+		assert.match({ changes: { [URI]: [ { range: span(src, 1, 2), newText: 'y' } ] } }, edit);
 	});
 
 	it('produces one edit per occurrence', () => {
-		let edit = renameAt(cursors("let $0x = 1;\nlet y = x + x;\n"), 'z');
+		let src = cursors("let $0$1x$2 = 1;\nlet y = $3x$4 + $5x$6;\n");
+		let edit = renameAt(src, 'z');
 
-		// x appears 3 times
-		assert.match(3, length(edit.changes[URI]));
+		assert.match(any_order([ span(src, 1, 2), span(src, 3, 4), span(src, 5, 6) ]), ranges(edit.changes[URI]));
 	});
 
 	it('each edit has newText set to the new name', () => {
-		let edit = renameAt(cursors("let $0x = x;\n"), 'renamed');
-		let edits = edit.changes[URI];
+		let src = cursors("let $0$1x$2 = $3x$4;\n");
+		let edit = renameAt(src, 'renamed');
 
-		assert.match(2, length(edits));
-		for (let e in edits)
-			assert.match('renamed', e.newText);
+		assert.match(any_order([
+			{ range: span(src, 1, 2), newText: 'renamed' },
+			{ range: span(src, 3, 4), newText: 'renamed' },
+		]), edit.changes[URI]);
 	});
 
 	it('edit ranges span the exact identifier token', () => {
 		let src = cursors("let $0$1count$2 = 0;\n");
 		let edit = renameAt(src, 'total');
 
-		assert.match(span(src, 1, 2), edit.changes[URI][0].range);
+		assert.match([ { range: span(src, 1, 2), newText: 'total' } ], edit.changes[URI]);
 	});
 });
 
@@ -96,10 +96,15 @@ describe('rename — scope awareness', () => {
 });
 
 describe('cross-file rename', () => {
-	let TEXT_A         = cursors("export function $0foo() { foo(); };\n");
-	let TEXT_B_NAMED   = cursors("import { foo } from 'a';\n$0foo();\n");
-	let TEXT_B_ALIASED = cursors("import { $1foo$2 as bar } from 'a';\n$0bar();\n");
-	let TEXT_B_NS      = cursors("import * as a from 'a';\na.foo();\n");
+	let TEXT_A         = cursors("export function $0$1foo$2() { $3foo$4(); };\n");
+	let TEXT_B_NAMED   = cursors("import { $1foo$2 } from 'a';\n$0$3foo$4();\n");
+	let TEXT_B_ALIASED = cursors("import { $1foo$2 as $3bar$4 } from 'a';\n$0$5bar$6();\n");
+	let TEXT_B_NS      = cursors("import * as a from 'a';\na.$1foo$2();\n");
+
+	// One edit per marker pair of `src`, all to `newText`.
+	function edits(src, pairs, newText) {
+		return any_order(map(pairs, (p) => ({ range: span(src, p[0], p[1]), newText })));
+	}
 
 	beforeEach(() => {
 		dag.init(fixture.config());
@@ -129,13 +134,11 @@ describe('cross-file rename', () => {
 		// on the 'foo' export
 		let edit = rename(URI_A, documents.get(URI_A), TEXT_A.at[0], 'bar');
 
-		// declaring file gets edits (export declaration + internal call)
-		assert.match(true, length(edit.changes[URI_A]) >= 1);
-		// importing file gets edits (import binding + call)
-		assert.match(true, type(edit.changes[URI_B]) === 'array');
-		assert.match(true, length(edit.changes[URI_B]) >= 1);
-		for (let e in edit.changes[URI_B])
-			assert.match('bar', e.newText);
+		// declaring file: export declaration + internal call; importer: import binding + call
+		assert.match({ changes: {
+			[URI_A]: edits(TEXT_A, [ [ 1, 2 ], [ 3, 4 ] ], 'bar'),
+			[URI_B]: edits(TEXT_B_NAMED, [ [ 1, 2 ], [ 3, 4 ] ], 'bar'),
+		} }, edit);
 	});
 
 	it('named import: renaming from importer side updates both files', () => {
@@ -144,8 +147,10 @@ describe('cross-file rename', () => {
 		// on the call 'foo();'
 		let edit = rename(URI_B, documents.get(URI_B), TEXT_B_NAMED.at[0], 'baz');
 
-		assert.match(true, type(edit.changes[URI_A]) === 'array');
-		assert.match(true, length(edit.changes[URI_A]) >= 1);
+		assert.match({ changes: {
+			[URI_A]: edits(TEXT_A, [ [ 1, 2 ], [ 3, 4 ] ], 'baz'),
+			[URI_B]: edits(TEXT_B_NAMED, [ [ 1, 2 ], [ 3, 4 ] ], 'baz'),
+		} }, edit);
 	});
 
 	it('aliased import: renaming local alias stays within the importing file', () => {
@@ -154,8 +159,10 @@ describe('cross-file rename', () => {
 		// on the call 'bar();' (local alias, not remote name)
 		let edit = rename(URI_B, documents.get(URI_B), TEXT_B_ALIASED.at[0], 'baz');
 
-		// should NOT produce edits in URI_A
-		assert.match(true, edit.changes[URI_A] === null);
+		// the alias and its use only: no edits in URI_A, the remote `foo` untouched
+		assert.match({ changes: {
+			[URI_B]: edits(TEXT_B_ALIASED, [ [ 3, 4 ], [ 5, 6 ] ], 'baz'),
+		} }, edit);
 	});
 
 	it('aliased import: renaming export changes only the remote name in import specifier', () => {
@@ -188,9 +195,9 @@ describe('cross-file rename', () => {
 		let edit = rename(URI_A, documents.get(URI_A), TEXT_A.at[0], 'qux');
 
 		// URI_B uses 'a.foo()' — should get an edit on the 'foo' property
-		let editsB = edit.changes[URI_B];
-		assert.match(true, type(editsB) === 'array');
-		assert.match(true, length(editsB) >= 1);
-		assert.match('qux', editsB[0].newText);
+		assert.match({ changes: {
+			[URI_A]: edits(TEXT_A, [ [ 1, 2 ], [ 3, 4 ] ], 'qux'),
+			[URI_B]: [ { range: span(TEXT_B_NS, 1, 2), newText: 'qux' } ],
+		} }, edit);
 	});
 });

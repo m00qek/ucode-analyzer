@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown, contains, not } from 'utest';
+import { describe, it, assert, setup, teardown } from 'utest';
 import * as lsp from 'client';
 import { cursors } from 'cursor';
 
@@ -14,6 +14,19 @@ teardown(() => {
 	assert.match(0, lsp.close(proc));
 });
 
+// The symbols of t.uc among the results.
+function inT(symbols) {
+	return filter(symbols, (s) => s.location.uri === 'file:///t.uc');
+}
+
+// t.uc's symbol `name` of this SymbolKind, from marker a to marker b of src.
+function symbol(src, name, kind, a, b) {
+	return {
+		name, kind, containerName: 't.uc',
+		location: { uri: 'file:///t.uc', range: { start: src.at[a], end: src.at[b] } },
+	};
+}
+
 describe('workspace/symbol', () => {
 
 	it('capability is advertised in initialize response', () => {
@@ -27,29 +40,30 @@ describe('workspace/symbol', () => {
 	});
 
 	it('empty query returns exported symbols from indexed files', () => {
-		lsp.open(proc, 'file:///t.uc', "export function greet() {};\nexport let count = 0;\n");
+		let src = cursors("export function $1greet$2() {};\nexport let $3count$4 = 0;\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: '' } });
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		assert.match(true, type(resp.result) === 'array');
 		// The fixture workspace exports a greet of its own: count only t.uc's.
-		let names = map(filter(resp.result, (s) => s.location.uri === 'file:///t.uc'), (s) => s.name);
-		assert.match(contains(['greet']), names);
-		assert.match(contains(['count']), names);
+		assert.match([
+			symbol(src, 'greet', 12, 1, 2),   // Function
+			symbol(src, 'count', 13, 3, 4),   // Variable
+		], inT(resp.result));
 	});
 
 	it('substring query filters results', () => {
-		lsp.open(proc, 'file:///t.uc', "export function handleRequest() {};\nexport function init() {};\n");
+		let src = cursors("export function $1handleRequest$2() {};\nexport function init() {};\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: 'req' } });
 		let resp = lsp.receive(proc);
 
 		assert.match(1, resp.id);
-		let names = map(resp.result, (s) => s.name);
-		assert.match(contains(['handleRequest']), names);
-		assert.match(not(contains(['init'])), names);
+		// Declarations elsewhere match 'req' too (require, ...): count only t.uc's.
+		assert.match([ symbol(src, 'handleRequest', 12, 1, 2) ], inT(resp.result));
 	});
 
 	it('result includes location with uri and range', () => {
@@ -59,20 +73,16 @@ describe('workspace/symbol', () => {
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: 'handleConn' } });
 		let resp = lsp.receive(proc);
 
-		let s = filter(resp.result, (s) => s.name === 'handleConn' && s.location.uri === 'file:///t.uc')[0];
-		assert.match(true, s !== null);
-		assert.match('file:///t.uc', s.location.uri);
-		assert.match({ start: src.at[1], end: src.at[2] }, s.location.range);
+		assert.match([ symbol(src, 'handleConn', 12, 1, 2) ], resp.result);
 	});
 
 	it('non-exported symbols are not returned', () => {
-		lsp.open(proc, 'file:///t.uc', "function hidden() {}\nexport function visible() {};\n");
+		let src = cursors("function hidden() {}\nexport function $1visible$2() {};\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'workspace/symbol', params: { query: '' } });
 		let resp = lsp.receive(proc);
 
-		let names = map(resp.result, (s) => s.name);
-		assert.match(not(contains(['hidden'])), names);
-		assert.match(contains(['visible']), names);
+		assert.match([ symbol(src, 'visible', 12, 1, 2) ], inT(resp.result));
 	});
 });

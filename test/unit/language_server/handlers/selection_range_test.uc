@@ -17,6 +17,11 @@ function rangesAt(src) {
 	return selectionRanges(open(src.text), [src.at[0]]);
 }
 
+// The range from marker a to marker b.
+function span(src, a, b) {
+	return { start: src.at[a], end: src.at[b] };
+}
+
 // Walk the parent chain and collect all ranges into a flat array.
 function flattenChain(sr) {
 	let out = [];
@@ -30,32 +35,25 @@ function flattenChain(sr) {
 
 describe('selectionRanges', () => {
 	it('returns an array with one entry per position', () => {
-		let src = cursors("let $0x = $11;\n");
+		let src = cursors("$6let $2$0x$3 = $4$11$5;$7\n$8");
 		let result = selectionRanges(open(src.text), [ src.at[0], src.at[1] ]);
-		assert.match(2, length(result));
+		// the declarator, the statement and the program are shared
+		let tail = [ span(src, 2, 5), span(src, 6, 7), span(src, 6, 8) ];
+		assert.match([ [ span(src, 2, 3), ...tail ], [ span(src, 4, 5), ...tail ] ], map(result, flattenChain));
 	});
 
 	it('innermost range covers the leaf node', () => {
 		let src = cursors("let $0$1x$2 = 1;\n");
 		let result = rangesAt(src);
-		assert.match(true, result !== null);
+		assert.match(1, length(result));
 		assert.match({ start: src.at[1], end: src.at[2] }, result[0].range);
 	});
 
 	it('parent chain expands outward', () => {
-		let result = rangesAt(cursors("let x = $01;\n"));
-		let chain = flattenChain(result[0]);
-		// The innermost is '1', the outermost covers the whole line.
-		assert.match(true, length(chain) >= 2);
-		let inner = chain[0];
-		let outer = chain[length(chain) - 1];
-		// Innermost is strictly inside outermost (or equal for single-node programs).
-		assert.match(true,
-			outer.start.line < inner.start.line ||
-			(outer.start.line === inner.start.line && outer.start.character <= inner.start.character));
-		assert.match(true,
-			outer.end.line > inner.end.line ||
-			(outer.end.line === inner.end.line && outer.end.character >= inner.end.character));
+		let src = cursors("$5let $3x = $0$11$2$4;$6\n$7");
+		let chain = flattenChain(rangesAt(src)[0]);
+		// '1', the declarator, the statement, the program
+		assert.match([ span(src, 1, 2), span(src, 3, 4), span(src, 5, 6), span(src, 5, 7) ], chain);
 	});
 
 	it('no duplicate adjacent ranges in chain', () => {
@@ -73,20 +71,22 @@ describe('selectionRanges', () => {
 	});
 
 	it('outermost range covers the whole program', () => {
-		let src = cursors("$1let $0x = 1;\n");
+		let src = cursors("$1let $0x = 1;\n$2");
 		let result = rangesAt(src);
 		let chain = flattenChain(result[0]);
-		let outer = chain[length(chain) - 1];
-		assert.match(src.at[1], outer.start);
+		assert.match(span(src, 1, 2), chain[length(chain) - 1]);
 	});
 
 	it('cursor inside a function body expands to function, then program', () => {
 		// on 'a' inside the return statement
-		let result = rangesAt(cursors("function f(a, b) {\n  return $0a + b;\n}\n"));
-		let chain = flattenChain(result[0]);
-		// Should have at least: identifier, binary_expression, return_statement,
-		//   statement_block, function_declaration, program.
-		assert.match(true, length(chain) >= 4);
+		let src = cursors("$7function f(a, b) $5{\n  $3return $0a$2 + b$4;$1\n}$6$8\n$9");
+		let chain = flattenChain(rangesAt(src)[0]);
+		// identifier, binary_expression, return_statement, statement_block,
+		// function_declaration, program
+		assert.match([
+			span(src, 0, 2), span(src, 0, 4), span(src, 3, 1),
+			span(src, 5, 6), span(src, 7, 8), span(src, 7, 9),
+		], chain);
 	});
 
 	it('handles multiple positions independently', () => {

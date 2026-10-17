@@ -1,4 +1,4 @@
-import { describe, it, assert, contains } from 'utest';
+import { describe, it, assert } from 'utest';
 import { parseDoc, typeToString } from 'ucode_analyzer.code_analysis.types.doc_parser';
 
 // Helpers that build expected type objects.
@@ -88,7 +88,7 @@ describe('parseDoc — @returns and @throws', () => {
 describe('parseDoc — @template and type params', () => {
 	it('collects template param names', () => {
 		let doc = parseDoc("/** @template T */");
-		assert.match(contains(['T']), doc.template);
+		assert.match(['T'], doc.template);
 	});
 
 	it('parses template type as param kind', () => {
@@ -142,8 +142,7 @@ describe('parseDoc — type forms', () => {
 
 	it('parses a bare {function} as an opaque callable function type', () => {
 		let doc = parseDoc("/** @returns {function} */");
-		assert.match('function', doc.returns.type.kind);
-		assert.match([], doc.returns.type.params);
+		assert.match({ kind: 'function', params: [], return: { kind: 'unknown' } }, doc.returns.type);
 	});
 
 	it('parses list<T>', () => {

@@ -1,4 +1,4 @@
-import { describe, it, assert, prop, gen, contains, not } from 'utest';
+import { describe, it, assert, prop, gen, any_order } from 'utest';
 import { matchPattern, scan } from 'ucode_analyzer.code_analysis.glob';
 import * as fs from 'fs';
 import * as fixture from 'fixture';
@@ -42,22 +42,19 @@ describe('glob.matchPattern', () => {
 
 describe('glob.scan', () => {
 	let WS = fixture.WORKSPACE;
+	// Every .uc file of the fixture workspace.
+	let FIXTURES = [
+		'default_export.uc', 'deprecated.uc', 'greet.uc', 'hover_record.uc', 'legacy_mod.uc',
+		'parser.uc', 'reexport/deep.uc', 'reexport/wrapper.uc', 'settings.uc', 'template_lib.uc',
+	];
 
 	it('finds .uc files matching include pattern', () => {
-		let files = scan(WS, ['**/*.uc'], []);
-		assert.match(contains([WS + '/parser.uc', WS + '/reexport/deep.uc']), files);
-		for (let f in files)
-			assert.match(true, substr(f, -3) === '.uc', f);
+		assert.match(any_order(map(FIXTURES, (f) => WS + '/' + f)), scan(WS, ['**/*.uc'], []));
 	});
 
 	it('excludes paths matching exclude pattern', () => {
-		let all  = scan(WS, ['**/*.uc'], []);
-		let excl = scan(WS, ['**/*.uc'], ['reexport/**']);
-
-		assert.match(true, length(excl) < length(all));
-		assert.match(contains([WS + '/parser.uc']), excl);
-		for (let f in excl)
-			assert.match(not(contains('reexport')), f);
+		let kept = filter(FIXTURES, (f) => index(f, 'reexport/') !== 0);
+		assert.match(any_order(map(kept, (f) => WS + '/' + f)), scan(WS, ['**/*.uc'], ['reexport/**']));
 	});
 
 	it('does not enter an excluded directory', () => {
@@ -75,8 +72,7 @@ describe('glob.scan', () => {
 	});
 
 	it('returns empty list when no files match', () => {
-		let files = scan(WS, ['**/*.lua'], []);
-		assert.match(0, length(files));
+		assert.match([], scan(WS, ['**/*.lua'], []));
 	});
 
 	it('follows a symlink back up the tree only once', () => {

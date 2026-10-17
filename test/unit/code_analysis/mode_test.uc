@@ -1,4 +1,4 @@
-import { describe, it, assert, contains, not } from 'utest';
+import { describe, it, assert } from 'utest';
 import * as ts from 'tree_sitter';
 import { isTemplate, parse, topLevelStatements,
          importStmtSpecifier, importBindings, importBindingNodes,
@@ -116,33 +116,28 @@ describe('mode — parse dispatch', () => {
 describe('mode — topLevelStatements', () => {
 	it('returns a script\'s top-level statements directly', () => {
 		let types = stmtTypes("let a = 1;\nfunction f() {}\n");
-		assert.match(contains(['lexical_declaration']), types);
-		assert.match(contains(['function_declaration']), types);
+		assert.match(['lexical_declaration', 'function_declaration'], types);
 	});
 
 	it('surfaces a template\'s statements and drops the tag delimiters', () => {
 		let types = stmtTypes("{% import { helper } from 'lib.util'; %}\n{{ y }}\n");
 		// the import inside {% %} is surfaced; the delimiters are dropped
-		assert.match(contains(['import_statement']), types);
-		assert.match(not(contains('statement_tag_open')), types);
-		assert.match(not(contains('statement_tag_close')), types);
+		assert.match(['import_statement', 'text_statement'], types);
 	});
 
 	it('drops the trim and lstrip delimiter variants too', () => {
 		let types = stmtTypes("{%- let a = 1; -%}\n{%+ let b = 2; %}\n");
-		assert.match(2, length(filter(types, (t) => t === 'lexical_declaration')));
-		assert.match(0, length(filter(types, (t) => index(t, 'statement_tag_') === 0)));
+		assert.match(['lexical_declaration', 'text_statement', 'lexical_declaration', 'text_statement'], types);
 	});
 
 	it('surfaces every statement of a multi-statement tag', () => {
 		let types = stmtTypes("{% let a = 1; let b = 2; %}\n");
-		let lex = filter(types, (t) => t === 'lexical_declaration');
-		assert.match(2, length(lex));
+		assert.match(['lexical_declaration', 'lexical_declaration', 'text_statement'], types);
 	});
 
 	it('a spanning form is the ordinary statement', () => {
 		let types = stmtTypes("{% for (x in xs): %}\n{{ x }}\n{% endfor %}\n");
-		assert.match(contains(['for_in_alt_statement']), types);
+		assert.match(['for_in_alt_statement', 'text_statement'], types);
 	});
 });
 

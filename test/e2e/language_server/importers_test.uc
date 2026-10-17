@@ -71,17 +71,6 @@ describe('importers of a changed file', () => {
 		assert.match('unchanged', lsp.documentDiagnostics(proc, B, before.resultId).kind);
 	});
 
-	it('get one diagnostic refresh for a burst of edits', () => {
-		open(LIB, LIB_V1);
-		open(B, IMPORTER.text);
-		for (let v = 2; v <= 6; v++)
-			lsp.change(proc, LIB, (v % 2) ? LIB_V1 : LIB_V2, v);
-		system('sleep 1');  // past the refresh delay
-		lsp.send(proc, { jsonrpc: '2.0', id: 77, method: 'workspace/symbol', params: { query: 'zzz' } });
-		let r = lsp.receiveUntil(proc, 77);
-		assert.match(['workspace/diagnostic/refresh'], r.requests);
-	});
-
 	it('see an edit to the imported file on disk', () => {
 		open(B, IMPORTER.text);
 		let before = lsp.documentDiagnostics(proc, B);
@@ -126,5 +115,66 @@ describe('importers of a changed file', () => {
 		let after = lsp.documentDiagnostics(proc, B, before.resultId);
 		assert.match('full', after.kind);
 		assert.match(contains(['unknown-import']), codes(after));
+	});
+});
+
+// The server asks the client to re-pull every diagnostic (a refresh) when a
+// change may have altered other files' diagnostics, once per burst.
+describe('diagnostic refreshes', () => {
+	let REFRESH = ['workspace/diagnostic/refresh'];
+
+	function watched(uri, type) {
+		lsp.send(proc, { jsonrpc: '2.0', method: 'workspace/didChangeWatchedFiles', params: {
+			changes: [{ uri, type }],
+		}});
+	}
+
+	it('one for a burst of edits that change an imported interface', () => {
+		open(LIB, LIB_V1);
+		open(B, IMPORTER.text);
+		lsp.settle(proc);
+		for (let v = 2; v <= 6; v++)
+			lsp.change(proc, LIB, (v % 2) ? LIB_V1 : LIB_V2, v);
+		assert.match(REFRESH, lsp.settle(proc));
+	});
+
+	it('none when an edit leaves the exports as they were', () => {
+		open(LIB, LIB_V1);
+		open(B, IMPORTER.text);
+		lsp.settle(proc);
+		lsp.change(proc, LIB, replace(LIB_V1, "return 'x';", "let y = 'y'; return y;"), 2);
+		assert.match([], lsp.settle(proc));
+	});
+
+	it('none for an edit to a file nothing imports', () => {
+		open(B, IMPORTER.text);
+		lsp.settle(proc);
+		lsp.change(proc, B, IMPORTER.text + "let more = 1;\n", 2);
+		assert.match([], lsp.settle(proc));
+	});
+
+	it('one when an imported file changes on disk', () => {
+		open(B, IMPORTER.text);
+		lsp.settle(proc);
+		fs.writefile(ws + '/src/lib.uc', LIB_V2);
+		watched(LIB, 2);
+		assert.match(REFRESH, lsp.settle(proc));
+	});
+
+	it('one when a file appears that an import was waiting for', () => {
+		open(B, "import { g } from 'newlib';\ng();\n");
+		lsp.settle(proc);
+		fs.writefile(ws + '/src/newlib.uc', "export function g() {};\n");
+		watched('file://' + ws + '/src/newlib.uc', 1);
+		assert.match(REFRESH, lsp.settle(proc));
+	});
+
+	it('none for a disk change to a file open in the editor', () => {
+		open(LIB, LIB_V1);
+		open(B, IMPORTER.text);
+		lsp.settle(proc);
+		fs.writefile(ws + '/src/lib.uc', LIB_V2);
+		watched(LIB, 2);
+		assert.match([], lsp.settle(proc));
 	});
 });

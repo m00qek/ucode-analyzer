@@ -1,5 +1,6 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, any_order } from 'utest';
 import * as lsp from 'client';
+import { cursors } from 'cursor';
 
 let proc;
 
@@ -13,21 +14,33 @@ teardown(() => {
 	assert.match(0, lsp.close(proc));
 });
 
+// The range from marker a to marker b.
+function span(src, a, b) {
+	return { start: src.at[a], end: src.at[b] };
+}
+
+// The DocumentSymbol `name` of this SymbolKind: its declaration from marker a
+// to b of src, its name from c to d.
+function symbol(src, name, kind, a, b, c, d) {
+	return { name, kind, range: span(src, a, b), selectionRange: span(src, c, d) };
+}
+
 describe('textDocument/documentSymbol', () => {
 
 	it('returns symbols for all top-level declarations', () => {
-		lsp.open(proc, 'file:///t.uc', "let count = 0;\nfunction greet() {}\n");
+		let src = cursors("$1let $3count$4 = 0;$2\n$5function $7greet$8() {}$6\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
 
 		let resp = lsp.receive(proc);
-		let names = sort(map(resp.result, (s) => s.name));
 
 		assert.match(1, resp.id);
-		assert.match(2, length(resp.result));
-		assert.match('count', names[0]);
-		assert.match('greet', names[1]);
+		assert.match(any_order([
+			symbol(src, 'count', 13, 1, 2, 3, 4),   // Variable
+			symbol(src, 'greet', 12, 5, 6, 7, 8),   // Function
+		]), resp.result);
 	});
 
 	it('returns empty list for a file with no declarations', () => {
@@ -43,21 +56,23 @@ describe('textDocument/documentSymbol', () => {
 	});
 
 	it('finds nested function declarations inside a function body as children', () => {
-		lsp.open(proc, 'file:///t.uc', "function outer() {\n  function inner() {}\n}\n");
+		let src = cursors("$1function $3outer$4() {\n  $5function $7inner$8() {}$6\n}$2\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
 
 		let resp = lsp.receive(proc);
 
-		assert.match(1, length(resp.result));
-		assert.match('outer', resp.result[0].name);
-		assert.match(1, length(resp.result[0].children));
-		assert.match('inner', resp.result[0].children[0].name);
+		assert.match([ {
+			...symbol(src, 'outer', 12, 1, 2, 3, 4),
+			children: [ symbol(src, 'inner', 12, 5, 6, 7, 8) ],
+		} ], resp.result);
 	});
 
 	it('finds function-valued object properties as children of the variable', () => {
-		lsp.open(proc, 'file:///t.uc', "const M = { handle: x => x, value: 1 };\n");
+		let src = cursors("$1const $3M$4 = { $5$7handle$8: x => x$6, value: 1 };$2\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/documentSymbol', params: {
 			textDocument: { uri: 'file:///t.uc' },
 		}});
@@ -65,10 +80,9 @@ describe('textDocument/documentSymbol', () => {
 		let resp = lsp.receive(proc);
 
 		// M (CONSTANT) at top level; handle (FUNCTION) as a child; value is plain, not emitted
-		assert.match(1, length(resp.result));
-		assert.match('M', resp.result[0].name);
-		assert.match(1, length(resp.result[0].children));
-		assert.match('handle', resp.result[0].children[0].name);
-		assert.match(12, resp.result[0].children[0].kind);
+		assert.match([ {
+			...symbol(src, 'M', 14, 1, 2, 3, 4),
+			children: [ symbol(src, 'handle', 12, 5, 6, 7, 8) ],
+		} ], resp.result);
 	});
 });

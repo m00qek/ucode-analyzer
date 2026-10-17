@@ -16,12 +16,13 @@ describe('ts (node/tree lifecycle)', () => {
 		let decl = ts.namedChild(root, 0);
 		assert.match('lexical_declaration', ts.nodeType(decl));
 		assert.match(src, ts.text(decl, src));
-		assert.match(true, ts.parent(decl) !== null);
+		assert.match('program', ts.nodeType(ts.parent(decl)));
+		assert.match(src, ts.text(ts.parent(decl), src));
 	});
 
 	it('namedChildren() collects all named children', () => {
 		let tree = ts.parse(ts.newParser(ts.ucode()), 'let x = 5;');
-		assert.match(1, length(ts.namedChildren(ts.rootNode(tree))));
+		assert.match(['lexical_declaration'], map(ts.namedChildren(ts.rootNode(tree)), ts.nodeType));
 	});
 
 	it('parses the ucdocs grammar too', () => {
@@ -220,12 +221,12 @@ describe('ts (query API)', () => {
 		let query = ts.newQuery(ts.ucode(), '(variable_declarator name: (identifier) @name)');
 
 		let caps = ts.queryCaptures(query, root, src);
-		assert.match(2, length(caps));
-		assert.match('x', ts.text(caps[0].node, src));
-		assert.match('y', ts.text(caps[1].node, src));
+		assert.match([['name', 'x'], ['name', 'y']], map(caps, (c) => [c.name, ts.text(c.node, src)]));
 
+		// one match per declarator, each with its one capture
 		let matches = ts.queryMatches(query, root, src);
-		assert.match(2, length(matches));
+		assert.match([[0, [['name', 'x']]], [0, [['name', 'y']]]], map(matches, (m) =>
+			[m.pattern, map(m.captures, (c) => [c.name, ts.text(c.node, src)])]));
 	});
 
 	it('patternCount() returns the number of patterns in a query', () => {
@@ -244,8 +245,7 @@ describe('ts (query API)', () => {
 			'(variable_declarator name: (identifier) @name (#eq? @name "x"))');
 
 		let caps = ts.queryCaptures(query, root, src);
-		assert.match(1, length(caps));
-		assert.match('x', ts.text(caps[0].node, src));
+		assert.match(['x'], map(caps, (c) => ts.text(c.node, src)));
 	});
 
 	it('filters matches with #not-eq?', () => {
@@ -255,8 +255,7 @@ describe('ts (query API)', () => {
 			'(variable_declarator name: (identifier) @name (#not-eq? @name "y"))');
 
 		let caps = ts.queryCaptures(query, root, src);
-		assert.match(1, length(caps));
-		assert.match('x', ts.text(caps[0].node, src));
+		assert.match(['x'], map(caps, (c) => ts.text(c.node, src)));
 	});
 
 	it('filters matches with #match?', () => {
@@ -266,8 +265,7 @@ describe('ts (query API)', () => {
 			'(variable_declarator name: (identifier) @name (#match? @name "^y$"))');
 
 		let caps = ts.queryCaptures(query, root, src);
-		assert.match(1, length(caps));
-		assert.match('y', ts.text(caps[0].node, src));
+		assert.match(['y'], map(caps, (c) => ts.text(c.node, src)));
 	});
 
 	it('filters matches with #not-match?', () => {
@@ -277,8 +275,7 @@ describe('ts (query API)', () => {
 			'(variable_declarator name: (identifier) @name (#not-match? @name "^y$"))');
 
 		let caps = ts.queryCaptures(query, root, src);
-		assert.match(1, length(caps));
-		assert.match('x', ts.text(caps[0].node, src));
+		assert.match(['x'], map(caps, (c) => ts.text(c.node, src)));
 	});
 
 	it('rejects invalid query syntax', () => {

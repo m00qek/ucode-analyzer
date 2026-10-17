@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
@@ -43,7 +43,7 @@ describe('generate_jsdoc', () => {
 	});
 
 	it('documents a const-assigned arrow', () => {
-		assert.match(contains('@param {any} n'), inserted("const i$0nc = (n) => n;\n") ?? '');
+		assert.match("/**\n * @param {any} n\n */\n", inserted("const i$0nc = (n) => n;\n"));
 	});
 
 	it('is offered only on the first line of an undocumented function', () => {

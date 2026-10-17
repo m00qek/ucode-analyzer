@@ -1,4 +1,5 @@
 import { describe, it, assert, afterEach } from 'utest';
+import * as ts from 'tree_sitter';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as fixture from 'fixture';
 
@@ -14,7 +15,7 @@ describe('documents', () => {
 		assert.match('file:///x.uc', doc.uri);
 		assert.match('let x = 5;', doc.text);
 		assert.match(1, doc.version);
-		assert.match(true, doc.tree !== null);
+		assert.match('let x = 5;', ts.text(ts.rootNode(doc.tree), doc.text));
 		assert.match([0], doc.lineTable);
 	});
 
@@ -25,6 +26,7 @@ describe('documents', () => {
 
 		assert.match('let x = 5;\nlet y = 6;', doc.text);
 		assert.match(2, doc.version);
+		assert.match('let x = 5;\nlet y = 6;', ts.text(ts.rootNode(doc.tree), doc.text));
 		assert.match([0, 11], doc.lineTable);
 	});
 
@@ -43,13 +45,19 @@ describe('documents', () => {
 		assert.match(null, documents.get('file:///unknown.uc'));
 	});
 
+	// The bindings in scope at the end of the document's scope map.
+	function lastBindings(map) {
+		return map[length(map) - 1].scope.bindings;
+	}
+
 	it('builds the scope map on first get(), not on open() or change()', () => {
+		let INT = { kind: 'primitive', name: 'int' };
 		let opened = documents.open('file:///x.uc', 'let x = 5;', 1);
 		assert.match(null, opened.scopeMap);
-		assert.match(true, documents.get('file:///x.uc').scopeMap !== null);
+		assert.match({ x: INT }, lastBindings(documents.get('file:///x.uc').scopeMap));
 		let changed = documents.change('file:///x.uc', [{ text: 'let y = 6;' }], 2);
 		assert.match(null, changed.scopeMap);
-		assert.match(true, documents.get('file:///x.uc').scopeMap !== null);
+		assert.match({ y: INT }, lastBindings(documents.get('file:///x.uc').scopeMap));
 	});
 
 	it('markStale() makes the next get() rebuild the scope map', () => {

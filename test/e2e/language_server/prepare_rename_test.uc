@@ -31,9 +31,7 @@ describe('textDocument/prepareRename', () => {
 		let resp = prepareRename(1, src.at[0]);
 
 		assert.match(1, resp.id);
-		assert.match(true, resp.result !== null);
-		assert.match('count', resp.result.placeholder);
-		assert.match({ start: src.at[1], end: src.at[2] }, resp.result.range);
+		assert.match({ range: { start: src.at[1], end: src.at[2] }, placeholder: 'count' }, resp.result);
 	});
 
 	it('returns null when cursor is not on an identifier', () => {

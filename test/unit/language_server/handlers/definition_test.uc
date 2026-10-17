@@ -27,6 +27,11 @@ function definitionImporting(src) {
 	return definition(URI, documents.get(URI), src.at[0]);
 }
 
+// The zero-width Location definition() returns for `pos` in `uri`.
+function point(uri, pos) {
+	return { uri, range: { start: pos, end: pos } };
+}
+
 afterEach(() => {
 	documents.close(URI);
 	dag.remove(URI);
@@ -42,24 +47,21 @@ describe('definition — local declarations', () => {
 		let src = cursors("let $1count = 0;\n$0count;");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('finds a const declaration', () => {
 		let src = cursors("const $1MAX = 100;\n$0MAX;");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('finds a function declaration', () => {
 		let src = cursors("function $1greet() {}\n$0greet;");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('resolves a forward reference to a later function declaration', () => {
@@ -69,24 +71,21 @@ describe('definition — local declarations', () => {
 		let src = cursors("$0foo();\nfunction $1foo() { return 1; }\n");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('resolves a use of a let before its declaration in the same block', () => {
 		let src = cursors("$0x;\nlet $1x = 1;\n");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('finds an exported let declaration', () => {
 		let src = cursors("export let $1x = 1;\n$0x;");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('returns null for an unknown identifier', () => {
@@ -116,8 +115,7 @@ describe('definition — named imports (inline export)', () => {
 	it('jumps to export function declaration in source file', () => {
 		let result = definitionImporting(cursors("import { parse } from 'parser';\n$0parse;\n"));
 
-		assert.match(PARSER_URI, result.uri);
-		assert.match(locate(fixture.read('parser.uc'), 'export function parse(', 0, length('export function ')), result.range.start);
+		assert.match(point(PARSER_URI, locate(fixture.read('parser.uc'), 'export function parse(', 0, length('export function '))), result);
 	});
 
 	it('returns null when the imported name does not exist in source', () => {
@@ -137,16 +135,14 @@ describe('definition — named imports (export clause)', () => {
 		// greet.uc: function greet() {}  export { greet };
 		let result = definitionImporting(cursors("import { greet } from 'greet';\n$0greet;\n"));
 
-		assert.match(GREET_URI, result.uri);
-		assert.match(locate(fixture.read('greet.uc'), 'function greet', 0, length('function ')), result.range.start);
+		assert.match(point(GREET_URI, locate(fixture.read('greet.uc'), 'function greet', 0, length('function '))), result);
 	});
 
 	it('extractExports reports export-clause names in the DAG', () => {
-		let exps = dag.exportsOf(GREET_URI);
-		assert.match(true, exps !== null);
-		assert.match(1, length(exps));
-		assert.match('greet', exps[0].name);
-		assert.match('function', exps[0].kind);
+		assert.match([ {
+			name: 'greet', kind: 'function', doc: null, params: [], valueType: null,
+			position: locate(fixture.read('greet.uc'), 'function greet', 0, length('function ')),
+		} ], dag.exportsOf(GREET_URI));
 	});
 });
 
@@ -160,8 +156,7 @@ describe('definition — cross-file default import', () => {
 		// default_export.uc: export default { k: 2 };
 		let result = definitionImporting(cursors("import x from 'default_export';\n$0x;\n"));
 
-		assert.match(DE_URI, result.uri);
-		assert.match(locate(fixture.read('default_export.uc'), 'export default {', 0, length('export default ')), result.range.start);
+		assert.match(point(DE_URI, locate(fixture.read('default_export.uc'), 'export default {', 0, length('export default '))), result);
 	});
 });
 
@@ -175,8 +170,7 @@ describe('definition — cross-file into a template module', () => {
 		// template_lib.uc: {% export function render(name) {...}; %}
 		let result = definitionImporting(cursors("import { render } from 'template_lib';\n$0render;\n"));
 
-		assert.match(TPL_URI, result.uri);
-		assert.match(locate(fixture.read('template_lib.uc'), 'export function render', 0, length('export function ')), result.range.start);
+		assert.match(point(TPL_URI, locate(fixture.read('template_lib.uc'), 'export function render', 0, length('export function '))), result);
 	});
 });
 
@@ -189,8 +183,7 @@ describe('definition — namespace import alias', () => {
 	it('jumps to the top of the imported module file', () => {
 		let result = definitionImporting(cursors("import * as p from 'parser';\n$0p;\n"));
 
-		assert.match(PARSER_URI, result.uri);
-		assert.match({ line: 0, character: 0 }, result.range.start);
+		assert.match(point(PARSER_URI, { line: 0, character: 0 }), result);
 	});
 
 	it('returns null for an identifier that is not a namespace alias', () => {
@@ -208,8 +201,7 @@ describe('definition — member expression (namespace import)', () => {
 	it('jumps to the export in the module when cursor is on the property', () => {
 		let result = definitionImporting(cursors("import * as p from 'parser';\np.$0parse;\n"));
 
-		assert.match(PARSER_URI, result.uri);
-		assert.match(locate(fixture.read('parser.uc'), 'export function parse(', 0, length('export function ')), result.range.start);
+		assert.match(point(PARSER_URI, locate(fixture.read('parser.uc'), 'export function parse(', 0, length('export function '))), result);
 	});
 
 	it('returns null for a property not exported by the module', () => {
@@ -227,19 +219,17 @@ describe('definition — require() module loader', () => {
 	// greet.uc: function greet() {}  export { greet };
 	it('jumps to the module file when cursor is on the require() string', () => {
 		let result = definitionImporting(cursors("let mod = require(\"gr$0eet\");\nmod.greet;\n"));
-		assert.match(GREET_URI, result.uri);
-		assert.match({ line: 0, character: 0 }, result.range.start);
+		assert.match(point(GREET_URI, { line: 0, character: 0 }), result);
 	});
 
 	it('jumps to the module file from a use of the require-bound variable', () => {
 		let result = definitionImporting(cursors("let mod = require(\"greet\");\n$0mod.greet;\n"));
-		assert.match(GREET_URI, result.uri);
-		assert.match({ line: 0, character: 0 }, result.range.start);
+		assert.match(point(GREET_URI, { line: 0, character: 0 }), result);
 	});
 
 	it('jumps into the module on member access of a require-bound variable', () => {
 		let result = definitionImporting(cursors("let mod = require(\"greet\");\nmod.$0greet;\n"));
-		assert.match(GREET_URI, result.uri);
+		assert.match(point(GREET_URI, locate(fixture.read('greet.uc'), 'function greet', 0, length('function '))), result);
 	});
 
 	it('does not treat a non-require string literal as a module jump', () => {
@@ -258,7 +248,7 @@ describe('definition — require() module loader', () => {
 		let LEGACY_URI = fixture.uri('legacy_mod.uc');
 		dag.addFromDisk(LEGACY_URI);
 		let result = definitionImporting(cursors("let m = require(\"legacy_mod\");\nm.$0greet;\n"));
-		assert.match(LEGACY_URI, result.uri);
+		assert.match(point(LEGACY_URI, locate(fixture.read('legacy_mod.uc'), 'greet: function')), result);
 		dag.remove(LEGACY_URI);
 	});
 });
@@ -268,16 +258,14 @@ describe('definition — function parameters', () => {
 		let src = cursors("function parse($1ts, opts) {\n$0ts;\n}");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('resolves to the innermost parameter when nested functions shadow the name', () => {
 		let src = cursors("function outer(x) {\nfunction inner($1x) {\n$0x;\n}\n}");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('does not match a parameter from a sibling function', () => {
@@ -288,14 +276,13 @@ describe('definition — function parameters', () => {
 	it('jumps to a rest parameter of a function', () => {
 		let src = cursors("function f(a, ...$1rest) {\n\treturn $0rest;\n}\n");
 		let result = definitionAt(src);
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to a rest parameter of an arrow function', () => {
 		let src = cursors("let g = (...$1xs) => $0xs;\n");
 		let result = definitionAt(src);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 });
 
@@ -303,63 +290,57 @@ describe('definition — local (block/loop/catch) declarations', () => {
 	it('jumps to a function-local let declaration', () => {
 		let src = cursors("function f() {\n\tlet $1x = 1;\n\treturn $0x;\n}\n");
 		let result = definitionAt(src);
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('resolves to the innermost let when a nested block shadows the name', () => {
 		let src = cursors("function f() {\n\tlet x = 1;\n\t{\n\t\tlet $1x = 2;\n\t\treturn $0x;\n\t}\n}\n");
 		let result = definitionAt(src);
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to a for-in loop variable', () => {
 		let src = cursors("for (let $1k in obj) {\n\tprint($0k);\n}\n");
 		let result = definitionAt(src);
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to a C-style for loop variable', () => {
 		let src = cursors("for (let $1i = 0; i < 3; i++) {\n\tprint($0i);\n}\n");
 		let result = definitionAt(src);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to a catch parameter', () => {
 		let src = cursors("try {} catch ($1e) {\n\tprint($0e);\n}\n");
 		let result = definitionAt(src);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to the value variable of a two-variable for-in', () => {
 		let src = cursors("let obj = {};\nfor (let k, $1v in obj) {\n\tprint($0v);\n}\n");
 		let result = definitionAt(src);
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('a for-in without let assigns, so gd resolves to the real declaration', () => {
 		// `for (x in …)` does not declare x; gd on the body x must reach `let x`.
 		let src = cursors("let $1x = 0;\nfor (x in [1]) {\n\tprint($0x);\n}\n");
 		let result = definitionAt(src);
-		assert.match(src.at[1], result.range.start);  // the `let x`, not the loop header
+		assert.match(point(URI, src.at[1]), result);  // the `let x`, not the loop header
 	});
 
 	it('resolves an outer-function local captured by a nested closure', () => {
 		let src = cursors("function outer() {\n\tlet $1cap = 1;\n\tfunction inner() {\n\t\treturn $0cap;\n\t}\n}\n");
 		let result = definitionAt(src);
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);  // outer's `let cap`
+		assert.match(point(URI, src.at[1]), result);  // outer's `let cap`
 	});
 
 	it('resolves a parameter that shadows a builtin name to the parameter', () => {
 		// 'length' is a builtin; as a param it must resolve locally, not to global.d.uc
 		let src = cursors("function f($1length) {\n\treturn $0length;\n}\n");
 		let result = definitionAt(src);
-		assert.match(URI, result.uri);                    // the param, not the builtin file
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);                    // the param, not the builtin file
 	});
 });
 
@@ -403,6 +384,7 @@ describe('definition — local binder identity (property)', () => {
 			dag.remove(URI);
 			assert.match(true, r !== null);
 			assert.match(c.name, identAt(b.text, r.range.start));
+			assert.match(r.range.start, r.range.end);
 		});
 });
 
@@ -420,9 +402,7 @@ describe('definition — member expression (record type, named import)', () => {
 		let src = cursors("let api = { $1greet: function(name) {}, bye: function() {} };\napi.$0greet;");
 		let result = definitionImporting(src);
 
-		assert.match(true, result !== null);
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('returns null when property does not exist on the record', () => {
@@ -440,9 +420,7 @@ describe('definition — chained member expression', () => {
 		let src = cursors("let api = { sub: { $1go: function() {}, stop: function() {} } };\napi.sub.$0go;");
 		let result = definitionImporting(src);
 
-		assert.match(true, result !== null);
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('returns null when intermediate member does not exist', () => {
@@ -457,39 +435,34 @@ describe('definition — brace-spanning template tag bindings', () => {
 		let src = cursors("{% for (let $1x in [1]) { %}\n{{ $0x }}\n{% } %}\n");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to a C-for initializer variable in a brace-spanning tag', () => {
 		let src = cursors("{% for (let $1i = 0; i < 3; i++) { %}\n{{ $0i }}\n{% } %}\n");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to a catch parameter in a brace-spanning try tag', () => {
 		let src = cursors("{% try { %}\nx\n{% } catch ($1e) { %}\n{{ $0e }}\n{% } %}\n");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to a parameter of a brace-spanning function tag', () => {
 		let src = cursors("{% function f($1a, b) { %}\n{{ $0a }}\n{% } %}\n");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 
 	it('jumps to a parameter of a colon-form function tag', () => {
 		let src = cursors("{% function g($1a): %}\n{{ $0a }}\n{% endfunction %}\n");
 		let result = definitionAt(src);
 
-		assert.match(URI, result.uri);
-		assert.match(src.at[1], result.range.start);
+		assert.match(point(URI, src.at[1]), result);
 	});
 });

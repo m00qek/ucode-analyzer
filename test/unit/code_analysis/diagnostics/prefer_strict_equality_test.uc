@@ -1,10 +1,26 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { preferStrictEquality } from 'ucode_analyzer.code_analysis.diagnostics.prefer_strict_equality';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
 afterEach(() => documents.close(URI));
+
+// The hints for a marked snippet: one per loose operator, on the marker pairs
+// ($0,$1), ($2,$3), … in order, each suggesting its strict form.
+function check(marked) {
+	let src = cursors(marked), want = [];
+	for (let i = 0; i + 1 < length(src.at); i += 2) {
+		let op = substr(src.text, src.offset[i], src.offset[i + 1] - src.offset[i]);
+		push(want, {
+			range: { start: src.at[i], end: src.at[i + 1] }, severity: 4, source: 'ucode-analyzer',
+			code: 'prefer-strict-equality', message: sprintf("Prefer '%s=' over '%s'", op, op),
+		});
+	}
+	documents.open(URI, src.text, 1);
+	return { want, got: preferStrictEquality(documents.get(URI)) };
+}
 
 describe('diagnostics — prefer strict equality', () => {
 	it('returns empty list when no == or != is used', () => {
@@ -13,30 +29,16 @@ describe('diagnostics — prefer strict equality', () => {
 		assert.match(0, length(preferStrictEquality(documents.get(URI))));
 	});
 
-	it('hints for == with severity 4', () => {
-		documents.open(URI, "let x = 1 == 1;\n", 1);
-
-		let diags = preferStrictEquality(documents.get(URI));
-
-		assert.match(1, length(diags));
-		assert.match(4, diags[0].severity);
-	});
-
-	it('message suggests === when operator is ==', () => {
-		documents.open(URI, "let x = 1 == 2;\n", 1);
-
-		let d = preferStrictEquality(documents.get(URI))[0];
-
-		assert.match(contains('==='), d.message);
-		assert.match(contains('=='), d.message);
+	it('hints for == on the operator token, suggesting ===', () => {
+		let r = check("let x = 1 $0==$1 2;\n");
+		assert.match("Prefer '===' over '=='", r.want[0].message);
+		assert.match(r.want, r.got);  // a HINT
 	});
 
 	it('hints for != and suggests !==', () => {
-		documents.open(URI, "let x = 1 != 2;\n", 1);
-
-		let d = preferStrictEquality(documents.get(URI))[0];
-
-		assert.match(contains('!=='), d.message);
+		let r = check("let x = 1 $0!=$1 2;\n");
+		assert.match("Prefer '!==' over '!='", r.want[0].message);
+		assert.match(r.want, r.got);
 	});
 
 	it('does not flag === or !==', () => {
@@ -45,27 +47,13 @@ describe('diagnostics — prefer strict equality', () => {
 		assert.match(0, length(preferStrictEquality(documents.get(URI))));
 	});
 
-	it('range covers only the operator token', () => {
-		documents.open(URI, "let x = 1 == 2;\n", 1);
-
-		let r = preferStrictEquality(documents.get(URI))[0].range;
-
-		// '==' starts at column 10
-		assert.match(0, r.start.line);
-		assert.match(10, r.start.character);
-		assert.match(0, r.end.line);
-		assert.match(12, r.end.character);
-	});
-
 	it('reports one hint per operator', () => {
-		documents.open(URI, "let a = 1 == 2;\nlet b = 3 != 4;\n", 1);
-
-		assert.match(2, length(preferStrictEquality(documents.get(URI))));
+		let r = check("let a = 1 $0==$1 2;\nlet b = 3 $2!=$3 4;\n");
+		assert.match(r.want, r.got);
 	});
 
 	it('finds == nested inside a function body', () => {
-		documents.open(URI, "function f(x) { return x == null; }\n", 1);
-
-		assert.match(1, length(preferStrictEquality(documents.get(URI))));
+		let r = check("function f(x) { return x $0==$1 null; }\n");
+		assert.match(r.want, r.got);
 	});
 });

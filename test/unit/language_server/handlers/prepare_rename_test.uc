@@ -25,10 +25,8 @@ describe('prepareRename', () => {
 	});
 
 	it('returns an object with range and placeholder', () => {
-		let result = prepareAt(cursors("let $0x = 1;\n"));
-		assert.match(true, result !== null);
-		assert.match(true, type(result.range) === 'object');
-		assert.match(true, type(result.placeholder) === 'string');
+		let src = cursors("let $0$1x$2 = 1;\n");
+		assert.match({ range: { start: src.at[1], end: src.at[2] }, placeholder: 'x' }, prepareAt(src));
 	});
 
 	it('placeholder matches the identifier text', () => {
@@ -49,10 +47,8 @@ describe('prepareRename', () => {
 		assert.match({ start: src.at[1], end: src.at[2] }, result.range);
 	});
 
-	it('returns null for unique identifier with no references (only declaration)', () => {
-		// A unique identifier that appears only once still has a valid anchor
-		let result = prepareAt(cursors("let $0unique = 1;\nunique;\n"));
-		assert.match(true, result !== null);
-		assert.match('unique', result.placeholder);
+	it('anchors on an identifier that appears only once', () => {
+		let src = cursors("let $0$1unique$2 = 1;\n");
+		assert.match({ range: { start: src.at[1], end: src.at[2] }, placeholder: 'unique' }, prepareAt(src));
 	});
 });

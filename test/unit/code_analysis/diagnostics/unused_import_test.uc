@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { unusedImports } from 'ucode_analyzer.code_analysis.diagnostics.unused_import';
 import { cursors } from 'cursor';
@@ -12,17 +12,26 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// The hints for a marked snippet: one per unused local name, on the marker
+// pairs ($0,$1), ($2,$3), … in order.
+function check(marked, ...names) {
+	let src = cursors(marked), want = [];
+	for (let i = 0; i < length(names); i++)
+		push(want, {
+			range: { start: src.at[2 * i], end: src.at[2 * i + 1] }, severity: 4, source: 'ucode-analyzer',
+			code: 'unused-import', message: sprintf("'%s' is imported but never used", names[i]),
+		});
+	return { want, got: unusedImports(open(src.text)) };
+}
+
 describe('diagnostics — unused imports', () => {
 	it('returns empty list when there are no imports', () => {
 		assert.match(0, length(unusedImports(open("let x = 1;\n"))));
 	});
 
-	it('hints for a named import that is never referenced', () => {
-		let diags = unusedImports(open("import { foo } from 'parser';\n"));
-		assert.match(1, length(diags));
-		assert.match(4, diags[0].severity);   // HINT
-		assert.match('unused-import', diags[0].code);
-		assert.match(contains("'foo'"), diags[0].message);
+	it('hints for a named import that is never referenced, on its identifier', () => {
+		let r = check("import { $0foo$1 } from 'parser';\n", 'foo');
+		assert.match(r.want, r.got);  // a HINT
 	});
 
 	it('does not hint for a named import that is used', () => {
@@ -31,10 +40,8 @@ describe('diagnostics — unused imports', () => {
 	});
 
 	it('hints for a namespace alias that is never referenced', () => {
-		let diags = unusedImports(open("import * as ts from 'parser';\n"));
-		assert.match(1, length(diags));
-		assert.match('unused-import', diags[0].code);
-		assert.match(contains("'ts'"), diags[0].message);
+		let r = check("import * as $0ts$1 from 'parser';\n", 'ts');
+		assert.match(r.want, r.got);
 	});
 
 	it('does not hint for a namespace alias that is used', () => {
@@ -44,28 +51,20 @@ describe('diagnostics — unused imports', () => {
 
 	it('handles aliased imports: uses local name, not original', () => {
 		// import { foo as bar } — bar is the local name; using bar is fine
-		let used   = unusedImports(open("import { foo as bar } from 'parser';\nbar();\n"));
-		let unused = unusedImports(open("import { foo as bar } from 'parser';\n"));
+		let used = unusedImports(open("import { foo as bar } from 'parser';\nbar();\n"));
 		assert.match(0, length(used));
-		assert.match(1, length(unused));
-		assert.match(contains("'bar'"), unused[0].message);
+		let r = check("import { foo as $0bar$1 } from 'parser';\n", 'bar');
+		assert.match(r.want, r.got);
 	});
 
 	it('reports each unused specifier individually', () => {
-		let diags = unusedImports(open("import { a, b, c } from 'parser';\n"));
-		assert.match(3, length(diags));
+		let r = check("import { $0a$1, $2b$3, $4c$5 } from 'parser';\n", 'a', 'b', 'c');
+		assert.match(r.want, r.got);
 	});
 
 	it('does not report specifiers used in the same import block', () => {
 		// 'a' used, 'b' not — only 'b' warned
-		let diags = unusedImports(open("import { a, b } from 'parser';\na();\n"));
-		assert.match(1, length(diags));
-		assert.match(contains("'b'"), diags[0].message);
-	});
-
-	it('range points at the local identifier token', () => {
-		let src = cursors("import { $0foo$1 } from 'parser';\n");
-		let diags = unusedImports(open(src.text));
-		assert.match({ start: src.at[0], end: src.at[1] }, diags[0].range);
+		let r = check("import { a, $0b$1 } from 'parser';\na();\n", 'b');
+		assert.match(r.want, r.got);
 	});
 });

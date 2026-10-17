@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, assert, any_order } from 'utest';
 import * as uloop from 'uloop';
 import { shardRoundRobin, fanOut, jobsFor } from 'ucode_analyzer.code_analysis.parallel';
 
@@ -11,7 +11,7 @@ function nums(n) {
 
 describe('parallel — shardRoundRobin', () => {
 	it('creates exactly `jobs` shards', () => {
-		assert.match(3, length(shardRoundRobin(nums(10), 3)));
+		assert.match([[0, 3, 6, 9], [1, 4, 7], [2, 5, 8]], shardRoundRobin(nums(10), 3));
 	});
 
 	it('assigns every item exactly once (no loss, no duplication)', () => {
@@ -27,9 +27,7 @@ describe('parallel — shardRoundRobin', () => {
 
 	it('spreads work evenly (round-robin, sizes differ by at most one)', () => {
 		let shards = shardRoundRobin(nums(10), 3);
-		assert.match(4, length(shards[0]));   // items 0,3,6,9
-		assert.match(3, length(shards[1]));   // items 1,4,7
-		assert.match(3, length(shards[2]));   // items 2,5,8
+		assert.match([4, 3, 3], map(shards, length));
 	});
 
 	it('places item i in shard (i % jobs)', () => {
@@ -42,19 +40,12 @@ describe('parallel — shardRoundRobin', () => {
 
 	it('leaves empty shards when jobs exceed items', () => {
 		let shards = shardRoundRobin(nums(2), 4);
-		assert.match(4, length(shards));
-		assert.match(1, length(shards[0]));
-		assert.match(1, length(shards[1]));
-		assert.match(0, length(shards[2]));
-		assert.match(0, length(shards[3]));
+		assert.match([[0], [1], [], []], shards);
 	});
 
 	it('a single job holds all items in order', () => {
 		let shards = shardRoundRobin(nums(5), 1);
-		assert.match(1, length(shards));
-		assert.match(5, length(shards[0]));
-		assert.match(0, shards[0][0]);
-		assert.match(4, shards[0][4]);
+		assert.match([[0, 1, 2, 3, 4]], shards);
 	});
 });
 
@@ -73,7 +64,7 @@ describe('parallel — fanOut', () => {
 
 		assert.match(true, doneCalled);
 		assert.match(0, itemCalls);
-		assert.match(0, length(tasks));
+		assert.match([], tasks);
 	});
 });
 
@@ -103,8 +94,7 @@ describe('parallel — fanOut across worker processes', () => {
 	it('delivers a null result as an item, not as the end of a worker', () => {
 		let r = runFanOut(nums(4), 2, (x) => (x % 2) ? x : null);
 		assert.match(1, r.doneCount);
-		assert.match(4, length(r.results));
-		assert.match(2, length(filter(r.results, (v) => v === null)));
+		assert.match(any_order([null, 1, null, 3]), r.results);
 	});
 
 	it('skips an item whose work throws and still completes', () => {

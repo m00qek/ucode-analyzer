@@ -1,6 +1,7 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { assignmentToConst } from 'ucode_analyzer.code_analysis.diagnostics.const_assignment';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -11,29 +12,38 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// The errors for a marked snippet: `$0name$1` is the assigned identifier and
+// `$2const$3` its declaration's keyword (the quick fix rewrites it).
+function check(marked, name) {
+	let src = cursors(marked);
+	return {
+		want: [{
+			range: { start: src.at[0], end: src.at[1] }, severity: 1, source: 'ucode-analyzer',
+			code: 'const-assignment', message: sprintf("Cannot assign to '%s' — it is declared const", name),
+			data: { constKeywordRange: { start: src.at[2], end: src.at[3] } },
+		}],
+		got: assignmentToConst(open(src.text)),
+	};
+}
+
 describe('diagnostics — assignment to const', () => {
 	it('returns empty list for let reassignment', () => {
 		assert.match(0, length(assignmentToConst(open("let x = 1;\nx = 2;\n"))));
 	});
 
-	it('errors on direct assignment to const', () => {
-		let diags = assignmentToConst(open("const x = 1;\nx = 2;\n"));
-		assert.match(1, length(diags));
-		assert.match(1, diags[0].severity);  // ERROR
-		assert.match('const-assignment', diags[0].code);
-		assert.match(contains("'x'"), diags[0].message);
+	it('errors on direct assignment to const, on the assigned identifier', () => {
+		let r = check("$2const$3 x = 1;\n$0x$1 = 2;\n", 'x');
+		assert.match(r.want, r.got);  // an ERROR
 	});
 
 	it('errors on augmented assignment to const', () => {
-		let diags = assignmentToConst(open("const n = 0;\nn += 1;\n"));
-		assert.match(1, length(diags));
-		assert.match('const-assignment', diags[0].code);
+		let r = check("$2const$3 n = 0;\n$0n$1 += 1;\n", 'n');
+		assert.match(r.want, r.got);
 	});
 
 	it('errors on update expression (++) on const', () => {
-		let diags = assignmentToConst(open("const n = 0;\nn++;\n"));
-		assert.match(1, length(diags));
-		assert.match('const-assignment', diags[0].code);
+		let r = check("$2const$3 n = 0;\n$0n$1++;\n", 'n');
+		assert.match(r.want, r.got);
 	});
 
 	it('inner block can shadow a const with a let', () => {
@@ -42,23 +52,13 @@ describe('diagnostics — assignment to const', () => {
 	});
 
 	it('inner block cannot reassign outer const when not shadowed', () => {
-		let text = "const x = 1;\nfunction f() {\n  x = 2;\n}\n";
-		let diags = assignmentToConst(open(text));
-		assert.match(1, length(diags));
-		assert.match('const-assignment', diags[0].code);
+		let r = check("$2const$3 x = 1;\nfunction f() {\n  $0x$1 = 2;\n}\n", 'x');
+		assert.match(r.want, r.got);
 	});
 
 	it('const declared in inner scope: error only within that scope', () => {
-		let text = "function f() {\n  const y = 1;\n  y = 2;\n}\n";
-		let diags = assignmentToConst(open(text));
-		assert.match(1, length(diags));
-		assert.match(contains("'y'"), diags[0].message);
-	});
-
-	it('reports range on the identifier being assigned', () => {
-		let diags = assignmentToConst(open("const x = 1;\nx = 2;\n"));
-		assert.match(1, diags[0].range.start.line);
-		assert.match(0, diags[0].range.start.character);
+		let r = check("function f() {\n  $2const$3 y = 1;\n  $0y$1 = 2;\n}\n", 'y');
+		assert.match(r.want, r.got);
 	});
 
 	it('no false positive for const used in a read-only way', () => {
@@ -67,8 +67,7 @@ describe('diagnostics — assignment to const', () => {
 	});
 
 	it('checks the right side of an assignment after a comment', () => {
-		let diags = assignmentToConst(open("const y = 1;\nlet x;\nx /* c */ = (y = 2);\n"));
-		assert.match(1, length(diags));
-		assert.match(contains("'y'"), diags[0].message);
+		let r = check("$2const$3 y = 1;\nlet x;\nx /* c */ = ($0y$1 = 2);\n", 'y');
+		assert.match(r.want, r.got);
 	});
 });

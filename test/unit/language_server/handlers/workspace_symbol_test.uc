@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach, afterEach, contains, not } from 'utest';
+import { describe, it, assert, beforeEach, afterEach, any_order } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { workspaceSymbol } from 'ucode_analyzer.language_server.handlers.workspace_symbol';
@@ -15,6 +15,15 @@ function addDoc(uri, text) {
 	dag.add(uri, text, documents.get(uri).tree);
 }
 
+// The SymbolInformation of an export in `uri`, spanning marker pair 1–2 of `src`.
+function symbol(name, kind, uri, src) {
+	return {
+		name, kind,
+		location: { uri, range: { start: src.at[1], end: src.at[2] } },
+		containerName: replace(uri, /^.*\//, ''),
+	};
+}
+
 beforeEach(() => dag.init(_config));
 
 afterEach(() => {
@@ -26,23 +35,19 @@ afterEach(() => {
 
 describe('workspace/symbol', () => {
 	it('returns empty list when no files are indexed', () => {
-		assert.match(0, length(workspaceSymbol('')));
+		assert.match([], workspaceSymbol(''));
 	});
 
 	it('returns exported function with FUNCTION kind (12)', () => {
-		addDoc(URI_A, "export function greet() {};\n");
-		let syms = workspaceSymbol('');
-		let s = filter(syms, (s) => s.name === 'greet')[0];
-		assert.match(true, s !== null);
-		assert.match(12, s.kind);
+		let src = cursors("export function $1greet$2() {};\n");
+		addDoc(URI_A, src.text);
+		assert.match([ symbol('greet', 12, URI_A, src) ], workspaceSymbol(''));
 	});
 
 	it('returns exported variable with VARIABLE kind (13)', () => {
-		addDoc(URI_A, "export let count = 0;\n");
-		let syms = workspaceSymbol('');
-		let s = filter(syms, (s) => s.name === 'count')[0];
-		assert.match(true, s !== null);
-		assert.match(13, s.kind);
+		let src = cursors("export let $1count$2 = 0;\n");
+		addDoc(URI_A, src.text);
+		assert.match([ symbol('count', 13, URI_A, src) ], workspaceSymbol(''));
 	});
 
 	it('includes location with uri', () => {
@@ -70,41 +75,36 @@ describe('workspace/symbol', () => {
 	it('empty query returns all exported symbols', () => {
 		addDoc(URI_A, "export function a() {};\nexport function b() {};\n");
 		let names = map(workspaceSymbol(''), (s) => s.name);
-		assert.match(contains(['a']), names);
-		assert.match(contains(['b']), names);
+		assert.match(any_order([ 'a', 'b' ]), names);
 	});
 
 	it('filters by case-insensitive substring match', () => {
-		addDoc(URI_A, "export function handleRequest() {};\nexport function init() {};\n");
-		let syms = workspaceSymbol('req');
-		assert.match(1, length(syms));
-		assert.match('handleRequest', syms[0].name);
+		let src = cursors("export function $1handleRequest$2() {};\nexport function init() {};\n");
+		addDoc(URI_A, src.text);
+		assert.match([ symbol('handleRequest', 12, URI_A, src) ], workspaceSymbol('req'));
 	});
 
 	it('query is case-insensitive', () => {
-		addDoc(URI_A, "export function handleRequest() {};\n");
-		let syms = workspaceSymbol('REQ');
-		assert.match(1, length(syms));
-		assert.match('handleRequest', syms[0].name);
+		let src = cursors("export function $1handleRequest$2() {};\n");
+		addDoc(URI_A, src.text);
+		assert.match([ symbol('handleRequest', 12, URI_A, src) ], workspaceSymbol('REQ'));
 	});
 
 	it('returns symbols from multiple files', () => {
-		addDoc(URI_A, "export function fromA() {};\n");
-		addDoc(URI_B, "export function fromB() {};\n");
-		let names = map(workspaceSymbol(''), (s) => s.name);
-		assert.match(contains(['fromA']), names);
-		assert.match(contains(['fromB']), names);
+		let srcA = cursors("export function $1fromA$2() {};\n");
+		let srcB = cursors("export function $1fromB$2() {};\n");
+		addDoc(URI_A, srcA.text);
+		addDoc(URI_B, srcB.text);
+		assert.match(any_order([ symbol('fromA', 12, URI_A, srcA), symbol('fromB', 12, URI_B, srcB) ]), workspaceSymbol(''));
 	});
 
 	it('non-exported declarations are not included', () => {
 		addDoc(URI_A, "function hidden() {}\nexport function visible() {};\n");
-		let names = map(workspaceSymbol(''), (s) => s.name);
-		assert.match(not(contains(['hidden'])), names);
-		assert.match(contains(['visible']), names);
+		assert.match([ 'visible' ], map(workspaceSymbol(''), (s) => s.name));
 	});
 
 	it('query with no matches returns empty list', () => {
 		addDoc(URI_A, "export function greet() {};\n");
-		assert.match(0, length(workspaceSymbol('zzznomatch')));
+		assert.match([], workspaceSymbol('zzznomatch'));
 	});
 });

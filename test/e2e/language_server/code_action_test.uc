@@ -14,46 +14,58 @@ teardown(() => {
 	assert.match(0, lsp.close(proc));
 });
 
+// Open text at uri and return its diagnostics with this code.
+function diagnosticsOf(uri, text, code) {
+	lsp.open(proc, uri, text);
+	return filter(lsp.documentDiagnostics(proc, uri).items, (d) => d.code === code);
+}
+
+// Ask for the code actions fixing diags (at the first one's range).
+function actionsFor(uri, id, diags) {
+	lsp.send(proc, { jsonrpc: '2.0', id, method: 'textDocument/codeAction', params: {
+		textDocument: { uri },
+		range: diags[0].range,
+		context: { diagnostics: diags },
+	}});
+	return lsp.receive(proc);
+}
+
+// A quickfix for diag replacing range in uri with newText.
+function quickfix(title, diag, isPreferred, uri, range, newText) {
+	return {
+		title, kind: 'quickfix', diagnostics: [ diag ], isPreferred,
+		edit: { changes: { [uri]: [ { range, newText } ] } },
+	};
+}
+
 describe('textDocument/codeAction', () => {
 
 	it('returns a quickfix for == that replaces it with ===', () => {
 		// Open a file with == so the server reports a hint diagnostic.
-		lsp.open(proc, 'file:///t.uc', "let x = 1;\nlet y = x == 1;\ny;\n");
-		let diags = lsp.documentDiagnostics(proc, 'file:///t.uc').items;
-		let hint = filter(diags, (d) => d.severity === 4)[0];
-		assert.match(true, hint !== null);
+		let src = cursors("let x = 1;\nlet y = x $1==$2 1;\ny;\n");
+		let diags = diagnosticsOf('file:///t.uc', src.text, 'prefer-strict-equality');
+		let range = { start: src.at[1], end: src.at[2] };
+		assert.match([ { range, severity: 4, source: 'ucode-analyzer',
+			code: 'prefer-strict-equality', message: "Prefer '===' over '=='" } ], diags);
 
 		// Send the hint back as context for codeAction.
-		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/codeAction', params: {
-			textDocument: { uri: 'file:///t.uc' },
-			range: hint.range,
-			context: { diagnostics: [hint] },
-		}});
-
-		let resp = lsp.receive(proc);
+		let resp = actionsFor('file:///t.uc', 1, diags);
 		assert.match(1, resp.id);
-		assert.match(true, type(resp.result) === 'array');
-		assert.match(1, length(resp.result));
-
-		let action = resp.result[0];
-		assert.match('quickfix', action.kind);
-		assert.match(true, action.isPreferred);
-		assert.match('===', action.edit.changes['file:///t.uc'][0].newText);
+		assert.match([
+			quickfix("Replace '==' with '==='", diags[0], true, 'file:///t.uc', range, '==='),
+		], resp.result);
 	});
 
 	it('returns a quickfix for != that replaces it with !==', () => {
-		lsp.open(proc, 'file:///t2.uc', "let x = 1;\nlet y = x != 1;\ny;\n");
-		let diags = lsp.documentDiagnostics(proc, 'file:///t2.uc').items;
-		let hint = filter(diags, (d) => d.severity === 4)[0];
+		let src = cursors("let x = 1;\nlet y = x $1!=$2 1;\ny;\n");
+		let diags = diagnosticsOf('file:///t2.uc', src.text, 'prefer-strict-equality');
+		assert.match(1, length(diags));
 
-		lsp.send(proc, { jsonrpc: '2.0', id: 2, method: 'textDocument/codeAction', params: {
-			textDocument: { uri: 'file:///t2.uc' },
-			range: hint.range,
-			context: { diagnostics: [hint] },
-		}});
-
-		let resp = lsp.receive(proc);
-		assert.match('!==', resp.result[0].edit.changes['file:///t2.uc'][0].newText);
+		let resp = actionsFor('file:///t2.uc', 2, diags);
+		assert.match([
+			quickfix("Replace '!=' with '!=='", diags[0], true, 'file:///t2.uc',
+				{ start: src.at[1], end: src.at[2] }, '!=='),
+		], resp.result);
 	});
 
 	it('returns null when context diagnostics are empty', () => {
@@ -73,119 +85,75 @@ describe('textDocument/codeAction', () => {
 	it('remove_unused_import: removes the whole import statement', () => {
 		let uri = 'file:///t4.uc';
 		let src = cursors("$1import { unusedFn } from 'utest';\n$2let x = 1;\nx;\n");
-		lsp.open(proc, uri, src.text);
-		let diags = lsp.documentDiagnostics(proc, uri).items;
-		let diag = filter(diags, (d) => d.code === 'unused-import')[0];
-		assert.match(true, diag !== null);
+		let diags = diagnosticsOf(uri, src.text, 'unused-import');
+		assert.match(1, length(diags));
 
-		lsp.send(proc, { jsonrpc: '2.0', id: 4, method: 'textDocument/codeAction', params: {
-			textDocument: { uri },
-			range: diag.range,
-			context: { diagnostics: [diag] },
-		}});
-
-		let resp = lsp.receive(proc);
-		assert.match(1, length(resp.result));
-		let action = resp.result[0];
-		assert.match('quickfix', action.kind);
-		assert.match(true, action.isPreferred);
-		let edit = action.edit.changes[uri][0];
-		assert.match('', edit.newText);
+		let resp = actionsFor(uri, 4, diags);
 		// The whole import line, newline included
-		assert.match({ start: src.at[1], end: src.at[2] }, edit.range);
+		assert.match([
+			quickfix("Remove unused import 'unusedFn'", diags[0], true, uri,
+				{ start: src.at[1], end: src.at[2] }, ''),
+		], resp.result);
 	});
 
 	it('remove_unused_import: removes only the unused specifier from a multi-import', () => {
 		let uri = 'file:///t5.uc';
 		let src = cursors("import { $1describe, $2it } from 'utest';\nit;\n");
-		lsp.open(proc, uri, src.text);
-		let diags = lsp.documentDiagnostics(proc, uri).items;
-		let diag = filter(diags, (d) => d.code === 'unused-import')[0];
-		assert.match(true, diag !== null);
+		let diags = diagnosticsOf(uri, src.text, 'unused-import');
+		assert.match(1, length(diags));
 
-		lsp.send(proc, { jsonrpc: '2.0', id: 5, method: 'textDocument/codeAction', params: {
-			textDocument: { uri },
-			range: diag.range,
-			context: { diagnostics: [diag] },
-		}});
-
-		let resp = lsp.receive(proc);
-		assert.match(1, length(resp.result));
-		let edit = resp.result[0].edit.changes[uri][0];
-		assert.match('', edit.newText);
+		let resp = actionsFor(uri, 5, diags);
 		// Only the specifier is removed, not the whole line
-		assert.match({ start: src.at[1], end: src.at[2] }, edit.range);
+		assert.match([
+			quickfix("Remove unused import 'describe'", diags[0], true, uri,
+				{ start: src.at[1], end: src.at[2] }, ''),
+		], resp.result);
 	});
 
 	it('remove_duplicate_key: removes the duplicate pair', () => {
 		let uri = 'file:///t6.uc';
 		let src = cursors("let x = { a: 1, b: 2$1, a: 3$2 };\nx;\n");
-		lsp.open(proc, uri, src.text);
-		let diags = lsp.documentDiagnostics(proc, uri).items;
-		let diag = filter(diags, (d) => d.code === 'duplicate-key')[0];
-		assert.match(true, diag !== null);
+		let diags = diagnosticsOf(uri, src.text, 'duplicate-key');
+		assert.match(1, length(diags));
 
-		lsp.send(proc, { jsonrpc: '2.0', id: 6, method: 'textDocument/codeAction', params: {
-			textDocument: { uri },
-			range: diag.range,
-			context: { diagnostics: [diag] },
-		}});
-
-		let resp = lsp.receive(proc);
-		assert.match(1, length(resp.result));
-		let action = resp.result[0];
-		assert.match('quickfix', action.kind);
-		assert.match(true, action.isPreferred);
-		let edit = action.edit.changes[uri][0];
-		assert.match('', edit.newText);
-		assert.match({ start: src.at[1], end: src.at[2] }, edit.range);
+		let resp = actionsFor(uri, 6, diags);
+		assert.match([
+			quickfix("Remove duplicate key 'a'", diags[0], true, uri,
+				{ start: src.at[1], end: src.at[2] }, ''),
+		], resp.result);
 	});
 
 	it('change_const_to_let: replaces the const keyword with let', () => {
 		let uri = 'file:///t7.uc';
 		let src = cursors("$1const$2 x = 1;\nx = 2;\n");
-		lsp.open(proc, uri, src.text);
-		let diags = lsp.documentDiagnostics(proc, uri).items;
-		let diag = filter(diags, (d) => d.code === 'const-assignment')[0];
-		assert.match(true, diag !== null);
+		let diags = diagnosticsOf(uri, src.text, 'const-assignment');
+		assert.match(1, length(diags));
 
-		lsp.send(proc, { jsonrpc: '2.0', id: 7, method: 'textDocument/codeAction', params: {
-			textDocument: { uri },
-			range: diag.range,
-			context: { diagnostics: [diag] },
-		}});
-
-		let resp = lsp.receive(proc);
-		assert.match(1, length(resp.result));
-		let action = resp.result[0];
-		assert.match('quickfix', action.kind);
-		assert.match(false, action.isPreferred);
-		let edit = action.edit.changes[uri][0];
-		assert.match('let', edit.newText);
-		assert.match({ start: src.at[1], end: src.at[2] }, edit.range);
+		let resp = actionsFor(uri, 7, diags);
+		assert.match([
+			quickfix("Change 'const' to 'let'", diags[0], false, uri,
+				{ start: src.at[1], end: src.at[2] }, 'let'),
+		], resp.result);
 	});
 
 	it('change_const_to_let: deduplicates when multiple assignments to same const', () => {
 		let uri = 'file:///t8.uc';
-		lsp.open(proc, uri, "const x = 1;\nx = 2;\nx = 3;\n");
-		let all = lsp.documentDiagnostics(proc, uri).items;
-		let diags = filter(all, (d) => d.code === 'const-assignment');
+		let src = cursors("$1const$2 x = 1;\nx = 2;\nx = 3;\n");
+		let diags = diagnosticsOf(uri, src.text, 'const-assignment');
 		assert.match(2, length(diags));
 
-		lsp.send(proc, { jsonrpc: '2.0', id: 8, method: 'textDocument/codeAction', params: {
-			textDocument: { uri },
-			range: diags[0].range,
-			context: { diagnostics: diags },
-		}});
-
-		let resp = lsp.receive(proc);
-		// Two diagnostics but only one action (deduplication by const keyword position)
-		assert.match(1, length(resp.result));
-		assert.match('let', resp.result[0].edit.changes[uri][0].newText);
+		let resp = actionsFor(uri, 8, diags);
+		// Two diagnostics but only one action (deduplication by const keyword
+		// position). Current behaviour: it lists only the first diagnostic,
+		// though changing the keyword resolves both.
+		assert.match([
+			quickfix("Change 'const' to 'let'", diags[0], false, uri,
+				{ start: src.at[1], end: src.at[2] }, 'let'),
+		], resp.result);
 	});
 
 	it('generate_jsdoc: offers a refactoring at a function with no doc', () => {
-		let src = cursors("function $0add(a, b) {\n\treturn 1;\n}\n");
+		let src = cursors("$1function $0add(a, b) {\n\treturn 1;\n}\n");
 		lsp.open(proc, 'file:///j.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 7, method: 'textDocument/codeAction', params: {
 			textDocument: { uri: 'file:///j.uc' },
@@ -194,10 +162,13 @@ describe('textDocument/codeAction', () => {
 		}});
 		let resp = lsp.receive(proc);
 		assert.match(7, resp.id);
-		assert.match(['Generate JSDoc'], map(resp.result ?? [], (a) => a.title));
-		assert.match('refactor.rewrite', resp.result[0].kind);
-		assert.match("/**\n * @param {any} a\n * @param {any} b\n * @returns {int}\n */\n",
-			resp.result[0].edit.changes['file:///j.uc'][0].newText);
+		assert.match([ {
+			title: 'Generate JSDoc',
+			kind: 'refactor.rewrite',
+			edit: { changes: { 'file:///j.uc': [ {
+				range: { start: src.at[1], end: src.at[1] },
+				newText: "/**\n * @param {any} a\n * @param {any} b\n * @returns {int}\n */\n",
+			} ] } },
+		} ], resp.result);
 	});
 });
-

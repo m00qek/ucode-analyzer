@@ -1,4 +1,4 @@
-import { describe, it, assert, contains } from 'utest';
+import { describe, it, assert } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { diagnosticsFor } from 'ucode_analyzer.code_analysis.diagnostics';
@@ -6,7 +6,8 @@ import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_brid
 import * as fixture from 'fixture';
 
 // Each diagnostic reads a template's code exactly as a script's: inside {% %}
-// the code is the same statement stream. One snippet per pass.
+// the code is the same statement stream. One snippet per pass, each raising
+// only its own diagnostic.
 const SNIPPETS = {
 	'unused-var':             "let unused = 1;",
 	'undefined-var':          "ghost();",
@@ -44,7 +45,7 @@ describe('diagnostics — templates read like scripts', () => {
 		it(name, () => {
 			let script = codes('file:///script.uc', code);
 			let template = codes('file:///template.uc', "{%\n" + code + "\n%}\n");
-			assert.match(contains([name]), script);
+			assert.match([name], script);
 			assert.match(script, template);
 		});
 	}

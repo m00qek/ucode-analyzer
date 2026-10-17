@@ -1,4 +1,4 @@
-import { describe, it, assert, mock, beforeEach, contains, not } from 'utest';
+import { describe, it, assert, mock, beforeEach } from 'utest';
 import * as templates from 'ucode_analyzer.language_server.templates';
 
 let SELF_SRC = '/app/src/ucode_analyzer';
@@ -58,22 +58,19 @@ describe('templates.renderTemplate — built-in defaults', () => {
 	it('default template: renders code fence with label and typeStr', () => {
 		let ctx = { label: 'x', typeStr: 'int', doc: null };
 		let md = templates.renderTemplate('hover/default', ctx, _config);
-		assert.match(true, md !== null);
-		assert.match(contains('x'), md);
-		assert.match(contains('int'), md);
+		assert.match("```ucode\nx: int\n```", md);
 	});
 
 	it('default template: includes description when doc is present', () => {
 		let ctx = { label: 'x', typeStr: 'int', doc: { description: 'A count value.', examples: [] } };
 		let md = templates.renderTemplate('hover/default', ctx, _config);
-		assert.match(contains('A count value.'), md);
+		assert.match("```ucode\nx: int\n```\nA count value.", md);
 	});
 
 	it('default template: includes @example blocks', () => {
 		let ctx = { label: 'x', typeStr: 'int', doc: { description: null, examples: ['let x = 1;'] } };
 		let md = templates.renderTemplate('hover/default', ctx, _config);
-		assert.match(contains('let x = 1;'), md);
-		assert.match(contains('**Example:**'), md);
+		assert.match("```ucode\nx: int\n```\n**Example:**\n```ucode\nlet x = 1;\n```", md);
 	});
 
 	it('function template: renders declaration-form signature in code fence', () => {
@@ -86,7 +83,8 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			returns: { typeStr: 'tree', description: null },
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
-		assert.match(contains('function parse(src: string): tree'), md);
+		assert.match("```ucode\nfunction parse(src: string): tree\n```\n\nParse text.\n\n" +
+			"**Parameters:**\n- `src`: `string` — Source text.\n", md);
 	});
 
 	it('function template: renders parameter list with each param on its own line', () => {
@@ -103,13 +101,12 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			returns: { typeStr: '?', description: null },
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
-		assert.match(contains('**Parameters:**'), md);
-		// Each param must be on its own line — check newline between items.
-		assert.match(contains('\n- `expected`'), md);
-		assert.match(contains('\n- `actual`'), md);
-		assert.match(contains('\n- `msg`'), md);
-		// Descriptions appear inline after em-dash.
-		assert.match(contains('— The expected value.'), md);
+		// One param per line; descriptions inline after an em dash.
+		assert.match("```ucode\nfunction match(expected: T, actual: T, msg: string): *\n```\n\n" +
+			"Asserts equality.\n\n**Parameters:**\n" +
+			"- `expected`: `T` — The expected value.\n" +
+			"- `actual`: `T` — The actual value.\n" +
+			"- `msg`: `string`\n", md);
 	});
 
 	it('function template: strips leading dash from descriptions', () => {
@@ -122,9 +119,8 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			returns: null,
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
-		// Should not have "— - The value." — description already clean.
-		assert.match(contains('— The value.'), md);
-		assert.match(not(contains('— - ')), md);
+		// Not "— - The value.": the description is already clean.
+		assert.match("```ucode\nfunction f(x: int): *\n```\n\n**Parameters:**\n- `x`: `int` — The value.\n", md);
 	});
 
 	it('function template: includes returns description when present', () => {
@@ -137,8 +133,7 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			returns: { typeStr: 'int', description: 'The result.' },
 		};
 		let md = templates.renderTemplate('hover/function', ctx, _config);
-		assert.match(contains('**Returns:**'), md);
-		assert.match(contains('The result.'), md);
+		assert.match("```ucode\nfunction f(): int\n```\n\n**Returns:** The result.\n", md);
 	});
 
 	it('record template: lists fields each on its own line', () => {
@@ -152,11 +147,8 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			],
 		};
 		let md = templates.renderTemplate('hover/record', ctx, _config);
-		assert.match(contains('assert'), md);
-		assert.match(contains('**Members:**'), md);
-		assert.match(contains('\n- `match`'), md);
-		assert.match(contains('— Assert equality.'), md);
-		assert.match(contains('\n- `throws`'), md);
+		assert.match("```ucode\nassert: { match, throws }\n```\n\nAssertions.\n\n**Members:**\n" +
+			"- `match`: `function` — Assert equality.\n- `throws`: `function`\n", md);
 	});
 
 	it('module template: renders specifier and description', () => {
@@ -166,9 +158,7 @@ describe('templates.renderTemplate — built-in defaults', () => {
 			module: { specifier: 'tree_sitter', description: 'Tree-sitter bindings.' },
 		};
 		let md = templates.renderTemplate('hover/module', ctx, _config);
-		assert.match(contains('ts'), md);
-		assert.match(contains('tree_sitter'), md);
-		assert.match(contains('Tree-sitter bindings.'), md);
+		assert.match("```ucode\nts: module 'tree_sitter'\n```\nTree-sitter bindings.", md);
 	});
 
 	it('returns null for a nonexistent template name', () => {

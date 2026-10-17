@@ -1,6 +1,7 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { duplicateObjectKey } from 'ucode_analyzer.code_analysis.diagnostics.duplicate_key';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -11,23 +12,31 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// The warnings for a marked snippet: one per name, on the marker pairs
+// ($0,$1), ($2,$3), … in order.
+function check(marked, ...names) {
+	let src = cursors(marked), want = [];
+	for (let i = 0; i < length(names); i++)
+		push(want, {
+			range: { start: src.at[2 * i], end: src.at[2 * i + 1] }, severity: 2, source: 'ucode-analyzer',
+			code: 'duplicate-key', message: sprintf("Duplicate key '%s' in object literal", names[i]),
+		});
+	return { want, got: duplicateObjectKey(open(src.text)) };
+}
+
 describe('diagnostics — duplicate object keys', () => {
 	it('returns empty list for an object with unique keys', () => {
 		assert.match(0, length(duplicateObjectKey(open("let o = { a: 1, b: 2 };\n"))));
 	});
 
-	it('warns for a duplicate unquoted key', () => {
-		let diags = duplicateObjectKey(open("let o = { a: 1, a: 2 };\n"));
-		assert.match(1, length(diags));
-		assert.match(2, diags[0].severity);   // WARNING
-		assert.match('duplicate-key', diags[0].code);
-		assert.match(contains("'a'"), diags[0].message);
+	it('warns for a duplicate unquoted key, on its second occurrence', () => {
+		let r = check("let o = { a: 1, $0a$1: 2 };\n", 'a');
+		assert.match(r.want, r.got);  // a WARNING
 	});
 
 	it('warns for a duplicate quoted key', () => {
-		let diags = duplicateObjectKey(open("let o = { \"x\": 1, \"x\": 2 };\n"));
-		assert.match(1, length(diags));
-		assert.match(contains("'x'"), diags[0].message);
+		let r = check("let o = { \"x\": 1, $0\"x\"$1: 2 };\n", 'x');
+		assert.match(r.want, r.got);
 	});
 
 	it('does not warn for mixed quoted and unquoted keys with different names', () => {
@@ -35,8 +44,8 @@ describe('diagnostics — duplicate object keys', () => {
 	});
 
 	it('reports each duplicate key separately', () => {
-		let diags = duplicateObjectKey(open("let o = { a: 1, b: 2, a: 3, b: 4 };\n"));
-		assert.match(2, length(diags));
+		let r = check("let o = { a: 1, b: 2, $0a$1: 3, $2b$3: 4 };\n", 'a', 'b');
+		assert.match(r.want, r.got);
 	});
 
 	it('does not warn for computed keys', () => {
@@ -44,38 +53,25 @@ describe('diagnostics — duplicate object keys', () => {
 		assert.match(0, length(duplicateObjectKey(open(text))));
 	});
 
-	it('reports duplicate key on the second occurrence, not the first', () => {
-		let diags = duplicateObjectKey(open("let o = { a: 1, a: 2 };\n"));
-		// 'a' second occurrence starts after the first 'a: 1, '
-		assert.match(0, diags[0].range.start.line);
-		assert.match(true, diags[0].range.start.character > 4);
-	});
-
 	it('detects duplicates in nested objects independently', () => {
 		// Outer unique, inner has duplicate
-		let text = "let o = { a: 1, b: { x: 1, x: 2 } };\n";
-		let diags = duplicateObjectKey(open(text));
-		assert.match(1, length(diags));
-		assert.match(contains("'x'"), diags[0].message);
+		let r = check("let o = { a: 1, b: { x: 1, $0x$1: 2 } };\n", 'x');
+		assert.match(r.want, r.got);
 	});
 
 	it('detects a shorthand key duplicated', () => {
-		let text = "let foo = 1;\nlet o = { foo, foo };\n";
-		let diags = duplicateObjectKey(open(text));
-		assert.match(1, length(diags));
-		assert.match(contains("'foo'"), diags[0].message);
+		let r = check("let foo = 1;\nlet o = { foo, $0foo$1 };\n", 'foo');
+		assert.match(r.want, r.got);
 	});
 
 	it('detects a shorthand colliding with an explicit pair', () => {
-		let text = "let foo = 1;\nlet o = { foo, foo: 3 };\n";
-		let diags = duplicateObjectKey(open(text));
-		assert.match(1, length(diags));
-		assert.match(contains("'foo'"), diags[0].message);
+		let r = check("let foo = 1;\nlet o = { foo, $0foo$1: 3 };\n", 'foo');
+		assert.match(r.want, r.got);
 	});
 
 	it('detects a shorthand colliding with a string key of the same name', () => {
-		let text = "let a = 1;\nlet o = { a, 'a': 2 };\n";
-		assert.match(1, length(duplicateObjectKey(open(text))));
+		let r = check("let a = 1;\nlet o = { a, $0'a'$1: 2 };\n", 'a');
+		assert.match(r.want, r.got);
 	});
 
 	it('no warning for distinct shorthand keys', () => {

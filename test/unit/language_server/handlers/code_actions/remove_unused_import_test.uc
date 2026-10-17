@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { actionsFor } from 'ucode_analyzer.language_server.handlers.code_actions.remove_unused_import';
 import { unusedImports } from 'ucode_analyzer.code_analysis.diagnostics.unused_import';
@@ -16,30 +16,35 @@ function open(text) {
 describe('remove_unused_import', () => {
 	it('returns empty list when no diagnostics', () => {
 		let doc = open("import { x } from 'mod';\nx;\n");
-		assert.match(0, length(actionsFor(URI, doc, [])));
+		assert.match([], actionsFor(URI, doc, []));
 	});
 
 	it('returns empty list when diagnostics have no unused-import code', () => {
 		let src = cursors("$0i$1mport { x } from 'mod';\n");
 		let doc = open(src.text);
 		let diags = [{ range: { start: src.at[0], end: src.at[1] }, severity: 1, code: 'some-other-code', message: 'err' }];
-		assert.match(0, length(actionsFor(URI, doc, diags)));
+		assert.match([], actionsFor(URI, doc, diags));
 	});
 
 	it('produces a quickfix action for an unused namespace import', () => {
-		let doc = open("import * as ts from 'tree_sitter';\nlet x = 1;\n");
+		let src = cursors("$0import * as ts from 'tree_sitter';\n$1let x = 1;\n");
+		let doc = open(src.text);
 		let diags = unusedImports(doc);
 		assert.match(1, length(diags));
-		let actions = actionsFor(URI, doc, diags);
-		assert.match(1, length(actions));
-		assert.match('quickfix', actions[0].kind);
+		assert.match([ {
+			title: "Remove unused import 'ts'",
+			kind: 'quickfix',
+			diagnostics: diags,
+			isPreferred: true,
+			edit: { changes: { [URI]: [ { range: { start: src.at[0], end: src.at[1] }, newText: '' } ] } },
+		} ], actionsFor(URI, doc, diags));
 	});
 
 	it('action title mentions the unused name', () => {
 		let doc = open("import * as ts from 'tree_sitter';\nlet x = 1;\n");
 		let diags = unusedImports(doc);
 		let action = actionsFor(URI, doc, diags)[0];
-		assert.match(contains('ts'), action.title);
+		assert.match("Remove unused import 'ts'", action.title);
 	});
 
 	it('action isPreferred is true', () => {
@@ -73,7 +78,7 @@ describe('remove_unused_import', () => {
 		let doc = open(src.text);
 		let diags = unusedImports(doc);
 		assert.match(1, length(diags));
-		assert.match('foo', index(diags[0].message, 'foo') >= 0 ? 'foo' : '?');
+		assert.match("'foo' is imported but never used", diags[0].message);
 		let edit = actionsFor(URI, doc, diags)[0].edit.changes[URI][0];
 		assert.match({ start: src.at[0], end: src.at[1] }, edit.range);
 		assert.match('', edit.newText);
@@ -94,7 +99,6 @@ describe('remove_unused_import', () => {
 		let doc = open("import { foo } from 'mod';\n");
 		let diags = unusedImports(doc);
 		let action = actionsFor(URI, doc, diags)[0];
-		assert.match(1, length(action.diagnostics));
-		assert.match(diags[0].code, action.diagnostics[0].code);
+		assert.match(diags, action.diagnostics);
 	});
 });

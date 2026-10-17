@@ -30,22 +30,16 @@ describe('type_utils.unionOf', () => {
 	});
 
 	it('returns a union for two distinct primitives', () => {
-		let r = unionOf([INT, STR]);
-		assert.match('union', r.kind);
-		assert.match(2, length(r.members));
+		assert.match({ kind: 'union', members: [INT, STR] }, unionOf([INT, STR]));
 	});
 
 	it('deduplicates within a union — three items two distinct', () => {
-		let r = unionOf([INT, STR, INT]);
-		assert.match('union', r.kind);
-		assert.match(2, length(r.members));
+		assert.match({ kind: 'union', members: [INT, STR] }, unionOf([INT, STR, INT]));
 	});
 
 	it('preserves non-primitive types (record) as distinct entries', () => {
 		let rec = { kind: 'record', fields: [] };
-		let r = unionOf([INT, rec]);
-		assert.match('union', r.kind);
-		assert.match(2, length(r.members));
+		assert.match({ kind: 'union', members: [INT, rec] }, unionOf([INT, rec]));
 	});
 
 	it('keeps records with different field-name sets distinct', () => {
@@ -53,27 +47,25 @@ describe('type_utils.unionOf', () => {
 		let fail = { kind: 'record', fields: [
 			{ name: 'kind', type: STR }, { name: 'value', type: INT },
 		]};
-		let r = unionOf([pass, fail]);
-		assert.match('union', r.kind);
-		assert.match(2, length(r.members));
+		assert.match({ kind: 'union', members: [pass, fail] }, unionOf([pass, fail]));
 	});
 
 	it('collapses records with the same field-name set', () => {
 		let a = { kind: 'record', fields: [{ name: 'kind', type: STR }] };
 		let b = { kind: 'record', fields: [{ name: 'kind', type: INT }] };
-		assert.match('record', unionOf([a, b]).kind);
+		// The first record stands for both.
+		assert.match(a, unionOf([a, b]));
 	});
 
 	it('is order-insensitive when comparing field names', () => {
 		let a = { kind: 'record', fields: [{ name: 'x', type: INT }, { name: 'y', type: STR }] };
 		let b = { kind: 'record', fields: [{ name: 'y', type: STR }, { name: 'x', type: INT }] };
-		assert.match('record', unionOf([a, b]).kind);
+		assert.match(a, unionOf([a, b]));
 	});
 
 	it('keeps distinct string literals apart', () => {
-		let r = unionOf([literal('string', 'a'), literal('string', 'b')]);
-		assert.match('union', r.kind);
-		assert.match(2, length(r.members));
+		let a = literal('string', 'a'), b = literal('string', 'b');
+		assert.match({ kind: 'union', members: [a, b] }, unionOf([a, b]));
 	});
 
 	it('collapses equal string literals', () => {
@@ -130,9 +122,7 @@ describe('type_utils.memberOfType', () => {
 		let recA = { kind: 'record', fields: [{ name: 'v', type: INT }] };
 		let recB = { kind: 'record', fields: [{ name: 'v', type: STR }] };
 		let u = { kind: 'union', members: [recA, recB] };
-		let r = memberOfType(u, 'v');
-		assert.match('union', r.kind);
-		assert.match(2, length(r.members));
+		assert.match({ kind: 'union', members: [INT, STR] }, memberOfType(u, 'v'));
 	});
 
 	it('resolves a ref type through the registry', () => {
@@ -157,7 +147,7 @@ describe('type_utils.resolveRef', () => {
 
 	it('resolves a ref to its registered target', () => {
 		registry.register('Callback', FN, 'file:///a.uc');
-		assert.match('function', resolveRef({ kind: 'ref', name: 'Callback' }).kind);
+		assert.match(FN, resolveRef({ kind: 'ref', name: 'Callback' }));
 	});
 
 	it('follows a chain of refs to the concrete type', () => {
@@ -171,18 +161,16 @@ describe('type_utils.resolveRef', () => {
 		let box = { kind: 'record', fields: [{ name: 'v', type: { kind: 'param', name: 'T' } }] };
 		registry.register('Box', box, 'file:///a.uc', ['T']);
 		let resolved = resolveRef({ kind: 'ref', name: 'Box', params: [STR] });
-		assert.match('record', resolved.kind);
-		assert.match(STR, resolved.fields[0].type);
+		assert.match({ kind: 'record', fields: [{ name: 'v', type: STR }] }, resolved);
 	});
 
 	it('returns the ref unchanged when unregistered', () => {
 		let ref = { kind: 'ref', name: 'Missing' };
-		assert.match('ref', resolveRef(ref).kind);
-		assert.match('Missing', resolveRef(ref).name);
+		assert.match({ kind: 'ref', name: 'Missing' }, resolveRef(ref));
 	});
 
 	it('terminates on a self-referential cycle', () => {
 		registry.register('Loop', { kind: 'ref', name: 'Loop' }, 'file:///a.uc');
-		assert.match('ref', resolveRef({ kind: 'ref', name: 'Loop' }).kind);
+		assert.match({ kind: 'ref', name: 'Loop' }, resolveRef({ kind: 'ref', name: 'Loop' }));
 	});
 });

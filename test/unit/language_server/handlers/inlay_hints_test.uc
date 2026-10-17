@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { inlayHints } from 'ucode_analyzer.language_server.handlers.inlay_hints';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
@@ -20,6 +20,16 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// A type hint (kind 1) at `position`.
+function typeHint(position, label) {
+	return { position, label, kind: 1, paddingLeft: true };
+}
+
+// A parameter-name hint (kind 2) at `position`.
+function paramHint(position, label) {
+	return { position, label, kind: 2, paddingRight: true };
+}
+
 afterEach(() => {
 	documents.close(URI);
 	invalidateUri(URI);
@@ -30,73 +40,56 @@ afterEach(() => {
 describe('inlayHints — variable type hints', () => {
 	it('emits a type hint for a function-call initializer', () => {
 		// makeStr has a known return type (string); the hint should appear.
-		let doc = open("function makeStr() { return 'hello'; }\nlet y = makeStr();\n");
-		let hints = inlayHints(doc, fullRange());
-		let h = filter(hints, (h) => h.kind === 1)[0];
-		assert.match(true, h !== null);
-		assert.match(contains(':'), h.label);
+		let src = cursors("function makeStr() { return 'hello'; }\nlet y$0 = makeStr();\n");
+		assert.match([ typeHint(src.at[0], ': string') ], inlayHints(open(src.text), fullRange()));
 	});
 
 	it('does not emit a hint for a number literal', () => {
 		let doc = open("let x = 42;\n");
-		let typeHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 1);
-		assert.match(0, length(typeHints));
+		assert.match([], inlayHints(doc, fullRange()));
 	});
 
 	it('does not emit a hint for a string literal', () => {
 		let doc = open('let x = "hello";\n');
-		let typeHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 1);
-		assert.match(0, length(typeHints));
+		assert.match([], inlayHints(doc, fullRange()));
 	});
 
 	it('does not emit a hint for a boolean literal', () => {
 		let doc = open("let x = true;\n");
-		let typeHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 1);
-		assert.match(0, length(typeHints));
+		assert.match([], inlayHints(doc, fullRange()));
 	});
 
 	it('does not emit a hint for a null literal', () => {
 		let doc = open("let x = null;\n");
-		let typeHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 1);
-		assert.match(0, length(typeHints));
+		assert.match([], inlayHints(doc, fullRange()));
 	});
 
 	it('does not emit a hint when inference yields unknown', () => {
 		let doc = open("let x = undefined_function();\n");
-		let typeHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 1);
-		assert.match(0, length(typeHints));
+		assert.match([], inlayHints(doc, fullRange()));
 	});
 
 	it('abbreviates function-typed variables to fn', () => {
 		// A variable assigned to a known function reference has type 'function'.
-		let doc = open("function greet() {}\nlet h = greet;\n");
-		let typeHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 1);
-		assert.match(1, length(typeHints));
-		assert.match(': fn', typeHints[0].label);
+		let src = cursors("function greet() {}\nlet h$0 = greet;\n");
+		assert.match([ typeHint(src.at[0], ': fn') ], inlayHints(open(src.text), fullRange()));
 	});
 
 	it('hint position is at the end of the variable name', () => {
 		let src = cursors("function makeStr() { return 'x'; }\nlet z$0 = makeStr();\n");
-		let typeHints = filter(inlayHints(open(src.text), fullRange()), (h) => h.kind === 1);
-		assert.match(1, length(typeHints));
-		assert.match(src.at[0], typeHints[0].position);
+		assert.match([ typeHint(src.at[0], ': string') ], inlayHints(open(src.text), fullRange()));
 	});
 
 	it('hint has kind 1 (Type) and paddingLeft', () => {
-		let doc = open("function makeStr() { return 'x'; }\nlet y = makeStr();\n");
-		let typeHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 1);
-		assert.match(1, length(typeHints));
-		assert.match(1, typeHints[0].kind);
-		assert.match(true, typeHints[0].paddingLeft === true);
+		let src = cursors("function makeStr() { return 'x'; }\nlet y$0 = makeStr();\n");
+		assert.match([ { position: src.at[0], label: ': string', kind: 1, paddingLeft: true } ], inlayHints(open(src.text), fullRange()));
 	});
 
 	it('respects range: excludes hints outside the requested range', () => {
 		// the range is the line of `a`; `b` starts where it ends
 		let src = cursors("function makeStr() { return 'x'; }\n$0let a$2 = makeStr();\n$1let b = makeStr();\n");
 		let range = { start: src.at[0], end: src.at[1] };
-		let typeHints = filter(inlayHints(open(src.text), range), (h) => h.kind === 1);
-		assert.match(1, length(typeHints));
-		assert.match(src.at[2], typeHints[0].position);
+		assert.match([ typeHint(src.at[2], ': string') ], inlayHints(open(src.text), range));
 	});
 });
 
@@ -104,43 +97,30 @@ describe('inlayHints — variable type hints', () => {
 
 describe('inlayHints — parameter name hints', () => {
 	it('emits a parameter hint for a documented function call', () => {
-		let doc = open("/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\nadd(1, 2);\n");
-		let paramHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 2);
-		assert.match(2, length(paramHints));
-		let labels = map(paramHints, (h) => h.label);
-		assert.match(contains(['x:']), labels);
-		assert.match(contains(['y:']), labels);
+		let src = cursors("/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\nadd($01, $12);\n");
+		assert.match([ paramHint(src.at[0], 'x:'), paramHint(src.at[1], 'y:') ], inlayHints(open(src.text), fullRange()));
 	});
 
 	it('hint has kind 2 (Parameter) and paddingRight', () => {
-		let doc = open("/**\n * @param {int} x\n */\nfunction f(x) { return x; }\nf(42);\n");
-		let paramHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 2);
-		assert.match(1, length(paramHints));
-		assert.match(2, paramHints[0].kind);
-		assert.match(true, paramHints[0].paddingRight === true);
+		let src = cursors("/**\n * @param {int} x\n */\nfunction f(x) { return x; }\nf($042);\n");
+		assert.match([ { position: src.at[0], label: 'x:', kind: 2, paddingRight: true } ], inlayHints(open(src.text), fullRange()));
 	});
 
 	it('hint position is at the start of the argument', () => {
 		let src = cursors("/**\n * @param {int} x\n */\nfunction f(x) { return x; }\nf($042);\n");
-		let paramHints = filter(inlayHints(open(src.text), fullRange()), (h) => h.kind === 2);
-		assert.match(src.at[0], paramHints[0].position);
+		assert.match([ paramHint(src.at[0], 'x:') ], inlayHints(open(src.text), fullRange()));
 	});
 
 	it('skips hint when argument identifier matches param name', () => {
 		let doc = open("/**\n * @param {int} x\n */\nfunction f(x) { return x; }\nlet x = 1;\nf(x);\n");
-		let paramHints = filter(inlayHints(doc, fullRange()), (h) => h.kind === 2);
-		assert.match(0, length(paramHints));
+		// `let x = 1` gets no type hint either: literal initializers never do
+		assert.match([], inlayHints(doc, fullRange()));
 	});
 
-	it('does not emit hint when function type has no param names', () => {
-		// A function with untyped params (no JSDoc) still has param names from
-		// the declaration, so this tests an undocumented function.
-		// Actually, inferring a function with identifiers gives names. Let's
-		// confirm a call to a built-in without known params produces no hints.
+	it('emits no hints for a call to a builtin', () => {
+		// Current behaviour: no parameter names and no type hint for x, though
+		// global.d.uc documents split(str, sep, limit) as returning Array<string>.
 		let doc = open("let x = split('a,b', ',');\n");
-		// split is a built-in; its inferred type may or may not carry param names.
-		// Either way, we just confirm no error is thrown and we get an array.
-		let hints = inlayHints(doc, fullRange());
-		assert.match(true, type(hints) === 'array');
+		assert.match([], inlayHints(doc, fullRange()));
 	});
 });

@@ -26,6 +26,8 @@ describe('diagnostic_reports — textDocument/diagnostic', () => {
 		invalidate(URI);
 		let second = documentDiagnostics(URI, doc, first.resultId);
 		assert.match('full', second.kind);
+		assert.match(first.items, second.items);
+		// resultIds are opaque: only a new one matters
 		assert.match(true, second.resultId !== first.resultId);
 	});
 

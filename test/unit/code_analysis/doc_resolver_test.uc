@@ -43,7 +43,7 @@ describe('doc_resolver — resolveDoc precedence', () => {
 
 		let node = firstIdent(ts.rootNode(tree), src, 'greet');
 		let r = resolveDoc(URI_A, node, src, makeScope(null));
-		assert.match(true, r.doc !== null);
+		assert.match('greets politely', r.doc.description);
 		assert.match(URI_A, r.modUri);
 	});
 
@@ -60,7 +60,7 @@ describe('doc_resolver — resolveDoc precedence', () => {
 
 		let node = firstIdent(ts.rootNode(treeB), srcB, 'answer');
 		let r = resolveDoc(URI_B, node, srcB, makeScope(null));
-		assert.match(true, r.doc !== null);
+		assert.match('the answer', r.doc.description);
 		assert.match(URI_A, r.modUri);   // doc comes from the declaring module, not B
 	});
 

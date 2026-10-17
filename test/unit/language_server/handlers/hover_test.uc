@@ -1,4 +1,4 @@
-import { describe, it, assert, afterEach, contains } from 'utest';
+import { describe, it, assert, afterEach, starts_with } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { hover } from 'ucode_analyzer.language_server.handlers.hover';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
@@ -33,6 +33,11 @@ function hoverImporting(marked, config) {
 	return hover(documents.get(URI), src.at[0], config);  // the scope map, now with the imports
 }
 
+// A markdown hover with `value`.
+function md(value) {
+	return { contents: { kind: 'markdown', value } };
+}
+
 afterEach(() => {
 	documents.close(URI);
 	invalidateUri(URI);
@@ -41,26 +46,15 @@ afterEach(() => {
 
 describe('hover', () => {
 	it('returns inferred type for an identifier', () => {
-		let result = hoverAt('let $0x = 5;');
-
-		assert.match('object', type(result));
-		assert.match('markdown', result.contents.kind);
-		assert.match(contains('x'), result.contents.value);
-		assert.match(contains('int'), result.contents.value);
+		assert.match(md("```ucode\nx: int\n```"), hoverAt('let $0x = 5;'));
 	});
 
 	it('returns inferred type for an integer literal', () => {
-		let result = hoverAt('let x = $05;');
-
-		assert.match('object', type(result));
-		assert.match(contains('int'), result.contents.value);
+		assert.match(md("```ucode\n5: int\n```"), hoverAt('let x = $05;'));
 	});
 
 	it('returns inferred type for a string literal', () => {
-		let result = hoverAt("let s = $0'hello';");
-
-		assert.match('object', type(result));
-		assert.match(contains('string'), result.contents.value);
+		assert.match(md("```ucode\n'hello': string\n```"), hoverAt("let s = $0'hello';"));
 	});
 
 	it('returns null for an anonymous token with no inferable type', () => {
@@ -81,11 +75,8 @@ describe('hover — property_identifier in member expression', () => {
 	// Hovering on 'parse' (property_identifier) should include its JSDoc, not just the type.
 	it('shows JSDoc for a property of a namespace-import module', () => {
 		let result = hoverImporting("import * as p from 'parser';\np.$0parse;");
-		assert.match('object', type(result));
-		// type string contains the name and signature
-		assert.match(contains('parse'), result.contents.value);
-		// JSDoc description is rendered (not just the type string)
-		assert.match(contains('Parse source text'), result.contents.value);
+		// the type string, then the JSDoc description (not just the type)
+		assert.match(md("```ucode\nparse: (parser: object, source: string) => object\n```\n\nParse source text into a tree."), result);
 	});
 });
 
@@ -93,28 +84,22 @@ describe('hover — via templates (selfSrcDir set)', () => {
 	it('function hover renders declaration-form signature and Parameters section', () => {
 		let result = hoverImporting("import * as p from 'parser';\np.$0parse;", _config);
 
-		assert.match('object', type(result));
-		// Signature is declaration-form, not type-annotation form.
-		assert.match(contains('function parse('), result.contents.value);
-		assert.match(contains('**Parameters:**'), result.contents.value);
-		// Each param must be on its own line.
-		assert.match(contains('\n- `'), result.contents.value);
+		// Declaration-form signature, not type-annotation form; one param per line.
+		assert.match(md("```ucode\nfunction parse(parser: object, source: string): object\n```\n\n" +
+			"Parse source text into a tree.\n\n**Parameters:**\n" +
+			"- `parser`: `object` — A parser from newParser().\n" +
+			"- `source`: `string` — The text to parse.\n"), result);
 	});
 
 	it('module hover renders module specifier from module template', () => {
 		let result = hoverImporting("import * as p from 'parser';\n$0p;", _config);
 
-		assert.match('object', type(result));
 		// module template uses "module 'specifier'" format
-		assert.match(contains("module 'parser'"), result.contents.value);
+		assert.match(starts_with("```ucode\np: module 'parser'\n```\n"), result.contents.value);
 	});
 
 	it('default hover renders code fence for primitive type', () => {
-		let result = hoverAt('let $0x = 42;', _config);
-
-		assert.match('object', type(result));
-		assert.match(contains('x'), result.contents.value);
-		assert.match(contains('int'), result.contents.value);
+		assert.match(md("```ucode\nx: int\n```"), hoverAt('let $0x = 42;', _config));
 	});
 });
 
@@ -122,10 +107,8 @@ describe('hover — parameter declaration site', () => {
 	it('shows type and description from @param JSDoc when cursor is on the parameter', () => {
 		let result = hoverAt("/**\n * @param {int} x — the multiplier\n */\nfunction double($0x) {}", _config);
 
-		assert.match('object', type(result));
-		assert.match(contains('x'), result.contents.value);
-		assert.match(contains('int'), result.contents.value);
-		assert.match(contains('multiplier'), result.contents.value);
+		// only `-` is a JSDoc separator, so the em dash stays in the description
+		assert.match(md("```ucode\nx: int\n```\n— the multiplier"), result);
 	});
 
 	it('returns null when cursor is on a parameter with no JSDoc', () => {
@@ -139,10 +122,7 @@ describe('hover — parameter declaration site', () => {
 	it('shows type from @param for an exported function', () => {
 		let result = hoverAt("/** @param {string} name — greeting target */\nexport function greet($0name) {};", _config);
 
-		assert.match('object', type(result));
-		assert.match(contains('name'), result.contents.value);
-		assert.match(contains('string'), result.contents.value);
-		assert.match(contains('greeting'), result.contents.value);
+		assert.match(md("```ucode\nname: string\n```\n— greeting target"), result);
 	});
 });
 
@@ -158,64 +138,68 @@ describe('hover — doc comment tags', () => {
 
 	it('keeps a description that starts with a dash', () => {
 		let v = hoverText("/** @returns {int} -1 on failure */\nexport function f() { return -1; };\n$0f;\n");
-		assert.match(contains('-1 on failure'), v);
+		assert.match("```ucode\nfunction f(): int\n```\n\n**Returns:** -1 on failure\n", v);
 	});
 
 	it('lists @see references', () => {
 		let v = hoverText("/**\n * Opens.\n * @see close\n */\nexport function open() {};\n$0open;\n");
-		assert.match(contains('**See:** close'), v);
+		assert.match("```ucode\nfunction open(): ?\n```\n\nOpens.\n\n**See:** close\n", v);
 	});
 
 	it('types a member declared by @property', () => {
 		let v = hoverText("/**\n * @typedef {Object} Conn\n * @property {string} host - Host name.\n */\n/** @type {Conn} */\nlet c = null;\nc.$0host;\n");
-		assert.match(contains('host: string'), v);
-		assert.match(contains('Host name.'), v);
+		assert.match("```ucode\nhost: string\n```\nHost name.", v);
 	});
 
 	it('lists a module\'s members', () => {
 		let v = hoverText("import * as p from 'parser';\n$0p;\n");
-		assert.match(contains('**Members:**'), v);
-		assert.match(contains('- `parse`: `'), v);
+		// Suspected bug: the description is newParser's doc comment (the first
+		// statement of parser.uc), not a module doc; asserted as it is today.
+		assert.match("```ucode\np: module 'parser'\n```\nCreate a parser for a language.\n**Members:**\n" +
+			"- `newParser`: `(language: string) => object`\n" +
+			"- `parse`: `(parser: object, source: string) => object`\n" +
+			"- `rootNode`: `(tree: ?) => ?`\n" +
+			"- `nodeType`: `(node: ?) => ?`\n" +
+			"- `text`: `(node: object, source: string) => string`\n" +
+			"- `parseString`: `(source: ?) => ?`", v);
 	});
 
 	it('types an exported const by its @type', () => {
 		let v = hoverText("/** @type {string} */\nexport const NAME = f();\n$0NAME;\n");
-		assert.match(contains('NAME: string'), v);
+		assert.match("```ucode\nNAME: string\n```", v);
 	});
 
 	it('shows the doc of a local function', () => {
 		let v = hoverText("/** Adds one. */\nfunction inc(x) { return x + 1; }\n$0inc;\n");
-		assert.match(contains('Adds one.'), v);
+		assert.match("```ucode\nfunction inc(x): ?\n```\n\nAdds one.\n", v);
 	});
 
 	it('shows the doc of a local const', () => {
 		let v = hoverText("/** The limit. */\nconst MAX = 5;\n$0MAX;\n");
-		assert.match(contains('The limit.'), v);
+		assert.match("```ucode\nMAX: int\n```\nThe limit.", v);
 	});
 
 	it('shows a parameter\'s @param description where it is used', () => {
 		let v = hoverText("/** @param {int} n - How many. */\nfunction f(n) {\n  return $0n;\n}\n");
-		assert.match(contains('How many.'), v);
+		assert.match("```ucode\nn: int\n```\nHow many.", v);
 	});
 
 	it('does not give a parameter its function\'s description', () => {
 		let v = hoverText("/** Doubles. @param {int} n */\nfunction f(n) {\n  return $0n;\n}\n");
-		assert.match(-1, index(v, 'Doubles.'));
+		assert.match("```ucode\nn: int\n```", v);
 	});
 
 	it('lists the members of a value typed by a named typedef', () => {
 		let v = hoverText("/**\n * @typedef {{ host: string, port: int }} Conn\n */\n/** @type {Conn} */\nlet c = null;\n$0c;\n");
-		assert.match(contains('c: Conn'), v);
-		assert.match(contains('**Members:**'), v);
-		assert.match(contains('- `port`: `int`'), v);
+		assert.match("```ucode\nc: Conn\n```\n\n**Members:**\n- `host`: `string`\n- `port`: `int`\n", v);
 	});
 
 	it('shows the signature of a value typed by a named function typedef', () => {
-		assert.match(contains('function fmt(n: int): string'), hoverText("/** @typedef {(n: int) => string} Fmt */\n/** @type {Fmt} */\nlet fmt = null;\n$0fmt;\n"));
+		assert.match("```ucode\nfunction fmt(n: int): string\n```\n", hoverText("/** @typedef {(n: int) => string} Fmt */\n/** @type {Fmt} */\nlet fmt = null;\n$0fmt;\n"));
 	});
 
 	it('shows the parameters of an undocumented function', () => {
-		assert.match(contains('function add(a, b)'), hoverText("function add(a, b) { return a + b; }\n$0add;\n"));
+		assert.match("```ucode\nfunction add(a, b): ?\n```\n", hoverText("function add(a, b) { return a + b; }\n$0add;\n"));
 	});
 });
 
@@ -228,31 +212,27 @@ describe('hover — imports whose docs carry no tags', () => {
 
 	it('types an imported const from its literal and shows its doc', () => {
 		let v = value("import { VERSION } from 'settings';\n$0VERSION;\n");
-		assert.match(contains('VERSION: int'), v);
-		assert.match(contains('The protocol version.'), v);
+		assert.match("```ucode\nVERSION: int\n```\nThe protocol version.", v);
 	});
 
 	it('shows the doc of an imported const of unknown type', () => {
 		let v = value("import { TIMEOUT } from 'settings';\n$0TIMEOUT;\n");
-		assert.match(contains('TIMEOUT: ?'), v);
-		assert.match(contains('The timeout, in seconds.'), v);
+		assert.match("```ucode\nTIMEOUT: ?\n```\nThe timeout, in seconds.", v);
 	});
 
 	it('names the parameters of an imported function without @param tags', () => {
 		let v = value("import { joinNames } from 'settings';\n$0joinNames;\n");
-		assert.match(contains('function joinNames(first, second)'), v);
-		assert.match(contains('Joins two names.'), v);
+		assert.match("```ucode\nfunction joinNames(first, second): ?\n```\n\nJoins two names.\n", v);
 	});
 
 	it('types an exported const bound to a function, rest parameter included', () => {
-		assert.match(contains('function pick(list, ...rest'), value("import { pick } from 'settings';\n$0pick;\n"));
+		assert.match("```ucode\nfunction pick(list, ...rest: list<?>): ?\n```\n", value("import { pick } from 'settings';\n$0pick;\n"));
 		let v = value("import * as p from 'parser';\np.$0rootNode;\n");
-		assert.match(contains('function rootNode(tree)'), v);
-		assert.match(contains('The root node of a tree.'), v);
+		assert.match("```ucode\nfunction rootNode(tree): ?\n```\n\nThe root node of a tree.\n", v);
 	});
 
 	it('names the parameters of a legacy module member', () => {
-		assert.match(contains('function greet(name)'), value("let m = require('legacy_mod');\nm.$0greet;\n"));
+		assert.match("```ucode\nfunction greet(name): ?\n```\n", value("let m = require('legacy_mod');\nm.$0greet;\n"));
 	});
 
 	it('still shows nothing for an undocumented local of unknown type', () => {

@@ -1,6 +1,7 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { formatString } from 'ucode_analyzer.code_analysis.diagnostics.format_string';
+import { cursors } from 'cursor';
 
 let URI = 'file:///test.uc';
 
@@ -10,32 +11,44 @@ function diags(text) {
 	documents.open(URI, text, 1);
 	return formatString(URI, documents.get(URI));
 }
-function count(text, code) {
-	return length(filter(diags(text), (d) => d.code === code));
+// The one warning a snippet raises, on the range marked `$0…$1`, and what the
+// check reports.
+function check(marked, code, message) {
+	let src = cursors(marked);
+	return {
+		want: [{ range: { start: src.at[0], end: src.at[1] }, severity: 2, source: 'ucode-analyzer', code, message }],
+		got: diags(src.text),
+	};
 }
 
 describe('diagnostics — format string: length modifiers', () => {
 	it('flags %ld', () => {
-		assert.match(1, count('sprintf("%ld", n);', 'invalid-format-specifier'));
+		let r = check('sprintf($0"%ld"$1, n);', 'invalid-format-specifier', "Format specifier '%ld' uses a length modifier, which ucode does not support — it is printed literally");
+		assert.match(r.want, r.got);
 	});
 	it('flags %lld and %zu', () => {
-		assert.match(1, count('printf("%lld", n);', 'invalid-format-specifier'));
-		assert.match(1, count('printf("%zu", n);',  'invalid-format-specifier'));
+		let r = check('printf($0"%lld"$1, n);', 'invalid-format-specifier', "Format specifier '%lld' uses a length modifier, which ucode does not support — it is printed literally");
+		assert.match(r.want, r.got);
+		r = check('printf($0"%zu"$1, n);', 'invalid-format-specifier', "Format specifier '%zu' uses a length modifier, which ucode does not support — it is printed literally");
+		assert.match(r.want, r.got);
 	});
 	it('does not flag a plain %d', () => {
 		assert.match(0, length(diags('sprintf("%d", n);')));
 	});
 	it('length modifier suppresses the arg-count check (no double report)', () => {
-		assert.match(0, count('sprintf("%ld", n);', 'format-argument-count'));
+		let r = check('sprintf($0"%ld"$1, n);', 'invalid-format-specifier', "Format specifier '%ld' uses a length modifier, which ucode does not support — it is printed literally");
+		assert.match(r.want, r.got);
 	});
 });
 
 describe('diagnostics — format string: argument count', () => {
 	it('flags too few arguments', () => {
-		assert.match(1, count('printf("%d %s", x);', 'format-argument-count'));
+		let r = check('printf($0"%d %s"$1, x);', 'format-argument-count', 'Format string expects 2 argument(s) but 1 given');
+		assert.match(r.want, r.got);
 	});
 	it('flags too many arguments', () => {
-		assert.match(1, count('sprintf("%d", a, b);', 'format-argument-count'));
+		let r = check('sprintf($0"%d"$1, a, b);', 'format-argument-count', 'Format string expects 1 argument(s) but 2 given');
+		assert.match(r.want, r.got);
 	});
 	it('accepts an exact match', () => {
 		assert.match(0, length(diags('sprintf("%d %s", a, b);')));
@@ -45,10 +58,12 @@ describe('diagnostics — format string: argument count', () => {
 	});
 	it('flags a literal percent ucode misformats ("20% done")', () => {
 		// ucode reads "% d" as a space-flagged %d, so this really consumes an arg.
-		assert.match(1, count('sprintf("20% done");', 'format-argument-count'));
+		let r = check('sprintf($0"20% done"$1);', 'format-argument-count', 'Format string expects 1 argument(s) but 0 given');
+		assert.match(r.want, r.got);
 	});
 	it('flags a format with conversions and no arguments', () => {
-		assert.match(1, count('printf("%d\\n");', 'format-argument-count'));
+		let r = check('printf($0"%d\\n"$1);', 'format-argument-count', 'Format string expects 1 argument(s) but 0 given');
+		assert.match(r.want, r.got);
 	});
 });
 
@@ -78,31 +93,35 @@ describe('diagnostics — format string: correctly silent', () => {
 
 describe('diagnostics — format string: argument type', () => {
 	it('flags an array literal passed to %d', () => {
-		assert.match(1, count('sprintf("%d", [1,2]);', 'format-argument-type'));
+		let r = check('sprintf("%d", $0[1,2]$1);', 'format-argument-type', "Conversion '%d' expects a number but its argument is a list");
+		assert.match(r.want, r.got);
 	});
 	it('flags an object literal passed to %x', () => {
-		assert.match(1, count('sprintf("%x", {a:1});', 'format-argument-type'));
+		let r = check('sprintf("%x", $0{a:1}$1);', 'format-argument-type', "Conversion '%x' expects a number but its argument is a record");
+		assert.match(r.want, r.got);
 	});
 	it('flags a function passed to %d', () => {
-		assert.match(1, count('function f() {}\nsprintf("%d", f);', 'format-argument-type'));
+		let r = check('function f() {}\nsprintf("%d", $0f$1);', 'format-argument-type', "Conversion '%d' expects a number but its argument is a function");
+		assert.match(r.want, r.got);
 	});
 	it('does NOT flag a structured value passed to %s', () => {
-		assert.match(0, count('sprintf("%s", [1,2]);', 'format-argument-type'));
+		assert.match([], diags('sprintf("%s", [1,2]);'));
 	});
 	it('does NOT flag a structured value passed to %J', () => {
-		assert.match(0, count('sprintf("%J", {a:1});', 'format-argument-type'));
+		assert.match([], diags('sprintf("%J", {a:1});'));
 	});
 	it('does NOT flag an integer passed to %d', () => {
-		assert.match(0, count('sprintf("%d", 5);', 'format-argument-type'));
+		assert.match([], diags('sprintf("%d", 5);'));
 	});
 	it('does NOT flag a string passed to %d (coercion is ambiguous)', () => {
-		assert.match(0, count('sprintf("%d", "42");', 'format-argument-type'));
+		assert.match([], diags('sprintf("%d", "42");'));
 	});
 	it('does NOT flag an unknown-typed argument', () => {
-		assert.match(0, count('sprintf("%d", x);', 'format-argument-type'));
+		assert.match([], diags('sprintf("%d", x);'));
 	});
 	it('maps conversions to arguments by position', () => {
 		// %s accepts the list; %d gets the record -> exactly one type warning
-		assert.match(1, count('sprintf("%s %d", [1], {a:1});', 'format-argument-type'));
+		let r = check('sprintf("%s %d", [1], $0{a:1}$1);', 'format-argument-type', "Conversion '%d' expects a number but its argument is a record");
+		assert.match(r.want, r.got);
 	});
 });

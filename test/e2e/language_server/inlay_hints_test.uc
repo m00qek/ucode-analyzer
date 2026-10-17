@@ -1,4 +1,4 @@
-import { describe, it, assert, setup, teardown } from 'utest';
+import { describe, it, assert, setup, teardown, any_order } from 'utest';
 import * as lsp from 'client';
 import { cursors } from 'cursor';
 
@@ -42,23 +42,21 @@ describe('textDocument/inlayHint', () => {
 			textDocument: { uri: 'file:///t.uc' }, range: FULL_RANGE,
 		}});
 		let resp = lsp.receive(proc);
-		let typeHints = filter(resp.result, (h) => h.kind === 1);
-		assert.match(1, length(typeHints));
-		assert.match(': string', typeHints[0].label);
-		assert.match(src.at[0], typeHints[0].position);
+		assert.match([ { position: src.at[0], label: ': string', kind: 1, paddingLeft: true } ],
+			resp.result);
 	});
 
 	it('emits parameter name hints for a documented call', () => {
-		lsp.open(proc, 'file:///t.uc', "/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\nadd(1, 2);\n");
+		let src = cursors("/**\n * @param {int} x\n * @param {int} y\n */\nfunction add(x, y) { return x + y; }\nadd($11, $22);\n");
+		lsp.open(proc, 'file:///t.uc', src.text);
 		lsp.send(proc, { jsonrpc: '2.0', id: 1, method: 'textDocument/inlayHint', params: {
 			textDocument: { uri: 'file:///t.uc' }, range: FULL_RANGE,
 		}});
 		let resp = lsp.receive(proc);
-		let paramHints = filter(resp.result, (h) => h.kind === 2);
-		assert.match(2, length(paramHints));
-		let labels = sort(map(paramHints, (h) => h.label));
-		assert.match('x:', labels[0]);
-		assert.match('y:', labels[1]);
+		assert.match(any_order([
+			{ position: src.at[1], label: 'x:', kind: 2, paddingRight: true },
+			{ position: src.at[2], label: 'y:', kind: 2, paddingRight: true },
+		]), resp.result);
 	});
 
 	it('skips param hint when arg identifier matches param name', () => {
@@ -67,8 +65,8 @@ describe('textDocument/inlayHint', () => {
 			textDocument: { uri: 'file:///t.uc' }, range: FULL_RANGE,
 		}});
 		let resp = lsp.receive(proc);
-		let paramHints = filter(resp.result, (h) => h.kind === 2);
-		assert.match(0, length(paramHints));
+		// Nor a type hint for the literal initializer of x.
+		assert.match([], resp.result);
 	});
 
 	it('respects range: hints outside visible range are not returned', () => {
@@ -80,8 +78,7 @@ describe('textDocument/inlayHint', () => {
 			range: { start: src.at[1], end: src.at[2] },
 		}});
 		let resp = lsp.receive(proc);
-		let typeHints = filter(resp.result, (h) => h.kind === 1);
-		assert.match(1, length(typeHints));
-		assert.match(src.at[0], typeHints[0].position);
+		assert.match([ { position: src.at[0], label: ': string', kind: 1, paddingLeft: true } ],
+			resp.result);
 	});
 });

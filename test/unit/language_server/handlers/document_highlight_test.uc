@@ -25,20 +25,25 @@ describe('documentHighlight', () => {
 	});
 
 	it('returns all occurrences as highlights', () => {
-		let highlights = highlightAt(cursors("let $0z = 0;\nz;\nz;\n"));
-		assert.match(3, length(highlights));
+		let src = cursors("let $0$1z$2 = 0;\n$3z$4;\n$5z$6;\n");
+		assert.match(any_order([
+			{ start: src.at[1], end: src.at[2] },
+			{ start: src.at[3], end: src.at[4] },
+			{ start: src.at[5], end: src.at[6] },
+		]), map(highlightAt(src), (h) => h.range));
 	});
 
 	it('each highlight has kind 1 (Text)', () => {
-		let highlights = highlightAt(cursors("let $0x = 1;\nx;\n"));
-		for (let h in highlights)
-			assert.match(1, h.kind);
+		let src = cursors("let $0$1x$2 = 1;\n$3x$4;\n");
+		assert.match(any_order([
+			{ range: { start: src.at[1], end: src.at[2] }, kind: 1 },
+			{ range: { start: src.at[3], end: src.at[4] }, kind: 1 },
+		]), highlightAt(src));
 	});
 
 	it('highlight ranges span the exact identifier token', () => {
 		let src = cursors("let $0$1count$2 = 0;\n");
-		let highlights = highlightAt(src);
-		assert.match({ start: src.at[1], end: src.at[2] }, highlights[0].range);
+		assert.match([ { range: { start: src.at[1], end: src.at[2] }, kind: 1 } ], highlightAt(src));
 	});
 
 	it('is scope-aware: does not cross function boundaries', () => {
