@@ -2,8 +2,8 @@ import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
-import { positionToOffset, rangeOf, nodeAtOffset } from 'ucode_analyzer.code_analysis.positions';
-import { referencesOf } from 'ucode_analyzer.code_analysis.scope_references';
+import { positionToOffset, rangeOf, nodeAtOffset, findAncestor } from 'ucode_analyzer.code_analysis.positions';
+import { referencesOf, anchorOf } from 'ucode_analyzer.code_analysis.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.code_analysis.cross_file_refs';
 import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
 import { declarators } from 'ucode_analyzer.code_analysis.ast_text';
@@ -12,12 +12,25 @@ import { declarators } from 'ucode_analyzer.code_analysis.ast_text';
 // ── Utilities ──────────────────────────────────────────────────────────────
 
 
-// True when refNode (an identifier) is the direct callee of a call_expression.
+// True when refNode is what a call_expression calls: an identifier `f()`, or the
+// property of a namespace member `ns.f()`.
 function isCallSite(refNode) {
-	let parent = ts.parent(refNode);
+	let callee = refNode;
+	let parent = ts.parent(callee);
+	if (parent && ts.nodeType(parent) === 'member_expression') {
+		let prop = ts.childByField(parent, 'property');
+		if (!prop || ts.startByte(prop) !== ts.startByte(refNode)) return false;
+		callee = parent;
+		parent = ts.parent(callee);
+	}
 	if (!parent || ts.nodeType(parent) !== 'call_expression') return false;
 	let fn = ts.childByField(parent, 'function');
-	return fn && ts.startByte(fn) === ts.startByte(refNode);
+	return fn && ts.startByte(fn) === ts.startByte(callee) && ts.endByte(fn) === ts.endByte(callee);
+}
+
+function isFunctionNode(node) {
+	let t = node ? ts.nodeType(node) : null;
+	return t === 'function_declaration' || t === 'function_expression' || t === 'arrow_function';
 }
 
 // ── CallHierarchyItem builders ─────────────────────────────────────────────
@@ -129,12 +142,9 @@ function collectCallsIn(fnNode, out) {
 	if (body) walk(body);
 }
 
-// Try to resolve a simple identifier callee to a { fnNode, nameNode, uri, doc }.
-// Handles locally-declared functions and named imports; skips member calls.
-function resolveCalleeIdent(identNode, callerUri, callerDoc) {
-	let name = ts.text(identNode, callerDoc.text);
-
-	// Named import → declaration in the exporting file.
+// The function a named import binds in callerUri: { fnNode, nameNode, uri, doc },
+// or null.
+function importedCallee(name, callerUri) {
 	for (let imp in (dag.importsOf(callerUri) ?? [])) {
 		if (!imp.resolvedUri || imp.alias !== null) continue;
 		if (index(imp.symbols, name) < 0) continue;
@@ -147,40 +157,46 @@ function resolveCalleeIdent(identNode, callerUri, callerDoc) {
 		let r = findFnAt(ts.rootNode(doc.tree), doc.text, byteOff);
 		if (r) return { fnNode: r.fnNode, nameNode: r.nameNode, uri: imp.resolvedUri, doc };
 	}
+	return null;
+}
 
-	// Local or top-level declaration in the same file.
-	let root = ts.rootNode(callerDoc.tree);
-	let r = findFnAt(root, callerDoc.text, -999);  // scan all
-	// findFnAt only matches on byte offset; for local lookup we need a name scan.
-	function scanLocal(node) {
-		let nt = ts.nodeType(node);
-		if (nt === 'function_declaration' || (nt === 'export_statement' && ts.namedChildCount(node) > 0)) {
-			let inner = (nt === 'export_statement') ? ts.childByField(node, 'declaration') : node;
-			if (!inner) return null;
+// The top-level function named `name` in the file, or null: a function may
+// call one declared after it, which has run by the time it is called.
+function topLevelCallee(name, callerUri, callerDoc) {
+	let text = callerDoc.text;
+	for (let stmt in ts.namedChildren(ts.rootNode(callerDoc.tree))) {
+		let inner = (ts.nodeType(stmt) === 'export_statement') ? ts.childByField(stmt, 'declaration') : stmt;
+		let nt = inner ? ts.nodeType(inner) : null;
+		if (nt === 'function_declaration') {
 			let nm = ts.childByField(inner, 'name');
-			if (nm && ts.nodeType(nm) === 'identifier' && ts.text(nm, callerDoc.text) === name)
+			if (nm && ts.nodeType(nm) === 'identifier' && ts.text(nm, text) === name)
 				return { fnNode: inner, nameNode: nm, uri: callerUri, doc: callerDoc };
-		}
-		if (nt === 'lexical_declaration' || (nt === 'export_statement' && ts.namedChildCount(node) > 0)) {
-			let inner = (nt === 'export_statement') ? ts.childByField(node, 'declaration') : node;
-			if (!inner || ts.nodeType(inner) !== 'lexical_declaration') return null;
+		} else if (nt === 'lexical_declaration') {
 			for (let vd in declarators(inner)) {
 				let nm = ts.childByField(vd, 'name');
-				if (!nm || ts.text(nm, callerDoc.text) !== name) continue;
 				let val = ts.childByField(vd, 'value');
-				let vnt = val ? ts.nodeType(val) : null;
-				if (vnt === 'function_expression' || vnt === 'arrow_function')
+				if (nm && ts.text(nm, text) === name && isFunctionNode(val))
 					return { fnNode: val, nameNode: nm, uri: callerUri, doc: callerDoc };
 			}
 		}
-		return null;
 	}
-	for (let i = 0; i < ts.namedChildCount(root); i++) {
-		let found = scanLocal(ts.namedChild(root, i));
-		if (found) return found;
-	}
-
 	return null;
+}
+
+// The function an identifier callee means, as { fnNode, nameNode, uri, doc },
+// or null: the declaration in scope (a nested function, a named import), else
+// a later top-level function. A parameter or another value calls nothing known.
+function resolveCalleeIdent(identNode, callerUri, callerDoc) {
+	let name = ts.text(identNode, callerDoc.text);
+	let root = ts.rootNode(callerDoc.tree);
+	let anchor = anchorOf(root, callerDoc.text, ts.startByte(identNode));
+	if (!anchor || anchor.anchorByte < 0 || !anchor.anchorNode)
+		return topLevelCallee(name, callerUri, callerDoc);
+	if (findAncestor(anchor.anchorNode, 'import_statement'))
+		return importedCallee(name, callerUri);
+	let r = findFnAt(root, callerDoc.text, anchor.anchorByte);
+	return (r && isFunctionNode(r.fnNode))
+		? { fnNode: r.fnNode, nameNode: r.nameNode, uri: callerUri, doc: callerDoc } : null;
 }
 
 // ── Exported handlers ──────────────────────────────────────────────────────
