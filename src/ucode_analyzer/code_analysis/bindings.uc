@@ -1,13 +1,11 @@
 import * as ts from 'tree_sitter';
 import { isStatementList } from 'ucode_analyzer.code_analysis.positions';
-import { firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
+import { firstNamed, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 
 // The variable_declarator name node for `name` inside a lexical_declaration
 // (or a `for (let x …)` binding), or null.
 function declaratorName(declNode, name, text) {
-	for (let j = 0; j < ts.namedChildCount(declNode); j++) {
-		let vd = ts.namedChild(declNode, j);
-		if (ts.nodeType(vd) !== 'variable_declarator') continue;
+	for (let vd in declarators(declNode)) {
 		let nn = ts.childByField(vd, 'name');
 		if (nn && ts.text(nn, text) === name) return nn;
 	}

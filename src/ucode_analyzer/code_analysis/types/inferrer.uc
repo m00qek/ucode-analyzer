@@ -7,7 +7,7 @@ import { makeScope, scopeGet, scopeSet, isRootBinding } from 'ucode_analyzer.cod
 import { parseGuard, applyGuard, narrowToNonNull } from 'ucode_analyzer.code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal, resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
 import { offsetToPosition, docBeforeMap, docBearingStatement } from 'ucode_analyzer.code_analysis.positions';
-import { stringLiteralText, firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
+import { stringLiteralText, firstNamed, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 
 // ── Preceding JSDoc ────────────────────────────────────────────────────────
@@ -105,9 +105,7 @@ export function declaredType(stmt, source, uri) {
 
 export function processDecl(stmt, source, uri, scope, depth) {
 	let declared = declaredType(stmt, source, uri);
-	for (let i = 0; i < ts.namedChildCount(stmt); i++) {
-		let decl = ts.namedChild(stmt, i);
-		if (ts.nodeType(decl) !== 'variable_declarator') continue;
+	for (let decl in declarators(stmt)) {
 		let nameNode = ts.childByField(decl, 'name');
 		let valNode  = ts.childByField(decl, 'value');
 		if (nameNode && ts.nodeType(nameNode) === 'identifier') {

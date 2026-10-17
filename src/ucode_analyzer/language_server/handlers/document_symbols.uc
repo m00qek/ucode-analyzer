@@ -1,6 +1,7 @@
 import * as ts from 'tree_sitter';
 import { buildLineTable, rangeOf, isStatementList } from 'ucode_analyzer.code_analysis.positions';
 import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
+import { declarators } from 'ucode_analyzer.code_analysis.ast_text';
 
 // LSP SymbolKind constants
 
@@ -57,9 +58,7 @@ function walkSymbols(node, text, lineTable) {
 		let kw = ts.child(node, 0);
 		let isConst = kw && ts.text(kw, text) === 'const';
 		let result = [];
-		for (let i = 0; i < ts.namedChildCount(node); i++) {
-			let vd = ts.namedChild(node, i);
-			if (ts.nodeType(vd) !== 'variable_declarator') continue;
+		for (let vd in declarators(node)) {
 			let nameNode = ts.childByField(vd, 'name');
 			if (!nameNode) continue;
 			let valNode = ts.childByField(vd, 'value');

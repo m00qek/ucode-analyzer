@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { firstNamed, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
+import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 import { inferNode, inferParams, declaredType, setReturnScopes } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { importScope } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork } from 'ucode_analyzer.code_analysis.types.scope';
@@ -43,9 +43,7 @@ function emit(map, offset, scope) {
 // COW: returns a new scope; does not mutate the input scope.
 function forkDecl(stmt, source, uri, scope) {
     let declared = declaredType(stmt, source, uri);
-    for (let i = 0; i < ts.namedChildCount(stmt); i++) {
-        let decl = ts.namedChild(stmt, i);
-        if (ts.nodeType(decl) !== 'variable_declarator') continue;
+    for (let decl in declarators(stmt)) {
         let nameNode = ts.childByField(decl, 'name');
         let valNode  = ts.childByField(decl, 'value');
         if (nameNode && ts.nodeType(nameNode) === 'identifier') {
@@ -478,9 +476,7 @@ function walkForStmt(node, source, uri, scope, map) {
     // Initializer variables are added to a fresh scope before any checkpoint.
     let forScope = makeScope(scope);
     if (init && ts.nodeType(init) === 'lexical_declaration') {
-        for (let i = 0; i < ts.namedChildCount(init); i++) {
-            let decl = ts.namedChild(init, i);
-            if (ts.nodeType(decl) !== 'variable_declarator') continue;
+        for (let decl in declarators(init)) {
             let nameNode = ts.childByField(decl, 'name');
             let valNode  = ts.childByField(decl, 'value');
             if (nameNode && ts.nodeType(nameNode) === 'identifier') {
@@ -529,9 +525,7 @@ function walkForAlt(node, source, uri, scope, map) {
     let incr = ts.childByField(node, 'increment');
     let forScope = makeScope(scope);
     if (init && ts.nodeType(init) === 'lexical_declaration') {
-        for (let i = 0; i < ts.namedChildCount(init); i++) {
-            let decl = ts.namedChild(init, i);
-            if (ts.nodeType(decl) !== 'variable_declarator') continue;
+        for (let decl in declarators(init)) {
             let nameNode = ts.childByField(decl, 'name');
             let valNode  = ts.childByField(decl, 'value');
             if (nameNode && ts.nodeType(nameNode) === 'identifier') {

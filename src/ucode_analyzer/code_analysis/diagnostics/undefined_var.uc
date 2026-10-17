@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { firstNamed, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
+import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
@@ -72,9 +72,7 @@ function bindForInVar(block, scope, source) {
 	if (ts.nodeType(left) === 'identifier') {
 		bind(scope, ts.text(left, source));
 	} else if (ts.nodeType(left) === 'lexical_declaration') {
-		for (let i = 0; i < ts.namedChildCount(left); i++) {
-			let vd = ts.namedChild(left, i);
-			if (ts.nodeType(vd) !== 'variable_declarator') continue;
+		for (let vd in declarators(left)) {
 			let nm = ts.childByField(vd, 'name');
 			if (nm) bind(scope, ts.text(nm, source));
 		}
@@ -90,9 +88,7 @@ function bindForVar(block, scope, source) {
 	                ts.nodeType(parent) !== 'for_alt_statement')) return;
 	let init = ts.childByField(parent, 'initializer');
 	if (!init || ts.nodeType(init) !== 'lexical_declaration') return;
-	for (let i = 0; i < ts.namedChildCount(init); i++) {
-		let vd = ts.namedChild(init, i);
-		if (ts.nodeType(vd) !== 'variable_declarator') continue;
+	for (let vd in declarators(init)) {
 		let nm = ts.childByField(vd, 'name');
 		if (nm) bind(scope, ts.text(nm, source));
 	}
@@ -138,9 +134,7 @@ function walk(node, scope, source, globals, lineTable, out) {
 	}
 
 	if (nt === 'lexical_declaration') {
-		for (let i = 0; i < ts.namedChildCount(node); i++) {
-			let vd = ts.namedChild(node, i);
-			if (ts.nodeType(vd) !== 'variable_declarator') continue;
+		for (let vd in declarators(node)) {
 			let nameNode = ts.childByField(vd, 'name');
 			if (nameNode) bind(scope, ts.text(nameNode, source));
 			let val = ts.childByField(vd, 'value');
@@ -238,8 +232,7 @@ function walk(node, scope, source, globals, lineTable, out) {
 		let inner = makeScope(scope);
 		let init = ts.childByField(node, 'initializer');
 		if (init && ts.nodeType(init) === 'lexical_declaration') {
-			for (let vd in ts.namedChildren(init)) {
-				if (ts.nodeType(vd) !== 'variable_declarator') continue;
+			for (let vd in declarators(init)) {
 				let val = ts.childByField(vd, 'value');
 				if (val) walk(val, inner, source, globals, lineTable, out);
 				let nm = ts.childByField(vd, 'name');

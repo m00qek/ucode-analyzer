@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { firstNamed, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
+import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 
 // Lightweight scope used only for tracking declaration byte-offsets.
@@ -64,9 +64,7 @@ function bindForInVar(block, scope, source, targetName, out) {
 		// for (x in arr) — bare identifier (re-use of existing variable)
 		bind(scope, source, left, targetName, out);
 	} else if (ts.nodeType(left) === 'lexical_declaration') {
-		for (let i = 0; i < ts.namedChildCount(left); i++) {
-			let vd = ts.namedChild(left, i);
-			if (ts.nodeType(vd) !== 'variable_declarator') continue;
+		for (let vd in declarators(left)) {
 			let nameNode = ts.childByField(vd, 'name');
 			if (nameNode) bind(scope, source, nameNode, targetName, out);
 		}
@@ -84,9 +82,7 @@ function bindForVar(block, scope, source, targetName, out) {
 	                ts.nodeType(parent) !== 'for_alt_statement')) return;
 	let init = ts.childByField(parent, 'initializer');
 	if (!init || ts.nodeType(init) !== 'lexical_declaration') return;
-	for (let i = 0; i < ts.namedChildCount(init); i++) {
-		let vd = ts.namedChild(init, i);
-		if (ts.nodeType(vd) !== 'variable_declarator') continue;
+	for (let vd in declarators(init)) {
 		let nameNode = ts.childByField(vd, 'name');
 		if (nameNode) bind(scope, source, nameNode, targetName, out);
 	}
@@ -131,9 +127,7 @@ function walk(node, scope, source, targetName, out) {
 
 	// ── Lexical declaration: bind name, then walk the initializer ───────────
 	if (nt === 'lexical_declaration') {
-		for (let i = 0; i < ts.namedChildCount(node); i++) {
-			let vd = ts.namedChild(node, i);
-			if (ts.nodeType(vd) !== 'variable_declarator') continue;
+		for (let vd in declarators(node)) {
 			let nameNode = ts.childByField(vd, 'name');
 			if (nameNode) bind(scope, source, nameNode, targetName, out);
 			let val = ts.childByField(vd, 'value');
@@ -216,9 +210,7 @@ function walk(node, scope, source, targetName, out) {
 		let inner = makeScope(scope);
 		let init = ts.childByField(node, 'initializer');
 		if (init && ts.nodeType(init) === 'lexical_declaration') {
-			for (let i = 0; i < ts.namedChildCount(init); i++) {
-				let vd = ts.namedChild(init, i);
-				if (ts.nodeType(vd) !== 'variable_declarator') continue;
+			for (let vd in declarators(init)) {
 				let val = ts.childByField(vd, 'value');
 				if (val) walk(val, scope, source, targetName, out);
 				let nm = ts.childByField(vd, 'name');

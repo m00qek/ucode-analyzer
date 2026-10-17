@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition, buildLineTable, nodeAtOffset } from 'ucode_analyzer.code_analysis.positions';
-import { stringLiteralText } from 'ucode_analyzer.code_analysis.ast_text';
+import { stringLiteralText, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as fs from 'fs';
 import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
@@ -25,9 +25,7 @@ function findExportName(decl, name, text) {
 		let nameNode = ts.childByField(decl, 'name');
 		if (nameNode && ts.text(nameNode, text) === name) return nameNode;
 	} else if (dt === 'lexical_declaration') {
-		for (let i = 0; i < ts.namedChildCount(decl); i++) {
-			let vd = ts.namedChild(decl, i);
-			if (ts.nodeType(vd) !== 'variable_declarator') continue;
+		for (let vd in declarators(decl)) {
 			let nameNode = ts.childByField(vd, 'name');
 			if (nameNode && ts.text(nameNode, text) === name) return nameNode;
 		}
@@ -42,9 +40,7 @@ function localDefinition(uri, doc, name) {
 		let nt = ts.nodeType(stmt);
 
 		if (nt === 'lexical_declaration') {
-			for (let j = 0; j < ts.namedChildCount(stmt); j++) {
-				let vd = ts.namedChild(stmt, j);
-				if (ts.nodeType(vd) !== 'variable_declarator') continue;
+			for (let vd in declarators(stmt)) {
 				let nameNode = ts.childByField(vd, 'name');
 				if (nameNode && ts.text(nameNode, doc.text) === name)
 					return location(uri, doc.text, doc.lineTable, ts.startByte(nameNode));

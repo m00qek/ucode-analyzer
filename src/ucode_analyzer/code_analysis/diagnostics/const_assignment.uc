@@ -1,5 +1,5 @@
 import * as ts from 'tree_sitter';
-import { firstNamed, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
+import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
 
@@ -65,9 +65,7 @@ _walk = function(node, scope, source, lineTable, diags) {
 		let entry = kind === 'const'
 			? { kind, kwRange: rangeOf(source, lineTable, kw) }
 			: { kind };
-		for (let i = 0; i < ts.namedChildCount(node); i++) {
-			let vd = ts.namedChild(node, i);
-			if (ts.nodeType(vd) !== 'variable_declarator') continue;
+		for (let vd in declarators(node)) {
 			let nameNode = ts.childByField(vd, 'name');
 			if (nameNode && ts.nodeType(nameNode) === 'identifier')
 				scope.decls[ts.text(nameNode, source)] = entry;

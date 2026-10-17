@@ -11,6 +11,12 @@ export function namedNonComments(node) {
 	return filter(ts.namedChildren(node), (c) => !isComment(c));
 };
 
+// The variable_declarators of a lexical_declaration (or a for initializer),
+// without the commas and comments between them.
+export function declarators(decl) {
+	return filter(ts.namedChildren(decl), (c) => ts.nodeType(c) === 'variable_declarator');
+};
+
 // The first non-comment named child, for nodes without fields: parentheses,
 // expression statements, `else`, spread and rest elements, `return`.
 export function firstNamed(node) {

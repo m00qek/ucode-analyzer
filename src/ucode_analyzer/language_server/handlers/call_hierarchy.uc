@@ -6,6 +6,7 @@ import { positionToOffset, rangeOf, nodeAtOffset } from 'ucode_analyzer.code_ana
 import { referencesOf } from 'ucode_analyzer.language_server.scope_references';
 import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.language_server.cross_file_refs';
 import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
+import { declarators } from 'ucode_analyzer.code_analysis.ast_text';
 
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -163,9 +164,7 @@ function resolveCalleeIdent(identNode, callerUri, callerDoc) {
 		if (nt === 'lexical_declaration' || (nt === 'export_statement' && ts.namedChildCount(node) > 0)) {
 			let inner = (nt === 'export_statement') ? ts.childByField(node, 'declaration') : node;
 			if (!inner || ts.nodeType(inner) !== 'lexical_declaration') return null;
-			for (let i = 0; i < ts.namedChildCount(inner); i++) {
-				let vd = ts.namedChild(inner, i);
-				if (ts.nodeType(vd) !== 'variable_declarator') continue;
+			for (let vd in declarators(inner)) {
 				let nm = ts.childByField(vd, 'name');
 				if (!nm || ts.text(nm, callerDoc.text) !== name) continue;
 				let val = ts.childByField(vd, 'value');

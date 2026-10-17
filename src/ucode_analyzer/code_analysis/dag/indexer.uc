@@ -4,7 +4,7 @@ import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBeforeMap } from 'ucode_analyzer.code_analysis.positions';
 import { topLevelStatements, importStmtSpecifier, importBindings, importRemoteName } from 'ucode_analyzer.code_analysis.mode';
-import { stringLiteralText, namedNonComments, firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
+import { stringLiteralText, namedNonComments, firstNamed, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 
 
 function dotToSlash(s) {
@@ -78,9 +78,7 @@ function buildDeclIndex(root, text, docOf) {
 			                params: paramsOf(stmt, text), valueType: null };
 		} else if (nt === 'lexical_declaration') {
 			let isConst = isConstDecl(stmt);
-			for (let j = 0; j < ts.namedChildCount(stmt); j++) {
-				let vd = ts.namedChild(stmt, j);
-				if (ts.nodeType(vd) !== 'variable_declarator') continue;
+			for (let vd in declarators(stmt)) {
 				let nameNode = ts.childByField(vd, 'name');
 				if (!nameNode) continue;
 				let name = ts.text(nameNode, text);
@@ -253,9 +251,7 @@ export function extractExports(text, tree) {
 
 		} else if (declType === 'lexical_declaration') {
 			let kind = isConstDecl(decl) ? 'const' : 'let';
-			for (let j = 0; j < ts.namedChildCount(decl); j++) {
-				let varDecl = ts.namedChild(decl, j);
-				if (ts.nodeType(varDecl) !== 'variable_declarator') continue;
+			for (let varDecl in declarators(decl)) {
 				let nameNode = ts.childByField(varDecl, 'name');
 				if (!nameNode || ts.nodeType(nameNode) !== 'identifier') continue;
 				let value = ts.childByField(varDecl, 'value');
