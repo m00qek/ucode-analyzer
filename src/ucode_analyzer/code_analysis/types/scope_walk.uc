@@ -89,7 +89,7 @@ function forkAssign(stmt, source, uri, scope) {
         if (!op || !FILLS[ts.nodeType(op)]) return scope;
         newType = filledType(scopeGet(scope, name) ?? UNKNOWN, newType);
     }
-    return newType.kind !== 'unknown' ? scopeFork(scope, name, newType) : scope;
+    return scopeFork(scope, name, newType);
 }
 
 // Return the scope after processing stmt's own declarations (COW).

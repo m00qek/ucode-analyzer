@@ -403,6 +403,11 @@ describe('diagnostics — type errors: values set elsewhere', () => {
 			"function outer() {\n\tlet d = null;\n\tfunction get() { d ??= {}; return d.x; }\n\treturn get;\n}\nouter();\n"));
 	});
 
+	it('a variable assigned a value of unknown type is no longer null', () => {
+		assert.match([], codes("function g(m) {\n\tlet p = null;\n\tp = m.make();\n\treturn () => p.go();\n}\ng({});\n"));
+		assert.match([], codes("function g(m) {\n\tlet p = null;\n\tp = m.make();\n\treturn p.go();\n}\ng({});\n"));
+	});
+
 	it('a ??= in one branch leaves the variable possibly null', () => {
 		assert.match([['may-be-null', 0]], codes("let e = null;\nlet c = time();\nif (c) e ??= {};\nprint($0e.x);\n"));
 	});
