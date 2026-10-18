@@ -209,8 +209,19 @@ describe('buildScopeMap assignment widening', () => {
 		assert.match({ kind: 'union', members: any_order([NUL, INT]) }, t);
 	});
 
-	it('an assignment in a nested function does not widen', () => {
-		assert.match(NUL, xAt("function f(c) {\n\tlet x = null;\n\tif (c) { let g = () => { x = 1; }; }\n\treturn x;\n}\n"));
+	it('an assignment in a function created there widens: the function may have run', () => {
+		assert.match({ kind: 'union', members: any_order([NUL, INT]) },
+			xAt("function f(c) {\n\tlet x = null;\n\tif (c) { let g = () => { x = 1; }; }\n\treturn x;\n}\n"));
+	});
+
+	it('a callback\'s assignment widens the variable after the call', () => {
+		assert.match({ kind: 'union', members: any_order([NUL, INT]) },
+			xAt("function f(xs) {\n\tlet x = null;\n\tmap(xs, () => { x = 1; });\n\treturn x;\n}\n"));
+	});
+
+	it('a function created before an assignment sees it', () => {
+		let text = "function f() {\n\tlet x = null;\n\tlet g = () => x;\n\tx = 1;\n\treturn g;\n}\n";
+		assert.match({ kind: 'union', members: any_order([NUL, INT]) }, scopeGet(scopeAt(text, 'x;\n\tx = 1'), 'x'));
 	});
 
 	it('a branch that redeclares the name does not widen the outer one', () => {

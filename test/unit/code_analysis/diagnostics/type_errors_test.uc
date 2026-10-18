@@ -328,6 +328,15 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 		assert.match(0, length(nullDiags("/** @param {?array} a */\nfunction f(a) { return a && a[0]; }\n")));
 	});
 
+	it('does not call a variable null that a function created before the access assigns', () => {
+		let head = "/** @returns {?object} */\nfunction mk() { return null; }\n";
+		// A callback the call may have run, and a closure run after the assignment.
+		let cb = cursors(head + "let first = null;\neach([1], (s) => { first = mk() ?? {}; });\n$0first$1.x;\n");
+		assert.match([diag(cb, 2, 'may-be-null', "'first' may be null")], nullDiags(cb.text));
+		let src = cursors(head + "function f() {\n\tlet req = null;\n\tlet close = () => $0req$1.free();\n\treq = mk();\n\treturn close;\n}\n");
+		assert.match([diag(src, 2, 'may-be-null', "'req' may be null")], nullDiags(src.text));
+	});
+
 	it('does not flag an access in a loop body its condition guards', () => {
 		let head = "/** @returns {?object} */\nfunction next() { return null; }\n";
 		for (let text in [

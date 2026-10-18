@@ -270,21 +270,33 @@ function lowerBound(list, start) {
     return lo;
 }
 
+// Index of the first of the sorted offsets after `x`.
+function firstAfter(offsets, x) {
+    let lo = 0, hi = length(offsets);
+    while (lo < hi) {
+        let mid = (lo + hi) >> 1;
+        if (offsets[mid] <= x) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+}
+
 // Every `name = …` and every declared name of the tree being mapped, sorted by
-// start, collected once: { start, name, rhs, fnStart, fnEnd } with fnStart and
-// fnEnd the range of the innermost enclosing function (-1 at top level).
+// start, collected once: { start, name, rhs, fnStart, fnEnd, closure } with
+// fnStart and fnEnd the range of the innermost enclosing function (-1 at top
+// level), and closure whether that function does not declare name.
 // _captured holds the right-hand sides, by name, of the variables another
 // function may see change (see widenCaptured); _capturedType caches its joins.
-let _assigns = [], _decls = [], _captured = {}, _capturedType = {};
+// _closureAssigns are the entries whose closure is true.
+let _assigns = [], _decls = [], _closureAssigns = [], _captured = {}, _capturedType = {};
 
 function collectBindings(root, source) {
     let lang = ts.nodeType(root) === 'markup' ? 'markup' : 'ucode';
     _assigns = [];
     _decls = [];
+    _closureAssigns = [];
     _captured = {};
     _capturedType = {};
     let fns = ts.descendantOffsets(root, keys(FUNCTION_TYPES));
-    let firstFn = length(fns) ? fns[0] : -1;
     for (let m in ts.queryMatches(query(lang), root, source)) {
         let c = {};
         for (let cap in m.captures) c[cap.name] = cap.node;
@@ -297,16 +309,18 @@ function collectBindings(root, source) {
         push(_assigns, entry);
     }
     // Captured: assigned in a function that does not declare it (the variable is
-    // an enclosing one), or at top level once a function exists that can run
-    // later. A variable assigned only where it is declared, before any function,
+    // an enclosing one), or after a function nested where it is assigned begins,
+    // which can run later. A variable assigned only before any such function
     // reads the same from every function, and the walk tracks it in order.
     for (let a in _assigns) {
         let local = false;
         if (a.fnStart >= 0)
             for (let i = lowerBound(_decls, a.fnStart); i < length(_decls) && _decls[i].start < a.fnEnd; i++)
                 if (_decls[i].name === a.name) { local = true; break; }
-        let captured = (a.fnStart >= 0) ? !local : (firstFn >= 0 && a.start > firstFn);
-        if (!captured) continue;
+        a.closure = (a.fnStart >= 0 && !local);
+        if (a.closure) push(_closureAssigns, a);
+        let f = firstAfter(fns, a.fnStart);   // the first function inside a's own
+        if (!a.closure && !(f < length(fns) && fns[f] < a.start)) continue;
         _captured[a.name] ??= [];
         push(_captured[a.name], a.rhs);
     }
@@ -321,6 +335,24 @@ function assignmentsIn(stmt, source) {
     for (let i = lowerBound(_assigns, s); i < length(_assigns) && _assigns[i].start < e; i++) {
         let a = _assigns[i];
         if (a.fnStart >= s) continue;   // inside a function nested in stmt
+        out[a.name] ??= [];
+        push(out[a.name], a.rhs);
+    }
+    if (length(out))
+        for (let i = lowerBound(_decls, s); i < length(_decls) && _decls[i].start < e; i++)
+            delete out[_decls[i].name];
+    return out;
+}
+
+// { name: [rhs nodes] } for `name = …` in functions nested in stmt that do
+// not declare name, for names stmt does not declare: once stmt has run, they
+// may have run too (`each(xs, (x) => { last = x; })`).
+function closureAssignmentsIn(stmt) {
+    let s = ts.startByte(stmt), e = ts.endByte(stmt);
+    let out = {};
+    for (let i = lowerBound(_closureAssigns, s); i < length(_closureAssigns) && _closureAssigns[i].start < e; i++) {
+        let a = _closureAssigns[i];
+        if (a.fnStart < s) continue;
         out[a.name] ??= [];
         push(out[a.name], a.rhs);
     }
@@ -419,6 +451,17 @@ function widenAssigned(stmt, before, after, source, uri, smap) {
     return after;
 }
 
+// The scope after stmt, with every outer variable a function created in it
+// assigns widened to those assignments' types.
+function widenByClosures(stmt, scope, source, uri, smap) {
+    for (let name, rhss in closureAssignmentsIn(stmt)) {
+        if (!scopeHas(scope, name)) continue;
+        let t0 = scopeGet(scope, name) ?? UNKNOWN;
+        scope = scopeFork(scope, name, joinTypes([t0, ...map(rhss, (r) => rhsType(r, source, uri, smap))]));
+    }
+    return scope;
+}
+
 // Forward declaration so handler functions can call walkNode.
 let walkNode;
 
@@ -437,6 +480,7 @@ function stepStatement(stmt, source, uri, scope, map) {
     inner = length(map) > inner;
     let next = applyGuardClause(stmt, source, advanceScope(stmt, source, uri, scope));
     next = widenAssigned(stmt, scope, next, source, uri, map);
+    next = widenByClosures(stmt, next, source, uri, map);
     // Past the statement's end (a blank line before the next one) its
     // declarations are in scope and its blocks' are not. Not when it is left
     // open at EOF: the end of the file is still inside its blocks.
@@ -907,7 +951,7 @@ function walkFile(uri, source, root, map) {
 export function buildScopeMap(uri, source, tree) {
     let map = [];
     let outer = [_marks, _pos, _assigns, _decls, _captured, _capturedType, _chainRoots,
-        setReturnScopes(null)];
+        setReturnScopes(null), _closureAssigns];
     function restore() {
         _marks = outer[0];
         _pos = outer[1];
@@ -917,6 +961,7 @@ export function buildScopeMap(uri, source, tree) {
         _capturedType = outer[5];
         _chainRoots = outer[6];
         setReturnScopes(outer[7]);
+        _closureAssigns = outer[8];
     }
     try {
         walkFile(uri, source, ts.rootNode(tree), map);
