@@ -97,6 +97,18 @@ describe('parallel — fanOut across worker processes', () => {
 		assert.match(any_order([null, 1, null, 3]), r.results);
 	});
 
+	it('delivers results larger than the pipe buffer, intact', () => {
+		// Quotes, backslashes and multibyte text across the piece boundaries.
+		let big = (x) => {
+			let a = [];
+			for (let i = 0; i < 3000; i++) push(a, sprintf('%d "q" \\ é→ %d', x, i));
+			return a;
+		};
+		let r = runFanOut(nums(4), 2, big);
+		assert.match(1, r.doneCount);
+		assert.match(map(nums(4), big), sort(r.results, (a, b) => (a[0] < b[0]) ? -1 : 1));
+	});
+
 	it('skips an item whose work throws and still completes', () => {
 		let r = runFanOut(nums(6), 2, (x) => { if (x === 3) die('boom'); return x; });
 		assert.match(1, r.doneCount);

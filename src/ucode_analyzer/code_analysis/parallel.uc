@@ -79,6 +79,20 @@ export function detectJobs() {
 	return jobsFor(fs.readfile('/proc/self/status'), cpuMax, fs.readfile('/proc/cpuinfo'));
 };
 
+// uloop reads a task's pipe without blocking and drops a message it finds
+// half written: one larger than the pipe's buffer (a big file's index) is
+// lost whenever the reader catches up with a busy writer. A write of up to
+// PIPE_BUF (4096) bytes is atomic, so results travel as pieces of their JSON,
+// in base64 (which JSON-encodes as is): 2400 bytes become 3200, under
+// PIPE_BUF with the framing.
+const PIECE = 2400;
+
+function sendPieces(pipe, msg) {
+	let js = sprintf('%J', msg);
+	for (let i = 0; i < length(js); i += PIECE)
+		pipe.send({ piece: b64enc(substr(js, i, PIECE)), last: i + PIECE >= length(js) });
+}
+
 // Fan `items` out across up to `jobs` worker processes on the CURRENT event loop
 // (the caller owns `uloop.init`/`run`/`end`; this function touches none of them).
 //
@@ -168,9 +182,10 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 	}
 
 	for (let s = 0; s < jobs; s++) {
-		let idx   = s;
-		let shard = shards[idx];
-		let task  = uloop.task(
+		let idx    = s;
+		let shard  = shards[idx];
+		let pieces = [];
+		let task   = uloop.task(
 			function(pipe) {
 				// The worker inherits the server's uloop SIGTERM handler, which
 				// here only queues the signal for a loop that never runs: without
@@ -178,7 +193,7 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 				signal('SIGTERM', 'default');
 				pipe.send({ ready: true });
 				for (let item in shard)
-					pipe.send(runItem(item));
+					sendPieces(pipe, runItem(item));
 				pipe.send({ done: true });
 			},
 			function(msg) {
@@ -190,7 +205,11 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 					return;
 				}
 				if (msg.done) return finish(idx);
-				deliver(msg);
+				push(pieces, b64dec(msg.piece));
+				if (!msg.last) return;
+				let js = join('', pieces);
+				pieces = [];
+				deliver(json(js));
 			}
 		);
 
