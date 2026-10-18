@@ -31,6 +31,10 @@ import { detectJobs } from 'ucode_analyzer.code_analysis.parallel';
 // How long a diagnostic refresh waits for further changes, in ms.
 const REFRESH_DELAY = 500;
 
+// How long a document's edits pause, in ms, before its scope map is built
+// afresh (documents.settle).
+const SETTLE_DELAY = 1000;
+
 // Requests a partial index would answer wrongly rather than incompletely
 // (false diagnostics, a rename missing importers): held until the startup
 // load finishes.
@@ -130,6 +134,23 @@ export function run(config) {
 					'workspace/diagnostic/refresh', null);
 		});
 	};
+
+	// Timers held per document: a collected one would never fire.
+	let _settleTimers = {};
+
+	function settleLater(uri) {
+		if (_settleTimers[uri])
+			return _settleTimers[uri].set(SETTLE_DELAY);
+		_settleTimers[uri] = uloop.timer(SETTLE_DELAY, function() {
+			delete _settleTimers[uri];
+			documents.settle(uri);
+		});
+	}
+
+	function stopSettling(uri) {
+		_settleTimers[uri]?.cancel();
+		delete _settleTimers[uri];
+	}
 
 	const handlers = {
 		initialize: function(msg) {
@@ -247,11 +268,13 @@ export function run(config) {
 			// edit affected dependents, prompt a re-pull of everything.
 			if (length(reindex(doc)) > 0)
 				requestDiagnosticRefresh();
+			settleLater(uri);
 		},
 
 		'textDocument/didClose': function(msg) {
 			let uri = msg.params.textDocument.uri;
 			background.supersede(uri);
+			stopSettling(uri);
 			documents.close(uri);
 			dag.markClosed(uri);
 			// No publish: pull-model clients clear diagnostics for closed files.

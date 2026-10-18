@@ -192,6 +192,23 @@ describe('incremental scope map', () => {
 		assert.match({ reused: 0, walked: 5 }, edit('[ 1, 3 ]', '[ 1, 4 ]'));
 	});
 
+	it('settles a reused map into one built from scratch, which the next edit reuses', () => {
+		open(FIVE);
+		corruptY();
+		edit('[ 1, 2 ]', '[ 1, 3 ]');
+		assert.match(true, differs() !== null);
+		documents.settle(URI);
+		assert.match(null, differs());
+		assert.match({ reused: 4, walked: 1 }, edit('[ 1, 3 ]', '[ 1, 4 ]'));
+	});
+
+	it('leaves a map built from scratch as it is', () => {
+		open(FIVE);
+		let built = documents.peek(URI).built;
+		documents.settle(URI);
+		assert.match(true, documents.peek(URI).built === built);
+	});
+
 	it('matches a map built from scratch after random edits', () => {
 		let seed = 20261018;
 		let rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };

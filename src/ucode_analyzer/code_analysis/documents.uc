@@ -64,18 +64,31 @@ export function get(uri) {
 		let prev = (doc.prev && doc.prev.generation < REBUILD_EVERY) ? doc.prev : null;
 		doc.built = buildScopeMapFrom(uri, doc.text, doc.tree, prev);
 		doc.built.generation = prev ? prev.generation + 1 : 0;
-		if (_check && lastBuildStats().reused > 0) {
+		doc.built.reused = lastBuildStats().reused;
+		if (_check && doc.built.reused > 0) {
 			let full = buildScopeMap(uri, doc.text, doc.tree);
 			let diff = mapDifference(doc.built.map, full);
 			if (diff) {
 				warn(sprintf('ucode-analyzer: the reused scope map of %s (version %J) differs: %s\n', uri, doc.version, diff));
-				doc.built = { ...doc.built, map: full, generation: REBUILD_EVERY };
+				doc.built = { ...doc.built, map: full, generation: REBUILD_EVERY, reused: 0 };
 			}
 		}
 		doc.scopeMap = doc.built.map;
 		doc.prev = null;
 	}
 	return doc;
+};
+
+// Build the scope map of an open document afresh, unless it is already: the
+// server does once edits pause, so whatever reusing parts of an older map got
+// wrong lasts only until then. Comparing the two would cost many builds.
+export function settle(uri) {
+	let doc = _documents[uri];
+	if (!doc || (doc.scopeMap && doc.built.reused === 0)) return;
+	doc.built = buildScopeMapFrom(uri, doc.text, doc.tree, null);
+	doc.built.generation = doc.built.reused = 0;
+	doc.scopeMap = doc.built.map;
+	doc.prev = null;
 };
 
 // The open document for uri as stored, its scope map perhaps not built yet;

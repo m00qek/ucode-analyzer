@@ -139,8 +139,9 @@ Settings come from `<workspace>/.lsp/config.json` (the project) merged over
   diagnosed. Defaults to `/usr/share/ucode`.
 - `debug.checkIncremental`: after an edit, check the types the server kept
   from the previous text against ones worked out from scratch, and log to
-  stderr where they differ (the fresh ones are then used). It doubles the work
-  per edit; turn it on to report a wrong type that goes away on reopening.
+  stderr where they differ (the fresh ones are then used). It makes each edit
+  a few times slower; turn it on to report a wrong type that goes away once
+  you stop typing for a second, when the server works them all out afresh.
 
 Every `.uc` file in the workspace is indexed, minus the excludes. A
 subfolder with its own `.lsp/config.json` is treated as a separate workspace.

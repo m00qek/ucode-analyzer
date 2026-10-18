@@ -65,6 +65,19 @@ describe('LSP document sync', () => {
 		assert.match(STRING, hoverAt(CHANGED.at[0]));
 	});
 
+	it('a pause in edits keeps the changed text, also when another document closes first', () => {
+		const OTHER = 'file:///other.uc';
+		lsp.open(proc, URI, SRC.text);
+		lsp.open(proc, OTHER, SRC.text);
+		lsp.change(proc, URI, CHANGED.text, 2);
+		lsp.change(proc, OTHER, CHANGED.text, 2);
+		assert.match(STRING, hoverAt(CHANGED.at[0]));
+		close(OTHER);
+		system('sleep 2');   // past the rebuild after a pause in edits (1 s)
+		assert.match(STRING, hoverAt(CHANGED.at[0]));
+		assert.match(null, hoverAt(CHANGED.at[0], OTHER));
+	});
+
 	it('didClose forgets the document', () => {
 		lsp.open(proc, URI, SRC.text);
 		close(URI);
