@@ -2,13 +2,42 @@ import * as ts from 'tree_sitter';
 import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 import { inferNode, inferParams, declaredType, setReturnScopes } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { importScope } from 'ucode_analyzer.code_analysis.types.dag_bridge';
-import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork } from 'ucode_analyzer.code_analysis.types.scope';
+import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork, recordLookups, resolve } from 'ucode_analyzer.code_analysis.types.scope';
+import { sameType, sameBindings } from 'ucode_analyzer.code_analysis.types.type_eq';
 import { UNKNOWN, STR, unionOf } from 'ucode_analyzer.code_analysis.types.type_utils';
 import { parseGuard, applyGuard as narrowBy, narrowToNonNull, optionalChainRoot } from 'ucode_analyzer.code_analysis.types.narrowing';
 
 // Where the last lookup landed. Passes read a file front to back, so the next
 // lookup is usually at that checkpoint or a few past it.
 let _hintMap = null, _hintAt = 0;
+
+// The checkpoints of an outermost function (a unit) can be reused for the
+// next text when it is the same and so is everything its walk read from
+// outside it. While a unit is walked, _unit records that:
+//   reads       lookups leaving its root scope (scope.uc's recordLookups)
+//   captured    captured variables' types it read, already inferred
+//   capturedWrites  those it inferred first, in a function nested in it: when
+//               one is first inferred depends on the map built so far
+//   chainReads  _chainRoots entries it read, chainWrites those it wrote
+//   mentions    the captured names its text holds
+// with { start, end, type, root, first, last, clean }: its node's range and
+// type, its root scope, its checkpoints map[first..last), and whether its
+// tree has no error.
+// _prev: the previous text's { units: { start → unit }, map, edit }, edit
+// being { start, oldEnd, newEnd, delta, sameLines }; null for a full build.
+let _units = null, _unit = null, _prev = null;
+
+// The captured names of the file, joined: a unit's mentions of them hold
+// while they are the same. _compared: per build, name → the types of a read
+// compared, { old, now, same }.
+let _capturedNames = '', _compared = {};
+
+// The last buildScopeMapFrom's units: { reused, walked }.
+let _stats = { reused: 0, walked: 0 };
+
+export function lastBuildStats() {
+    return _stats;
+};
 
 // The scope of the largest checkpoint.offset <= offset (the first checkpoint's
 // before any).
@@ -65,6 +94,8 @@ function rootsNonNull(scope, guard, positive) {
         return;
     }
     let root = _chainRoots[guard.name];
+    if (_unit && !exists(_unit.chainWrites, guard.name) && !exists(_unit.chainReads, guard.name))
+        _unit.chainReads[guard.name] = { v: root };
     if (guard.kind !== 'truthy' || !root || !scopeHas(scope, root)) return;
     if (guard.positive ? positive : !positive)
         scopeSet(scope, root, narrowToNonNull(scopeGet(scope, root) ?? UNKNOWN));
@@ -86,7 +117,10 @@ function forkDecl(stmt, source, uri, scope) {
         let valNode  = ts.childByField(decl, 'value');
         if (nameNode && ts.nodeType(nameNode) === 'identifier') {
             let root = valNode ? optionalChainRoot(valNode, source) : null;
-            if (root) _chainRoots[ts.text(nameNode, source)] = root;
+            if (root) {
+                _chainRoots[ts.text(nameNode, source)] = root;
+                if (_unit) _unit.chainWrites[ts.text(nameNode, source)] = root;
+            }
             let t = declared ?? (valNode ? inferNode(valNode, source, uri, scope, 0) : UNKNOWN);
             scope = scopeFork(scope, ts.text(nameNode, source), t);
         }
@@ -244,19 +278,8 @@ function applyGuardClause(stmt, source, scope) {
 // After a compound statement, a variable it assigns has the type of whichever
 // path reached the end: `let x = null; if (c) x = {};` leaves x `null | {}`.
 
-// One pass for both: patterns 0 and 1 are assignments (`??=` and `||=` widen
-// like `=`), the others declarations.
-let BINDINGS = `
-(assignment_expression left: (identifier) @name right: (_) @rhs)
-(augmented_assignment_expression left: (identifier) @name operator: ["??=" "||="] right: (_) @rhs)
-(variable_declarator name: (identifier) @name)
-(for_in_statement variable: (identifier) @name)`;
-let _queries = {};
-
-function query(lang) {
-    _queries[lang] ??= ts.newQuery(lang === 'markup' ? ts.markup() : ts.ucode(), BINDINGS);
-    return _queries[lang];
-}
+// The nodes that assign (`??=` and `||=` widen like `=`) or declare a name.
+const BINDING_TYPES = [ 'assignment_expression', 'augmented_assignment_expression', 'variable_declarator', 'for_in_statement' ];
 
 const FUNCTION_TYPES = { function_declaration: true, function_expression: true, arrow_function: true };
 
@@ -290,24 +313,31 @@ function firstAfter(offsets, x) {
 let _assigns = [], _decls = [], _closureAssigns = [], _captured = {}, _capturedType = {};
 
 function collectBindings(root, source) {
-    let lang = ts.nodeType(root) === 'markup' ? 'markup' : 'ucode';
     _assigns = [];
     _decls = [];
     _closureAssigns = [];
     _captured = {};
     _capturedType = {};
     let fns = ts.descendantOffsets(root, keys(FUNCTION_TYPES));
-    for (let m in ts.queryMatches(query(lang), root, source)) {
-        let c = {};
-        for (let cap in m.captures) c[cap.name] = cap.node;
-        let entry = { start: ts.startByte(c.name), name: ts.text(c.name, source) };
-        if (m.pattern > 1) { push(_decls, entry); continue; }
-        entry.rhs = c.rhs;
-        entry.fnStart = entry.fnEnd = -1;
-        for (let p = ts.parent(c.name); p; p = ts.parent(p))
+    for (let n in ts.descendants(root, BINDING_TYPES)) {
+        let t = ts.nodeType(n);
+        if (t === 'variable_declarator' || t === 'for_in_statement') {
+            let name = ts.childByField(n, (t === 'variable_declarator') ? 'name' : 'variable');
+            if (name && ts.nodeType(name) === 'identifier')
+                push(_decls, { start: ts.startByte(name), name: ts.text(name, source) });
+            continue;
+        }
+        let lhs = ts.childByField(n, 'left'), rhs = ts.childByField(n, 'right');
+        if (!lhs || !rhs || ts.nodeType(lhs) !== 'identifier') continue;
+        if (t === 'augmented_assignment_expression' && !FILLS[ts.nodeType(ts.childByField(n, 'operator'))]) continue;
+        let entry = { start: ts.startByte(lhs), name: ts.text(lhs, source), rhs, fnStart: -1, fnEnd: -1 };
+        for (let p = ts.parent(n); p; p = ts.parent(p))
             if (FUNCTION_TYPES[ts.nodeType(p)]) { entry.fnStart = ts.startByte(p); entry.fnEnd = ts.endByte(p); break; }
         push(_assigns, entry);
     }
+    let byStart = (a, b) => a.start - b.start;
+    sort(_assigns, byStart);
+    sort(_decls, byStart);
     // Captured: assigned in a function that does not declare it (the variable is
     // an enclosing one), or after a function nested where it is assigned begins,
     // which can run later. A variable assigned only before any such function
@@ -324,6 +354,7 @@ function collectBindings(root, source) {
         _captured[a.name] ??= [];
         push(_captured[a.name], a.rhs);
     }
+    _capturedNames = join(' ', sort(keys(_captured)));
 }
 
 
@@ -765,21 +796,38 @@ function walkSwitch(node, source, uri, scope, map) {
 // that mentions it. Matched by name, so a shadowing variable only widens, never
 // narrows. The widened types go in the function's own frame (fnScope), not in a
 // chain of forks every later lookup would walk.
-function widenCaptured(fnScope, body, source, uri, smap) {
-    let text = ts.text(body, source);
-    for (let name, rhss in _captured) {
-        if (index(text, name) < 0) continue;
+// Returns the captured names body's text holds, which are `mentions` when
+// that is given (see reuseUnit).
+function widenCaptured(fnScope, body, source, uri, smap, mentions) {
+    let text = mentions ? null : ts.text(body, source);
+    let found = [];
+    for (let name in (mentions ?? keys(_captured))) {
+        if (text !== null && index(text, name) < 0) continue;
+        push(found, name);
+        let rhss = _captured[name];
         let t0 = scopeGet(fnScope, name);
         if (!t0 || t0.kind === 'unknown') continue;
+        let had = exists(_capturedType, name);
         _capturedType[name] ??= joinTypes(map(rhss, (r) => rhsType(r, source, uri, smap)));
+        // The unit's own root scope is made again when it is reused.
+        if (_unit && fnScope !== _unit.root) {
+            if (!had) _unit.capturedWrites[name] = _capturedType[name];
+            else if (!exists(_unit.capturedWrites, name)) _unit.captured[name] ??= _capturedType[name];
+        }
         scopeSet(fnScope, name, joinTypes([t0, _capturedType[name]]));
     }
+    return found;
 }
 
-function walkFn(node, source, uri, scope, map) {
+function walkFnBody(node, source, uri, scope, map) {
     let fnScope = makeScope(scope);
+    if (_unit && !_unit.root) {
+        _unit.root = fnScope;
+        recordLookups({ root: fnScope, reads: _unit.reads });
+    }
     let body = ts.childByField(node, 'body');
-    if (body) widenCaptured(fnScope, body, source, uri, map);
+    let mentions = body ? widenCaptured(fnScope, body, source, uri, map) : [];
+    if (_unit && _unit.root === fnScope) _unit.mentions = mentions;
     addParams(node, source, uri, fnScope);
     if (!body) return;
     if (ts.nodeType(body) === 'statement_block') {
@@ -793,6 +841,75 @@ function walkFn(node, source, uri, scope, map) {
         emit(map, ts.startByte(body), fnScope);
         walkNode(body, source, uri, fnScope, map);
     }
+}
+
+// Reuse the previous text's unit for node, when it can; true when it did.
+function reuseUnit(node, source, uri, scope, smap) {
+    let e = _prev.edit;
+    let start = ts.startByte(node), end = ts.endByte(node);
+    // Before the edit, or after it on a later line, the lines where they were:
+    // the types hold positions.
+    let delta;
+    if (end <= e.start) delta = 0;
+    else if (start >= e.newEnd && e.sameLines && index(substr(source, e.newEnd, start - e.newEnd), '\n') >= 0)
+        delta = e.delta;
+    else return false;
+    let old = _prev.units[start - delta];
+    if (!old || !old.clean || old.end !== end - delta || old.type !== ts.nodeType(node) || ts.hasError(node))
+        return false;
+
+    for (let name, r in old.reads) {
+        let now = resolve(scope, name);
+        if (now.found !== r.found || now.root !== r.root) return false;
+        // Most units read the same few names: compare each pair of types once.
+        let seen = _compared[name];
+        if (!seen || seen.old !== r.type || seen.now !== now.type)
+            _compared[name] = seen = { old: r.type, now: now.type, same: sameType(now.type, r.type) };
+        if (!seen.same) return false;
+    }
+    for (let name, r in old.chainReads)
+        if (_chainRoots[name] !== r.v) return false;
+    // Its root scope, as walkFn would make it now: the captured names its text
+    // holds are those it held, unless the file's are others now.
+    let frame = makeScope(scope);
+    let body = ts.childByField(node, 'body');
+    let mentions = body
+        ? widenCaptured(frame, body, source, uri, smap, (_prev.capturedNames === _capturedNames) ? old.mentions : null)
+        : [];
+    addParams(node, source, uri, frame);
+    if (!sameBindings(frame.bindings, old.root.bindings)) return false;
+    for (let name, t in old.captured)
+        if (!exists(_capturedType, name) || !sameType(_capturedType[name], t)) return false;
+    for (let name in old.capturedWrites)
+        if (!_captured[name] || exists(_capturedType, name)) return false;
+
+    old.root.parent = scope;
+    let first = length(smap);
+    if (delta === 0)
+        for (let i = old.first; i < old.last; i++) push(smap, _prev.map[i]);
+    else
+        for (let i = old.first; i < old.last; i++)
+            push(smap, { offset: _prev.map[i].offset + delta, scope: _prev.map[i].scope });
+    for (let name, r in old.chainWrites) _chainRoots[name] = r;
+    for (let name, t in old.capturedWrites) _capturedType[name] = t;
+    push(_units, { ...old, start, end, first, last: length(smap), mentions });
+    _stats.reused++;
+    return true;
+}
+
+function walkFn(node, source, uri, scope, map) {
+    if (_units === null || _unit) return walkFnBody(node, source, uri, scope, map);
+    if (_prev && reuseUnit(node, source, uri, scope, map)) return;
+    let u = { start: ts.startByte(node), end: ts.endByte(node), type: ts.nodeType(node), root: null,
+              first: length(map), last: 0, clean: !ts.hasError(node),
+              reads: {}, captured: {}, capturedWrites: {}, chainReads: {}, chainWrites: {}, mentions: null };
+    _unit = u;
+    walkFnBody(node, source, uri, scope, map);
+    recordLookups(null);
+    _unit = null;
+    u.last = length(map);
+    push(_units, u);
+    _stats.walked++;
 }
 
 function walkTernary(node, source, uri, scope, map) {
@@ -943,15 +1060,54 @@ function walkFile(uri, source, root, map) {
         emit(map, ts.endByte(root), scope);
 }
 
-// Build a sorted [(offset, scope)] map for the whole file.
-// Checkpoints are emitted before each statement, so scopeAtOffset(map, X)
-// returns the scope with all declarations from statements that begin before X.
-// A map built while another is (a return type inferred meanwhile) gets the
-// module state to itself, and gives it back even when the walk throws.
-export function buildScopeMap(uri, source, tree) {
+// The common prefix and suffix of texts a and b, as an edit from a to b:
+// { start, oldEnd, newEnd, delta, sameLines }.
+function editBetween(a, b) {
+    let la = length(a), lb = length(b), n = (la < lb) ? la : lb;
+    let lo = 0, hi = n;
+    while (lo < hi) {
+        let mid = (lo + hi + 1) >> 1;
+        if (substr(a, 0, mid) === substr(b, 0, mid)) lo = mid; else hi = mid - 1;
+    }
+    let start = lo;
+    lo = 0; hi = n - start;
+    while (lo < hi) {
+        let mid = (lo + hi + 1) >> 1;
+        if (substr(a, la - mid) === substr(b, lb - mid)) lo = mid; else hi = mid - 1;
+    }
+    let oldEnd = la - lo, newEnd = lb - lo;
+    let lines = (t) => length(split(t, '\n'));
+    return { start, oldEnd, newEnd, delta: newEnd - oldEnd,
+             sameLines: lines(substr(a, start, oldEnd - start)) === lines(substr(b, start, newEnd - start)) };
+}
+
+// True when [from, to] of text meets a /** */ that declares a @typedef: types
+// anywhere may have resolved it. The candidates: the last one opening before
+// from, and those opening in [from, to].
+function touchesTypedef(text, from, to) {
+    if (index(text, '@typedef') < 0) return false;
+    let opens = [];
+    let before = rindex(substr(text, 0, from), '/**');
+    if (before >= 0) push(opens, before);
+    for (let at = from; ; ) {
+        let i = index(substr(text, at, to - at + 3), '/**');
+        if (i < 0) break;
+        push(opens, at + i);
+        at += i + 3;
+    }
+    for (let open in opens) {
+        let close = index(substr(text, open), '*/');
+        let end = (close < 0) ? length(text) : open + close + 2;
+        if (open <= to && from <= end && index(substr(text, open, end - open), '@typedef') >= 0) return true;
+    }
+    return false;
+}
+
+function buildMap(uri, source, tree, from, withUnits) {
     let map = [];
     let outer = [_marks, _pos, _assigns, _decls, _captured, _capturedType, _chainRoots,
-        setReturnScopes(null), _closureAssigns];
+        setReturnScopes(null), _closureAssigns, _units, _unit, _prev, recordLookups(null),
+        _capturedNames, _compared];
     function restore() {
         _marks = outer[0];
         _pos = outer[1];
@@ -962,13 +1118,55 @@ export function buildScopeMap(uri, source, tree) {
         _chainRoots = outer[6];
         setReturnScopes(outer[7]);
         _closureAssigns = outer[8];
+        _units = outer[9];
+        _unit = outer[10];
+        _prev = outer[11];
+        recordLookups(outer[12]);
+        _capturedNames = outer[13];
+        _compared = outer[14];
     }
+    _units = withUnits ? [] : null;
+    _unit = null;
+    _prev = from;
+    _compared = {};
+    let units, capturedNames;
     try {
         walkFile(uri, source, ts.rootNode(tree), map);
+        units = _units;
+        capturedNames = _capturedNames;
     } catch (e) {
         restore();
         die(e);
     }
     restore();
-    return map;
+    return { map, units, capturedNames };
+}
+
+// Build a sorted [(offset, scope)] map for the whole file.
+// Checkpoints are emitted before each statement, so scopeAtOffset(map, X)
+// returns the scope with all declarations from statements that begin before X.
+// A map built while another is (a return type inferred meanwhile) gets the
+// module state to itself, and gives it back even when the walk throws.
+export function buildScopeMap(uri, source, tree) {
+    return buildMap(uri, source, tree, null, false).map;
 };
+
+// The scope map of a document, reusing what it can of the one built for its
+// previous text (prev, a result of this, or null): { map, units, source,
+// rootType }.
+export function buildScopeMapFrom(uri, source, tree, prev) {
+    let rootType = ts.nodeType(ts.rootNode(tree));
+    let from = null;
+    if (prev && prev.rootType === rootType) {
+        let edit = editBetween(prev.source, source);
+        if (!touchesTypedef(prev.source, edit.start, edit.oldEnd) && !touchesTypedef(source, edit.start, edit.newEnd)) {
+            let units = {};
+            for (let u in prev.units) units[u.start] = u;
+            from = { units, map: prev.map, edit, capturedNames: prev.capturedNames };
+        }
+    }
+    _stats = { reused: 0, walked: 0 };
+    let built = buildMap(uri, source, tree, from, true);
+    return { map: built.map, units: built.units, source, rootType, capturedNames: built.capturedNames };
+};
+

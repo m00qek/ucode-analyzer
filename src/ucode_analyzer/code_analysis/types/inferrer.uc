@@ -2,8 +2,8 @@ import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import { unify, substitute, returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
-import { memoGet, memoSet, docMapGet, docMapSet, lineTableFor } from 'ucode_analyzer.code_analysis.memo';
-import { makeScope, scopeGet, scopeSet, isRootBinding } from 'ucode_analyzer.code_analysis.types.scope';
+import { memoGet, memoSet, docMapGet, docMapSet, lineTableFor, epochOf, enterEpoch } from 'ucode_analyzer.code_analysis.memo';
+import { makeScope, scopeGet, scopeSet, scopeHas, isRootBinding } from 'ucode_analyzer.code_analysis.types.scope';
 import { parseGuard, applyGuard, narrowToNonNull } from 'ucode_analyzer.code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal, resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
 import { offsetToPosition, docBeforeMap, docBearingStatement } from 'ucode_analyzer.code_analysis.positions';
@@ -51,12 +51,16 @@ export function setReturnScopes(next) {
 // A function type whose return type infer() computes on first read
 // (returnOf): the scope walk types every function it passes, but few of their
 // returns are ever read, and inferring one walks the whole body. infer() runs
-// with the checkpoint lookup installed now, so it gives what it would now.
-function lazyFunction(params, infer) {
+// with the checkpoint lookup and the cache epoch (see memo.uc) installed now,
+// so it gives what it would now.
+function lazyFunction(uri, params, infer) {
 	let returnScopes = _returnScopes;
+	let epoch = epochOf(uri);
 	return { kind: 'function', params, return: null, inferReturn: () => {
 		let prev = setReturnScopes(returnScopes);
+		let prevEpoch = enterEpoch(uri, epoch);
 		let ret = infer();
+		enterEpoch(uri, prevEpoch);
 		setReturnScopes(prev);
 		return ret;
 	} };
@@ -171,7 +175,7 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 	let params = arrowParams(node, source, uri, scope, depth, expectedType);
 	let bodyNode = ts.childByField(node, 'body');
 	if (!bodyNode) return { kind: 'function', params, return: UNKNOWN };
-	return lazyFunction(params, () => {
+	return lazyFunction(uri, params, () => {
 		let childScope = makeScope(scope);
 		for (let i = 0; i < length(params); i++)
 			scopeSet(childScope, params[i].name, params[i].type);
@@ -185,15 +189,9 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 }
 
 // True if `name` is bound in a non-root scope — a genuine local shadow, as
-// opposed to a builtin sitting in the root scope (parent === null). The builtin
-// scope is the only scope with a null parent, so we stop before it.
+// opposed to a builtin sitting in the root scope (parent === null).
 function locallyShadowed(scope, name) {
-	let s = scope;
-	while (s && s.parent) {
-		if (exists(s.bindings, name)) return true;
-		s = s.parent;
-	}
-	return false;
+	return scopeHas(scope, name) && !isRootBinding(scope, name);
 }
 
 // require("spec") is ucode's runtime module loader — the dynamic counterpart of
@@ -675,7 +673,7 @@ function inferFunctionDecl(node, source, uri, scope, depth) {
 		return { kind: 'function', params, return: doc.returns.type };
 	let body = ts.childByField(node, 'body');
 	if (!body) return { kind: 'function', params, return: UNKNOWN };
-	return lazyFunction(params, () => {
+	return lazyFunction(uri, params, () => {
 		let bodyScope = makeScope(scope);
 		for (let i = 0; i < length(params); i++)
 			scopeSet(bodyScope, params[i].name, params[i].type ?? UNKNOWN);

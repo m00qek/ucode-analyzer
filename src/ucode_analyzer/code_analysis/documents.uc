@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { buildLineTable } from 'ucode_analyzer.code_analysis.positions';
-import { buildScopeMap } from 'ucode_analyzer.code_analysis.types.scope_walk';
+import { buildScopeMap, buildScopeMapFrom } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 import { toPath } from 'ucode_analyzer.code_analysis.uri';
 
@@ -13,7 +13,13 @@ let _documents = {};
 // first, and a burst of edits costs one rebuild.
 // The type caches are keyed by byte ranges, not content: any new text for a
 // uri must drop them, or a same-length text would read stale entries.
+// A new text's map reuses what it can of the last one built (prev, see
+// buildScopeMapFrom); every REBUILD_EVERY maps one is built afresh, which lets
+// go of the older texts the reused parts hold.
+const REBUILD_EVERY = 32;
+
 function store(uri, text, version) {
+	let old = _documents[uri];
 	invalidateUri(uri);
 	let doc = {
 		uri,
@@ -22,6 +28,8 @@ function store(uri, text, version) {
 		tree: mode.parse(text),
 		lineTable: buildLineTable(text),
 		scopeMap: null,
+		built: null,
+		prev: old ? (old.built ?? old.prev) : null,
 	};
 	_documents[uri] = doc;
 	return doc;
@@ -43,8 +51,13 @@ export function change(uri, changes, version) {
 // The open document for uri, with its scope map; null if it is not open.
 export function get(uri) {
 	let doc = _documents[uri];
-	if (doc && !doc.scopeMap)
-		doc.scopeMap = buildScopeMap(uri, doc.text, doc.tree);
+	if (doc && !doc.scopeMap) {
+		let prev = (doc.prev && doc.prev.generation < REBUILD_EVERY) ? doc.prev : null;
+		doc.built = buildScopeMapFrom(uri, doc.text, doc.tree, prev);
+		doc.built.generation = prev ? prev.generation + 1 : 0;
+		doc.scopeMap = doc.built.map;
+		doc.prev = null;
+	}
 	return doc;
 };
 
@@ -63,10 +76,14 @@ export function versionOf(uri) {
 	return _documents[uri]?.version ?? null;
 };
 
-// Drop the scope map of an open document whose imports changed.
+// Drop the scope map of an open document whose imports changed. The next is
+// built afresh: what the old one resolved through them is not recorded.
 export function markStale(uri) {
 	let doc = _documents[uri];
-	if (doc) doc.scopeMap = null;
+	if (doc) {
+		doc.scopeMap = null;
+		doc.built = doc.prev = null;
+	}
 };
 
 // Read and parse a file from disk into a bare document (no lineTable/scopeMap).

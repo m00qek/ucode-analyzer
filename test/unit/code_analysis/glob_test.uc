@@ -44,8 +44,9 @@ describe('glob.scan', () => {
 	let WS = fixture.WORKSPACE;
 	// Every .uc file of the fixture workspace.
 	let FIXTURES = [
-		'default_export.uc', 'deprecated.uc', 'greet.uc', 'hover_record.uc', 'legacy_mod.uc',
-		'parser.uc', 'reexport/deep.uc', 'reexport/wrapper.uc', 'settings.uc', 'template_lib.uc',
+		'default_export.uc', 'deprecated.uc', 'greet.uc', 'hover_record.uc', 'incremental.uc',
+		'legacy_mod.uc', 'parser.uc', 'reexport/deep.uc', 'reexport/wrapper.uc', 'settings.uc',
+		'template_lib.uc',
 	];
 
 	it('finds .uc files matching include pattern', () => {

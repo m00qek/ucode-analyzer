@@ -4,6 +4,39 @@ let _cache = {};       // uri → { 'startByte|nodeType|scopeId' → Type }
 let _docMaps = {};     // uri → { parentKey → { childStartByte → docText|null } }
 let _lineTables = {};  // uri → { src, table }
 
+// Each text of a uri is an epoch, whose caches are the two above. A function
+// type inferred from an older text, which a scope map reused across an edit
+// still holds, infers its return type in its own epoch (enterEpoch): its nodes
+// are the older tree's, whose byte ranges mean other nodes now.
+let _epochs = {};      // uri → { now, active, buckets: { epoch → { types, docs } } }
+
+function slot(uri) {
+	if (!_epochs[uri]) {
+		let b = { types: _cache[uri] ?? {}, docs: _docMaps[uri] ?? {} };
+		_epochs[uri] = { now: 0, active: 0, buckets: { '0': b } };
+		_cache[uri] = b.types;
+		_docMaps[uri] = b.docs;
+	}
+	return _epochs[uri];
+}
+
+export function epochOf(uri) {
+	return slot(uri).now;
+};
+
+// Make epoch e's caches the ones in use for uri; returns the epoch it replaces.
+export function enterEpoch(uri, e) {
+	let s = slot(uri);
+	let prev = s.active;
+	if (e !== prev) {
+		let b = s.buckets[e] ??= { types: {}, docs: {} };
+		_cache[uri] = b.types;
+		_docMaps[uri] = b.docs;
+		s.active = e;
+	}
+	return prev;
+};
+
 // The inference recursion caps at a fixed depth; a node first computed near the
 // cap may have a truncated (unknown) subtree. Each entry records the depth it was
 // computed at (smaller depth = more remaining budget). A cached value is only
@@ -21,7 +54,7 @@ export function memoGet(uri, offset, nodeType, scopeId, depth) {
 };
 
 export function memoSet(uri, offset, nodeType, scopeId, type, depth) {
-	if (!_cache[uri]) _cache[uri] = {};
+	if (!_cache[uri]) slot(uri);
 	let key = offset + '|' + nodeType + '|' + scopeId;
 	let d = depth ?? 0;
 	let existing = _cache[uri][key];
@@ -42,7 +75,7 @@ export function docMapGet(uri, parentKey) {
 };
 
 export function docMapSet(uri, parentKey, map) {
-	if (!_docMaps[uri]) _docMaps[uri] = {};
+	if (!_docMaps[uri]) slot(uri);
 	_docMaps[uri][parentKey] = map;
 };
 
@@ -59,8 +92,12 @@ export function lineTableFor(uri, source) {
 	return table;
 };
 
+// A new text for uri: a new epoch, the older ones' caches dropped.
 export function invalidateUri(uri) {
-	delete _cache[uri];
-	delete _docMaps[uri];
+	let now = (_epochs[uri]?.now ?? 0) + 1;
+	let b = { types: {}, docs: {} };
+	_epochs[uri] = { now, active: now, buckets: { [now]: b } };
+	_cache[uri] = b.types;
+	_docMaps[uri] = b.docs;
 	delete _lineTables[uri];
 };
