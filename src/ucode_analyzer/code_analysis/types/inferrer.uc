@@ -216,10 +216,23 @@ function requireModuleType(node, source, scope) {
 	return length(path) ? { kind: 'module', path } : null;   // "" → nothing to resolve
 }
 
+// True when length() of a `t` is never null: a string, list or object.
+function hasLength(t) {
+	t = t ? resolveRef(t) : null;
+	if (!t) return false;
+	if (t.kind === 'union') {
+		for (let m in t.members) if (!hasLength(m)) return false;
+		return length(t.members) > 0;
+	}
+	return (t.kind === 'primitive' && t.name === 'string') || t.kind === 'record' ||
+		(t.kind === 'generic' && (t.base === 'list' || t.base === 'dict'));
+}
+
 // Builtins whose declared `?T` is null only for arguments a call site can
 // rule out (per ucode's docs): clock() only for a monotonic clock the system
-// lacks; keys()/values() only for a non-object argument; proto(val, p)
-// returns val (it throws rather than return null), only proto(val) can be null.
+// lacks; keys()/values() only for a non-object argument; length() only for
+// one that is not a string, list or object; proto(val, p) returns val (it
+// throws rather than return null), only proto(val) can be null.
 function builtinReturn(name, args, argTypes, ret, source, scope) {
 	if (!isRootBinding(scope, name)) return ret;
 	if (name === 'clock') {
@@ -245,6 +258,8 @@ function builtinReturn(name, args, argTypes, ret, source, scope) {
 		let t = argTypes[0] ? resolveRef(argTypes[0]) : null;
 		if (t && (t.kind === 'record' || (t.kind === 'generic' && t.base === 'dict')))
 			return narrowToNonNull(ret);
+	} else if (name === 'length') {
+		if (hasLength(argTypes[0])) return narrowToNonNull(ret);
 	}
 	return ret;
 }

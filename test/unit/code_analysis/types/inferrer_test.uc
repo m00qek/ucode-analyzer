@@ -1068,6 +1068,7 @@ describe('inferrer — export clause carries doc', () => {
 		assert.match([{
 			name: 'greet', kind: 'function', doc: null, params: [], valueType: null,
 			position: { line: 0, character: 9 },
+			local: 'greet',
 		}], dag.exportsOf(GREET_URI));
 	});
 });
@@ -1660,6 +1661,17 @@ describe('inferrer — builtins whose null depends on the arguments', () => {
 		let text = "function f(x) {\n\tlet k = keys(x);\n\treturn k;\n}\n";
 		assert.match({ kind: 'nullable', inner: list_(prim('string')) },
 			scopeGet(scopeFor(text, parse(text), index(text, 'return k')), 'k'));
+	});
+
+	it('length() of a string, list or object is never null; of an unknown value may be', () => {
+		for (let v in [ "'ab'", '[1, 2]', '{ a: 1 }', "(c ? 'ab' : [1])" ])
+			assert.match(prim('int'), typeAfter(sprintf("let c = 1;\nlet n = length(%s);\nn;\n", v), 'n'), v);
+		for (let v in [ '1', "(c ? 'ab' : null)" ])
+			assert.match({ kind: 'nullable', inner: prim('int') },
+				typeAfter(sprintf("let c = 1;\nlet n = length(%s);\nn;\n", v), 'n'), v);
+		let text = "function f(x) {\n\tlet n = length(x);\n\treturn n;\n}\n";
+		assert.match({ kind: 'nullable', inner: prim('int') },
+			scopeGet(scopeFor(text, parse(text), index(text, 'return n')), 'n'));
 	});
 
 	it('proto(val, p) is val with p\'s fields; proto(val) may be null', () => {
