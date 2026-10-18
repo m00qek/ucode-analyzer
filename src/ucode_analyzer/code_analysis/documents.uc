@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { buildLineTable } from 'ucode_analyzer.code_analysis.positions';
-import { buildScopeMap, buildScopeMapFrom } from 'ucode_analyzer.code_analysis.types.scope_walk';
+import { buildScopeMap, buildScopeMapFrom, lastBuildStats } from 'ucode_analyzer.code_analysis.types.scope_walk';
+import { mapDifference } from 'ucode_analyzer.code_analysis.types.type_eq';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 import { toPath } from 'ucode_analyzer.code_analysis.uri';
 
@@ -17,6 +18,14 @@ let _documents = {};
 // buildScopeMapFrom); every REBUILD_EVERY maps one is built afresh, which lets
 // go of the older texts the reused parts hold.
 const REBUILD_EVERY = 32;
+
+// Set by debug.checkIncremental: each map reusing part of the last is checked
+// against one built from scratch, which is used instead when they differ.
+let _check = false;
+
+export function checkIncremental(on) {
+	_check = on;
+};
 
 function store(uri, text, version) {
 	let old = _documents[uri];
@@ -55,6 +64,14 @@ export function get(uri) {
 		let prev = (doc.prev && doc.prev.generation < REBUILD_EVERY) ? doc.prev : null;
 		doc.built = buildScopeMapFrom(uri, doc.text, doc.tree, prev);
 		doc.built.generation = prev ? prev.generation + 1 : 0;
+		if (_check && lastBuildStats().reused > 0) {
+			let full = buildScopeMap(uri, doc.text, doc.tree);
+			let diff = mapDifference(doc.built.map, full);
+			if (diff) {
+				warn(sprintf('ucode-analyzer: the reused scope map of %s (version %J) differs: %s\n', uri, doc.version, diff));
+				doc.built = { ...doc.built, map: full, generation: REBUILD_EVERY };
+			}
+		}
 		doc.scopeMap = doc.built.map;
 		doc.prev = null;
 	}

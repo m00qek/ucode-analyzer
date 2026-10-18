@@ -3,7 +3,7 @@ import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { buildScopeMap, lastBuildStats } from 'ucode_analyzer.code_analysis.types.scope_walk';
-import { sameType } from 'ucode_analyzer.code_analysis.types.type_eq';
+import { mapDifference } from 'ucode_analyzer.code_analysis.types.type_eq';
 import { typeErrors } from 'ucode_analyzer.code_analysis.diagnostics.type_errors';
 import * as fixture from 'fixture';
 
@@ -17,30 +17,17 @@ if (_globalUri) {
 let URI = fixture.uri('test_incremental.uc');
 let _version = 1;
 
-afterEach(() => documents.close(URI));
-
-// name → type at a scope, past the root (the imports and builtins).
-function flatten(scope, memo) {
-	if (!scope || !scope.parent) return {};
-	if (memo[scope.id]) return memo[scope.id];
-	let f = { ...flatten(scope.parent, memo) };
-	for (let k, v in scope.bindings) f[k] = v;
-	return memo[scope.id] = f;
-}
+afterEach(() => {
+	documents.checkIncremental(false);
+	documents.close(URI);
+});
 
 // How the document's scope map differs from one built from scratch, or null.
 function differs() {
 	let doc = documents.get(URI);
 	let full = buildScopeMap(URI, doc.text, doc.tree);
-	let a = doc.scopeMap, ma = {}, mb = {};
-	if (length(a) !== length(full)) return sprintf('%d checkpoints, %d from scratch', length(a), length(full));
-	for (let i = 0; i < length(a); i++) {
-		if (a[i].offset !== full[i].offset) return sprintf('checkpoint %d at %d, %d from scratch', i, a[i].offset, full[i].offset);
-		let fa = flatten(a[i].scope, ma), fb = flatten(full[i].scope, mb);
-		if (length(keys(fa)) !== length(keys(fb))) return sprintf('checkpoint %d: %J vs %J', i, keys(fa), keys(fb));
-		for (let k, v in fb)
-			if (!exists(fa, k) || !sameType(fa[k], v)) return sprintf('checkpoint %d: %s is %J, %J from scratch', i, k, fa[k], v);
-	}
+	let d = mapDifference(doc.scopeMap, full);
+	if (d) return d;
 	let e1 = sprintf('%J', typeErrors(URI, doc)), e2 = sprintf('%J', typeErrors(URI, { ...doc, scopeMap: full }));
 	return (e1 === e2) ? null : sprintf('diagnostics %s vs %s', e1, e2);
 }
@@ -70,6 +57,16 @@ const FIVE = "let limit = 10;\n" +
 	"function c(n) { let m = limit; return n > m ? m : n; }\n" +
 	"function d(o) { let k = keys(o ?? {}); return k; }\n" +
 	"function e() { return [ 1, 2 ]; }\n";
+
+// Give the y of function a, in the checkpoints the next map reuses, a type it
+// does not have.
+function corruptY() {
+	let built = documents.peek(URI).built;
+	let u = built.units[0];
+	for (let i = u.first; i < u.last; i++)
+		for (let s = built.map[i].scope; s; s = s.parent)
+			if (exists(s.bindings, 'y')) s.bindings.y = { kind: 'corrupt' };
+}
 
 describe('incremental scope map', () => {
 	it('reuses the functions an edit within one line does not touch', () => {
@@ -142,6 +139,29 @@ describe('incremental scope map', () => {
 		documents.markStale(URI);
 		documents.get(URI);
 		assert.match({ reused: 0, walked: 5 }, lastBuildStats());
+	});
+
+	it('builds afresh when reusing the previous map throws', () => {
+		open(FIVE);
+		for (let u in documents.peek(URI).built.units) u.root = null;
+		assert.match({ reused: 0, walked: 5 }, edit('[ 1, 2 ]', '[ 1, 3 ]'));
+		assert.match(null, differs());
+	});
+
+	it('uses a map built from scratch when asked to check a reused one, and it differs', () => {
+		open(FIVE);
+		corruptY();
+		edit('[ 1, 2 ]', '[ 1, 3 ]');
+		assert.match(true, differs() !== null);
+
+		documents.close(URI);
+		documents.checkIncremental(true);
+		open(FIVE);
+		corruptY();
+		assert.match({ reused: 4, walked: 1 }, edit('[ 1, 2 ]', '[ 1, 3 ]'));
+		assert.match(null, differs());
+		// Nor is the next built from it.
+		assert.match({ reused: 0, walked: 5 }, edit('[ 1, 3 ]', '[ 1, 4 ]'));
 	});
 
 	it('matches a map built from scratch after random edits', () => {

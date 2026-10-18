@@ -38,3 +38,26 @@ export function sameBindings(a, b) {
 		if (!exists(b, k) || !sameType(a[k], b[k])) return false;
 	return true;
 };
+
+// name → type at a scope, past the root (the imports and builtins).
+function flatten(scope, memo) {
+	if (!scope || !scope.parent) return {};
+	if (memo[scope.id]) return memo[scope.id];
+	let f = { ...flatten(scope.parent, memo) };
+	for (let k, v in scope.bindings) f[k] = v;
+	return memo[scope.id] = f;
+}
+
+// Where scope map a differs from b, as a message; null when they agree.
+export function mapDifference(a, b) {
+	let ma = {}, mb = {};
+	if (length(a) !== length(b)) return sprintf('%d checkpoints, %d expected', length(a), length(b));
+	for (let i = 0; i < length(a); i++) {
+		if (a[i].offset !== b[i].offset) return sprintf('checkpoint %d at %d, %d expected', i, a[i].offset, b[i].offset);
+		let fa = flatten(a[i].scope, ma), fb = flatten(b[i].scope, mb);
+		if (length(keys(fa)) !== length(keys(fb))) return sprintf('at %d: %J, %J expected', a[i].offset, keys(fa), keys(fb));
+		for (let k, v in fb)
+			if (!exists(fa, k) || !sameType(fa[k], v)) return sprintf('at %d: %s is %J, %J expected', a[i].offset, k, fa[k], v);
+	}
+	return null;
+};

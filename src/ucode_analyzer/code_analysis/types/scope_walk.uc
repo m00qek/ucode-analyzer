@@ -1166,7 +1166,16 @@ export function buildScopeMapFrom(uri, source, tree, prev) {
         }
     }
     _stats = { reused: 0, walked: 0 };
-    let built = buildMap(uri, source, tree, from, true);
+    let built;
+    try {
+        built = buildMap(uri, source, tree, from, true);
+    } catch (e) {
+        if (!from) die(e);
+        // A bug in reusing the previous map costs only the time it saves.
+        warn(sprintf('ucode-analyzer: reusing the scope map of %s failed, building it afresh: %s\n', uri, e));
+        _stats = { reused: 0, walked: 0 };
+        built = buildMap(uri, source, tree, null, true);
+    }
     return { map: built.map, units: built.units, source, rootType, capturedNames: built.capturedNames };
 };
 

@@ -65,6 +65,7 @@ function reindex(doc) {
 }
 
 export function run(config) {
+	documents.checkIncremental(config.debug?.checkIncremental === true);
 	let shutdown_requested = false;
 	let initialized = false;
 

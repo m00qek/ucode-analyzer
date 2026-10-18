@@ -137,6 +137,10 @@ Settings come from `<workspace>/.lsp/config.json` (the project) merged over
   already.
 - `systemLibPaths`: installed ucode libraries, indexed for resolution but never
   diagnosed. Defaults to `/usr/share/ucode`.
+- `debug.checkIncremental`: after an edit, check the types the server kept
+  from the previous text against ones worked out from scratch, and log to
+  stderr where they differ (the fresh ones are then used). It doubles the work
+  per edit; turn it on to report a wrong type that goes away on reopening.
 
 Every `.uc` file in the workspace is indexed, minus the excludes. A
 subfolder with its own `.lsp/config.json` is treated as a separate workspace.
