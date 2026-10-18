@@ -367,7 +367,7 @@ let WRITES = `[
 let _writesQuery = {};
 let _writes = { source: null, byName: {} };
 
-function memberWrites(node, source) {
+export function memberWrites(node, source) {
 	if (_writes.source === source) return _writes.byName;
 	let root = node;
 	while (ts.parent(root)) root = ts.parent(root);
@@ -383,7 +383,7 @@ function memberWrites(node, source) {
 	}
 	_writes = { source, byName };
 	return byName;
-}
+};
 
 // A record type of `name` with the fields the file writes on it unknown, and
 // those it adds present as unknown.

@@ -178,56 +178,71 @@ function walkFor(node, scope, source, visitor) {
 	}
 }
 
-// Walk `node` with the names of `scope` declared, calling visitor.declare(node,
-// name) where a name enters scope and visitor.use(node, name, scope) for every
-// use: an identifier, or a shorthand property `{ x }` (which uses x). There is
-// no hoisting: a name is declared where its statement is.
-walkNames = function(node, scope, source, visitor) {
-	let nt = ts.nodeType(node);
+function walkUse(node, scope, source, visitor) {
+	visitor.use(node, ts.text(node, source), scope);
+}
 
-	if (nt === 'identifier' || nt === 'shorthand_property_identifier') {
-		visitor.use(node, ts.text(node, source), scope);
-	} else if (nt === 'import_statement') {
+function walkChildren(node, scope, source, visitor) {
+	for (let c in ts.namedChildren(node)) walkNames(c, scope, source, visitor);
+}
+
+// The node types walked other than by their children, by type: a table, as
+// most nodes are none of these.
+const WALKERS = {
+	identifier: walkUse,
+	shorthand_property_identifier: walkUse,
+	import_statement: (node, scope, source, visitor) => {
 		for (let n in importBindingNodes(node)) declare(scope, n, source, visitor);
-	} else if (nt === 'lexical_declaration') {
+	},
+	lexical_declaration: (node, scope, source, visitor) => {
 		for (let vd in declarators(node)) {
 			let name = ts.childByField(vd, 'name');
 			if (name) declare(scope, name, source, visitor);
 			let value = ts.childByField(vd, 'value');
 			if (value) walkNames(value, scope, source, visitor);
 		}
-	} else if (nt === 'function_declaration') {
+	},
+	function_declaration: (node, scope, source, visitor) => {
 		let name = ts.childByField(node, 'name');
 		if (name && ts.nodeType(name) === 'identifier') declare(scope, name, source, visitor);
 		walkFunction(node, scope, source, visitor);
-	} else if (nt === 'function_expression' || nt === 'arrow_function') {
-		walkFunction(node, scope, source, visitor);
-	} else if (nt === 'export_statement') {
+	},
+	function_expression: walkFunction,
+	arrow_function: walkFunction,
+	export_statement: (node, scope, source, visitor) => {
 		for (let inner in namedNonComments(node)) walkNames(inner, scope, source, visitor);
-	} else if (nt === 'export_specifier') {
-		// `export { a as b }` uses a; b is only the exported name.
+	},
+	// `export { a as b }` uses a; b is only the exported name.
+	export_specifier: (node, scope, source, visitor) => {
 		let name = ts.childByField(node, 'name');
 		if (name) walkNames(name, scope, source, visitor);
-	} else if (nt === 'catch_clause') {
+	},
+	catch_clause: (node, scope, source, visitor) => {
 		let inner = nameScope(scope);
 		let param = ts.childByField(node, 'parameter');
 		if (param && ts.nodeType(param) === 'identifier') declare(inner, param, source, visitor);
 		let body = ts.childByField(node, 'body');
 		if (body) walkNames(body, inner, source, visitor);
-	} else if (nt === 'statement_block' || nt === 'statement_list') {
-		let inner = nameScope(scope);
-		for (let c in ts.namedChildren(node)) walkNames(c, inner, source, visitor);
-	} else if (nt === 'for_in_statement' || nt === 'for_in_alt_statement') {
-		walkForIn(node, scope, source, visitor);
-	} else if (nt === 'for_statement' || nt === 'for_alt_statement') {
-		walkFor(node, scope, source, visitor);
-	} else if (nt === 'member_expression') {
-		// `o.p`: p is a property name, not a use.
+	},
+	statement_block: (node, scope, source, visitor) => walkChildren(node, nameScope(scope), source, visitor),
+	statement_list: (node, scope, source, visitor) => walkChildren(node, nameScope(scope), source, visitor),
+	for_in_statement: walkForIn,
+	for_in_alt_statement: walkForIn,
+	for_statement: walkFor,
+	for_alt_statement: walkFor,
+	// `o.p`: p is a property name, not a use.
+	member_expression: (node, scope, source, visitor) => {
 		let object = ts.childByField(node, 'object');
 		if (object) walkNames(object, scope, source, visitor);
-	} else {
-		for (let c in ts.namedChildren(node)) walkNames(c, scope, source, visitor);
-	}
+	},
+};
+
+// Walk `node` with the names of `scope` declared, calling visitor.declare(node,
+// name) where a name enters scope and visitor.use(node, name, scope) for every
+// use: an identifier, or a shorthand property `{ x }` (which uses x). There is
+// no hoisting: a name is declared where its statement is.
+walkNames = function(node, scope, source, visitor) {
+	(WALKERS[ts.nodeType(node)] ?? walkChildren)(node, scope, source, visitor);
 };
 
 // Walk a whole tree; see walkNames.

@@ -2,7 +2,7 @@ import * as ts from 'tree_sitter';
 import { rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
 import { UNKNOWN, resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
-import { inferNode } from 'ucode_analyzer.code_analysis.types.inferrer';
+import { inferNode, memberWrites } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { stringLiteralText, isComment, firstNamed } from 'ucode_analyzer.code_analysis.ast_text';
 import { Severity, diagnostic } from 'ucode_analyzer.code_analysis.lsp_types';
@@ -104,27 +104,13 @@ function isDeleteTarget(node) {
 	return parent && ts.nodeType(parent) === 'delete_expression';
 }
 
-// `x.p` member writes (`x.p = …`, `x.p ??= …`) in the file, as "x.p" keys.
+// `x.p` member writes in the file, by name (the inferrer's memberWrites).
 // ucode objects are open: after a write, `x.p` exists, so reading it is not
-// an unknown property. Matched by name, not scope: that can only hide a
-// finding, never add one.
-let WRITES = `[
-	(assignment_expression left: (member_expression object: (identifier) @obj property: (property_identifier) @prop))
-	(augmented_assignment_expression left: (member_expression object: (identifier) @obj property: (property_identifier) @prop))
-]`;
-let _writeQuery = {};
+// an unknown property.
 let _written = {};
 
-function writtenMembers(root, source) {
-	let lang = ts.nodeType(root) === 'markup' ? 'markup' : 'ucode';
-	_writeQuery[lang] ??= ts.newQuery(lang === 'markup' ? ts.markup() : ts.ucode(), WRITES);
-	let out = {};
-	for (let m in ts.queryMatches(_writeQuery[lang], root, source)) {
-		let c = {};
-		for (let cap in m.captures) c[cap.name] = cap.node;
-		out[ts.text(c.obj, source) + '.' + ts.text(c.prop, source)] = true;
-	}
-	return out;
+function isWritten(obj, prop) {
+	return _written[obj]?.[prop] === true;
 }
 
 // Returns the field name that is missing on a known record type, or null if
@@ -180,7 +166,7 @@ function isWrittenMember(obj, source) {
 	if (ts.nodeType(obj) !== 'member_expression') return false;
 	let o = ts.childByField(obj, 'object'), p = ts.childByField(obj, 'property');
 	return o && p && ts.nodeType(o) === 'identifier'
-		&& _written[ts.text(o, source) + '.' + ts.text(p, source)] === true;
+		&& isWritten(ts.text(o, source), ts.text(p, source));
 }
 
 function objectType(obj, source, uri, scopeMap) {
@@ -190,30 +176,22 @@ function objectType(obj, source, uri, scopeMap) {
 		: inferNode(obj, source, uri, scope, 0);
 }
 
-let _walk;
+// The nodes the checks look at. Each is checked on its own: a nested one (the
+// callee of a call, the object of a member access) is one of these too.
+const CHECKED = ['call_expression', 'member_expression', 'subscript_expression', 'for_in_statement'];
 
-_walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
-	if (!node) return;
+function check(node, source, uri, scopeMap, lineTable, diags, strict) {
 	let nt = ts.nodeType(node);
 
 	if (nt === 'call_expression') {
 		let callee = ts.childByField(node, 'function');
-		if (callee) {
-			if (ts.nodeType(callee) === 'identifier') {
-				let scope = scopeAtOffset(scopeMap, ts.startByte(callee));
-				let calleeType = scopeGet(scope, ts.text(callee, source)) ?? UNKNOWN;
-				if (!isCallable(calleeType)) {
-					push(diags, diagnostic(rangeOf(source, lineTable, callee), Severity.ERROR, 'not-a-function',
-						sprintf("'%s' is not a function (type: %s)", ts.text(callee, source), typeToString(calleeType))));
-				}
-			} else {
-				_walk(callee, source, uri, scopeMap, lineTable, diags, strict);
+		if (callee && ts.nodeType(callee) === 'identifier') {
+			let scope = scopeAtOffset(scopeMap, ts.startByte(callee));
+			let calleeType = scopeGet(scope, ts.text(callee, source)) ?? UNKNOWN;
+			if (!isCallable(calleeType)) {
+				push(diags, diagnostic(rangeOf(source, lineTable, callee), Severity.ERROR, 'not-a-function',
+					sprintf("'%s' is not a function (type: %s)", ts.text(callee, source), typeToString(calleeType))));
 			}
-		}
-		let args = ts.childByField(node, 'arguments');
-		if (args) {
-			for (let i = 0; i < ts.namedChildCount(args); i++)
-				_walk(ts.namedChild(args, i), source, uri, scopeMap, lineTable, diags, strict);
 		}
 		return;
 	}
@@ -229,15 +207,13 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 			let objType = isWrittenMember(obj, source) ? UNKNOWN : objectType(obj, source, uri, scopeMap);
 			if (!nullDiag(obj, objType, optChain, source, lineTable, diags, strict)
 			    && prop && ts.nodeType(prop) === 'property_identifier' && !isAssignmentTarget(node) && !isDeleteTarget(node)
-			           && !(ts.nodeType(obj) === 'identifier' && _written[ts.text(obj, source) + '.' + ts.text(prop, source)])) {
+			           && !(ts.nodeType(obj) === 'identifier' && isWritten(ts.text(obj, source), ts.text(prop, source)))) {
 				let field = unknownFieldOf(objType, ts.text(prop, source));
 				if (field !== null) {
 					push(diags, diagnostic(rangeOf(source, lineTable, prop), Severity.WARNING, 'unknown-property',
 						sprintf("Property '%s' does not exist on this type", field)));
 				}
 			}
-			// Recurse into the object to catch errors nested within it.
-			if (ts.nodeType(obj) !== 'identifier') _walk(obj, source, uri, scopeMap, lineTable, diags, strict);
 		}
 		return;
 	}
@@ -245,47 +221,32 @@ _walk = function(node, source, uri, scopeMap, lineTable, diags, strict) {
 	// `obj[i]` fails on null like `obj.p` (read and write); `obj?.[i]` is safe.
 	if (nt === 'subscript_expression') {
 		let obj = ts.childByField(node, 'object');
-		if (obj) {
-			if (!isWrittenMember(obj, source))
-				nullDiag(obj, objectType(obj, source, uri, scopeMap),
-				         ts.childByField(node, 'optional_chain') !== null, source, lineTable, diags, strict);
-			if (ts.nodeType(obj) !== 'identifier') _walk(obj, source, uri, scopeMap, lineTable, diags, strict);
-		}
-		let idx = ts.childByField(node, 'index');
-		if (idx) _walk(idx, source, uri, scopeMap, lineTable, diags, strict);
+		if (obj && !isWrittenMember(obj, source))
+			nullDiag(obj, objectType(obj, source, uri, scopeMap),
+			         ts.childByField(node, 'optional_chain') !== null, source, lineTable, diags, strict);
 		return;
 	}
 
-	if (nt === 'for_in_statement') {
-		let right = ts.childByField(node, 'object');
-		if (right) {
-			let scope = scopeAtOffset(scopeMap, ts.startByte(right));
-			let iterType = inferNode(right, source, uri, scope, 0);
-			if (isNonIterable(iterType)) {
-				push(diags, diagnostic(rangeOf(source, lineTable, right), Severity.WARNING, 'for-in-non-iterable',
-					sprintf("Cannot iterate over type '%s'",
-					    iterType.kind === 'primitive' ? iterType.name : iterType.kind)));
-			}
-			_walk(right, source, uri, scopeMap, lineTable, diags, strict);
+	// for_in_statement
+	let right = ts.childByField(node, 'object');
+	if (right) {
+		let scope = scopeAtOffset(scopeMap, ts.startByte(right));
+		let iterType = inferNode(right, source, uri, scope, 0);
+		if (isNonIterable(iterType)) {
+			push(diags, diagnostic(rangeOf(source, lineTable, right), Severity.WARNING, 'for-in-non-iterable',
+				sprintf("Cannot iterate over type '%s'",
+				    iterType.kind === 'primitive' ? iterType.name : iterType.kind)));
 		}
-		let body = ts.childByField(node, 'body');
-		if (body) _walk(body, source, uri, scopeMap, lineTable, diags, strict);
-		return;
 	}
-
-	if (nt === 'import_statement') return;
-
-	let n = ts.namedChildCount(node);
-	for (let i = 0; i < n; i++)
-		_walk(ts.namedChild(node, i), source, uri, scopeMap, lineTable, diags, strict);
-};
+}
 
 export function typeErrors(uri, doc) {
 	let diags = [];
 	let root = ts.rootNode(doc.tree);
 	let strict = isStrict(root, doc.text);
-	_written = writtenMembers(root, doc.text);
-	_walk(root, doc.text, uri, doc.scopeMap, doc.lineTable, diags, strict);
+	_written = memberWrites(root, doc.text);
+	for (let node in ts.descendants(root, CHECKED))
+		check(node, doc.text, uri, doc.scopeMap, doc.lineTable, diags, strict);
 	_written = {};
 	return diags;
 };

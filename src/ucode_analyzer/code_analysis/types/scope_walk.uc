@@ -6,21 +6,34 @@ import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork } from 'ucode_analyz
 import { UNKNOWN, STR, unionOf } from 'ucode_analyzer.code_analysis.types.type_utils';
 import { parseGuard, applyGuard as narrowBy, narrowToNonNull, optionalChainRoot } from 'ucode_analyzer.code_analysis.types.narrowing';
 
-// Binary search: return the scope for the largest checkpoint.offset <= offset.
+// Where the last lookup landed. Passes read a file front to back, so the next
+// lookup is usually at that checkpoint or a few past it.
+let _hintMap = null, _hintAt = 0;
+
+// The scope of the largest checkpoint.offset <= offset (the first checkpoint's
+// before any).
 export function scopeAtOffset(map, offset) {
-    let lo = 0;
-    let hi = length(map) - 1;
-    let result = length(map) > 0 ? map[0].scope : makeScope(null);
-    while (lo <= hi) {
-        let mid = (lo + hi) >> 1;
-        if (map[mid].offset <= offset) {
-            result = map[mid].scope;
-            lo = mid + 1;
-        } else {
-            hi = mid - 1;
+    let n = length(map);
+    if (n === 0) return makeScope(null);
+    let i = (_hintMap === map && _hintAt < n) ? _hintAt : 0;
+    if (map[i].offset <= offset) {
+        for (let k = 0; k < 8 && i + 1 < n && map[i + 1].offset <= offset; k++) i++;
+        if (i + 1 < n && map[i + 1].offset <= offset) i = -1;   // further on: search
+    } else {
+        i = -1;
+    }
+    if (i < 0) {
+        let lo = 0, hi = n - 1;
+        i = 0;
+        while (lo <= hi) {
+            let mid = (lo + hi) >> 1;
+            if (map[mid].offset <= offset) { i = mid; lo = mid + 1; }
+            else hi = mid - 1;
         }
     }
-    return result;
+    _hintMap = map;
+    _hintAt = i;
+    return map[i].scope;
 };
 
 // The checkpoint with the largest offset <= offset, or null.
@@ -807,49 +820,44 @@ function holdsMark(start, end) {
     return _pos < n && _marks[_pos] < end;
 }
 
+function walkWhile(node, source, uri, scope, map) {
+    let cond = ts.childByField(node, 'condition');
+    let body = ts.childByField(node, 'body');
+    if (cond) walkNode(firstNamed(cond) ?? cond, source, uri, scope, map);
+    if (body) walkNode(body, source, uri, scope, map);
+}
+
+// The node types walked other than by their children, by type: a table, as
+// most nodes reached are none of these.
+const WALKERS = {
+    // Standalone block: new scope layer for its own declarations.
+    statement_block: (node, source, uri, scope, map) => walkBlock(node, source, uri, makeScope(scope), map),
+    // An alt-syntax body reached without its statement (normally the
+    // statement's walker threads it): like a block.
+    statement_list: (node, source, uri, scope, map) => walkStatementList(node, source, uri, makeScope(scope), map),
+    if_statement: walkIfStmt,
+    for_in_statement: walkForIn,
+    for_statement: walkForStmt,
+    for_in_alt_statement: walkForInAlt,
+    for_alt_statement: walkForAlt,
+    while_alt_statement: walkWhileAlt,
+    if_alt_statement: walkIfAlt,
+    while_statement: walkWhile,
+    try_statement: walkTry,
+    switch_statement: walkSwitch,
+    function_declaration: walkFn,
+    function_expression: walkFn,
+    arrow_function: walkFn,
+    ternary_expression: walkTernary,
+    binary_expression: walkBinary,
+};
+
 walkNode = function(node, source, uri, scope, map) {
-    let nt = ts.nodeType(node);
-    if (nt === 'statement_block') {
-        // Standalone block: new scope layer for its own declarations.
-        walkBlock(node, source, uri, makeScope(scope), map);
-    } else if (nt === 'statement_list') {
-        // An alt-syntax body reached without its statement (normally the
-        // statement's walker threads it): like a block.
-        walkStatementList(node, source, uri, makeScope(scope), map);
-    } else if (nt === 'if_statement') {
-        walkIfStmt(node, source, uri, scope, map);
-    } else if (nt === 'for_in_statement') {
-        walkForIn(node, source, uri, scope, map);
-    } else if (nt === 'for_statement') {
-        walkForStmt(node, source, uri, scope, map);
-    } else if (nt === 'for_in_alt_statement') {
-        walkForInAlt(node, source, uri, scope, map);
-    } else if (nt === 'for_alt_statement') {
-        walkForAlt(node, source, uri, scope, map);
-    } else if (nt === 'while_alt_statement') {
-        walkWhileAlt(node, source, uri, scope, map);
-    } else if (nt === 'if_alt_statement') {
-        walkIfAlt(node, source, uri, scope, map);
-    } else if (nt === 'while_statement') {
-        let cond = ts.childByField(node, 'condition');
-        let body = ts.childByField(node, 'body');
-        if (cond) walkNode(firstNamed(cond) ?? cond, source, uri, scope, map);
-        if (body) walkNode(body, source, uri, scope, map);
-    } else if (nt === 'try_statement') {
-        walkTry(node, source, uri, scope, map);
-    } else if (nt === 'switch_statement') {
-        walkSwitch(node, source, uri, scope, map);
-    } else if (nt === 'function_declaration' || nt === 'function_expression' || nt === 'arrow_function') {
-        walkFn(node, source, uri, scope, map);
-    } else if (nt === 'ternary_expression') {
-        walkTernary(node, source, uri, scope, map);
-    } else if (nt === 'binary_expression') {
-        walkBinary(node, source, uri, scope, map);
-    } else {
-        for (let c in ts.namedChildren(node))
-            if (holdsMark(ts.startByte(c), ts.endByte(c)))
-                walkNode(c, source, uri, scope, map);
-    }
+    let w = WALKERS[ts.nodeType(node)];
+    if (w) return w(node, source, uri, scope, map);
+    for (let c in ts.namedChildren(node))
+        if (holdsMark(ts.startByte(c), ts.endByte(c)))
+            walkNode(c, source, uri, scope, map);
 };
 
 // Walk the file's statements into map, with the module state set up for it.
