@@ -1674,6 +1674,27 @@ describe('inferrer — builtins whose null depends on the arguments', () => {
 			scopeGet(scopeFor(text, parse(text), index(text, 'return n')), 'n'));
 	});
 
+	it('a builtin whose null means a wrong argument type is not null for a right one', () => {
+		let NI = { kind: 'nullable', inner: prim('int') };
+		for (let c in [
+			[ "index('ab', 'b')", prim('int') ], [ "rindex([1, 2], 2)", prim('int') ], [ "index(x, 1)", NI ],
+			[ "join(',', [ 'a' ])", prim('string') ], [ "join(',', x)", { kind: 'nullable', inner: prim('string') } ],
+			[ "b64enc('a')", prim('string') ],
+		])
+			assert.match(c[1], typeAfter(sprintf("function f(x) {\n\tlet n = %s;\n\treturn n;\n}\nlet n = %s;\nn;\n", c[0], c[0]), 'n'), c[0]);
+		assert.match(list_(prim('int')), typeAfter("let n = uniq([1, 1]);\nn;\n", 'n'));
+	});
+
+	it('getenv(name) may be null; getenv() is the whole environment', () => {
+		assert.match('nullable', typeAfter("let v = getenv('HOME');\nv;\n", 'v')?.kind);
+		assert.match(true, typeAfter("let v = getenv();\nv;\n", 'v')?.kind !== 'nullable');
+	});
+
+	it('lc() and uc() are never null: they convert any value', () => {
+		assert.match(prim('string'), typeAfter("let v = lc(null);\nv;\n", 'v'));
+		assert.match(prim('string'), typeAfter("let v = uc(1);\nv;\n", 'v'));
+	});
+
 	it('proto(val, p) is val with p\'s fields; proto(val) may be null', () => {
 		let o = typeAfter("let C = { m: function() {} };\nlet o = proto({ a: 1 }, C);\no;\n", 'o');
 		assert.match(['a', 'm'], map(o?.fields ?? [], (f) => f.name));

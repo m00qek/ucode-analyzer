@@ -375,15 +375,15 @@ export function exit(n) {};
 /**
  * Query an environment variable or then entire environment.
  *
- * Returns the value of the given environment variable, or - if omitted - a
- * dictionary containing all environment variables.
+ * Returns the value of the given environment variable, or `null` if it is not
+ * set, or - if omitted - a dictionary containing all environment variables.
  *
  * @function module:core#getenv
  *
  * @param {string} [name]
  * The name of the environment variable.
  *
- * @returns {string|Object<string, string>}
+ * @returns {?(string|Object<string, string>)}
  */
 export function getenv(name) {};
 
@@ -518,7 +518,7 @@ export function keys(obj) {};
  * @param {string} s
  * The input string.
  *
- * @returns {?string}
+ * @returns {string}
  * The lowercase string.
  *
  * @example
@@ -850,7 +850,7 @@ export function time() {};
  * @param {any} str
  * The string to be converted to uppercase.
  *
- * @returns {?string}
+ * @returns {string}
  *
  * @example
  * uc("hello");   // "HELLO"

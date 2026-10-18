@@ -216,29 +216,51 @@ function requireModuleType(node, source, scope) {
 	return length(path) ? { kind: 'module', path } : null;   // "" → nothing to resolve
 }
 
-// True when length() of a `t` is never null: a string, list or object.
-function hasLength(t) {
+// True when `t` is one of the kinds 'string', 'list' and 'object'.
+function isOneOf(t, kinds) {
 	t = t ? resolveRef(t) : null;
 	if (!t) return false;
 	if (t.kind === 'union') {
-		for (let m in t.members) if (!hasLength(m)) return false;
+		for (let m in t.members) if (!isOneOf(m, kinds)) return false;
 		return length(t.members) > 0;
 	}
-	return (t.kind === 'primitive' && t.name === 'string') || t.kind === 'record' ||
-		(t.kind === 'generic' && (t.base === 'list' || t.base === 'dict'));
+	if (t.kind === 'primitive') return t.name === 'string' && kinds.string === true;
+	if (t.kind === 'record') return kinds.object === true;
+	if (t.kind !== 'generic') return false;
+	return (t.base === 'list') ? kinds.list === true : (t.base === 'dict' && kinds.object === true);
 }
 
+// Builtins whose null only means a wrong argument type, per ucode's lib.c:
+// [the argument, the kinds it takes].
+const NULL_ON_WRONG_TYPE = {
+	length:  [ 0, { string: true, list: true, object: true } ],
+	index:   [ 0, { string: true, list: true } ],
+	rindex:  [ 0, { string: true, list: true } ],
+	reverse: [ 0, { string: true, list: true } ],
+	join:    [ 1, { list: true } ],
+	slice:   [ 0, { list: true } ],
+	uniq:    [ 0, { list: true } ],
+	b64enc:  [ 0, { string: true } ],
+	keys:    [ 0, { object: true } ],
+	values:  [ 0, { object: true } ],
+};
+
 // Builtins whose declared `?T` is null only for arguments a call site can
-// rule out (per ucode's docs): clock() only for a monotonic clock the system
-// lacks; keys()/values() only for a non-object argument; length() only for
-// one that is not a string, list or object; proto(val, p) returns val (it
-// throws rather than return null), only proto(val) can be null.
+// rule out: those of NULL_ON_WRONG_TYPE; clock() only for a monotonic clock
+// the system lacks; getenv() only for an unset variable, not the whole
+// environment; proto(val, p) returns val (it throws rather than return null),
+// only proto(val) can be null.
 function builtinReturn(name, args, argTypes, ret, source, scope) {
 	if (!isRootBinding(scope, name)) return ret;
-	if (name === 'clock') {
+	let wrong = NULL_ON_WRONG_TYPE[name];
+	if (wrong) {
+		if (isOneOf(argTypes[wrong[0]], wrong[1])) return narrowToNonNull(ret);
+	} else if (name === 'clock') {
 		let a = args[0];
 		if (!a || ts.nodeType(a) === 'false' || ts.nodeType(a) === 'null')
 			return narrowToNonNull(ret);
+	} else if (name === 'getenv') {
+		if (!length(args)) return narrowToNonNull(ret);
 	} else if (name === 'proto' && length(args) >= 2) {
 		// val, which now also reads p's fields (own fields win); with an
 		// unknown p its extra fields are unknown, so it is open.
@@ -254,12 +276,6 @@ function builtinReturn(name, args, argTypes, ret, source, scope) {
 			return { ...t, fields };
 		}
 		return { ...t, fields, open: true };
-	} else if (name === 'keys' || name === 'values') {
-		let t = argTypes[0] ? resolveRef(argTypes[0]) : null;
-		if (t && (t.kind === 'record' || (t.kind === 'generic' && t.base === 'dict')))
-			return narrowToNonNull(ret);
-	} else if (name === 'length') {
-		if (hasLength(argTypes[0])) return narrowToNonNull(ret);
 	}
 	return ret;
 }
