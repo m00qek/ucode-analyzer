@@ -55,12 +55,33 @@ function flatten(scope, memo) {
 	return memo[scope.id] = f;
 }
 
+// True when scopes a and b bind the same, level by level up to the root: a
+// cheap proof that they see the same names, kept for the checkpoints that
+// share levels. Chains that differ in shape can still agree once flattened.
+function sameChain(a, b, memo) {
+	let path = [], ok;
+	for (;;) {
+		if (!a?.parent || !b?.parent) { ok = !a?.parent && !b?.parent; break; }
+		let k = a.id + ':' + b.id;
+		if (exists(memo, k)) { ok = memo[k]; break; }
+		push(path, [ k, a, b ]);
+		a = a.parent;
+		b = b.parent;
+	}
+	for (let i = length(path) - 1; i >= 0; i--) {
+		ok = ok && sameBindings(path[i][1].bindings, path[i][2].bindings);
+		memo[path[i][0]] = ok;
+	}
+	return ok;
+}
+
 // Where scope map a differs from b, as a message; null when they agree.
 export function mapDifference(a, b) {
-	let ma = {}, mb = {};
+	let ma = {}, mb = {}, mc = {};
 	if (length(a) !== length(b)) return sprintf('%d checkpoints, %d expected', length(a), length(b));
 	for (let i = 0; i < length(a); i++) {
 		if (a[i].offset !== b[i].offset) return sprintf('checkpoint %d at %d, %d expected', i, a[i].offset, b[i].offset);
+		if (sameChain(a[i].scope, b[i].scope, mc)) continue;
 		let fa = flatten(a[i].scope, ma), fb = flatten(b[i].scope, mb);
 		if (length(keys(fa)) !== length(keys(fb))) return sprintf('at %d: %J, %J expected', a[i].offset, keys(fa), keys(fb));
 		for (let k, v in fb)
