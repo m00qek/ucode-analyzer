@@ -123,7 +123,7 @@ export function narrowUnionByDiscriminant(type, field, value, keep) {
 // The root variable of an access chain holding a `?.` link (`x?.a`,
 // `x.a?.[i]`), or null. Such a chain is non-null only if x is: a `?.` on null
 // short-circuits to null, a plain access on null throws.
-function optionalChainRoot(node, source) {
+export function optionalChainRoot(node, source) {
 	let opt = false;
 	while (node) {
 		let t = ts.nodeType(node);
@@ -132,7 +132,7 @@ function optionalChainRoot(node, source) {
 		node = ts.childByField(node, 'object');
 	}
 	return (opt && node && ts.nodeType(node) === 'identifier') ? ts.text(node, source) : null;
-}
+};
 
 // `name` is non-null in the branch where the condition is `holds`.
 function nonNullWhen(name, holds) {
@@ -220,12 +220,10 @@ export function parseGuard(node, source) {
 					if (toType)
 						return { kind: 'type', name, positive: isEq, toType };
 					// object/array/function have no singleton type, but
-					// `type(x) === '<non-null kind>'` still proves x is non-null in
-					// the true branch (type(null) is 'null'). Narrow only that
-					// branch — wrapping in an 'and' guard makes applyGuard skip the
-					// false branch, where x could still be null.
-					if (isEq)
-						return { kind: 'and', guards: [ { kind: 'truthy', name, positive: true } ] };
+					// `type(x) === '<non-null kind>'` still proves x is non-null
+					// where it holds (type(null) is 'null'), and `!==` where it
+					// fails: only that branch narrows, x could be null in the other.
+					return nonNullWhen(name, isEq);
 				}
 			}
 		}

@@ -356,9 +356,58 @@ function inferNumber(node, source) {
 	return INT;
 }
 
+// `x.p = …` member writes in a file, as { x: { p: true } }: ucode objects are
+// open, and such a write anywhere (a callback, a later statement) may add p
+// or replace its value. Matched by name, not scope: that can only hide a
+// finding. Cached for the last text asked about.
+let WRITES = `[
+	(assignment_expression left: (member_expression object: (identifier) @obj property: (property_identifier) @prop))
+	(augmented_assignment_expression left: (member_expression object: (identifier) @obj property: (property_identifier) @prop))
+]`;
+let _writesQuery = {};
+let _writes = { source: null, byName: {} };
+
+function memberWrites(node, source) {
+	if (_writes.source === source) return _writes.byName;
+	let root = node;
+	while (ts.parent(root)) root = ts.parent(root);
+	let lang = ts.nodeType(root) === 'markup' ? 'markup' : 'ucode';
+	_writesQuery[lang] ??= ts.newQuery(lang === 'markup' ? ts.markup() : ts.ucode(), WRITES);
+	let byName = {};
+	for (let m in ts.queryMatches(_writesQuery[lang], root, source)) {
+		let c = {};
+		for (let cap in m.captures) c[cap.name] = cap.node;
+		let obj = ts.text(c.obj, source);
+		byName[obj] ??= {};
+		byName[obj][ts.text(c.prop, source)] = true;
+	}
+	_writes = { source, byName };
+	return byName;
+}
+
+// A record type of `name` with the fields the file writes on it unknown, and
+// those it adds present as unknown.
+function withWrittenFields(t, written) {
+	if (!t || !written) return t;
+	if (t.kind === 'nullable') {
+		let inner = withWrittenFields(t.inner, written);
+		return (inner === t.inner) ? t : { ...t, inner };
+	}
+	if (t.kind !== 'record') return t;
+	let have = {};
+	let fields = map(t.fields ?? [], (f) => {
+		have[f.name] = true;
+		return written[f.name] ? { ...f, type: UNKNOWN } : f;
+	});
+	for (let p in keys(written))
+		if (!have[p]) push(fields, { name: p, type: UNKNOWN });
+	return { ...t, fields };
+}
+
 function inferIdentifier(node, source, uri, scope) {
 	let name = ts.text(node, source);
-	return scopeGet(scope, name) ?? dagNamedLookup(uri, name) ?? UNKNOWN;
+	let t = scopeGet(scope, name) ?? dagNamedLookup(uri, name) ?? UNKNOWN;
+	return withWrittenFields(t, memberWrites(node, source)[name]);
 }
 
 // Cursor on a property name in obj.prop — infer the whole member expression.
@@ -656,13 +705,14 @@ let INFER = {
 _infer = function(node, source, uri, scope, depth) {
 	if (!node || depth > 10) return UNKNOWN;
 	let ntype = ts.nodeType(node);
-	let offset = ts.startByte(node);
+	// The whole span: `c.range` and `c.range.start` share a start and a type.
+	let span = ts.startByte(node) + ':' + ts.endByte(node);
 	let sid = scope ? scope.id : 0;
-	let cached = memoGet(uri, offset, ntype, sid, depth);
+	let cached = memoGet(uri, span, ntype, sid, depth);
 	if (cached) return cached;
 	let h = INFER[ntype];
 	let type = h ? h(node, source, uri, scope, depth) : UNKNOWN;
-	memoSet(uri, offset, ntype, sid, type, depth);
+	memoSet(uri, span, ntype, sid, type, depth);
 	return type;
 };
 

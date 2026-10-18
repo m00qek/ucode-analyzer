@@ -403,6 +403,31 @@ describe('diagnostics — type errors: values set elsewhere', () => {
 			"function outer() {\n\tlet d = null;\n\tfunction get() { d ??= {}; return d.x; }\n\treturn get;\n}\nouter();\n"));
 	});
 
+	it('reads a nested member of a returned record by its own type', () => {
+		// c.range and c.range.start share a start and a node type.
+		assert.match([], codes("function r(n) {\n\treturn { start: { line: n } };\n}\n" +
+			"function item(n) {\n\treturn { range: r(n) };\n}\nlet c = item(1);\nprint(c.range.start.line + 1);\n"));
+	});
+
+	it('a field set in a callback, or added later, is not its literal type', () => {
+		assert.match([], codes("function w(cb) { cb(); }\nfunction get() {\n\tlet out = { res: null };\n" +
+			"\tw(() => { out.res = { d: 1 }; });\n\treturn out;\n}\nprint(get().res.d);\n"));
+		assert.match([], codes("function sim() {\n\tlet s = { now: 1 };\n\ts.cycle = (o) => o;\n\treturn s;\n}\n" +
+			"print(sim().cycle(1));\n"));
+	});
+
+	it('a variable read from an optional chain proves the chain root non-null', () => {
+		assert.match([], codes("function parse(b) {\n\ttry { return json(b); } catch (e) { return null; }\n}\n" +
+			"function call(raw) {\n\tlet body = parse(raw);\n\tlet code = body?.status?.code;\n" +
+			"\tif (code == null)\n\t\treturn { outcome: 1 };\n\treturn { body };\n}\n" +
+			"function one(raw) {\n\tlet r = call(raw);\n\tif (r.outcome)\n\t\treturn r.outcome;\n\treturn r.body.records;\n}\none('{}');\n"));
+	});
+
+	it('a type() mismatch that returns leaves the variable non-null', () => {
+		assert.match([], codes("function f(raw) {\n\tlet m = json(raw)?.meta;\n\tif (type(m) != 'object')\n\t\treturn null;\n" +
+			"\treturn m.name;\n}\nf('{}');\n"));
+	});
+
 	it('a variable assigned a value of unknown type is no longer null', () => {
 		assert.match([], codes("function g(m) {\n\tlet p = null;\n\tp = m.make();\n\treturn () => p.go();\n}\ng({});\n"));
 		assert.match([], codes("function g(m) {\n\tlet p = null;\n\tp = m.make();\n\treturn p.go();\n}\ng({});\n"));

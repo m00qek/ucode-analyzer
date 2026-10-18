@@ -194,10 +194,10 @@ describe('parseGuard', () => {
 		assert.match(true, g.guards[0].positive);
 	});
 
-	it('type(x) !== "array" → null (cannot narrow the unmapped negative case)', () => {
+	it('type(x) !== "array" → x non-null where it fails, nothing where it holds', () => {
 		let doc = parseSource('if (type(x) !== "array") {}');
 		let g = parseGuard(conditionNode(doc), doc.source);
-		assert.match(null, g);
+		assert.match({ kind: 'or', guards: [ { kind: 'truthy', name: 'x', positive: false } ] }, g);
 	});
 
 	it('type(x, extra) === "string" → null (only single-arg calls qualify)', () => {

@@ -4,7 +4,7 @@ import { inferNode, inferParams, declaredType, setReturnScopes } from 'ucode_ana
 import { importScope } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork } from 'ucode_analyzer.code_analysis.types.scope';
 import { UNKNOWN, STR, unionOf } from 'ucode_analyzer.code_analysis.types.type_utils';
-import { parseGuard, applyGuard, narrowToNonNull } from 'ucode_analyzer.code_analysis.types.narrowing';
+import { parseGuard, applyGuard as narrowBy, narrowToNonNull, optionalChainRoot } from 'ucode_analyzer.code_analysis.types.narrowing';
 
 // Binary search: return the scope for the largest checkpoint.offset <= offset.
 export function scopeAtOffset(map, offset) {
@@ -39,6 +39,31 @@ function emit(map, offset, scope) {
     push(map, { offset, scope });
 }
 
+// Variables declared from an optional chain (`let code = body?.status?.code`),
+// by name: the chain's root variable. Where a guard proves one non-null, its
+// root is non-null too. Matched by name: that can only hide a finding.
+let _chainRoots = {};
+
+function rootsNonNull(scope, guard, positive) {
+    if (!guard) return;
+    if (guard.kind === 'and' || guard.kind === 'or') {
+        if (positive === (guard.kind === 'and'))
+            for (let g in guard.guards) rootsNonNull(scope, g, positive);
+        return;
+    }
+    let root = _chainRoots[guard.name];
+    if (guard.kind !== 'truthy' || !root || !scopeHas(scope, root)) return;
+    if (guard.positive ? positive : !positive)
+        scopeSet(scope, root, narrowToNonNull(scopeGet(scope, root) ?? UNKNOWN));
+}
+
+// As narrowing's applyGuard, also narrowing the chain roots of the variables
+// the guard proves non-null.
+function applyGuard(scope, guard, positive) {
+    narrowBy(scope, guard, positive);
+    rootsNonNull(scope, guard, positive);
+}
+
 // Advance scope for a lexical_declaration, forking once per declarator.
 // COW: returns a new scope; does not mutate the input scope.
 function forkDecl(stmt, source, uri, scope) {
@@ -47,6 +72,8 @@ function forkDecl(stmt, source, uri, scope) {
         let nameNode = ts.childByField(decl, 'name');
         let valNode  = ts.childByField(decl, 'value');
         if (nameNode && ts.nodeType(nameNode) === 'identifier') {
+            let root = valNode ? optionalChainRoot(valNode, source) : null;
+            if (root) _chainRoots[ts.text(nameNode, source)] = root;
             let t = declared ?? (valNode ? inferNode(valNode, source, uri, scope, 0) : UNKNOWN);
             scope = scopeFork(scope, ts.text(nameNode, source), t);
         }
@@ -825,22 +852,17 @@ walkNode = function(node, source, uri, scope, map) {
     }
 };
 
-// Build a sorted [(offset, scope)] map for the whole file.
-// Checkpoints are emitted before each statement, so scopeAtOffset(map, X)
-// returns the scope with all declarations from statements that begin before X.
-export function buildScopeMap(uri, source, tree) {
-    let root  = ts.rootNode(tree);
-    let scope = importScope(uri);
-    let map   = [];
-    let outer = [_marks, _pos];
+// Walk the file's statements into map, with the module state set up for it.
+function walkFile(uri, source, root, map) {
     _marks = ts.descendantOffsets(root, SCOPE_TYPES);
     _pos = 0;
-    let outerBindings = [_assigns, _decls, _captured, _capturedType];
+    _chainRoots = {};
     collectBindings(root, source);
-    let outerReturns = setReturnScopes({ uri, at: (offset, from) => {
+    setReturnScopes({ uri, at: (offset, from) => {
         let c = checkpointAt(map, offset);
         return (c && c.offset >= from) ? c.scope : null;
     } });
+    let scope = importScope(uri);
     emit(map, 0, scope);
     let n = ts.namedChildCount(root);
     for (let i = 0; i < n; i++)
@@ -851,13 +873,33 @@ export function buildScopeMap(uri, source, tree) {
     let last = n ? ts.namedChild(root, n - 1) : null;
     if (!last || !ts.hasError(last) || ts.endByte(last) < ts.endByte(root))
         emit(map, ts.endByte(root), scope);
-    _marks = outer[0];
-    _pos = outer[1];
-    _assigns = outerBindings[0];
-    _decls = outerBindings[1];
-    _captured = outerBindings[2];
-    _capturedType = outerBindings[3];
-    setReturnScopes(outerReturns);
+}
+
+// Build a sorted [(offset, scope)] map for the whole file.
+// Checkpoints are emitted before each statement, so scopeAtOffset(map, X)
+// returns the scope with all declarations from statements that begin before X.
+// A map built while another is (a return type inferred meanwhile) gets the
+// module state to itself, and gives it back even when the walk throws.
+export function buildScopeMap(uri, source, tree) {
+    let map = [];
+    let outer = [_marks, _pos, _assigns, _decls, _captured, _capturedType, _chainRoots,
+        setReturnScopes(null)];
+    function restore() {
+        _marks = outer[0];
+        _pos = outer[1];
+        _assigns = outer[2];
+        _decls = outer[3];
+        _captured = outer[4];
+        _capturedType = outer[5];
+        _chainRoots = outer[6];
+        setReturnScopes(outer[7]);
+    }
+    try {
+        walkFile(uri, source, ts.rootNode(tree), map);
+    } catch (e) {
+        restore();
+        die(e);
+    }
+    restore();
     return map;
 };
-
