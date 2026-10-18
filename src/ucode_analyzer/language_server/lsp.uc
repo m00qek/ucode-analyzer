@@ -24,6 +24,7 @@ import { documentLinks } from 'ucode_analyzer.language_server.handlers.document_
 import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCallsPlan, outgoingCalls as outgoingCallsDoc } from 'ucode_analyzer.language_server.handlers.call_hierarchy';
 import * as platform from 'ucode_analyzer.language_server.platform';
 import * as background from 'ucode_analyzer.language_server.background';
+import { newProgress } from 'ucode_analyzer.language_server.progress';
 import { FileChangeType } from 'ucode_analyzer.code_analysis.lsp_types';
 import { detectJobs } from 'ucode_analyzer.code_analysis.parallel';
 
@@ -65,14 +66,24 @@ export function run(config) {
 	let shutdown_requested = false;
 	let initialized = false;
 
+	let clientCapabilities = {};
+
+	// The client's responses to our requests that need one: id → callback.
+	let awaiting = {};
+
+	function requestThen(id, method, params, onResponse) {
+		awaiting[id] = onResponse;
+		protocol.request(id, method, params);
+	}
+
 	// The startup load: whether it runs, its workers and the requests it holds.
 	let indexing = false;
-	let loadTasks = [];
+	let loading = null;
 	let held = [];
 
 	function stopLoading() {
-		for (let t in loadTasks) t.kill();
-		loadTasks = [];
+		if (loading) loading.kill();
+		loading = null;
 		indexing = false;
 	}
 
@@ -119,6 +130,7 @@ export function run(config) {
 
 	const handlers = {
 		initialize: function(msg) {
+			clientCapabilities = msg.params?.capabilities ?? {};
 			protocol.respond(msg.id, {
 				capabilities: {
 					textDocumentSync: 1,
@@ -151,12 +163,21 @@ export function run(config) {
 			initialized = true;
 
 			// Indexing takes seconds on a slow device: workers do it while the
-			// loop keeps answering.
+			// loop keeps answering, and the editor shows how far it got.
+			let progress = null;
+			if (clientCapabilities.window?.workDoneProgress) {
+				let token = 'ucode-analyzer/indexing';
+				progress = newProgress(token, 'Indexing');
+				requestThen('index-progress', 'window/workDoneProgress/create', { token },
+					(resp) => progress.accepted(resp.error === null));
+			}
+
 			indexing = true;
-			let tasks = workspace.loadWorkspaceAsync(config, detectJobs(), function(declVersions) {
+			let load = workspace.loadWorkspaceAsync(config, detectJobs(), function(declVersions) {
 				if (!indexing) return;
 				indexing = false;
-				loadTasks = [];
+				loading = null;
+				if (progress) progress.end(sprintf('%d files', length(dag.allUris())));
 				// What was answered meanwhile came from a partial index.
 				invalidateDependents(keys(documents.all()));
 				// Package-manager queries are blocking subprocess calls; run them in a
@@ -164,8 +185,10 @@ export function run(config) {
 				// which read it when asked, so nothing needs refreshing when it lands.
 				platform.initAsync(declVersions, null);
 				release();
+			}, function(done, total) {
+				if (progress) progress.report(done, total);
 			});
-			if (indexing) loadTasks = tasks;
+			if (indexing) loading = load;
 
 			// Ask the editor to notify us when .uc files change on disk.
 			protocol.request('cap-watch-uc', 'client/registerCapability', {
@@ -399,8 +422,15 @@ export function run(config) {
 	});
 
 	dispatch = function(msg) {
+		// A response to one of our requests.
+		if (!msg.method && 'id' in msg) {
+			let onResponse = awaiting[msg.id];
+			delete awaiting[msg.id];
+			if (onResponse) onResponse(msg);
+			return;
+		}
+
 		// After shutdown, reject all requests (notifications are silently ignored).
-		// Response messages (no method) are also silently ignored.
 		if (shutdown_requested && msg.method !== 'exit') {
 			if ('id' in msg && msg.method)
 				protocol.error(msg.id, protocol.ErrorCode.INVALID_REQUEST, 'server is shutting down');
@@ -408,7 +438,6 @@ export function run(config) {
 		}
 
 		// Before initialized, only allow initialize / initialized / exit / $/cancel.
-		// Response messages (no method) are silently ignored.
 		if (!initialized && msg.method !== 'initialize' && msg.method !== 'initialized' &&
 		    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
 			if ('id' in msg && msg.method)
@@ -434,8 +463,6 @@ export function run(config) {
 			}
 		} else if ('id' in msg && msg.method) {
 			// Only unknown *requests* (have both id and method) get MethodNotFound.
-			// Response messages (client replies to our outbound requests) have id but
-			// no method — ignore them silently.
 			protocol.error(msg.id, protocol.ErrorCode.METHOD_NOT_FOUND, sprintf('method not found: %s', msg.method));
 		}
 	};

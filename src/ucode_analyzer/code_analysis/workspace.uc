@@ -118,22 +118,46 @@ export function loadWorkspace(config) {
 	return finishLoad();
 };
 
-// As loadWorkspace, but the files are parsed and indexed by `jobs` forked
-// workers on the current event loop, which stays free meanwhile. The DAG
-// gets the results in one go, in loadWorkspace's order, and then onDone
-// receives the @version map. Files indexed in-process before that (opened,
-// changed on disk) keep that newer index. Returns the workers, to kill().
-export function loadWorkspaceAsync(config, jobs, onDone) {
+// As loadWorkspace, but in forked workers on the current event loop, which
+// stays free meanwhile: one lists the files (a walk of the whole tree), then
+// `jobs` parse and index them. The DAG gets the results in one go, in
+// loadWorkspace's order, and then onDone receives the @version map; onProgress
+// (optional) gets (indexed, total) as they arrive. Files indexed in-process
+// before that (opened, changed on disk) keep that newer index. Returns a
+// handle to kill() the load.
+export function loadWorkspaceAsync(config, jobs, onDone, onProgress) {
 	dag.init(config);
 	dag.beginLoad();
-	let uris = indexedUris(config);
-	let byUri = {};
-	return fanOut(uris, jobs, dag.readRecord,
-		(entry) => { if (entry) byUri[entry.uri] = entry; },
-		() => {
-			dag.endLoad(map(uris, (u) => byUri[u]));
-			onDone(finishLoad());
-		});
+	let tasks = [];
+	let stopped = false;
+	let listed = null;
+
+	function indexAll(uris) {
+		let byUri = {};
+		let done = 0;
+		if (onProgress) onProgress(0, length(uris));
+		tasks = fanOut(uris, jobs, dag.readRecord,
+			(entry) => {
+				if (entry) byUri[entry.uri] = entry;
+				if (onProgress) onProgress(++done, length(uris));
+			},
+			() => {
+				dag.endLoad(map(uris, (u) => byUri[u]));
+				onDone(finishLoad());
+			});
+	}
+
+	tasks = fanOut([config], 1, indexedUris, (uris) => { listed = uris; }, () => {
+		// A listing that failed is done here instead.
+		if (!stopped) indexAll(listed ?? indexedUris(config));
+	});
+
+	return {
+		kill: function() {
+			stopped = true;
+			for (let t in tasks) t.kill();
+		},
+	};
 };
 
 // Every workspace URI currently known to the DAG.

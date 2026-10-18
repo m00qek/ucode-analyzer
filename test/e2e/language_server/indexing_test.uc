@@ -83,4 +83,27 @@ describe('startup indexing', () => {
 		assert.match(0, lsp.close(proc));
 		proc = null;
 	});
+
+	it('reports its progress to a client that supports it', () => {
+		lsp.send(proc, { jsonrpc: '2.0', id: 0, method: 'initialize',
+			params: { capabilities: { window: { workDoneProgress: true } } } });
+		lsp.receive(proc);
+		lsp.send(proc, { jsonrpc: '2.0', method: 'initialized', params: {} });
+
+		let create = lsp.receiveServerRequest(proc);
+		assert.match('window/workDoneProgress/create', create.method);
+		lsp.send(proc, { jsonrpc: '2.0', id: create.id, result: null });
+
+		let values = [];
+		while (!length(values) || values[-1].kind !== 'end') {
+			let msg = lsp.receiveNotification(proc);
+			if (msg === null) die(lsp.gone(proc, 'progress'));
+			if (msg.method !== '$/progress') continue;
+			assert.match(create.params.token, msg.params.token);
+			push(values, msg.params.value);
+		}
+		assert.match('begin', values[0].kind);
+		assert.match('Indexing', values[0].title);
+		assert.match(match(values[-1].message, /^[0-9]+ files$/) !== null, true);
+	});
 });

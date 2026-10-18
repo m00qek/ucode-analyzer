@@ -94,13 +94,15 @@ killed: killed earlier, it could relay the signal to the server's own handler.
 `textDocument/diagnostic` for one file stays synchronous, and an unchanged
 file answers `unchanged` by resultId.
 
-Startup indexing runs the same way (`workspace.loadWorkspaceAsync`): workers
-build each file's index record, and the DAG installs them all when the last
-arrives, in the synchronous order, so typedef precedence does not depend on
+Startup indexing runs the same way (`workspace.loadWorkspaceAsync`): one
+worker lists the files, others build each file's index record, and the DAG
+installs them all when the last arrives, in the synchronous order, so typedef precedence does not depend on
 timing. Meanwhile the server answers from what it has, except for requests a
 partial index would answer wrongly (diagnostics, references, rename, incoming
 calls, workspace symbols): those are held until the load ends. A file indexed
 in-process during the load (opened, changed on disk) keeps that newer index.
+A client that supports work-done progress sees the load as `$/progress`
+(`language_server/progress.uc`).
 
 References, rename and incoming calls grow with an export's importers. Their
 handlers return a plan, `{ items, work, finish }`, one item per importing file
