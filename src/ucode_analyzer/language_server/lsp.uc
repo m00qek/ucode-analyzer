@@ -7,7 +7,7 @@ import { completion as completionDoc } from 'ucode_analyzer.language_server.hand
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as workspace from 'ucode_analyzer.code_analysis.workspace';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
-import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics, cancel as cancelWorkspaceDiagnostics, cancelRequest as cancelWorkspaceRequest } from 'ucode_analyzer.language_server.handlers.diagnostic_reports';
+import { documentDiagnosticsPlan, workspaceDiagnostics, invalidate as invalidateDiagnostics, cancel as cancelWorkspaceDiagnostics, cancelRequest as cancelWorkspaceRequest } from 'ucode_analyzer.language_server.handlers.diagnostic_reports';
 import { signatureHelp as signatureHelpDoc } from 'ucode_analyzer.language_server.handlers.signature_help';
 import { referencesPlan } from 'ucode_analyzer.language_server.handlers.references';
 import { documentSymbols as documentSymbolsDoc } from 'ucode_analyzer.language_server.handlers.document_symbols';
@@ -47,6 +47,7 @@ const WAITS_FOR_INDEX = {
 // caches, diagnostics and, for open ones, scope maps.
 function invalidateDependents(uris) {
 	for (let uri in uris) {
+		background.supersede(uri);
 		invalidateUri(uri);
 		invalidateDiagnostics(uri);
 		documents.markStale(uri);
@@ -56,6 +57,7 @@ function invalidateDependents(uris) {
 // Index an opened or edited document into the DAG. Returns the files whose
 // view of it changed, already invalidated.
 function reindex(doc) {
+	background.supersede(doc.uri);
 	invalidateDiagnostics(doc.uri);
 	let cascaded = dag.update(doc.uri, doc.text, doc.tree, documents.all());
 	invalidateDependents(cascaded);
@@ -248,6 +250,7 @@ export function run(config) {
 
 		'textDocument/didClose': function(msg) {
 			let uri = msg.params.textDocument.uri;
+			background.supersede(uri);
 			documents.close(uri);
 			dag.markClosed(uri);
 			// No publish: pull-model clients clear diagnostics for closed files.
@@ -255,10 +258,10 @@ export function run(config) {
 
 		'textDocument/diagnostic': function(msg) {
 			let uri = msg.params.textDocument.uri;
-			let doc = documents.get(uri);
-			protocol.respond(msg.id, doc
-				? documentDiagnostics(uri, doc, msg.params.previousResultId)
-				: { kind: 'full', items: [] });
+			let doc = documents.peek(uri);
+			if (!doc)
+				return protocol.respond(msg.id, { kind: 'full', items: [] });
+			background.respond(msg.id, documentDiagnosticsPlan(uri, doc, msg.params.previousResultId));
 		},
 
 		'workspace/diagnostic': function(msg) {

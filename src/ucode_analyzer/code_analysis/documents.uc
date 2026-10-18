@@ -48,6 +48,12 @@ export function get(uri) {
 	return doc;
 };
 
+// The open document for uri as stored, its scope map perhaps not built yet;
+// null if it is not open.
+export function peek(uri) {
+	return _documents[uri];
+};
+
 export function isOpen(uri) {
 	return exists(_documents, uri);
 };

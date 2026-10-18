@@ -2,7 +2,7 @@ import * as protocol from 'ucode_analyzer.language_server.protocol';
 import { diagnosticsFor } from 'ucode_analyzer.code_analysis.diagnostics';
 import { workspaceUris, diagnoseFile } from 'ucode_analyzer.code_analysis.workspace';
 import { fanOut, detectJobs } from 'ucode_analyzer.code_analysis.parallel';
-import { versionOf } from 'ucode_analyzer.code_analysis.documents';
+import * as documents from 'ucode_analyzer.code_analysis.documents';
 
 // Per-URI resultId generation. Bumped whenever a document's diagnostics may
 // have changed (edit, dependency cascade, watched-file change). A pull request
@@ -20,11 +20,29 @@ function resultId(uri) {
 
 // --- textDocument/diagnostic (single open document, synchronous) ------------
 
-export function documentDiagnostics(uri, doc, previousResultId) {
+// From this size on, a document is diagnosed in a worker (see background.uc):
+// about 100 ms of work on an x86 host, several times that on a slow device.
+const LARGE = 16384;
+
+// The report for an open document as a plan, keyed by its uri so a change can
+// supersede it. The work builds the scope map, when not built yet, where it
+// runs.
+export function documentDiagnosticsPlan(uri, doc, previousResultId) {
 	let id = resultId(uri);
 	if (previousResultId === id)
-		return { kind: 'unchanged', resultId: id };
-	return { kind: 'full', resultId: id, items: diagnosticsFor(uri, doc) };
+		return { items: [], finish: () => ({ kind: 'unchanged', resultId: id }) };
+	return {
+		key:    uri,
+		inline: length(doc.text) < LARGE,
+		items:  [uri],
+		work:   (u) => diagnosticsFor(u, documents.get(u)),
+		finish: (r) => ({ kind: 'full', resultId: id, items: r[0] ?? [] }),
+	};
+};
+
+export function documentDiagnostics(uri, doc, previousResultId) {
+	let p = documentDiagnosticsPlan(uri, doc, previousResultId);
+	return p.finish(map(p.items, p.work));
 };
 
 // --- workspace/diagnostic (all workspace files, background fork) ------------
@@ -81,7 +99,7 @@ export function workspaceDiagnostics(requestId, params, config) {
 		function(uri) {
 			// The version the worker's snapshot holds, so the client can drop the
 			// result if the document has changed since.
-			let version = versionOf(uri);
+			let version = documents.versionOf(uri);
 			let id = resultId(uri);
 			if (prevIds[uri] === id)
 				return { kind: 'unchanged', uri, version, resultId: id };

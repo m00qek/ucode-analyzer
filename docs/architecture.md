@@ -91,8 +91,11 @@ after what they check. Passes that only need certain node types find them with
 finish. A newer request kills the scan and answers the older one with
 ContentModified. A worker resets SIGTERM and reports ready before it may be
 killed: killed earlier, it could relay the signal to the server's own handler.
-`textDocument/diagnostic` for one file stays synchronous, and an unchanged
-file answers `unchanged` by resultId.
+`textDocument/diagnostic` for one file runs in-process below 16 KB and in a
+worker above (a plan, see below), so a large file's passes do not hold up the
+hover or completion that follows an edit; a change to the file or its imports
+answers a pull still running with ContentModified. An unchanged file answers
+`unchanged` by resultId.
 
 Startup indexing runs the same way (`workspace.loadWorkspaceAsync`): one
 worker lists the files, others build each file's index record, and the DAG
