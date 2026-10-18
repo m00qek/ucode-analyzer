@@ -57,15 +57,33 @@ function addOutEdges(uri, imports) {
 	if (length(targets) > 0) _outEdges[uri] = targets;
 }
 
-function indexNode(uri, text, tree) {
-	let exps = extractExports(text, tree);
-	let imps = resolveAll(extractImports(text, tree));
-	let moduleDoc = extractModuleDoc(text, tree);
-	let versions  = extractVersions(text);
+// What indexing a file yields: plain data, so a worker can send it back.
+function recordOf(text, tree) {
+	return {
+		exports:   extractExports(text, tree),
+		imports:   resolveAll(extractImports(text, tree)),
+		moduleDoc: extractModuleDoc(text, tree),
+		versions:  extractVersions(text),
+		typedefs:  extractTypedefs(text, tree),
+	};
+}
+
+function install(uri, rec) {
 	removeOutEdges(uri);
-	_nodes[uri] = { exports: exps, imports: imps, moduleDoc, versions };
-	addOutEdges(uri, imps);
-	extractTypedefs(uri, text, tree);
+	_nodes[uri] = { exports: rec.exports, imports: rec.imports, moduleDoc: rec.moduleDoc, versions: rec.versions };
+	addOutEdges(uri, rec.imports);
+	type_registry.removeUri(uri);
+	for (let t in rec.typedefs)
+		type_registry.register(t.name, t.type, uri, t.params);
+}
+
+// Files indexed here while a background load runs: their record from the
+// load is older, and is dropped.
+let _touched = null;
+
+function indexNode(uri, text, tree) {
+	if (_touched) _touched[uri] = true;
+	install(uri, recordOf(text, tree));
 }
 
 // A value without its `position` keys, at any depth.
@@ -96,6 +114,7 @@ function readAndParse(path) {
 export function init(config) {
 	_config = config;
 	_openUris = {};
+	_touched = null;
 };
 
 // The configuration passed to init().
@@ -120,6 +139,32 @@ export function addFromDisk(uri) {
 		let st = fs.stat(path);
 		if (st) _diskStamp[uri] = { mtime: st.mtime, size: st.size };
 	}
+};
+
+// Index a file from disk without touching the DAG, for a worker: returns
+// { uri, record, stamp }, or null when the file cannot be read.
+export function readRecord(uri) {
+	let path = toPath(uri);
+	let parsed = readAndParse(path);
+	if (!parsed) return null;
+	let st = fs.stat(path);
+	return { uri, record: recordOf(parsed.text, parsed.tree),
+		stamp: st ? { mtime: st.mtime, size: st.size } : null };
+};
+
+// Bracket a background load: between the two, files indexed here are marked,
+// and endLoad() installs the records of the others, in the order given.
+export function beginLoad() {
+	_touched = {};
+};
+
+export function endLoad(entries) {
+	for (let e in entries) {
+		if (!e || (_touched && _touched[e.uri])) continue;
+		install(e.uri, e.record);
+		if (e.stamp) _diskStamp[e.uri] = e.stamp;
+	}
+	_touched = null;
 };
 
 // Re-index a file with the given content, then cascade through reverse deps.
@@ -166,6 +211,7 @@ export function update(uri, text, tree, openDocs) {
 				} else {
 					// File no longer on disk — cascade its reverse deps then remove it.
 					let revDeps = _inEdges[next] ?? [];
+					if (_touched) _touched[next] = true;
 					removeOutEdges(next);
 					delete _nodes[next];
 					delete _inEdges[next];
@@ -206,6 +252,7 @@ function reresolve(uris) {
 // Forget a file. Its importers resolve their imports again: the specifier may
 // now name another file (a declaration stub), or nothing.
 export function remove(uri) {
+	if (_touched) _touched[uri] = true;
 	let importers = _inEdges[uri] ?? [];
 	removeOutEdges(uri);
 	delete _nodes[uri];

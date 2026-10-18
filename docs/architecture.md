@@ -93,6 +93,18 @@ killed: killed earlier, it could relay the signal to the server's own handler.
 `textDocument/diagnostic` for one file stays synchronous, and an unchanged
 file answers `unchanged` by resultId.
 
+Startup indexing runs the same way (`workspace.loadWorkspaceAsync`): workers
+build each file's index record, and the DAG installs them all when the last
+arrives, in the synchronous order, so typedef precedence does not depend on
+timing. Meanwhile the server answers from what it has, except for requests a
+partial index would answer wrongly (diagnostics, references, rename, incoming
+calls, workspace symbols): those are held until the load ends. A file indexed
+in-process during the load (opened, changed on disk) keeps that newer index.
+
+Worker results travel in pieces of at most PIPE_BUF bytes: uloop drops a
+message larger than the pipe's buffer when its reader catches up with the
+writer.
+
 ## Tests
 
 `make test` runs everything in Docker; never run the sources on the host.

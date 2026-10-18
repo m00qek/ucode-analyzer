@@ -1,7 +1,6 @@
 import * as ts from 'tree_sitter';
 import * as fs from 'fs';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
-import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import { buildLineTable, offsetToPosition, docBeforeMap } from 'ucode_analyzer.code_analysis.positions';
 import { topLevelStatements, importStmtSpecifier, importBindings, importRemoteName } from 'ucode_analyzer.code_analysis.mode';
 import { stringLiteralText, namedNonComments, declarators, paramNodes, isComment } from 'ucode_analyzer.code_analysis.ast_text';
@@ -387,11 +386,10 @@ export function extractModuleDoc(text, tree) {
 	return null;
 };
 
-// Walk every /** */ comment in the file and register any @typedef it contains.
-// Removes stale entries for this uri first so re-indexing stays consistent.
-export function extractTypedefs(uri, text, tree) {
-	type_registry.removeUri(uri);
-	if (index(text, '@typedef') < 0) return;
+// The @typedefs of the file's /** */ comments, as [{ name, type, params }].
+export function extractTypedefs(text, tree) {
+	let out = [];
+	if (index(text, '@typedef') < 0) return out;
 	let root = ts.rootNode(tree);
 	let children = ts.namedChildren(root);
 	for (let i = 0; i < length(children); i++) {
@@ -401,6 +399,7 @@ export function extractTypedefs(uri, text, tree) {
 		if (index(raw, '@typedef') < 0) continue;
 		let doc = parseDoc(raw);
 		if (doc.typedef && doc.typedef.name && doc.typedef.type)
-			type_registry.register(doc.typedef.name, doc.typedef.type, uri, doc.template);
+			push(out, { name: doc.typedef.name, type: doc.typedef.type, params: doc.template });
 	}
+	return out;
 };

@@ -24,9 +24,22 @@ import { documentLinks } from 'ucode_analyzer.language_server.handlers.document_
 import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'ucode_analyzer.language_server.handlers.call_hierarchy';
 import * as platform from 'ucode_analyzer.language_server.platform';
 import { FileChangeType } from 'ucode_analyzer.code_analysis.lsp_types';
+import { detectJobs } from 'ucode_analyzer.code_analysis.parallel';
 
 // How long a diagnostic refresh waits for further changes, in ms.
 const REFRESH_DELAY = 500;
+
+// Requests a partial index would answer wrongly rather than incompletely
+// (false diagnostics, a rename missing importers): held until the startup
+// load finishes.
+const WAITS_FOR_INDEX = {
+	'textDocument/diagnostic':     true,
+	'workspace/diagnostic':        true,
+	'textDocument/references':     true,
+	'textDocument/rename':         true,
+	'callHierarchy/incomingCalls': true,
+	'workspace/symbol':            true,
+};
 
 // Drop everything derived from the files that import a changed file: type
 // caches, diagnostics and, for open ones, scope maps.
@@ -51,11 +64,32 @@ export function run(config) {
 	let shutdown_requested = false;
 	let initialized = false;
 
+	// The startup load: whether it runs, its workers and the requests it holds.
+	let indexing = false;
+	let loadTasks = [];
+	let held = [];
+
+	function stopLoading() {
+		for (let t in loadTasks) t.kill();
+		loadTasks = [];
+		indexing = false;
+	}
+
 	// Kill any in-flight background tasks before the process exits so their forked
 	// children are not orphaned (reparented to init) and left burning CPU/memory.
 	function teardown() {
+		stopLoading();
 		platform.cancel();
 		cancelWorkspaceDiagnostics();
+	}
+
+	let dispatch;
+
+	// Run the held requests: after the load, or rejected after shutdown.
+	function release() {
+		let msgs = held;
+		held = [];
+		for (let msg in msgs) dispatch(msg);
 	}
 
 	let _refreshSeq = 0;
@@ -114,12 +148,22 @@ export function run(config) {
 		initialized: function(msg) {
 			initialized = true;
 
-			let declVersions = workspace.loadWorkspace(config);
-
-			// Package-manager queries are blocking subprocess calls; run them in a
-			// background task. Availability only shows in hover and completion,
-			// which read it when asked, so nothing needs refreshing when it lands.
-			platform.initAsync(declVersions, null);
+			// Indexing takes seconds on a slow device: workers do it while the
+			// loop keeps answering.
+			indexing = true;
+			let tasks = workspace.loadWorkspaceAsync(config, detectJobs(), function(declVersions) {
+				if (!indexing) return;
+				indexing = false;
+				loadTasks = [];
+				// What was answered meanwhile came from a partial index.
+				invalidateDependents(keys(documents.all()));
+				// Package-manager queries are blocking subprocess calls; run them in a
+				// background task. Availability only shows in hover and completion,
+				// which read it when asked, so nothing needs refreshing when it lands.
+				platform.initAsync(declVersions, null);
+				release();
+			});
+			if (indexing) loadTasks = tasks;
 
 			// Ask the editor to notify us when .uc files change on disk.
 			protocol.request('cap-watch-uc', 'client/registerCapability', {
@@ -133,6 +177,8 @@ export function run(config) {
 
 		shutdown: function(msg) {
 			shutdown_requested = true;
+			stopLoading();
+			release();
 			protocol.respond(msg.id, null);
 		},
 
@@ -140,11 +186,18 @@ export function run(config) {
 			uloop.end();
 		},
 
-		// Only the workspace scan runs in the background; a queued request is
+		// Only held requests and the workspace scan wait; a queued request is
 		// cancelled when its batch is read (see the dispatch below), and others
 		// have already been answered.
 		'$/cancelRequest': function(msg) {
-			cancelWorkspaceRequest(msg.params?.id ?? null);
+			let id = msg.params?.id ?? null;
+			let rest = filter(held, (m) => m.id !== id);
+			if (length(rest) < length(held)) {
+				held = rest;
+				protocol.error(id, protocol.ErrorCode.REQUEST_CANCELLED, 'request cancelled');
+				return;
+			}
+			cancelWorkspaceRequest(id);
 		},
 
 		'textDocument/didOpen': function(msg) {
@@ -342,7 +395,7 @@ export function run(config) {
 			e?.message ?? e, at ? sprintf(' (%s:%d)', at.filename, at.line) : ''));
 	});
 
-	function dispatch(msg) {
+	dispatch = function(msg) {
 		// After shutdown, reject all requests (notifications are silently ignored).
 		// Response messages (no method) are also silently ignored.
 		if (shutdown_requested && msg.method !== 'exit') {
@@ -357,6 +410,11 @@ export function run(config) {
 		    msg.method !== 'exit' && msg.method !== '$/cancelRequest') {
 			if ('id' in msg && msg.method)
 				protocol.error(msg.id, protocol.ErrorCode.SERVER_NOT_INITIALIZED, 'server not yet initialized');
+			return;
+		}
+
+		if (indexing && WAITS_FOR_INDEX[msg.method]) {
+			push(held, msg);
 			return;
 		}
 
@@ -377,7 +435,7 @@ export function run(config) {
 			// no method — ignore them silently.
 			protocol.error(msg.id, protocol.ErrorCode.METHOD_NOT_FOUND, sprintf('method not found: %s', msg.method));
 		}
-	}
+	};
 
 	protocol.startListening(
 		function(bodies) {

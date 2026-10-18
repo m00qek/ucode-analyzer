@@ -5,6 +5,7 @@ import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_brid
 import { diagnosticsFor } from 'ucode_analyzer.code_analysis.diagnostics';
 import { libraryDirs } from 'ucode_analyzer.code_analysis.config';
 import { toPath } from 'ucode_analyzer.code_analysis.uri';
+import { fanOut } from 'ucode_analyzer.code_analysis.parallel';
 
 // Directories under workspaceDir that carry their own .lsp/config.json. Each is
 // a self-contained nested workspace (e.g. the linter's test fixtures) and is
@@ -81,31 +82,20 @@ export function isWorkspaceUri(uri, config, nestedRoots) {
 	return true;
 };
 
-// Build the cross-file graph and the builtin scope for a workspace: index every
-// source / declaration / system-lib file into the DAG and initialise builtins.
-// Returns the declaration @version map ({ uri -> versions[] }) so the caller can
-// decide whether and how to initialise platform availability.
-//
-// Imports only analysis modules (no protocol/io/uloop), so it is shared by both
-// the language server (`initialized`) and the standalone linter.
-export function loadWorkspace(config) {
-	dag.init(config);
+// The URIs to index, each once: the workspace's sources, then the declaration
+// stubs and the system libraries.
+function indexedUris(config) {
+	let paths = sourceFiles(config);
+	if (config.selfSrcDir)
+		push(paths, ...glob.scan(config.selfSrcDir + '/declarations', ['**/*.uc'], []));
+	for (let sysPath in (config.systemLibPaths ?? []))
+		push(paths, ...glob.scan(sysPath, ['**/*.uc'], []));
+	return uniq(map(paths, (p) => 'file://' + p));
+}
 
-	for (let path in sourceFiles(config))
-		dag.addFromDisk('file://' + path);
-
-	if (config.selfSrcDir) {
-		let files = glob.scan(config.selfSrcDir + '/declarations', ['**/*.uc'], []);
-		for (let path in files)
-			dag.addFromDisk('file://' + path);
-	}
-
-	for (let sysPath in (config.systemLibPaths ?? [])) {
-		let files = glob.scan(sysPath, ['**/*.uc'], []);
-		for (let path in files)
-			dag.addFromDisk('file://' + path);
-	}
-
+// Once everything is indexed: the builtin scope, and the declaration @version
+// map ({ uri -> versions[] }) for platform availability.
+function finishLoad() {
 	let globalUri = dag.resolveSpecifier('global');
 	if (globalUri) initBuiltinsFromDag(globalUri);
 
@@ -116,6 +106,34 @@ export function loadWorkspace(config) {
 		if (v) declVersions[uri] = v;
 	}
 	return declVersions;
+}
+
+// Build the cross-file graph and the builtin scope for a workspace: index every
+// source / declaration / system-lib file into the DAG and initialise builtins.
+// Returns the declaration @version map.
+export function loadWorkspace(config) {
+	dag.init(config);
+	for (let uri in indexedUris(config))
+		dag.addFromDisk(uri);
+	return finishLoad();
+};
+
+// As loadWorkspace, but the files are parsed and indexed by `jobs` forked
+// workers on the current event loop, which stays free meanwhile. The DAG
+// gets the results in one go, in loadWorkspace's order, and then onDone
+// receives the @version map. Files indexed in-process before that (opened,
+// changed on disk) keep that newer index. Returns the workers, to kill().
+export function loadWorkspaceAsync(config, jobs, onDone) {
+	dag.init(config);
+	dag.beginLoad();
+	let uris = indexedUris(config);
+	let byUri = {};
+	return fanOut(uris, jobs, dag.readRecord,
+		(entry) => { if (entry) byUri[entry.uri] = entry; },
+		() => {
+			dag.endLoad(map(uris, (u) => byUri[u]));
+			onDone(finishLoad());
+		});
 };
 
 // Every workspace URI currently known to the DAG.

@@ -1,8 +1,11 @@
 import { describe, it, assert, afterEach } from 'utest';
 import * as fs from 'fs';
+import * as uloop from 'uloop';
+import * as mode from 'ucode_analyzer.code_analysis.mode';
+import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
-import { isWorkspaceUri, loadWorkspace, loadWorkspaceDocs, workspaceUris,
+import { isWorkspaceUri, loadWorkspace, loadWorkspaceAsync, loadWorkspaceDocs, workspaceUris,
          diagnoseFile, diagnoseDoc, diagnoseWorkspace } from 'ucode_analyzer.code_analysis.workspace';
 
 let _dirs = [];
@@ -166,6 +169,60 @@ describe('workspace — loadWorkspace', () => {
 		]), indexed());
 		// The @version map: declarations with a Versions header only.
 		assert.match({ ['file://' + pkg + '/declarations/global.d.uc']: ['24.10', '25.12'] }, versions);
+	});
+});
+
+// Run loadWorkspaceAsync on a fresh event loop, calling during() once the
+// workers are started. Returns the @version map it reported.
+function loadAsync(config, during) {
+	let versions = null;
+	uloop.init();
+	let timeout = uloop.timer(5000, () => uloop.end());
+	loadWorkspaceAsync(config, 2, (v) => { versions = v; uloop.end(); });
+	if (during) during();
+	uloop.run();
+	if (timeout) timeout.cancel();
+	return versions;
+}
+
+describe('workspace — loadWorkspaceAsync', () => {
+	function setup() {
+		let sys = tree({ 'syslib.uc': 'export let t = 1;\n' });
+		let pkg = tree({ 'declarations/global.d.uc': '// Versions: 24.10, 25.12\nexport function hello() {};\n' });
+		let dir = tree({
+			'a.uc': '/** @typedef {{ x: int }} Shape */\nexport let a = 1;\n',
+			'b.uc': '/** @typedef {{ y: string }} Shape */\nexport let b = 1;\n',
+			'c.uc': 'export let c = 1;\n',
+		});
+		return { dir, config: { workspaceDir: dir, selfSrcDir: pkg, systemLibPaths: [sys] } };
+	}
+
+	it('indexes what loadWorkspace does, with the same typedef winning', () => {
+		let w = setup();
+		let want = loadWorkspace(w.config);
+		let files = indexed(), shape = type_registry.lookup('Shape');
+		for (let uri in files) dag.remove(uri);
+
+		assert.match(want, loadAsync(w.config));
+		assert.match(files, indexed());
+		assert.match(shape, type_registry.lookup('Shape'));
+		assert.match([ { name: 'a', kind: 'let' } ], map(dag.exportsOf('file://' + w.dir + '/a.uc'), (e) => ({ name: e.name, kind: e.kind })));
+	});
+
+	it('keeps the index of a file changed in-process during the load', () => {
+		let w = setup();
+		let uri = 'file://' + w.dir + '/c.uc';
+		let text = 'export let edited = 1;\n';
+		loadAsync(w.config, () => dag.update(uri, text, mode.parse(text)));
+		assert.match(['edited'], map(dag.exportsOf(uri), (e) => e.name));
+	});
+
+	it('does not bring back a file removed during the load', () => {
+		let w = setup();
+		let uri = 'file://' + w.dir + '/c.uc';
+		loadAsync(w.config, () => dag.remove(uri));
+		assert.match(null, dag.exportsOf(uri));
+		assert.match(['a.uc', 'b.uc'], rel(w.dir, filter(indexed(), (u) => index(u, w.dir) >= 0)));
 	});
 });
 

@@ -148,6 +148,14 @@ export function settle(proc) {
 	return seen;
 };
 
+// Wait until the server's background startup load is done: it holds
+// workspace/symbol until then.
+export function waitForIndex(proc) {
+	let id = _settleId++;
+	send(proc, { jsonrpc: '2.0', id, method: 'workspace/symbol', params: { query: 'zzz' } });
+	if (receiveUntil(proc, id).response === null) die(gone(proc, 'waitForIndex'));
+};
+
 // Start a server on `workspace` (default: the fixture workspace,
 // test/fixtures/workspace).
 export function connect(workspace) {
@@ -189,6 +197,7 @@ export function initialize(proc) {
 	// Server sends client/registerCapability after processing initialized; consume it so
 	// subsequent receive() calls return the expected responses, not this server request.
 	receiveServerRequest(proc);
+	waitForIndex(proc);
 	return resp;
 };
 
