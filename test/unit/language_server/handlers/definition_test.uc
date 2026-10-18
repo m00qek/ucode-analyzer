@@ -142,6 +142,7 @@ describe('definition — named imports (export clause)', () => {
 		assert.match([ {
 			name: 'greet', kind: 'function', doc: null, params: [], valueType: null,
 			position: locate(fixture.read('greet.uc'), 'function greet', 0, length('function ')),
+			local: 'greet',
 		} ], dag.exportsOf(GREET_URI));
 	});
 });

@@ -1,14 +1,16 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, offsetToPosition } from 'ucode_analyzer.code_analysis.positions';
 import { referencesOf } from 'ucode_analyzer.code_analysis.scope_references';
+import { exportAliasAt } from 'ucode_analyzer.code_analysis.cross_file_refs';
 
 export function prepareRename(uri, doc, position) {
 	let offset = positionToOffset(doc.text, doc.lineTable, position);
 	let root   = ts.rootNode(doc.tree);
 	if (offset >= ts.endByte(root)) return null;
 
-	let nodes = referencesOf(root, doc.text, offset);
-	if (!nodes) return null;
+	// The `b` of `export { a as b }` renames the export.
+	let nodes = referencesOf(root, doc.text, offset) ?? [ exportAliasAt(root, offset) ];
+	if (!nodes[0]) return null;
 
 	// Find the specific identifier node the cursor is on.
 	let cursorNode = null;

@@ -111,6 +111,12 @@ References, rename and incoming calls grow with an export's importers. Their
 handlers return a plan, `{ items, work, finish }`, one item per importing file
 (`language_server/background.uc`): up to 16 files it runs in-process, more in
 workers, answering when they finish or when the request is cancelled.
+The files come from `cross_file_refs.crossFileSearch`, which follows
+re-exports, from the DAG's records alone: up to the module that declares the
+export, then down to the importers of every module that re-exports it. A
+rename follows only a re-export of the same binding (`import { t }` then
+`export { t }`); `export const t = m.t` declares a binding of its own, which
+keeps its name.
 
 Worker results travel in pieces of at most PIPE_BUF bytes: uloop drops a
 message larger than the pipe's buffer when its reader catches up with the

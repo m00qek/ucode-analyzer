@@ -2,7 +2,7 @@ import { describe, it, assert, afterEach, mock, any_order } from 'utest';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
-import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.code_analysis.cross_file_refs';
+import { resolveExportIdentity, crossFileRefsOf, crossFileSearch, searchEntry } from 'ucode_analyzer.code_analysis.cross_file_refs';
 import { cursors, locate } from 'cursor';
 import * as fixture from 'fixture';
 
@@ -39,16 +39,23 @@ function index(files) {
 	}
 }
 
-afterEach(() => {
+function cleanup() {
 	for (let uri in indexed) {
 		documents.close(uri);
 		dag.remove(uri);
 	}
 	indexed = [];
-});
+}
+
+afterEach(cleanup);
 
 function identityAt(uri, offset) {
 	return resolveExportIdentity(uri, documents.get(uri), offset);
+}
+
+// An identity a rename follows, as resolveExportIdentity returns it.
+function id(declaringUri, exportName) {
+	return { declaringUri, exportName, rename: true, onAlias: false };
 }
 
 function span(src, a, b) {
@@ -62,7 +69,7 @@ function entry(uri, refRanges, renameRanges) {
 describe('resolveExportIdentity — in an importer', () => {
 	it('resolves a named import binding and its uses to the declaring file', () => {
 		index(ALL);
-		let want = { declaringUri: URI.lib, exportName: 'foo' };
+		let want = id(URI.lib, 'foo');
 		assert.match(want, identityAt(URI.named, NAMED.offset[0]));
 		assert.match(want, identityAt(URI.named, NAMED.offset[3]));
 		assert.match(want, identityAt(URI.named, NAMED.offset[5]));
@@ -70,13 +77,14 @@ describe('resolveExportIdentity — in an importer', () => {
 
 	it('resolves the unaliased name of a mixed import list', () => {
 		index(ALL);
-		assert.match({ declaringUri: URI.lib, exportName: 'other' }, identityAt(URI.aliased, ALIASED.offset[7]));
+		assert.match(id(URI.lib, 'other'), identityAt(URI.aliased, ALIASED.offset[7]));
 	});
 
-	it('keeps an aliased import local: renaming the alias stays in its file', () => {
+	it('resolves an aliased import, which a rename of the alias keeps', () => {
 		index(ALL);
-		assert.match(null, identityAt(URI.aliased, ALIASED.offset[3]));
-		assert.match(null, identityAt(URI.aliased, ALIASED.offset[5]));
+		let want = { declaringUri: URI.lib, exportName: 'foo', rename: false, onAlias: false };
+		assert.match(want, identityAt(URI.aliased, ALIASED.offset[3]));
+		assert.match(want, identityAt(URI.aliased, ALIASED.offset[5]));
 	});
 
 	it('does not resolve a namespace alias or its members', () => {
@@ -85,11 +93,19 @@ describe('resolveExportIdentity — in an importer', () => {
 		assert.match(null, identityAt(URI.ns, NS.offset[1]));
 	});
 
-	it('resolves an import of a name the module lacks: the module is not consulted', () => {
-		let src = cursors("import { $0missing } from 'cfr_lib';\nmissing();\n");
+	it('does not resolve an import of a name the module lacks', () => {
+		// Other files importing it import nothing they share.
+		let src = cursors("import { $0missing } from 'cfr_lib';\n$1missing();\n");
 		index({ 'cfr_lib.uc': LIB, 'cfr_missing.uc': src });
-		assert.match({ declaringUri: URI.lib, exportName: 'missing' },
-			identityAt(fixture.uri('cfr_missing.uc'), src.offset[0]));
+		assert.match(null, identityAt(fixture.uri('cfr_missing.uc'), src.offset[0]));
+		assert.match(null, identityAt(fixture.uri('cfr_missing.uc'), src.offset[1]));
+	});
+
+	it('does not resolve an import of a field only require() reaches', () => {
+		let lib = cursors("return { f: 1 };\n");
+		let src = cursors("import { $0f } from 'cfr_legacy';\nf;\n");
+		index({ 'cfr_legacy.uc': lib, 'cfr_legacy_user.uc': src });
+		assert.match(null, identityAt(fixture.uri('cfr_legacy_user.uc'), src.offset[0]));
 	});
 
 	it('does not resolve a default import, whose remote name differs', () => {
@@ -108,24 +124,30 @@ describe('resolveExportIdentity — in an importer', () => {
 describe('resolveExportIdentity — in the declaring file', () => {
 	it('resolves an exported declaration and its uses', () => {
 		index(ALL);
-		let want = { declaringUri: URI.lib, exportName: 'foo' };
+		let want = id(URI.lib, 'foo');
 		assert.match(want, identityAt(URI.lib, LIB.offset[0]));
 		assert.match(want, identityAt(URI.lib, LIB.offset[3]));
-		assert.match({ declaringUri: URI.lib, exportName: 'other' }, identityAt(URI.lib, LIB.offset[5]));
+		assert.match(id(URI.lib, 'other'), identityAt(URI.lib, LIB.offset[5]));
 	});
 
 	it('resolves a name exported by an export clause', () => {
 		let src = cursors("function $0greet() {}\nexport { greet };\n");
 		index({ 'cfr_clause.uc': src });
-		assert.match({ declaringUri: fixture.uri('cfr_clause.uc'), exportName: 'greet' },
-			identityAt(fixture.uri('cfr_clause.uc'), src.offset[0]));
+		assert.match(id(fixture.uri('cfr_clause.uc'), 'greet'), identityAt(fixture.uri('cfr_clause.uc'), src.offset[0]));
 	});
 
-	it('does not resolve a name exported under an alias', () => {
-		// `let a … export { a as b }`: the export is named b, so a is not matched
-		// and its references stay in this file.
+	it('resolves a name exported under an alias to the alias, which a rename of it keeps', () => {
+		// `let a … export { a as b }`: renaming a leaves the export named b.
 		index(ALL);
-		assert.match(null, identityAt(URI.lib, LIB.offset[7]));
+		assert.match({ declaringUri: URI.lib, exportName: 'b', rename: false, onAlias: false },
+			identityAt(URI.lib, LIB.offset[7]));
+	});
+
+	it('resolves an export alias, which has no references of its own', () => {
+		let src = cursors("let a = 2;\nexport { a as $0b };\n");
+		index({ 'cfr_alias_at.uc': src });
+		assert.match({ declaringUri: fixture.uri('cfr_alias_at.uc'), exportName: 'b', rename: true, onAlias: true },
+			identityAt(fixture.uri('cfr_alias_at.uc'), src.offset[0]));
 	});
 
 	it('returns null for a local, an undeclared name, or no identifier', () => {
@@ -192,20 +214,21 @@ describe('crossFileRefsOf', () => {
 			crossFileRefsOf(URI.lib, 'foo', null));
 	});
 
-	it('finds a namespace member re-exported by another module, but not that module\'s importers', () => {
+	it('finds a namespace member re-exported by another module, and that module\'s importers', () => {
 		let deep = fixture.uri('reexport/deep.uc'), wrapper = fixture.uri('reexport/wrapper.uc');
 		dag.addFromDisk(deep);
 		dag.addFromDisk(wrapper);
 		push(indexed, deep, wrapper);
-		let user = cursors("import { thing } from 'reexport.wrapper';\nthing();\n");
-		dag.add(fixture.uri('cfr_user.uc'), user.text, mode.parse(user.text));
-		push(indexed, fixture.uri('cfr_user.uc'));
+		let user = cursors("import { $1thing$2 } from 'reexport.wrapper';\n$3thing$4();\n");
+		index({ 'cfr_user.uc': user });
 
-		// `export const thing = deep.thing`: its `thing` property. Re-exports
-		// are not followed, so the user of wrapper's thing is not listed.
+		// `export const thing = deep.thing`: its `thing` property.
 		let start = locate(fixture.read('reexport/wrapper.uc'), 'deep.thing', 0, 5);
 		let end = { line: start.line, character: start.character + 5 };
-		assert.match([ entry(wrapper, [ { start, end } ]) ], crossFileRefsOf(deep, 'thing', deep));
+		assert.match([
+			entry(wrapper, [ { start, end } ]),
+			entry(fixture.uri('cfr_user.uc'), [ span(user, 1, 2), span(user, 3, 4) ]),
+		], crossFileRefsOf(deep, 'thing', deep));
 	});
 
 	it('lists each reference once for a file importing the module twice', () => {
@@ -231,5 +254,111 @@ describe('crossFileRefsOf', () => {
 		index({ 'cfr_lib.uc': LIB, 'cfr_shadow.uc': src });
 		assert.match([ entry(fixture.uri('cfr_shadow.uc'), [ span(src, 1, 2) ]) ],
 			crossFileRefsOf(URI.lib, 'foo', URI.lib));
+	});
+});
+
+// A chain cfr_a → cfr_b → cfr_c of modules re-exporting cfr_a's t: the
+// files, the search's entries by file.
+function chain(b) {
+	let files = {
+		'cfr_a.uc': cursors("export function $1t$2() {};\n"),
+		'cfr_b.uc': cursors(b),
+		'cfr_c.uc': cursors("import { $1t$2 } from 'cfr_b';\n$3t$4();\n"),
+	};
+	index(files);
+	return files;
+}
+
+function search(identity, excludeUri, forRename) {
+	let s = crossFileSearch(identity, excludeUri, forRename);
+	let out = {};
+	for (let e in [ s.decl, ...map(s.items, searchEntry) ])
+		if (e) out[replace(e.uri, /^.*\//, '')] = e;
+	return out;
+}
+
+describe('crossFileSearch through re-exports', () => {
+	it('renames through `export { t }` of an import, which is the same binding', () => {
+		let f = chain("import { $1t$2 } from 'cfr_a';\nexport { $3t$4 };\n");
+		let a = f['cfr_a.uc'], b = f['cfr_b.uc'], c = f['cfr_c.uc'];
+		assert.match({
+			'cfr_a.uc': entry(fixture.uri('cfr_a.uc'), [ span(a, 1, 2) ]),
+			'cfr_b.uc': entry(fixture.uri('cfr_b.uc'), [ span(b, 1, 2), span(b, 3, 4) ]),
+			'cfr_c.uc': entry(fixture.uri('cfr_c.uc'), [ span(c, 1, 2), span(c, 3, 4) ]),
+		}, search(id(fixture.uri('cfr_a.uc'), 't'), null, true));
+	});
+
+	it('finds, but does not rename, the importers of a re-export under its own binding', () => {
+		for (let b in [ "import * as m from 'cfr_a';\nexport const t = m.$1t$2;\n",
+		                "import { $1t$2 as u } from 'cfr_a';\nexport { u as t };\n" ]) {
+			let f = chain(b);
+			assert.match([ 'cfr_a.uc', 'cfr_b.uc', 'cfr_c.uc' ],
+				sort(keys(search(id(fixture.uri('cfr_a.uc'), 't'), null, false))), b);
+			assert.match([ 'cfr_a.uc', 'cfr_b.uc' ],
+				sort(keys(search(id(fixture.uri('cfr_a.uc'), 't'), null, true))), b);
+			cleanup();
+		}
+	});
+
+	it('finds, from an importer of the re-export, the module that declares it', () => {
+		for (let b in [ "import * as m from 'cfr_a';\nexport const t = m.$1t$2;\n",
+		                "import { $1t$2 as u } from 'cfr_a';\nexport { u as t };\n" ]) {
+			let a = chain(b)['cfr_a.uc'];
+			let found = search(id(fixture.uri('cfr_b.uc'), 't'), fixture.uri('cfr_c.uc'), false);
+			assert.match([ 'cfr_a.uc', 'cfr_b.uc' ], sort(keys(found)), b);
+			assert.match(entry(fixture.uri('cfr_a.uc'), [ span(a, 1, 2) ]), found['cfr_a.uc'], b);
+			// A rename changes b's own t.
+			assert.match([ 'cfr_b.uc' ], keys(search(id(fixture.uri('cfr_b.uc'), 't'), fixture.uri('cfr_c.uc'), true)), b);
+			cleanup();
+		}
+	});
+
+	it('renames, from an importer of `export { t }`, up to the module that declares it', () => {
+		let f = chain("import { $1t$2 } from 'cfr_a';\nexport { $3t$4 };\n");
+		let a = f['cfr_a.uc'], b = f['cfr_b.uc'];
+		assert.match({
+			'cfr_a.uc': entry(fixture.uri('cfr_a.uc'), [ span(a, 1, 2) ]),
+			'cfr_b.uc': entry(fixture.uri('cfr_b.uc'), [ span(b, 1, 2), span(b, 3, 4) ]),
+		}, search(id(fixture.uri('cfr_b.uc'), 't'), fixture.uri('cfr_c.uc'), true));
+	});
+
+	it('stops at a cycle of re-exports, having searched each module once', () => {
+		let a = cursors("import { $1t$2 } from 'cfr_cy_b';\nexport { $3t$4 };\n");
+		let b = cursors("import { $1t$2 } from 'cfr_cy_a';\nexport { $3t$4 };\n");
+		index({ 'cfr_cy_a.uc': a, 'cfr_cy_b.uc': b });
+		let s = crossFileSearch(id(fixture.uri('cfr_cy_a.uc'), 't'), null, false);
+		assert.match(any_order([ [ fixture.uri('cfr_cy_a.uc'), fixture.uri('cfr_cy_b.uc'), 't' ],
+		                         [ fixture.uri('cfr_cy_b.uc'), fixture.uri('cfr_cy_a.uc'), 't' ] ]), s.items);
+	});
+});
+
+describe('crossFileSearch of an aliased export', () => {
+	let LIB2 = "let $1a$2 = 2;\nexport { $3a$4 as $5b$6 };\nexport { $7a$8 };\n";
+
+	it('finds the importers of every name it is exported under', () => {
+		let lib = cursors(LIB2);
+		let ub = cursors("import { $1b$2 } from 'cfr_al';\n$3b$4;\n");
+		let ua = cursors("import { $1a$2 } from 'cfr_al';\n$3a$4;\n");
+		index({ 'cfr_al.uc': lib, 'cfr_al_b.uc': ub, 'cfr_al_a.uc': ua });
+		let ident = resolveExportIdentity(fixture.uri('cfr_al.uc'), documents.get(fixture.uri('cfr_al.uc')), lib.offset[1]);
+		assert.match(id(fixture.uri('cfr_al.uc'), 'a'), ident);
+		assert.match({
+			'cfr_al_a.uc': entry(fixture.uri('cfr_al_a.uc'), [ span(ua, 1, 2), span(ua, 3, 4) ]),
+			'cfr_al_b.uc': entry(fixture.uri('cfr_al_b.uc'), [ span(ub, 1, 2), span(ub, 3, 4) ]),
+		}, search(ident, fixture.uri('cfr_al.uc'), false));
+		// A rename of a keeps b.
+		assert.match([ 'cfr_al_a.uc' ], keys(search(ident, fixture.uri('cfr_al.uc'), true)));
+	});
+
+	it('renames, from the alias, the alias and its importers only', () => {
+		let lib = cursors(LIB2);
+		let ub = cursors("import { $1b$2 } from 'cfr_al';\n$3b$4;\n");
+		let ua = cursors("import { a } from 'cfr_al';\na;\n");
+		index({ 'cfr_al.uc': lib, 'cfr_al_b.uc': ub, 'cfr_al_a.uc': ua });
+		let ident = resolveExportIdentity(fixture.uri('cfr_al.uc'), documents.get(fixture.uri('cfr_al.uc')), lib.offset[5]);
+		assert.match({
+			'cfr_al.uc': entry(fixture.uri('cfr_al.uc'), [ span(lib, 1, 2), span(lib, 3, 4), span(lib, 7, 8) ], [ span(lib, 5, 6) ]),
+			'cfr_al_b.uc': entry(fixture.uri('cfr_al_b.uc'), [ span(ub, 1, 2), span(ub, 3, 4) ]),
+		}, search(ident, fixture.uri('cfr_al.uc'), true));
 	});
 });

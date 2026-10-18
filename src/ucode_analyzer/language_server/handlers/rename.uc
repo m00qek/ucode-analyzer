@@ -1,7 +1,7 @@
 import * as ts from 'tree_sitter';
 import { positionToOffset, rangeOf } from 'ucode_analyzer.code_analysis.positions';
 import { referencesOf } from 'ucode_analyzer.code_analysis.scope_references';
-import { resolveExportIdentity, declaringEntry, importersOf, importerEntry } from 'ucode_analyzer.code_analysis.cross_file_refs';
+import { resolveExportIdentity, crossFileSearch, searchEntry } from 'ucode_analyzer.code_analysis.cross_file_refs';
 
 // The rename as a plan (see background.uc), one item per importing file.
 export function renamePlan(uri, doc, position, newName) {
@@ -9,25 +9,33 @@ export function renamePlan(uri, doc, position, newName) {
 	let root   = ts.rootNode(doc.tree);
 	if (offset >= ts.endByte(root)) return null;
 
+	// An export alias has no references here; its file's entry has them.
 	let nodes = referencesOf(root, doc.text, offset);
-	if (!nodes) return null;
-
-	let edits = map(nodes, (n) => ({ range: rangeOf(doc.text, doc.lineTable, n), newText: newName }));
-
-	let changes = { [uri]: edits };
-
 	let identity = resolveExportIdentity(uri, doc, offset);
+	if (!nodes && !identity?.onAlias) return null;
+
+	let edits = map(nodes ?? [], (n) => ({ range: rangeOf(doc.text, doc.lineTable, n), newText: newName }));
+	let changes = length(edits) ? { [uri]: edits } : {};
 	if (!identity)
 		return { items: [], work: null, finish: () => ({ changes }) };
 
-	let decl = declaringEntry(identity.declaringUri, identity.exportName, uri);
+	let search = crossFileSearch(identity, uri, true);
 	return {
-		items:  importersOf(identity.declaringUri, uri),
-		work:   (u) => importerEntry(u, identity.declaringUri, identity.exportName),
+		items:  search.items,
+		work:   searchEntry,
 		finish: (entries) => {
-			for (let cr in [decl, ...entries])
-				if (cr && length(cr.renameRanges) > 0)
-					changes[cr.uri] = map(cr.renameRanges, (r) => ({ range: r, newText: newName }));
+			// A file reached through two modules gets each edit once.
+			let seen = {};
+			for (let e in edits) seen[sprintf('%s %J', uri, e.range)] = true;
+			for (let cr in [search.decl, ...entries]) {
+				if (!cr) continue;
+				for (let r in cr.renameRanges) {
+					let k = sprintf('%s %J', cr.uri, r);
+					if (seen[k]) continue;
+					seen[k] = true;
+					push(changes[cr.uri] ??= [], { range: r, newText: newName });
+				}
+			}
 			return { changes };
 		},
 	};

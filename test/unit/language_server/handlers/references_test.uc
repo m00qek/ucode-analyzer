@@ -246,13 +246,37 @@ describe('cross-file references', () => {
 		]), locs);
 	});
 
-	it('aliased import: cursor on local alias returns only within-file locations', () => {
+	it('aliased import: cursor on local alias returns its locations and the export\'s', () => {
 		setupFiles(TEXT_A.text, TEXT_B_ALIASED.text);
 
-		// on the call 'bar();' — a local alias, no cross-file
+		// on the call 'bar();'
 		let locs = references(URI_B, documents.get(URI_B), TEXT_B_ALIASED.at[0]);
 
-		assert.match(any_order([ loc(URI_B, TEXT_B_ALIASED, 1, 2), loc(URI_B, TEXT_B_ALIASED, 3, 4) ]), locs);
+		assert.match(any_order([
+			loc(URI_A, TEXT_A, 1, 2), loc(URI_A, TEXT_A, 3, 4),
+			loc(URI_B, TEXT_B_ALIASED, 1, 2), loc(URI_B, TEXT_B_ALIASED, 3, 4),
+		]), locs);
+	});
+
+	it('export alias: cursor on it returns the local\'s locations and the importer\'s', () => {
+		let srcA = cursors("let $1x$2 = 1;\nexport { $3x$4 as $0foo };\n");
+		setupFiles(srcA.text, TEXT_B_NAMED.text);
+
+		let locs = references(URI_A, documents.get(URI_A), srcA.at[0]);
+
+		assert.match(any_order([
+			loc(URI_A, srcA, 1, 2), loc(URI_A, srcA, 3, 4),
+			loc(URI_B, TEXT_B_NAMED, 1, 2), loc(URI_B, TEXT_B_NAMED, 3, 4),
+		]), locs);
+	});
+
+	it('import of a name the module lacks: only within-file locations', () => {
+		let srcB = cursors("import { $1nope$2 } from 'a';\n$0$3nope$4();\n");
+		setupFiles(TEXT_A.text, srcB.text);
+
+		let locs = references(URI_B, documents.get(URI_B), srcB.at[0]);
+
+		assert.match(any_order([ loc(URI_B, srcB, 1, 2), loc(URI_B, srcB, 3, 4) ]), locs);
 	});
 
 	it('namespace import: cursor in declaring file returns property accesses in importer', () => {
@@ -265,5 +289,43 @@ describe('cross-file references', () => {
 		assert.match(any_order([
 			loc(URI_A, TEXT_A, 1, 2), loc(URI_A, TEXT_A, 3, 4), loc(URI_B, TEXT_B_NS, 1, 2),
 		]), locs);
+	});
+});
+
+describe('references — through a re-export', () => {
+	let URI_C = fixture.uri('c.uc');
+	let A = cursors("export function $1foo$2() {};\n");
+	let B = cursors("import { $1foo$2 } from 'a';\nexport { $3foo$4 };\n");
+	let C = cursors("import { $1foo$2 } from 'b';\n$0$3foo$4();\n");
+
+	beforeEach(() => {
+		dag.init(fixture.config());
+		let files = { [URI_A]: A, [URI_B]: B, [URI_C]: C };
+		let data = {};
+		for (let uri, src in files) data[fixture.WORKSPACE + '/' + replace(uri, /^.*\//, '')] = src.text;
+		mock.global.patch('fs', { data });
+		for (let uri, src in files) dag.add(uri, src.text, parse(src.text));
+		mock.global.unpatch('fs');
+		for (let uri, src in files) documents.open(uri, src.text, 1);
+	});
+
+	afterEach(() => {
+		for (let uri in [ URI_A, URI_B, URI_C ]) {
+			documents.close(uri);
+			dag.remove(uri);
+		}
+	});
+
+	it('finds, from an importer of the re-export, the declaring module and the re-exporting one', () => {
+		assert.match(any_order([
+			{ uri: URI_A, range: span(A, 1, 2) },
+			{ uri: URI_B, range: span(B, 1, 2) }, { uri: URI_B, range: span(B, 3, 4) },
+			{ uri: URI_C, range: span(C, 1, 2) }, { uri: URI_C, range: span(C, 3, 4) },
+		]), references(URI_C, documents.get(URI_C), C.at[0]));
+	});
+
+	it('drops the declaration in the declaring module without includeDeclaration', () => {
+		let locs = references(URI_C, documents.get(URI_C), C.at[0], false);
+		assert.match([], filter(locs, (l) => l.uri === URI_A));
 	});
 });

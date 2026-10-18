@@ -191,6 +191,13 @@ describe('indexer.extractExports', () => {
 		assert.match(src.at[0], exps[0].position);
 	});
 
+	it('records the local name of an export-clause export, declared here or imported', () => {
+		let text = "import { t } from 'x';\nlet a = 1;\nexport { a as b, t };\n";
+		let exps = extractExports(text, parse(text));
+		assert.match([ [ 'b', 'a', true ], [ 't', 't', false ] ],
+			map(exps, (e) => [ e.name, e.local, e.position !== null ]));
+	});
+
 	it('names an export-clause default export `default`', () => {
 		let text = 'function greet() {}\nexport { greet as default };';
 		let exps = extractExports(text, parse(text));

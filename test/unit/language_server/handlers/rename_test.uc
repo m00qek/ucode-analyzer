@@ -201,3 +201,64 @@ describe('cross-file rename', () => {
 		} }, edit);
 	});
 });
+
+describe('rename — export aliases and re-exports', () => {
+	let URI_C = fixture.uri('c.uc');
+
+	// Index and open files ({ uri: cursors() result }), their imports
+	// resolving to each other.
+	function setup(files) {
+		let data = {};
+		for (let uri, src in files) data[fixture.WORKSPACE + '/' + replace(uri, /^.*\//, '')] = src.text;
+		mock.global.patch('fs', { data });
+		for (let uri, src in files) dag.add(uri, src.text, parse(src.text));
+		mock.global.unpatch('fs');
+		for (let uri, src in files) documents.open(uri, src.text, 1);
+	}
+
+	function edits(src, pairs, newText) {
+		return any_order(map(pairs, (p) => ({ range: span(src, p[0], p[1]), newText })));
+	}
+
+	beforeEach(() => dag.init(fixture.config()));
+
+	afterEach(() => {
+		for (let uri in [ URI_A, URI_B, URI_C ]) {
+			documents.close(uri);
+			dag.remove(uri);
+		}
+	});
+
+	it('renames through `export { foo }` of an import to that module\'s importers', () => {
+		let a = cursors("export function $0$1foo$2() {};\n");
+		let b = cursors("import { $1foo$2 } from 'a';\nexport { $3foo$4 };\n");
+		let c = cursors("import { $1foo$2 } from 'b';\n$3foo$4();\n");
+		setup({ [URI_A]: a, [URI_B]: b, [URI_C]: c });
+
+		assert.match({ changes: {
+			[URI_A]: edits(a, [ [ 1, 2 ] ], 'bar'),
+			[URI_B]: edits(b, [ [ 1, 2 ], [ 3, 4 ] ], 'bar'),
+			[URI_C]: edits(c, [ [ 1, 2 ], [ 3, 4 ] ], 'bar'),
+		} }, rename(URI_A, documents.get(URI_A), a.at[0], 'bar'));
+	});
+
+	it('renames, from an export alias, the alias and its importers', () => {
+		let a = cursors("let x = 1;\nexport { x as $0$1foo$2 };\n");
+		let b = cursors("import { $1foo$2 } from 'a';\n$3foo$4;\n");
+		setup({ [URI_A]: a, [URI_B]: b });
+
+		assert.match({ changes: {
+			[URI_A]: edits(a, [ [ 1, 2 ] ], 'bar'),
+			[URI_B]: edits(b, [ [ 1, 2 ], [ 3, 4 ] ], 'bar'),
+		} }, rename(URI_A, documents.get(URI_A), a.at[0], 'bar'));
+	});
+
+	it('renames the local of an export alias in its file only', () => {
+		let a = cursors("let $0$1x$2 = 1;\nexport { $3x$4 as foo };\n");
+		let b = cursors("import { foo } from 'a';\nfoo;\n");
+		setup({ [URI_A]: a, [URI_B]: b });
+
+		assert.match({ changes: { [URI_A]: edits(a, [ [ 1, 2 ], [ 3, 4 ] ], 'y') } },
+			rename(URI_A, documents.get(URI_A), a.at[0], 'y'));
+	});
+});

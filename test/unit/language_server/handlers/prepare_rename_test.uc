@@ -47,6 +47,11 @@ describe('prepareRename', () => {
 		assert.match({ start: src.at[1], end: src.at[2] }, result.range);
 	});
 
+	it('accepts an export alias, which renames the export', () => {
+		let src = cursors("let x = 1;\nexport { x as $1f$0oo$2 };\n");
+		assert.match({ range: { start: src.at[1], end: src.at[2] }, placeholder: 'foo' }, prepareAt(src));
+	});
+
 	it('anchors on an identifier that appears only once', () => {
 		let src = cursors("let $0$1unique$2 = 1;\n");
 		assert.match({ range: { start: src.at[1], end: src.at[2] }, placeholder: 'unique' }, prepareAt(src));

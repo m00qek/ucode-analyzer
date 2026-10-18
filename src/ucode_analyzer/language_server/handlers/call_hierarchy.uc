@@ -4,7 +4,7 @@ import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { positionToOffset, rangeOf, nodeAtOffset, findAncestor } from 'ucode_analyzer.code_analysis.positions';
 import { referencesOf, anchorOf } from 'ucode_analyzer.code_analysis.scope_references';
-import { resolveExportIdentity, declaringEntry, importersOf, importerEntry } from 'ucode_analyzer.code_analysis.cross_file_refs';
+import { resolveExportIdentity, crossFileSearch, searchEntry } from 'ucode_analyzer.code_analysis.cross_file_refs';
 import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
 import { declarators } from 'ucode_analyzer.code_analysis.ast_text';
 
@@ -280,13 +280,6 @@ export function prepareCallHierarchy(uri, doc, position) {
 			}
 		}
 	}
-
-	// An aliased import (`import { greet as hi }`) has no export identity, which
-	// keeps rename local; it still calls the function it imports.
-	let callee = resolveCalleeIdent(node, uri, doc);
-	if (callee && callee.uri !== uri)
-		return [makeItem(ts.text(callee.nameNode, callee.doc.text), callee.fnNode, callee.nameNode,
-		                 callee.uri, callee.doc.text, callee.doc.lineTable)];
 	return null;
 };
 
@@ -347,10 +340,11 @@ export function incomingCallsPlan(item) {
 	if (!identity)
 		return { items: [], work: null, finish: () => mergeCallers([local]) };
 
-	let decl = entryCallers(declaringEntry(identity.declaringUri, identity.exportName, uri));
+	let search = crossFileSearch(identity, uri, false);
+	let decl = entryCallers(search.decl);
 	return {
-		items:  importersOf(identity.declaringUri, uri),
-		work:   (u) => entryCallers(importerEntry(u, identity.declaringUri, identity.exportName)),
+		items:  search.items,
+		work:   (it) => entryCallers(searchEntry(it)),
 		finish: (lists) => mergeCallers([local, decl, ...lists]),
 	};
 };

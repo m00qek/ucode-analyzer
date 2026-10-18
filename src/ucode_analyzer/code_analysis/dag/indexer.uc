@@ -265,7 +265,7 @@ export function extractExports(text, tree) {
 				let info = localDeclInfo(declIndex(), localName);
 				let position = (info.startByte !== null) ? pos(info.startByte) : null;
 				push(result, { name, kind: info.kind, doc: info.doc, params: info.params,
-				               valueType: info.valueType, position });
+				               valueType: info.valueType, position, local: localName });
 			}
 		}
 	}
