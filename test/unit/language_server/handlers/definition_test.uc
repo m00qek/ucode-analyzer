@@ -424,6 +424,11 @@ describe('definition — chained member expression', () => {
 		assert.match(point(URI, src.at[1]), result);
 	});
 
+	it('jumps to a field of the record a function returns', () => {
+		let src = cursors("function make() {\n\treturn { $1port: 1 };\n}\nlet p = make();\np.$0port;\n");
+		assert.match(point(URI, src.at[1]), definitionImporting(src));
+	});
+
 	it('returns null when intermediate member does not exist', () => {
 		let result = definitionImporting(cursors("let api = { sub: { go: function() {} } };\napi.missing.$0go;"));
 

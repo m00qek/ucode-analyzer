@@ -92,10 +92,8 @@ export function substitute(type, bindings) {
 	}
 
 	if (k === 'record') {
-		let fields = map(type.fields, (f) => ({ name: f.name, type: substitute(f.type, bindings) }));
-		let r = { kind: 'record', fields };
-		if (type.open) r.open = true;
-		return r;
+		// The rest, such as where each field is, stays: go-to-definition reads it.
+		return { ...type, fields: map(type.fields, (f) => ({ ...f, type: substitute(f.type, bindings) })) };
 	}
 
 	if (k === 'function') {
