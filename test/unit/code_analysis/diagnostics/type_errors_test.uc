@@ -328,6 +328,29 @@ describe('diagnostics — type errors: tiered null-safety', () => {
 		assert.match(0, length(nullDiags("/** @param {?array} a */\nfunction f(a) { return a && a[0]; }\n")));
 	});
 
+	it('does not flag an access in a loop body its condition guards', () => {
+		let head = "/** @returns {?object} */\nfunction next() { return null; }\n";
+		for (let text in [
+			head + "let x = next();\nwhile (x) { x.a; x = next(); }\n",
+			head + "let x = next();\nwhile (x != null && x.a) { x.b; x = next(); }\n",
+			head + "for (let x = next(); x; x = next()) x.a;\n",
+			head + "for (let x = next(); x && x.a; x = next()) { x.b; }\n",
+			"{% " + head + "let x = next(); while (x): %}{{ x.a }}{% x = next(); endwhile %}\n",
+			"{% " + head + "for (let x = next(); x; x = next()): %}{{ x.a }}{% endfor %}\n",
+		])
+			assert.match([], nullDiags(text), text);
+	});
+
+	it('flags an access the loop condition does not guard', () => {
+		let head = "/** @returns {?object} */\nfunction next() { return null; }\n";
+		// After a reassignment in the body, and after the loop, which a
+		// break leaves with the condition true.
+		let src = cursors(head + "let x = next();\nwhile (x) { x = next(); $0x$1.a; }\n");
+		assert.match([diag(src, 2, 'may-be-null', "'x' may be null")], nullDiags(src.text));
+		src = cursors(head + "let x = next();\nwhile (!x) x = next();\n$0x$1.a;\n");
+		assert.match([diag(src, 2, 'may-be-null', "'x' may be null")], nullDiags(src.text));
+	});
+
 	it("escalates a possibly-null access to an error under 'use strict'", () => {
 		let src = cursors("'use strict';\n/** @param {?string} s */\nfunction f(s) { return $0s$1.foo; }\n");
 		assert.match([diag(src, 1, 'may-be-null', "'s' may be null")], nullDiags(src.text));   // ERROR under strict

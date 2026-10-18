@@ -508,6 +508,16 @@ function walkForIn(node, source, uri, scope, map) {
     }
 }
 
+// The scope of a loop body: the condition, checked before every iteration,
+// holds there. Not after the loop, which a break can leave.
+function loopBodyScope(cond, source, scope) {
+    let guard = cond ? parseGuard(cond, source) : null;
+    if (!guard) return scope;
+    let s = makeScope(scope);
+    applyGuard(s, guard, true);
+    return s;
+}
+
 function walkForStmt(node, source, uri, scope, map) {
     let init = ts.childByField(node, 'initializer');
     let cond = ts.childByField(node, 'condition');
@@ -530,7 +540,8 @@ function walkForStmt(node, source, uri, scope, map) {
     // keep the scope before the loop, as they always did.
     if (cond) { emit(map, ts.startByte(cond), forScope); walkNode(cond, source, uri, forScope, map); }
     if (incr) { emit(map, ts.startByte(incr), scope); walkNode(incr, source, uri, forScope, map); }
-    if (body) { emit(map, ts.startByte(body), forScope); walkNode(body, source, uri, forScope, map); }
+    let bodyScope = loopBodyScope(cond, source, forScope);
+    if (body) { emit(map, ts.startByte(body), bodyScope); walkNode(body, source, uri, bodyScope, map); }
 }
 
 // ── colon / end… (alt-syntax) forms: `for (…): … endfor` and friends ────────────
@@ -576,16 +587,16 @@ function walkForAlt(node, source, uri, scope, map) {
     }
     if (cond) walkNode(cond, source, uri, forScope, map);
     if (incr) walkNode(incr, source, uri, forScope, map);
-    walkStatementList(ts.childByField(node, 'body'), source, uri, forScope, map);
+    walkStatementList(ts.childByField(node, 'body'), source, uri, loopBodyScope(cond, source, forScope), map);
 }
 
 // {% while (cond): %} … {% endwhile %}. Walk the condition, then thread the body
-// under the current scope (a loop condition implies no lasting narrowing).
+// under it (a loop condition implies no lasting narrowing).
 function walkWhileAlt(node, source, uri, scope, map) {
     let condWrapper = ts.childByField(node, 'condition');
-    if (condWrapper)
-        walkNode(firstNamed(condWrapper) ?? condWrapper, source, uri, scope, map);
-    walkStatementList(ts.childByField(node, 'body'), source, uri, scope, map);
+    let cond = condWrapper ? (firstNamed(condWrapper) ?? condWrapper) : null;
+    if (cond) walkNode(cond, source, uri, scope, map);
+    walkStatementList(ts.childByField(node, 'body'), source, uri, loopBodyScope(cond, source, scope), map);
 }
 
 // `if (cond): … elif (c2): … else: … endif` — in a template, {% if (cond): %} …
@@ -821,10 +832,15 @@ function holdsMark(start, end) {
 }
 
 function walkWhile(node, source, uri, scope, map) {
-    let cond = ts.childByField(node, 'condition');
+    let wrapper = ts.childByField(node, 'condition');
+    let cond = wrapper ? (firstNamed(wrapper) ?? wrapper) : null;
     let body = ts.childByField(node, 'body');
-    if (cond) walkNode(firstNamed(cond) ?? cond, source, uri, scope, map);
-    if (body) walkNode(body, source, uri, scope, map);
+    if (cond) walkNode(cond, source, uri, scope, map);
+    if (body) {
+        let bodyScope = loopBodyScope(cond, source, scope);
+        emit(map, ts.startByte(body), bodyScope);
+        walkNode(body, source, uri, bodyScope, map);
+    }
 }
 
 // The node types walked other than by their children, by type: a table, as
