@@ -9,20 +9,21 @@ import * as workspace from 'ucode_analyzer.code_analysis.workspace';
 import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
 import { documentDiagnostics, workspaceDiagnostics, invalidate as invalidateDiagnostics, cancel as cancelWorkspaceDiagnostics, cancelRequest as cancelWorkspaceRequest } from 'ucode_analyzer.language_server.handlers.diagnostic_reports';
 import { signatureHelp as signatureHelpDoc } from 'ucode_analyzer.language_server.handlers.signature_help';
-import { references as referencesDoc } from 'ucode_analyzer.language_server.handlers.references';
+import { referencesPlan } from 'ucode_analyzer.language_server.handlers.references';
 import { documentSymbols as documentSymbolsDoc } from 'ucode_analyzer.language_server.handlers.document_symbols';
 import { workspaceSymbol as workspaceSymbolDoc } from 'ucode_analyzer.language_server.handlers.workspace_symbol';
 import { inlayHints as inlayHintsDoc } from 'ucode_analyzer.language_server.handlers.inlay_hints';
 import { foldingRanges as foldingRangesDoc } from 'ucode_analyzer.language_server.handlers.folding_range';
-import { rename as renameDoc } from 'ucode_analyzer.language_server.handlers.rename';
+import { renamePlan } from 'ucode_analyzer.language_server.handlers.rename';
 import { documentHighlight as documentHighlightDoc } from 'ucode_analyzer.language_server.handlers.document_highlight';
 import { prepareRename as prepareRenameDoc } from 'ucode_analyzer.language_server.handlers.prepare_rename';
 import { codeAction as codeActionDoc } from 'ucode_analyzer.language_server.handlers.code_actions';
 import { selectionRanges as selectionRangesDoc } from 'ucode_analyzer.language_server.handlers.selection_range';
 import { linkedEditingRanges } from 'ucode_analyzer.language_server.handlers.linked_editing';
 import { documentLinks } from 'ucode_analyzer.language_server.handlers.document_link';
-import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCalls as incomingCallsDoc, outgoingCalls as outgoingCallsDoc } from 'ucode_analyzer.language_server.handlers.call_hierarchy';
+import { prepareCallHierarchy as prepareCallHierarchyDoc, incomingCallsPlan, outgoingCalls as outgoingCallsDoc } from 'ucode_analyzer.language_server.handlers.call_hierarchy';
 import * as platform from 'ucode_analyzer.language_server.platform';
+import * as background from 'ucode_analyzer.language_server.background';
 import { FileChangeType } from 'ucode_analyzer.code_analysis.lsp_types';
 import { detectJobs } from 'ucode_analyzer.code_analysis.parallel';
 
@@ -79,6 +80,7 @@ export function run(config) {
 	// children are not orphaned (reparented to init) and left burning CPU/memory.
 	function teardown() {
 		stopLoading();
+		background.cancelAll();
 		platform.cancel();
 		cancelWorkspaceDiagnostics();
 	}
@@ -186,9 +188,9 @@ export function run(config) {
 			uloop.end();
 		},
 
-		// Only held requests and the workspace scan wait; a queued request is
-		// cancelled when its batch is read (see the dispatch below), and others
-		// have already been answered.
+		// Only held requests, plans in workers and the workspace scan wait; a
+		// queued request is cancelled when its batch is read (see the dispatch
+		// below), and others have already been answered.
 		'$/cancelRequest': function(msg) {
 			let id = msg.params?.id ?? null;
 			let rest = filter(held, (m) => m.id !== id);
@@ -197,7 +199,8 @@ export function run(config) {
 				protocol.error(id, protocol.ErrorCode.REQUEST_CANCELLED, 'request cancelled');
 				return;
 			}
-			cancelWorkspaceRequest(id);
+			if (!background.cancel(id))
+				cancelWorkspaceRequest(id);
 		},
 
 		'textDocument/didOpen': function(msg) {
@@ -268,7 +271,7 @@ export function run(config) {
 			let doc = documents.get(uri);
 			let ctx = msg.params.context;
 			let includeDecl = (ctx && ctx.includeDeclaration === false) ? false : true;
-			protocol.respond(msg.id, doc ? referencesDoc(uri, doc, msg.params.position, includeDecl) : null);
+			background.respond(msg.id, doc ? referencesPlan(uri, doc, msg.params.position, includeDecl) : null);
 		},
 
 		'textDocument/documentSymbol': function(msg) {
@@ -336,8 +339,8 @@ export function run(config) {
 		'textDocument/rename': function(msg) {
 			let uri = msg.params.textDocument.uri;
 			let doc = documents.get(uri);
-			protocol.respond(msg.id, doc
-				? renameDoc(uri, doc, msg.params.position, msg.params.newName)
+			background.respond(msg.id, doc
+				? renamePlan(uri, doc, msg.params.position, msg.params.newName)
 				: null);
 		},
 
@@ -366,7 +369,7 @@ export function run(config) {
 		},
 
 		'callHierarchy/incomingCalls': function(msg) {
-			protocol.respond(msg.id, incomingCallsDoc(msg.params.item));
+			background.respond(msg.id, incomingCallsPlan(msg.params.item));
 		},
 
 		'callHierarchy/outgoingCalls': function(msg) {

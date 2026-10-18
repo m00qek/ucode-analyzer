@@ -107,96 +107,103 @@ export function resolveExportIdentity(uri, doc, cursorOffset) {
 	return null;
 };
 
-// Find all cross-file reference ranges for (declaringUri, exportName).
-// excludeUri is the caller's file (its within-file refs are already handled).
-// Returns [{ uri, refRanges, renameRanges }].
+// Cross-file references come as one entry per file, { uri, refRanges,
+// renameRanges }:
 //   refRanges    — ranges to include in textDocument/references results
 //   renameRanges — ranges to produce rename edits for in textDocument/rename
-export function crossFileRefsOf(declaringUri, exportName, excludeUri) {
-	let entries = {};
 
-	function getEntry(uri) {
-		if (!entries[uri]) entries[uri] = { uri, refRanges: [], renameRanges: [] };
-		return entries[uri];
+function entryOf(uri, refRanges, renameRanges) {
+	return { uri, refRanges, renameRanges };
+}
+
+// The declaring file's entry for the export, or null when it has no
+// references or is excludeUri (the caller's file, whose within-file refs are
+// already handled).
+export function declaringEntry(declaringUri, exportName, excludeUri) {
+	if (declaringUri === excludeUri) return null;
+	let doc = documents.getOrRead(declaringUri);
+	if (!doc) return null;
+	let root = ts.rootNode(doc.tree);
+	let lt = doc.lineTable;
+	for (let exp in (dag.exportsOf(declaringUri) ?? [])) {
+		if (exp.name !== exportName || !exp.position) continue;
+		let byteOff = positionToOffset(doc.text, lt, exp.position);
+		let nodes = referencesOf(root, doc.text, byteOff);
+		if (!nodes || length(nodes) === 0) return null;
+		let ranges = nodeRanges(nodes, doc.text, lt);
+		// `export { a as b }`: renaming b renames the alias, not the local a.
+		let aliases = exportAliasNodes(root, doc.text, exportName);
+		return entryOf(declaringUri, ranges, length(aliases) ? nodeRanges(aliases, doc.text, lt) : ranges);
 	}
+	return null;
+};
 
-	// Include the declaring file when the cursor is in an importing file.
-	if (declaringUri !== excludeUri) {
-		let doc = documents.getOrRead(declaringUri);
-		if (doc) {
-			let root = ts.rootNode(doc.tree);
-			let lt = doc.lineTable;
-			for (let exp in (dag.exportsOf(declaringUri) ?? [])) {
-				if (exp.name !== exportName || !exp.position) continue;
-				let byteOff = positionToOffset(doc.text, lt, exp.position);
-				let nodes = referencesOf(root, doc.text, byteOff);
-				if (nodes && length(nodes) > 0) {
-					let ranges = nodeRanges(nodes, doc.text, lt);
-					// `export { a as b }`: renaming b renames the alias, not the local a.
-					let aliases = exportAliasNodes(root, doc.text, exportName);
-					let renames = length(aliases) ? nodeRanges(aliases, doc.text, lt) : ranges;
-					let e = getEntry(declaringUri);
-					for (let r in ranges)  push(e.refRanges, r);
-					for (let r in renames) push(e.renameRanges, r);
-				}
-				break;
+// The files importing the declaring file, other than excludeUri.
+export function importersOf(declaringUri, excludeUri) {
+	return filter(dag.reverseDeps(declaringUri), (u) => u !== excludeUri && u !== declaringUri);
+};
+
+// An importing file's entry for the export, or null when it cannot be read
+// or imports no binding of it. Plain data, so a worker can compute it.
+export function importerEntry(revUri, declaringUri, exportName) {
+	let doc = documents.getOrRead(revUri);
+	if (!doc) return null;
+	let root = ts.rootNode(doc.tree);
+	let lt = doc.lineTable;
+	let e = entryOf(revUri, [], []);
+	let matched = false;
+
+	for (let imp in (dag.importsOf(revUri) ?? [])) {
+		if (imp.resolvedUri !== declaringUri) continue;
+
+		let refRanges = [];
+		let renameRanges = [];
+
+		if (imp.alias !== null) {
+			// Namespace import: find `imp.alias.exportName` property accesses.
+			let propNodes = memberPropertyNodesOf(root, doc.text, imp.specifier, exportName);
+			let ranges = nodeRanges(propNodes, doc.text, lt);
+			refRanges = ranges;
+			renameRanges = ranges;
+		} else {
+			// Named import: resolve the local alias for exportName.
+			let localName = exportName;
+			for (let local, remote in (imp.renames ?? {})) {
+				if (remote === exportName) { localName = local; break; }
 			}
-		}
-	}
+			if (index(imp.symbols, localName) < 0) continue;
 
-	// Importing files.
-	for (let revUri in dag.reverseDeps(declaringUri)) {
-		if (revUri === excludeUri || revUri === declaringUri) continue;
+			let sn = importSpecNodes(root, doc.text, imp.specifier, exportName);
+			if (!sn.localNode) continue;
 
-		let doc = documents.getOrRead(revUri);
-		if (!doc) continue;
-		let root = ts.rootNode(doc.tree);
-		let lt = doc.lineTable;
+			let allNodes = referencesOf(root, doc.text, ts.startByte(sn.localNode));
+			if (!allNodes) continue;
 
-		for (let imp in (dag.importsOf(revUri) ?? [])) {
-			if (imp.resolvedUri !== declaringUri) continue;
+			refRanges = nodeRanges(allNodes, doc.text, lt);
 
-			let refRanges = [];
-			let renameRanges = [];
-
-			if (imp.alias !== null) {
-				// Namespace import: find `imp.alias.exportName` property accesses.
-				let propNodes = memberPropertyNodesOf(root, doc.text, imp.specifier, exportName);
-				let ranges = nodeRanges(propNodes, doc.text, lt);
-				refRanges = ranges;
-				renameRanges = ranges;
+			if (localName !== exportName) {
+				// Aliased (`{ foo as bar }`): only the remote name in the import
+				// specifier changes on rename; local uses of `bar` are unaffected.
+				renameRanges = sn.remoteNode ? nodeRanges([sn.remoteNode], doc.text, lt) : [];
 			} else {
-				// Named import: resolve the local alias for exportName.
-				let localName = exportName;
-				for (let local, remote in (imp.renames ?? {})) {
-					if (remote === exportName) { localName = local; break; }
-				}
-				if (index(imp.symbols, localName) < 0) continue;
-
-				let sn = importSpecNodes(root, doc.text, imp.specifier, exportName);
-				if (!sn.localNode) continue;
-
-				let allNodes = referencesOf(root, doc.text, ts.startByte(sn.localNode));
-				if (!allNodes) continue;
-
-				refRanges = nodeRanges(allNodes, doc.text, lt);
-
-				if (localName !== exportName) {
-					// Aliased (`{ foo as bar }`): only the remote name in the import
-					// specifier changes on rename; local uses of `bar` are unaffected.
-					renameRanges = sn.remoteNode ? nodeRanges([sn.remoteNode], doc.text, lt) : [];
-				} else {
-					renameRanges = refRanges;
-				}
+				renameRanges = refRanges;
 			}
-
-			let e = getEntry(revUri);
-			for (let r in refRanges)    push(e.refRanges, r);
-			for (let r in renameRanges) push(e.renameRanges, r);
 		}
-	}
 
-	let result = [];
-	for (let _, entry in entries) push(result, entry);
-	return result;
+		matched = true;
+		push(e.refRanges, ...refRanges);
+		push(e.renameRanges, ...renameRanges);
+	}
+	return matched ? e : null;
+};
+
+// Every file's entry for (declaringUri, exportName) but excludeUri's: the
+// declaring file's, then its importers'.
+export function crossFileRefsOf(declaringUri, exportName, excludeUri) {
+	let out = [];
+	let decl = declaringEntry(declaringUri, exportName, excludeUri);
+	if (decl) push(out, decl);
+	for (let u in importersOf(declaringUri, excludeUri))
+		push(out, importerEntry(u, declaringUri, exportName));
+	return filter(out, (e) => e !== null);
 };

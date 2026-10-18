@@ -37,7 +37,8 @@ against intuition or the grammar:
   depends on the count. Hold memory to **512 MB** as a discipline (real hosts
   have more) and remember the container takes part of it.
 - **Scale:** up to 500 modules per workspace. Interactive work should not grow
-  with the workspace; indexing at startup and cross-file references still do.
+  with the workspace; what does (indexing at startup, cross-file references)
+  runs in workers, off the event loop.
 - **Precision over recall:** when the analyzer is unsure, it says nothing. An
   unknown type is `{ kind: 'unknown' }`, and checks treat it as fine.
 
@@ -100,6 +101,11 @@ timing. Meanwhile the server answers from what it has, except for requests a
 partial index would answer wrongly (diagnostics, references, rename, incoming
 calls, workspace symbols): those are held until the load ends. A file indexed
 in-process during the load (opened, changed on disk) keeps that newer index.
+
+References, rename and incoming calls grow with an export's importers. Their
+handlers return a plan, `{ items, work, finish }`, one item per importing file
+(`language_server/background.uc`): up to 16 files it runs in-process, more in
+workers, answering when they finish or when the request is cancelled.
 
 Worker results travel in pieces of at most PIPE_BUF bytes: uloop drops a
 message larger than the pipe's buffer when its reader catches up with the

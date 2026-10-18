@@ -4,7 +4,7 @@ import * as documents from 'ucode_analyzer.code_analysis.documents';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { positionToOffset, rangeOf, nodeAtOffset, findAncestor } from 'ucode_analyzer.code_analysis.positions';
 import { referencesOf, anchorOf } from 'ucode_analyzer.code_analysis.scope_references';
-import { resolveExportIdentity, crossFileRefsOf } from 'ucode_analyzer.code_analysis.cross_file_refs';
+import { resolveExportIdentity, declaringEntry, importersOf, importerEntry } from 'ucode_analyzer.code_analysis.cross_file_refs';
 import { SymbolKind } from 'ucode_analyzer.code_analysis.lsp_types';
 import { declarators } from 'ucode_analyzer.code_analysis.ast_text';
 
@@ -290,56 +290,74 @@ export function prepareCallHierarchy(uri, doc, position) {
 	return null;
 };
 
-// Return all incoming call sites for item (functions that call this function).
-export function incomingCalls(item) {
+// The call sites among a file's reference nodes, grouped by caller in
+// first-seen order: [{ key, from, fromRanges }].
+function callersIn(refNodes, refUri, refDoc) {
+	let byKey = {}, out = [];
+	for (let refNode in refNodes) {
+		if (!isCallSite(refNode)) continue;
+		let caller = enclosingItem(refNode, refUri, refDoc.text, refDoc.lineTable);
+		let key    = sprintf('%s:%d:%d', caller.uri, caller.range.start.line, caller.range.start.character);
+		if (!byKey[key]) push(out, byKey[key] = { key, from: caller, fromRanges: [] });
+		push(byKey[key].fromRanges, rangeOf(refDoc.text, refDoc.lineTable, refNode));
+	}
+	return out;
+}
+
+// The callers in a cross-file entry's file. Its ranges already enumerate every
+// reference there, so each maps straight to its node.
+function entryCallers(cr) {
+	let refDoc = cr ? documents.getOrRead(cr.uri) : null;
+	if (!refDoc) return [];
+	let refRoot = ts.rootNode(refDoc.tree);
+	let nodes = [];
+	for (let rng in cr.refRanges) {
+		let node = nodeAtOffset(refRoot, positionToOffset(refDoc.text, refDoc.lineTable, rng.start));
+		if (node) push(nodes, node);
+	}
+	return callersIn(nodes, cr.uri, refDoc);
+}
+
+// Per-file caller lists merged by caller, or null when there are none.
+function mergeCallers(lists) {
+	let byKey = {}, out = [];
+	for (let list in lists)
+		for (let c in (list ?? [])) {
+			if (byKey[c.key]) {
+				push(byKey[c.key].fromRanges, ...c.fromRanges);
+				continue;
+			}
+			push(out, byKey[c.key] = { from: c.from, fromRanges: [...c.fromRanges] });
+		}
+	return length(out) > 0 ? out : null;
+}
+
+// The incoming calls of item (the functions that call it) as a plan (see
+// background.uc), one item per importing file.
+export function incomingCallsPlan(item) {
 	let uri            = item.data.uri;
 	let nameByteOffset = item.data.nameByteOffset;
 	let doc = documents.getOrRead(uri);
 	if (!doc) return null;
 
-	// Collect { callerItem, fromRange } pairs, keyed by callerItem range to deduplicate.
-	let callerMap = {};
+	let root  = ts.rootNode(doc.tree);
+	let local = callersIn(referencesOf(root, doc.text, nameByteOffset, false) ?? [], uri, doc);
 
-	function addCallSite(refNode, refUri, refDoc) {
-		if (!isCallSite(refNode)) return;
-		let lt    = refDoc.lineTable;
-		let text  = refDoc.text;
-		let fnRange = rangeOf(text, lt, refNode);
-		let caller  = enclosingItem(refNode, refUri, text, lt);
-		let key     = sprintf('%s:%d:%d', caller.uri, caller.range.start.line, caller.range.start.character);
-		if (!exists(callerMap, key))
-			callerMap[key] = { from: caller, fromRanges: [] };
-		push(callerMap[key].fromRanges, fnRange);
-	}
-
-	// Within-file references.
-	let root     = ts.rootNode(doc.tree);
-	let refNodes = referencesOf(root, doc.text, nameByteOffset, false);
-	for (let ref in (refNodes ?? []))
-		addCallSite(ref, uri, doc);
-
-	// Cross-file references via the export identity.
 	let identity = resolveExportIdentity(uri, doc, nameByteOffset);
-	if (identity) {
-		for (let cr in crossFileRefsOf(identity.declaringUri, identity.exportName, uri)) {
-			let refDoc = documents.getOrRead(cr.uri);
-			if (!refDoc) continue;
-			let refRoot = ts.rootNode(refDoc.tree);
-			// cr.refRanges already enumerates every reference in this file. Map each
-			// straight to its node and add it once — re-running referencesOf per range
-			// re-derived the whole set each time (O(refs²)) and pushed every call site
-			// once per range (duplicated fromRanges).
-			for (let rng in cr.refRanges) {
-				let byteOff = positionToOffset(refDoc.text, refDoc.lineTable, rng.start);
-				let node    = nodeAtOffset(refRoot, byteOff);
-				if (node) addCallSite(node, cr.uri, refDoc);
-			}
-		}
-	}
+	if (!identity)
+		return { items: [], work: null, finish: () => mergeCallers([local]) };
 
-	let result = [];
-	for (let _, entry in callerMap) push(result, entry);
-	return length(result) > 0 ? result : null;
+	let decl = entryCallers(declaringEntry(identity.declaringUri, identity.exportName, uri));
+	return {
+		items:  importersOf(identity.declaringUri, uri),
+		work:   (u) => entryCallers(importerEntry(u, identity.declaringUri, identity.exportName)),
+		finish: (lists) => mergeCallers([local, decl, ...lists]),
+	};
+};
+
+export function incomingCalls(item) {
+	let p = incomingCallsPlan(item);
+	return p ? p.finish(map(p.items, p.work)) : null;
 };
 
 // Return all outgoing calls from item (functions this function calls).
