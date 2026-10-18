@@ -10,6 +10,7 @@ import * as type_registry from 'ucode_analyzer.code_analysis.types.registry';
 import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { localBinding } from 'ucode_analyzer.code_analysis.bindings';
 import { toPath } from 'ucode_analyzer.code_analysis.uri';
+import { anchorOffset } from 'ucode_analyzer.code_analysis.memo';
 
 // Return an LSP Location object for byte offset inside uri.
 function location(uri, text, lineTable, byteOffset) {
@@ -79,10 +80,22 @@ function namespaceDef(uri, name) {
 	return null;
 }
 
+// A record field's position: an index's { line, character }, or an anchor
+// (inferObject) into the current text of its uri: doc's (uri's) or one on disk.
+function fieldPosition(f, uri, doc) {
+	let p = f.position;
+	if (p?.kind !== 'anchor') return p ?? { line: 0, character: 0 };
+	let offset = anchorOffset(p);
+	if (offset === null) return { line: 0, character: 0 };
+	if (p.uri === uri) return offsetToPosition(doc.text, doc.lineTable, offset);
+	let text = fs.readfile(toPath(p.uri)) ?? '';
+	return offsetToPosition(text, buildLineTable(text), offset);
+}
+
 // Resolve a member name in a type to a file Location.
 // Handles direct record types (with sourceUri+position from exportType/inferObject)
 // and typedef refs (via the type registry).
-function locationOfMember(type, propName, depth) {
+function locationOfMember(type, propName, uri, doc, depth) {
 	if (!depth) depth = 0;
 	if (depth > 5 || !type) return null;
 	if (type.kind === 'record') {
@@ -90,7 +103,7 @@ function locationOfMember(type, propName, depth) {
 		for (let i = 0; i < length(type.fields); i++) {
 			let f = type.fields[i];
 			if (f.name !== propName) continue;
-			let pos = f.position ?? { line: 0, character: 0 };
+			let pos = fieldPosition(f, uri, doc);
 			return { uri: type.sourceUri, range: { start: pos, end: pos } };
 		}
 		return null;
@@ -98,7 +111,7 @@ function locationOfMember(type, propName, depth) {
 	if (type.kind === 'ref') {
 		let def = type_registry.lookup(type.name);
 		if (!def) return null;
-		return locationOfMember(def.type, propName, depth + 1);
+		return locationOfMember(def.type, propName, uri, doc, depth + 1);
 	}
 	return null;
 }
@@ -165,7 +178,7 @@ function memberExprDef(uri, doc, memberExpr, propName, offset) {
 	}
 
 	// Record type: find member using stored position and sourceUri
-	return locationOfMember(objType, propName);
+	return locationOfMember(objType, propName, uri, doc);
 }
 
 // If name is a named import into uri, return the Location of its definition.

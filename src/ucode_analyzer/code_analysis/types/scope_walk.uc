@@ -4,6 +4,7 @@ import { inferNode, inferParams, declaredType, setReturnScopes } from 'ucode_ana
 import { importScope } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork, recordLookups, resolve } from 'ucode_analyzer.code_analysis.types.scope';
 import { sameType, sameBindings } from 'ucode_analyzer.code_analysis.types.type_eq';
+import { epochOf, recordMove, forgetMoves } from 'ucode_analyzer.code_analysis.memo';
 import { UNKNOWN, STR, unionOf } from 'ucode_analyzer.code_analysis.types.type_utils';
 import { parseGuard, applyGuard as narrowBy, narrowToNonNull, optionalChainRoot } from 'ucode_analyzer.code_analysis.types.narrowing';
 
@@ -24,7 +25,7 @@ let _hintMap = null, _hintAt = 0;
 // type, its root scope, its checkpoints map[first..last), and whether its
 // tree has no error.
 // _prev: the previous text's { units: { start → unit }, map, edit }, edit
-// being { start, oldEnd, newEnd, delta, sameLines }; null for a full build.
+// being { start, oldEnd, newEnd, delta }; null for a full build.
 let _units = null, _unit = null, _prev = null;
 
 // The captured names of the file, joined: a unit's mentions of them hold
@@ -847,12 +848,11 @@ function walkFnBody(node, source, uri, scope, map) {
 function reuseUnit(node, source, uri, scope, smap) {
     let e = _prev.edit;
     let start = ts.startByte(node), end = ts.endByte(node);
-    // Before the edit, or after it on a later line, the lines where they were:
-    // the types hold positions.
+    // Before the edit or after it: the places its types hold are anchors, which
+    // the edit moves with it (memo.uc recordMove).
     let delta;
     if (end <= e.start) delta = 0;
-    else if (start >= e.newEnd && e.sameLines && index(substr(source, e.newEnd, start - e.newEnd), '\n') >= 0)
-        delta = e.delta;
+    else if (start >= e.newEnd) delta = e.delta;
     else return false;
     let old = _prev.units[start - delta];
     if (!old || !old.clean || old.end !== end - delta || old.type !== ts.nodeType(node) || ts.hasError(node))
@@ -1061,7 +1061,7 @@ function walkFile(uri, source, root, map) {
 }
 
 // The common prefix and suffix of texts a and b, as an edit from a to b:
-// { start, oldEnd, newEnd, delta, sameLines }.
+// { start, oldEnd, newEnd, delta }.
 function editBetween(a, b) {
     let la = length(a), lb = length(b), n = (la < lb) ? la : lb;
     let lo = 0, hi = n;
@@ -1076,9 +1076,7 @@ function editBetween(a, b) {
         if (substr(a, la - mid) === substr(b, lb - mid)) lo = mid; else hi = mid - 1;
     }
     let oldEnd = la - lo, newEnd = lb - lo;
-    let lines = (t) => length(split(t, '\n'));
-    return { start, oldEnd, newEnd, delta: newEnd - oldEnd,
-             sameLines: lines(substr(a, start, oldEnd - start)) === lines(substr(b, start, newEnd - start)) };
+    return { start, oldEnd, newEnd, delta: newEnd - oldEnd };
 }
 
 // True when [from, to] of text meets a /** */ that declares a @typedef: types
@@ -1153,7 +1151,7 @@ export function buildScopeMap(uri, source, tree) {
 
 // The scope map of a document, reusing what it can of the one built for its
 // previous text (prev, a result of this, or null): { map, units, source,
-// rootType }.
+// rootType, capturedNames, epoch }.
 export function buildScopeMapFrom(uri, source, tree, prev) {
     let rootType = ts.nodeType(ts.rootNode(tree));
     let from = null;
@@ -1163,8 +1161,10 @@ export function buildScopeMapFrom(uri, source, tree, prev) {
             let units = {};
             for (let u in prev.units) units[u.start] = u;
             from = { units, map: prev.map, edit, capturedNames: prev.capturedNames };
+            recordMove(uri, prev.epoch, edit);
         }
     }
+    if (!from) forgetMoves(uri);
     _stats = { reused: 0, walked: 0 };
     let built;
     try {
@@ -1176,6 +1176,6 @@ export function buildScopeMapFrom(uri, source, tree, prev) {
         _stats = { reused: 0, walked: 0 };
         built = buildMap(uri, source, tree, null, true);
     }
-    return { map: built.map, units: built.units, source, rootType, capturedNames: built.capturedNames };
+    return { map: built.map, units: built.units, source, rootType, capturedNames: built.capturedNames, epoch: epochOf(uri) };
 };
 

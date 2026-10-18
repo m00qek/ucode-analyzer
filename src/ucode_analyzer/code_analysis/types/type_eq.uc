@@ -1,4 +1,5 @@
 import { returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
+import { anchorOffset } from 'ucode_analyzer.code_analysis.memo';
 
 // Past this depth two types count as different.
 const MAX_DEPTH = 24;
@@ -19,6 +20,12 @@ export function sameType(a, b, depth) {
 		return true;
 	}
 	if (ta !== 'object') return a === b;
+	// Places in older texts are the same where the edits since moved them.
+	if (a.kind === 'anchor' || b.kind === 'anchor') {
+		if (a.kind !== b.kind || a.uri !== b.uri) return false;
+		let at = anchorOffset(a);
+		return at !== null && at === anchorOffset(b);
+	}
 	if (a.kind === 'function' && b.kind === 'function') {
 		returnOf(a);
 		returnOf(b);

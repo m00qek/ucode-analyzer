@@ -2,11 +2,11 @@ import * as ts from 'tree_sitter';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import { unify, substitute, returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
-import { memoGet, memoSet, docMapGet, docMapSet, lineTableFor, epochOf, enterEpoch } from 'ucode_analyzer.code_analysis.memo';
+import { memoGet, memoSet, docMapGet, docMapSet, epochOf, enterEpoch, anchor } from 'ucode_analyzer.code_analysis.memo';
 import { makeScope, scopeGet, scopeSet, scopeHas, isRootBinding } from 'ucode_analyzer.code_analysis.types.scope';
 import { parseGuard, applyGuard, narrowToNonNull } from 'ucode_analyzer.code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal, resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
-import { offsetToPosition, docBeforeMap, docBearingStatement } from 'ucode_analyzer.code_analysis.positions';
+import { docBeforeMap, docBearingStatement } from 'ucode_analyzer.code_analysis.positions';
 import { stringLiteralText, firstNamed, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 import { exportType, dagNamedLookup, dagMemberLookup } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 
@@ -558,7 +558,6 @@ function literalValueOf(valNode, source) {
 }
 
 function inferObject(node, source, uri, scope, depth) {
-	let lineTable = lineTableFor(uri, source);
 	let fields = [];
 	// A record is "open" when its full field set can't be known statically —
 	// spreading a non-record (e.g. an untyped value) contributes unknown extra
@@ -583,8 +582,7 @@ function inferObject(node, source, uri, scope, depth) {
 		if (ct === 'shorthand_property_identifier') {
 			// { x } — key and value are both the identifier x
 			let name = ts.text(child, source);
-			let position = offsetToPosition(source, lineTable, ts.startByte(child));
-			push(fields, { name, type: scopeGet(scope, name) ?? UNKNOWN, position });
+			push(fields, { name, type: scopeGet(scope, name) ?? UNKNOWN, position: anchor(uri, ts.startByte(child)) });
 			continue;
 		}
 		if (ct !== 'pair') continue;
@@ -600,7 +598,7 @@ function inferObject(node, source, uri, scope, depth) {
 			keyName = length(s) ? s : null;
 		}
 		if (!keyName) continue;
-		let position = offsetToPosition(source, lineTable, ts.startByte(keyNode));
+		let position = anchor(uri, ts.startByte(keyNode));
 		let ft = valNode ? _infer(valNode, source, uri, scope, depth + 1) : UNKNOWN;
 		if (ft.kind === 'primitive') {
 			let lv = literalValueOf(valNode, source);

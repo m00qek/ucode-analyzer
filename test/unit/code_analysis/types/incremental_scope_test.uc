@@ -5,6 +5,8 @@ import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_brid
 import { buildScopeMap, lastBuildStats } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { mapDifference } from 'ucode_analyzer.code_analysis.types.type_eq';
 import { typeErrors } from 'ucode_analyzer.code_analysis.diagnostics.type_errors';
+import { definition } from 'ucode_analyzer.language_server.handlers.definition';
+import { offsetToPosition } from 'ucode_analyzer.code_analysis.positions';
 import * as fixture from 'fixture';
 
 dag.init(fixture.config());
@@ -82,11 +84,20 @@ describe('incremental scope map', () => {
 		assert.match(null, differs());
 	});
 
-	it('walks again the functions after an edit that adds a line: their types hold positions', () => {
+	it('reuses the functions after an edit that adds a line', () => {
 		open(FIVE);
-		// a and b before it; c, where it is, and d and e after.
-		assert.match({ reused: 2, walked: 3 }, edit('let m = limit;', 'let m = limit;\n'));
+		assert.match({ reused: 4, walked: 1 }, edit('let m = limit;', 'let m = limit;\n'));
 		assert.match(null, differs());
+	});
+
+	it('moves the places a reused function holds with the edit', () => {
+		// o's record holds where its field is, which go-to-definition reads.
+		open("function a() { return 1; }\nfunction make() { let o = { port: 1 }; return o.port; }\n");
+		assert.match({ reused: 1, walked: 1 }, edit('return 1;', 'return 1;\n\n'));
+		assert.match(null, differs());
+		let doc = documents.get(URI);
+		let r = definition(URI, doc, offsetToPosition(doc.text, doc.lineTable, index(doc.text, 'o.port') + 2));
+		assert.match(offsetToPosition(doc.text, doc.lineTable, index(doc.text, 'port: 1')), r?.range?.start);
 	});
 
 	it('walks again a function whose own text the edit is in, and its new parameters', () => {

@@ -1,8 +1,5 @@
-import { buildLineTable } from 'ucode_analyzer.code_analysis.positions';
-
 let _cache = {};       // uri → { 'startByte|nodeType|scopeId' → Type }
 let _docMaps = {};     // uri → { parentKey → { childStartByte → docText|null } }
-let _lineTables = {};  // uri → { src, table }
 
 // Each text of a uri is an epoch, whose caches are the two above. A function
 // type inferred from an older text, which a scope map reused across an edit
@@ -20,8 +17,45 @@ function slot(uri) {
 	return _epochs[uri];
 }
 
+// The epoch whose caches are in use for uri: an older one while a function
+// type inferred from an older text infers its return type.
 export function epochOf(uri) {
-	return slot(uri).now;
+	return slot(uri).active;
+};
+
+// Where the offsets of a text moved in the next one, for each text a scope map
+// reused parts of: uri → { epoch → { next, start, oldEnd, delta } }.
+let _moves = {};
+
+// The text of epoch `from` became uri's current one through edit
+// { start, oldEnd, delta }.
+export function recordMove(uri, from, edit) {
+	let now = slot(uri).now;
+	if (from !== now)
+		(_moves[uri] ??= {})[from] = { next: now, start: edit.start, oldEnd: edit.oldEnd, delta: edit.delta };
+};
+
+export function forgetMoves(uri) {
+	delete _moves[uri];
+};
+
+// An offset into uri's text of the epoch in use, which anchorOffset finds in a
+// later text.
+export function anchor(uri, offset) {
+	return { kind: 'anchor', uri, epoch: slot(uri).active, offset };
+};
+
+// Where anchor a is in its uri's current text; null when an edit since changed
+// what was there, or the texts in between are not known.
+export function anchorOffset(a) {
+	let now = slot(a.uri).now, e = a.epoch, offset = a.offset;
+	while (e !== now) {
+		let m = _moves[a.uri]?.[e];
+		if (!m || (offset >= m.start && offset < m.oldEnd)) return null;
+		if (offset >= m.oldEnd) offset += m.delta;
+		e = m.next;
+	}
+	return offset;
 };
 
 // Make epoch e's caches the ones in use for uri; returns the epoch it replaces.
@@ -79,19 +113,6 @@ export function docMapSet(uri, parentKey, map) {
 	_docMaps[uri][parentKey] = map;
 };
 
-// Line table for a source, cached per uri. Inference builds many objects from
-// one file text; each would otherwise rebuild the whole-file line table. Keyed
-// by string identity (source === cached.src is a fast native compare, no
-// staleness possible) rather than a length/offset proxy, so it's correct even
-// on the test path where a uri is re-opened without invalidation.
-export function lineTableFor(uri, source) {
-	let cached = _lineTables[uri];
-	if (cached && cached.src === source) return cached.table;
-	let table = buildLineTable(source);
-	_lineTables[uri] = { src: source, table };
-	return table;
-};
-
 // A new text for uri: a new epoch, the older ones' caches dropped.
 export function invalidateUri(uri) {
 	let now = (_epochs[uri]?.now ?? 0) + 1;
@@ -99,5 +120,4 @@ export function invalidateUri(uri) {
 	_epochs[uri] = { now, active: now, buckets: { [now]: b } };
 	_cache[uri] = b.types;
 	_docMaps[uri] = b.docs;
-	delete _lineTables[uri];
 };

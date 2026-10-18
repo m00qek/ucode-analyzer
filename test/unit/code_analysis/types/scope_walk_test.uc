@@ -5,7 +5,7 @@ import * as mode from 'ucode_analyzer.code_analysis.mode';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { buildScopeMap, scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
-import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import { invalidateUri, epochOf } from 'ucode_analyzer.code_analysis.memo';
 import * as fixture from 'fixture';
 
 // What `catch (e)` binds.
@@ -160,11 +160,13 @@ describe('buildScopeMap assignment widening', () => {
 	}
 	let NUL = { kind: 'primitive', name: 'null' };
 	let INT = { kind: 'primitive', name: 'int' };
-	// The `{ a: 1 }` literal assigned at line 2, column `character`.
+	// The `{ a: 1 }` literal assigned at line 2, column `character` (line 2
+	// starts at byte 31).
 	function recA1(character) {
+		let position = { kind: 'anchor', uri: URI, epoch: epochOf(URI), offset: 31 + character };
 		return {
 			kind: 'record',
-			fields: [{ name: 'a', type: { kind: 'primitive', name: 'int', value: 1 }, position: { line: 2, character } }],
+			fields: [{ name: 'a', type: { kind: 'primitive', name: 'int', value: 1 }, position }],
 			sourceUri: URI,
 		};
 	}

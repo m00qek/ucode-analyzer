@@ -6,7 +6,7 @@ import { returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { buildScopeMap, scopeAtOffset } from 'ucode_analyzer.code_analysis.types.scope_walk';
 import { makeScope, scopeSet, scopeGet } from 'ucode_analyzer.code_analysis.types.scope';
-import { invalidateUri } from 'ucode_analyzer.code_analysis.memo';
+import { invalidateUri, epochOf } from 'ucode_analyzer.code_analysis.memo';
 import { cursors } from 'cursor';
 import * as fixture from 'fixture';
 
@@ -1699,12 +1699,15 @@ describe('inferrer — builtins whose null depends on the arguments', () => {
 		let o = typeAfter("let C = { m: function() {} };\nlet o = proto({ a: 1 }, C);\no;\n", 'o');
 		assert.match(['a', 'm'], map(o?.fields ?? [], (f) => f.name));
 		// An unknown prototype leaves the record open to more fields.
+		let src = "function f(P) {\n\tlet o = proto({ a: 1 }, P);\n\treturn o;\n}\nlet q = proto({ a: 1 }, g());\nq;\n";
+		let q = typeAfter(src, 'q');
 		assert.match({
 			kind: 'record',
-			fields: [{ name: 'a', type: { kind: 'primitive', name: 'int', value: 1 }, position: { line: 4, character: 16 } }],
+			fields: [{ name: 'a', type: { kind: 'primitive', name: 'int', value: 1 },
+				position: { kind: 'anchor', uri: URI, epoch: epochOf(URI), offset: index(src, 'a: 1 }, g') } }],
 			sourceUri: URI,
 			open: true,
-		}, typeAfter("function f(P) {\n\tlet o = proto({ a: 1 }, P);\n\treturn o;\n}\nlet q = proto({ a: 1 }, g());\nq;\n", 'q'));
+		}, q);
 		assert.match({ kind: 'nullable', inner: { kind: 'generic', base: 'dict', params: [unknown()] } },
 			typeAfter("let o = proto({ a: 1 });\no;\n", 'o'));
 	});
