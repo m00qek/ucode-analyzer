@@ -60,3 +60,31 @@ describe('diagnostics — syntax errors', () => {
 		assert.match([syntaxError(src, "Syntax error: missing '}'")], syntaxErrors(documents.get(URI)));
 	});
 });
+
+describe('diagnostics — a slash after ++ or --', () => {
+	function errors(text) {
+		documents.open(URI, text, 1);
+		return syntaxErrors(documents.get(URI));
+	}
+
+	it('is an error: ucode reads it as the start of a regex', () => {
+		for (let c in [
+			[ "let a = 1, b = 2;\nprint(a++ $0/$1 b);\n", '++', 'a++' ],
+			[ "let a = 1, b = 2;\nprint(a--$0/$1b);\n", '--', 'a--' ],
+			[ "let a = 1, b = 2;\nlet c = a++ /* n */ $0/$1 b;\n", '++', 'a++' ],
+			[ "let a = 1, b = 2;\nlet c = a++\n$0/$1 b;\n", '++', 'a++' ],
+			[ "let o = { n: 1 };\nprint(o.n++ $0/$1 2);\n", '++', 'o.n++' ],
+			[ "{% let a = 1; %}{{ a++ $0/$1 2 }}\n", '++', 'a++' ],
+		]) {
+			let src = cursors(c[0]);
+			assert.match([ syntaxError(src, sprintf("ucode reads '/' after '%s' as the start of a regex: write (%s) / …", c[1], c[2])) ],
+				errors(src.text), c[0]);
+		}
+	});
+
+	it('is not an error after parentheses, a prefix ++ or another operand', () => {
+		for (let text in [ "let a = 1, b = 2;\nprint((a++) / b);\n", "let a = 1, b = 2;\nprint(++a / b);\n",
+		                   "let a = 1, b = 2;\nprint(a++ + b / 2);\n", "let a = 1, b = 2;\nprint(a / b++);\n" ])
+			assert.match([], errors(text), text);
+	});
+});
