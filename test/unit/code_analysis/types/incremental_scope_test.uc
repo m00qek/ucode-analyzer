@@ -128,6 +128,23 @@ describe('incremental scope map', () => {
 		assert.match(null, differs());
 	});
 
+	it('walks again a function reading an optional-chain root an edit removes', () => {
+		// g's code is b's chain while f declares it so: then the guard narrows b.
+		open("function f(b) { let code = b?.s?.c; return code; }\n" +
+			"/** @param {?object} b */\nfunction g(b, code) {\n\tif (code == null) return;\n\tlet t = b;\n\treturn t;\n}\n");
+		assert.match({ reused: 0, walked: 2 }, edit('let code = b?.s?.c;', 'let code = 1;'));
+		assert.match(null, differs());
+	});
+
+	it('walks again a function that inferred a captured variable first, once an earlier one does', () => {
+		// x's type is inferred where it is first assigned in a closure: in a,
+		// before v is declared, it does not see v.
+		open("function a() { let y = null; return y; }\nlet v = 5;\n" +
+			"function b() { let x = null; let s = () => { x = v; }; return s; }\n");
+		assert.match({ reused: 0, walked: 2 }, edit('let y = null; return y;', 'let x = null; let s = () => { x = v; }; return s;'));
+		assert.match(null, differs());
+	});
+
 	it('builds afresh after an edit to a @typedef', () => {
 		open("/**\n * @typedef {Object} P\n * @property {string} n\n */\nfunction f(/** P */ p) { return p.n; }\nfunction g() { return 1; }\n");
 		assert.match({ reused: 0, walked: 2 }, edit('{string} n', '{int} n'));
