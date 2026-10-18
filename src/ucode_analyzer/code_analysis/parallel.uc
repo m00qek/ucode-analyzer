@@ -191,6 +191,9 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 				// here only queues the signal for a loop that never runs: without
 				// the default action, kill() leaves the worker running.
 				signal('SIGTERM', 'default');
+				// A task's stderr is /dev/null: warnings go to the parent, short
+				// enough to be written atomically (see sendPieces).
+				global.warn = (...parts) => pipe.send({ warn: substr(join('', parts), 0, 3000) });
 				pipe.send({ ready: true });
 				for (let item in shard)
 					sendPieces(pipe, runItem(item));
@@ -199,6 +202,7 @@ export function fanOut(items, jobs, work, onItem, onDone) {
 			function(msg) {
 				// null: uloop's implicit end-of-task message, superseded by `done`.
 				if (msg === null) return;
+				if (exists(msg, 'warn')) return warn(msg.warn);
 				if (msg.ready) {
 					ready[idx] = true;
 					if (killed[idx]) tasks[idx].kill();

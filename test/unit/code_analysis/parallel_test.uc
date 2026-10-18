@@ -109,6 +109,16 @@ describe('parallel — fanOut across worker processes', () => {
 		assert.match(map(nums(4), big), sort(r.results, (a, b) => (a[0] < b[0]) ? -1 : 1));
 	});
 
+	it('relays a worker\'s warnings to the parent', () => {
+		// A task's stderr is /dev/null.
+		let seen = [], parentWarn = global.warn;
+		global.warn = (m) => push(seen, m);
+		let r = runFanOut(nums(2), 2, (x) => { warn(sprintf('item %d\n', x)); return x; });
+		global.warn = parentWarn;
+		assert.match(1, r.doneCount);
+		assert.match([ 'item 0\n', 'item 1\n' ], sort(seen));
+	});
+
 	it('skips an item whose work throws and still completes', () => {
 		let r = runFanOut(nums(6), 2, (x) => { if (x === 3) die('boom'); return x; });
 		assert.match(1, r.doneCount);
