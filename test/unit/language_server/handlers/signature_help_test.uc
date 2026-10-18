@@ -84,6 +84,29 @@ describe('signatureHelp', () => {
 		assert.match(1, sigAt("let f = (a, b) => a;\nf(1, $0\nlet z = 2;\n").activeParameter);
 	});
 
+	it('finds an unfinished call on the last line of the file', () => {
+		let F = "let f = (a, b) => a;\nlet g = (x, y) => x;\nlet o = { m: f };\n";
+		let at = (marked) => {
+			let r = sigAt(F + marked);
+			return r ? [ r.signatures[0].label, r.activeParameter ] : null;
+		};
+		assert.match([ 'f(a: ?, b: ?)', 0 ], at("f($0"));
+		assert.match([ 'f(a: ?, b: ?)', 1 ], at("f(1, $0"));
+		assert.match([ 'f(a: ?, b: ?)', 1 ], at("f(1, $0\n"));
+		assert.match([ 'f(a: ?, b: ?)', 1 ], at("let x = f(1, $0"));
+		assert.match([ 'f(a: ?, b: ?)', 1 ], at("x = f(1, $0"));
+		assert.match([ 'f(a: ?, b: ?)', 1 ], at("if (f(1, $0"));
+		assert.match([ 'o.m(a: ?, b: ?)', 1 ], at("o.m(1, $0"));
+		assert.match([ 'f(a: ?, b: ?)', 1 ], at("f(g(1, 2), $0"));
+		assert.match([ 'f(a: ?, b: ?)', 1 ], at("f([1, 2], $0"));
+		assert.match([ 'g(x: ?, y: ?)', 1 ], at("f(g(1, $0"));
+		assert.match([ 'g(x: ?, y: ?)', 0 ], at("f(1, g($0"));
+		assert.match(null, at("(1, $0"));
+
+		let t = sigAt("{% let f = (a, b) => a; %}\n{{ f(1, $0");
+		assert.match([ 'f(a: ?, b: ?)', 1 ], [ t.signatures[0].label, t.activeParameter ]);
+	});
+
 	it('parameters array has one entry per parameter', () => {
 		let result = sigAt("let f = (a, b, c) => a;\nf(1$0, 2, 3);\n");
 

@@ -39,6 +39,86 @@ function activeParam(argsNode, offset) {
 	return count;
 }
 
+const CALLEES = {
+	identifier: true, member_expression: true, subscript_expression: true,
+	call_expression: true, parenthesized_expression: true,
+};
+const OPENERS = { '(': true, '[': true, '{': true };
+const CLOSERS = { ')': true, ']': true, '}': true };
+
+// The callee ending at byte `end` inside `node`: a statement or assignment
+// that the recovery left before the ERROR ends in it (`x = f`, `let x = f`).
+function calleeEndingAt(node, end) {
+	while (node && ts.endByte(node) === end && !CALLEES[ts.nodeType(node)]) {
+		let n = ts.namedChildCount(node);
+		node = n ? ts.namedChild(node, n - 1) : null;
+	}
+	return (node && ts.endByte(node) === end && CALLEES[ts.nodeType(node)]) ? node : null;
+}
+
+// The node before `node` among its parent's children.
+function prevSibling(node) {
+	let prev = null;
+	for (let c in ts.children(ts.parent(node))) {
+		if (ts.startByte(c) >= ts.startByte(node)) break;
+		prev = c;
+	}
+	return prev;
+}
+
+// An unfinished call the parser could not recover (`f(1, ` at the end of the
+// file) is a flat run of tokens in an ERROR, which ends before the blanks up
+// to the cursor: find its innermost unclosed `(` that follows a callee, and
+// the arguments and commas after it.
+function unfinishedCall(root, text, offset) {
+	let last = offset - 1;
+	while (last > 0 && index(" \t\r\n", substr(text, last, 1)) >= 0) last--;
+	let err = ts.descendantAt(root, max(last, 0));
+	while (err && ts.nodeType(err) !== 'ERROR') err = ts.parent(err);
+	if (!err) return null;
+
+	let toks = ts.children(err);
+	let open = [];
+	for (let i = 0; i < length(toks) && ts.startByte(toks[i]) < offset; i++) {
+		let t = ts.nodeType(toks[i]);
+		if (ts.isNamed(toks[i])) continue;
+		if (OPENERS[t]) push(open, i);
+		else if (CLOSERS[t] && length(open)) pop(open);
+	}
+
+	for (let k = length(open) - 1; k >= 0; k--) {
+		let i = open[k];
+		if (ts.nodeType(toks[i]) !== '(') continue;
+		let start = ts.startByte(toks[i]);
+		let fnNode = (i > 0) ? calleeEndingAt(toks[i - 1], start)
+			: (prevSibling(err) ? calleeEndingAt(prevSibling(err), start) : null);
+		if (!fnNode) continue;
+
+		let args = [], commas = 0, depth = 0;
+		for (let j = i + 1; j < length(toks) && ts.startByte(toks[j]) < offset; j++) {
+			let t = ts.nodeType(toks[j]);
+			if (ts.isNamed(toks[j])) { if (!depth) push(args, toks[j]); }
+			else if (OPENERS[t]) depth++;
+			else if (CLOSERS[t]) depth--;
+			else if (t === ',' && !depth) commas++;
+		}
+		return { fnNode, args, active: commas };
+	}
+	return null;
+}
+
+// The call around offset: its callee, its argument nodes and the index of
+// the argument at offset.
+function callAt(root, text, offset) {
+	let callNode = enclosingCall(root, offset);
+	if (!callNode) return unfinishedCall(root, text, offset);
+
+	let fnNode   = ts.childByField(callNode, 'function');
+	let argsNode = ts.childByField(callNode, 'arguments');
+	if (!fnNode || !argsNode) return null;
+	return { fnNode, args: ts.namedChildren(argsNode), active: activeParam(argsNode, offset) };
+}
+
 // Count UTF-16 code units in a UTF-8 string, as required by the LSP spec for
 // label offset fields.  ASCII strings (the common case for identifiers and
 // type names) have length == UTF-16 length, but 4-byte code points (U+10000+)
@@ -83,16 +163,10 @@ function buildSignature(name, fnType) {
 
 export function signatureHelp(uri, doc, position) {
 	let offset = positionToOffset(doc.text, doc.lineTable, position);
-	let root   = ts.rootNode(doc.tree);
-	if (offset >= ts.endByte(root)) return null;
+	let call   = callAt(ts.rootNode(doc.tree), doc.text, offset);
+	if (!call) return null;
 
-	let callNode = enclosingCall(root, offset);
-	if (!callNode) return null;
-
-	let fnNode   = ts.childByField(callNode, 'function');
-	let argsNode = ts.childByField(callNode, 'arguments');
-	if (!fnNode || !argsNode) return null;
-
+	let fnNode  = call.fnNode;
 	let scope   = scopeAtOffset(doc.scopeMap, offset);
 	let fnType  = inferNode(fnNode, doc.text, uri, scope);
 	if (!fnType || fnType.kind !== 'function') return null;
@@ -102,7 +176,7 @@ export function signatureHelp(uri, doc, position) {
 	// builds bindings like {T: int}, then substitute applies them to the whole
 	// function type so the label shows concrete types instead of T.
 	let bindings = {};
-	let args = ts.namedChildren(argsNode);
+	let args = call.args;
 	for (let i = 0; i < length(args); i++) {
 		let paramType = (i < length(fnType.params)) ? (fnType.params[i].type ?? { kind: 'unknown' }) : { kind: 'unknown' };
 		unify(paramType, inferNode(args[i], doc.text, uri, scope), bindings, 0);
@@ -111,7 +185,7 @@ export function signatureHelp(uri, doc, position) {
 
 	let fnName = ts.text(fnNode, doc.text);
 	let sig    = buildSignature(fnName, concreteFnType);
-	let active = activeParam(argsNode, offset);
+	let active = call.active;
 	if (length(sig.parameters) > 0)
 		active = min(active, length(sig.parameters) - 1);
 	else
