@@ -1,10 +1,10 @@
-import * as mode from 'ucode_analyzer.code_analysis.mode';
+import * as ts from 'tree_sitter';
 
 // For each diagnostic with a code, in a script (a template line may be text,
 // where `//` would be output): a `// ucode-analyzer disable-next-line <code>`
 // above its line, indented as it (see suppress.uc).
 export function actionsFor(uri, doc, diagnostics) {
-	if (mode.isTemplate(doc.text)) return [];
+	if (ts.nodeType(ts.rootNode(doc.tree)) === 'markup') return [];
 	let actions = [], seen = {};
 	for (let d in diagnostics) {
 		let line = d.range?.start?.line;

@@ -83,6 +83,19 @@ describe('mode — isTemplate detection', () => {
 	});
 
 	// ── shebang-driven mode (matches how ucode is actually invoked) ──────────
+	it('does not flag a tag opener inside a regex literal', () => {
+		assert.match(false, isTemplate("let r = /\\{%-?\\s*/;\nlet c = /^\\{#/;\n"));
+		assert.match(false, isTemplate("let d = n / 2;\nlet r = /\\{%/;\n"));
+	});
+
+	it('does not take a division for the start of a regex hiding a tag', () => {
+		assert.match(true, isTemplate("{% let x = a / b; %} text {% let y = c / d; %}\n"));
+	});
+
+	it("does not flag a tag opener in a template string's text", () => {
+		assert.match(false, isTemplate("let s = `a {% b`;\n"));
+	});
+
 	it('treats a utpl shebang as template', () => {
 		assert.match(true, isTemplate("#!/usr/bin/utpl\nplain text no tags\n"));
 	});

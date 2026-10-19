@@ -19,7 +19,7 @@ function quoted(q) {
 // One token per match: a comment or string literal is consumed whole, so an
 // opener inside it is never seen, and an unterminated one runs to the end.
 // Built from strings: the quotes of a regex literal would derail the scan of
-// this very file, which would then read as a template.
+// this very file.
 const TOKENS = regexp(join('|', [
 	'//[^\n]*',
 	'/\\*([^*]|\\*+[^*/])*(\\*+/|\\**$)',
@@ -27,24 +27,66 @@ const TOKENS = regexp(join('|', [
 	'\\{[%{#]',
 ]), 'g');
 
-// Scan the source as if it were a script, skipping string literals ('...',
-// "...", `...`) and comments (// and block comments), and report whether a
-// template tag opener ({% / {{ / {#) appears in *code* position. In a valid raw
-// script such openers can only occur inside strings or comments — as bare syntax
-// they are a hard parse error — so an opener in code position means the file must
-// be a template. This catches a tag anywhere on a line, not only at its start,
-// while ignoring a script's own "{{ }}" string content.
-//
-// Residual gap: a template whose only tag sits inside a quoted run of raw text
-// (e.g. `<a href="{{ url }}">` with no other tag) is skipped, because the scan
-// treats the quotes as a string. Vanishingly rare and unobserved in the corpus.
-function hasCodePositionTag(text) {
-	// Most scripts contain no opener at all.
-	if (index(text, '{%') < 0 && index(text, '{{') < 0 && index(text, '{#') < 0)
-		return false;
+// Whether an opener is in code position by a scan of the text: strings and
+// comments skipped, an unterminated one running to the end as in ucode. It
+// cannot tell a regex literal from a division, so it reads an opener inside a
+// regex as code; classify asks it only where the parse cannot tell.
+function scannedTag(text) {
 	for (let m in match(text, TOKENS))
 		if (substr(m[0], 0, 1) === '{') return true;
 	return false;
+}
+
+// Where a script holds a literal: an opener inside one is text, not a tag. A
+// template string's ${ } is code again.
+const LITERALS = { string: true, regex: true, comment: true, doc_comment: true };
+
+function inLiteral(root, offset) {
+	for (let n = ts.descendantAt(root, offset); n; n = ts.parent(n)) {
+		let t = ts.nodeType(n);
+		if (LITERALS[t]) return true;
+		if (t === 'template_substitution') return false;
+		if (t === 'template_string') return true;
+	}
+	return false;
+}
+
+// Parse the source as a script and report whether a template tag opener
+// ({% / {{ / {#) is in code position: { template, tree }, tree the script's
+// parse. In a valid script such openers can only be inside strings, regexes
+// or comments — as bare syntax they are a hard parse error — so one in code
+// position means the file must be a template. A clean parse tells a regex
+// from a division as ucode does; a parse with errors (a template, or a script
+// left unterminated while typed) recovers unlike ucode, so the scan of the
+// text decides.
+//
+// Residual gap: a template whose only tag sits inside a quoted run of raw text
+// (e.g. `<a href="{{ url }}">` with no other tag) reads as a script, because
+// the quotes parse as a string. Vanishingly rare and unobserved in the corpus.
+function classify(text) {
+	let tree = ts.parse(_scriptParser, text);
+	let root = ts.rootNode(tree);
+	for (let opener in [ '{%', '{{', '{#' ])
+		for (let from = 0, at; (at = index(substr(text, from), opener)) >= 0; from += at + 2)
+			if (!inLiteral(root, from + at))
+				return { template: ts.hasError(root) ? scannedTag(text) : true, tree };
+	return { template: false, tree };
+}
+
+// The mode a shebang records, or null: `utpl` or a `-T` flag selects template
+// mode, `-R` forces a raw script, and a plain `#!/usr/bin/ucode` carries none.
+function shebangMode(text) {
+	if (substr(text, 0, 2) !== '#!') return null;
+	let nl = index(text, "\n");
+	let shebang = (nl >= 0) ? substr(text, 0, nl) : text;
+	if (index(shebang, 'utpl') >= 0 || index(shebang, '-T') >= 0) return true;
+	if (index(shebang, '-R') >= 0) return false;
+	return null;
+}
+
+// Most scripts contain no opener at all.
+function hasOpener(text) {
+	return index(text, '{%') >= 0 || index(text, '{{') >= 0 || index(text, '{#') >= 0;
 }
 
 // Does the source use template mode?
@@ -52,20 +94,14 @@ function hasCodePositionTag(text) {
 // ucode itself picks the mode by how it is invoked (`ucode` / `-R` ⇒ raw script,
 // the default; `ucode -T` or the `utpl` symlink ⇒ template). A shebang is the
 // in-file record of that choice, so it wins when present. Otherwise we detect by
-// content: a template tag opener in code position (see hasCodePositionTag).
+// content: a template tag opener in code position (see classify).
 //
 // Validated against the ucode interpreter over the firewall4 corpus (33/33 files
 // classified identically).
 export function isTemplate(text) {
-	if (substr(text, 0, 2) === '#!') {
-		let nl = index(text, "\n");
-		let shebang = (nl >= 0) ? substr(text, 0, nl) : text;
-		// `utpl` or a `-T` flag selects template mode; `-R` forces raw script.
-		if (index(shebang, 'utpl') >= 0 || index(shebang, '-T') >= 0) return true;
-		if (index(shebang, '-R') >= 0) return false;
-		// A plain `#!/usr/bin/ucode` carries no mode flag → fall through to content.
-	}
-	return hasCodePositionTag(text);
+	let m = shebangMode(text);
+	if (m !== null) return m;
+	return hasOpener(text) && classify(text).template;
 };
 
 // ── Blocks left open at the end of the file ─────────────────────────────────
@@ -141,8 +177,14 @@ function missingClosers(tree) {
 // last nodes end past length(text). The `\n` ends a trailing line comment; the
 // spaces keep `} }` from lexing as a template's `}}`.
 export function parse(text) {
-	let parser = isTemplate(text) ? _templateParser : _scriptParser;
-	let tree = ts.parse(parser, text);
+	let m = shebangMode(text), tree = null;
+	if (m === null && hasOpener(text)) {
+		let c = classify(text);
+		m = c.template;
+		if (!m) tree = c.tree;
+	}
+	let parser = m ? _templateParser : _scriptParser;
+	tree ??= ts.parse(parser, text);
 	let closers = missingClosers(tree);
 	if (!closers) return tree;
 	let closed = ts.parse(parser, text + "\n" + join(' ', closers));

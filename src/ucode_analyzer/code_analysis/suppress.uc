@@ -8,8 +8,7 @@
 import * as ts from 'tree_sitter';
 import { offsetToPosition } from 'ucode_analyzer.code_analysis.positions';
 
-// `[{]#`: a literal `{#` in code makes the file read as a template (mode.uc).
-const DIRECTIVE = /^(\/\/|\/\*|[{]#-?)[ \t]*ucode-analyzer[ \t]+(disable-next-line|disable)([ \t,][^\n]*)?$/;
+const DIRECTIVE = /^(\/\/|\/\*|\{#-?)[ \t]*ucode-analyzer[ \t]+(disable-next-line|disable)([ \t,][^\n]*)?$/;
 
 // Every directive's line → the codes it hides (code → true), or true for all.
 function directives(doc) {
