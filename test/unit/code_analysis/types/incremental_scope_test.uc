@@ -127,7 +127,8 @@ describe('incremental scope map', () => {
 		// start of make it is not yet.
 		open("function make() {\n\tlet waiting = [];\n\tlet g = 1;\n\tlet f = () => waiting;\n" +
 			"\tlet h = () => { waiting = g; };\n\treturn [ f, h ];\n}\nfunction other() { return 1; }\n");
-		assert.match({ reused: 1, walked: 1 }, edit('return 1;', 'return 2;'));
+		// make inferred waiting first, so it is walked again too.
+		assert.match({ reused: 0, walked: 2 }, edit('return 1;', 'return 2;'));
 		assert.match(null, differs());
 	});
 
@@ -153,6 +154,14 @@ describe('incremental scope map', () => {
 		open("function a() { let y = null; return y; }\nlet v = 5;\n" +
 			"function b() { let x = null; let s = () => { x = v; }; return s; }\n");
 		assert.match({ reused: 0, walked: 2 }, edit('let y = null; return y;', 'let x = null; let s = () => { x = v; }; return s;'));
+		assert.match(null, differs());
+	});
+
+	it('walks again a function that inferred a captured variable first, once an assignment elsewhere changes', () => {
+		// u infers x first, from both assignments to an x in a closure.
+		open("function u() { let x = null; let s = () => { x = 1; }; let g = () => x; return g; }\n" +
+			"function v() { let x = null; let t = () => { x = 2; }; return t; }\n");
+		assert.match({ reused: 0, walked: 2 }, edit('x = 2;', "x = 'a';"));
 		assert.match(null, differs());
 	});
 

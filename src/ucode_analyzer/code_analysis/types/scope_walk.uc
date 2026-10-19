@@ -17,8 +17,10 @@ let _hintMap = null, _hintAt = 0;
 // outside it. While a unit is walked, _unit records that:
 //   reads       lookups leaving its root scope (scope.uc's recordLookups)
 //   captured    captured variables' types it read, already inferred
-//   capturedWrites  those it inferred first, in a function nested in it: when
-//               one is first inferred depends on the map built so far
+//   capturedWrites  those it inferred first, in a function nested in it: such
+//               a type joins every assignment to the name in the file, and
+//               when it is first inferred depends on the map built so far, so
+//               a unit with any is always walked again
 //   chainReads  _chainRoots entries it read, chainWrites those it wrote
 //   mentions    the captured names its text holds
 // with { start, end, type, root, first, last, clean }: its node's range and
@@ -897,7 +899,8 @@ function reuseUnit(node, source, uri, scope, smap) {
     else if (start >= e.newEnd) delta = e.delta;
     else return false;
     let old = _prev.units[start - delta];
-    if (!old || !old.clean || old.end !== end - delta || old.type !== ts.nodeType(node) || ts.hasError(node))
+    if (!old || !old.clean || old.end !== end - delta || old.type !== ts.nodeType(node) || ts.hasError(node) ||
+        length(old.capturedWrites))
         return false;
 
     for (let name, r in old.reads) {
@@ -922,8 +925,6 @@ function reuseUnit(node, source, uri, scope, smap) {
     if (!sameBindings(frame.bindings, old.root.bindings)) return false;
     for (let name, t in old.captured)
         if (!exists(_capturedType, name) || !sameType(_capturedType[name], t)) return false;
-    for (let name in old.capturedWrites)
-        if (!_captured[name] || exists(_capturedType, name)) return false;
 
     old.root.parent = scope;
     let first = length(smap);
@@ -933,7 +934,6 @@ function reuseUnit(node, source, uri, scope, smap) {
         for (let i = old.first; i < old.last; i++)
             push(smap, { offset: _prev.map[i].offset + delta, scope: _prev.map[i].scope });
     for (let name, r in old.chainWrites) _chainRoots[name] = r;
-    for (let name, t in old.capturedWrites) _capturedType[name] = t;
     push(_units, { ...old, start, end, first, last: length(smap), mentions });
     _stats.reused++;
     return true;
