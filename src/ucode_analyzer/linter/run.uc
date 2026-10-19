@@ -3,6 +3,7 @@ import * as uloop from 'uloop';
 import * as workspace from 'ucode_analyzer.code_analysis.workspace';
 import * as reporters from 'ucode_analyzer.linter.reporters';
 import { fanOut } from 'ucode_analyzer.code_analysis.parallel';
+import * as releases from 'ucode_analyzer.code_analysis.releases';
 
 // Resolve a (possibly relative) path to an absolute file:// URI, or null if the
 // file cannot be resolved.
@@ -52,6 +53,7 @@ function diagnoseWorkspaceParallel(config, jobs) {
 // Returns the process exit code: 0 clean / below threshold, 1 findings at or
 // above --fail-on, 2 usage or IO error.
 export function run(config, opts) {
+	releases.configure(config);
 	if (opts.files === null) {
 		let st = fs.stat(config.workspaceDir);
 		if (!st || st.type !== 'directory') {

@@ -124,7 +124,8 @@ Settings come from `<workspace>/.lsp/config.json` (the project) merged over
     "exclude": ["build/**"],
     "globals": { "www/**": ["uhttpd"] }
   },
-  "systemLibPaths": ["/usr/share/ucode"]
+  "systemLibPaths": ["/usr/share/ucode"],
+  "target": "24.10"
 }
 ```
 
@@ -139,6 +140,11 @@ Settings come from `<workspace>/.lsp/config.json` (the project) merged over
   already.
 - `systemLibPaths`: installed ucode libraries, indexed for resolution but never
   diagnosed. Defaults to `/usr/share/ucode`.
+- `target`: the OpenWrt release the code runs on (`22.03`, `23.05`, `24.10`,
+  `25.12`, or `main` for ucode's tip). Code that release cannot run is then
+  flagged: modules its feed does not ship, and module functions, handle
+  methods and builtins added after it. Unset, nothing is checked. The release
+  data comes from [noah-lsp](https://github.com/NoahBPeterson/ucode-lsp).
 - `debug.checkIncremental`: after an edit, check the types the server kept
   from the previous text against ones worked out from scratch, and log to
   stderr where they differ (the fresh ones are then used). It makes each edit

@@ -1,6 +1,7 @@
 import * as protocol from 'ucode_analyzer.language_server.protocol';
 import * as uloop from 'uloop';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
+import * as releases from 'ucode_analyzer.code_analysis.releases';
 import { hover as hoverDoc } from 'ucode_analyzer.language_server.handlers.hover';
 import { definition as definitionDoc } from 'ucode_analyzer.language_server.handlers.definition';
 import { completion as completionDoc } from 'ucode_analyzer.language_server.handlers.completion';
@@ -70,6 +71,7 @@ function reindex(doc) {
 
 export function run(config) {
 	documents.checkIncremental(config.debug?.checkIncremental === true);
+	releases.configure(config);
 	let shutdown_requested = false;
 	let initialized = false;
 

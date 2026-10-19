@@ -17,6 +17,7 @@ import { jsdocConsistency }     from 'ucode_analyzer.code_analysis.diagnostics.j
 import { unknownTypes }         from 'ucode_analyzer.code_analysis.diagnostics.unknown_type';
 import { typeNameChecks }       from 'ucode_analyzer.code_analysis.diagnostics.type_name';
 import { nanArithmetic }        from 'ucode_analyzer.code_analysis.diagnostics.nan_arithmetic';
+import { releaseChecks }        from 'ucode_analyzer.code_analysis.diagnostics.release';
 import { unsuppressed }         from 'ucode_analyzer.code_analysis.suppress';
 
 // Run one diagnostic pass, appending its results to `out`. Each pass is isolated:
@@ -54,5 +55,6 @@ export function diagnosticsFor(uri, doc) {
 	runPass('unknown-type',           uri, () => unknownTypes(doc),              diags);
 	runPass('impossible-type-check',  uri, () => typeNameChecks(doc),            diags);
 	runPass('nan-arithmetic',         uri, () => nanArithmetic(uri, doc),        diags);
+	runPass('not-in-release',         uri, () => releaseChecks(uri, doc),        diags);
 	return unsuppressed(doc, diags);
 };
