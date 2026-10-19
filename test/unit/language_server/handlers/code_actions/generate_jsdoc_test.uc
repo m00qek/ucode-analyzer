@@ -46,6 +46,12 @@ describe('generate_jsdoc', () => {
 		assert.match("/**\n * @param {any} n\n */\n", inserted("const i$0nc = (n) => n;\n"));
 	});
 
+	it('documents an object member before its key', () => {
+		assert.match("\t/**\n\t * @param {any} x\n\t * @returns {int}\n\t */\n",
+			inserted("return {\n\t$0m: function(x) { return 1; },\n};\n"));
+		assert.match(null, inserted("return {\n\t/** Doc. */\n\t$0m: function(x) { return 1; },\n};\n"));
+	});
+
 	it('is offered only on the first line of an undocumented function', () => {
 		assert.match(null, inserted("/** Done. */\nfunction $0f(a) {}\n"));
 		assert.match(null, inserted("function f(a) {\n\tre$0turn a;\n}\n"));

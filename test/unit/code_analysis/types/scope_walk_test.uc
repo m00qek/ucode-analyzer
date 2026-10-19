@@ -400,6 +400,20 @@ describe('buildScopeMap function parameters', () => {
 		assert.match({ kind: 'primitive', name: 'string' }, scopeGet(scope, 'y'));
 	});
 
+	it('a method takes the @param types of the doc before its key', () => {
+		let STR = { kind: 'primitive', name: 'string' };
+		let m = "\t/** @param {string} a */\n\tm: function(a) { let z = a; },\n\tn: (b) => { let y = b; },\n";
+		for (let src in [ 'let o = {\n' + m + '};\n', 'return {\n' + m + '};\n' ]) {
+			assert.match(STR, scopeGet(scopeAt(src, 'let z'), 'a'));
+			assert.match('unknown', scopeGet(scopeAt(src, 'let y'), 'b')?.kind);
+		}
+	});
+
+	it('a method does not take the doc of the statement holding its object', () => {
+		let src = '/** @param {string} a */\nreturn {\n\tm: function(a) { let z = a; },\n};\n';
+		assert.match('unknown', scopeGet(scopeAt(src, 'let z'), 'a')?.kind);
+	});
+
 	it('params not visible outside function body', () => {
 		let src = '/** @param {int} x */\nfunction f(x) {}\nlet z = 1;\n';
 		let scope = scopeAt(src, 'let z');

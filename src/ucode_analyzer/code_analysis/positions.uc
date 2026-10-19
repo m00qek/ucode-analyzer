@@ -51,14 +51,16 @@ export function docBeforeMap(parent, text) {
 
 // The statement-level ancestor of `node` whose leading /** */ documents it, and
 // that statement's enclosing block. Walks up until the parent is a statement
-// list (isStatementList). Returns { target, parent } with parent=null when
-// `node` has none.
+// list (isStatementList), or is an object whose member `node` is in: a
+// method's doc comes before its key. Returns { target, parent } with
+// parent=null when `node` has none.
 export function docBearingStatement(node) {
 	let target = node;
 	let p = ts.parent(target);
 	while (p) {
 		let pt = ts.nodeType(p);
 		if (isStatementList(pt)) break;
+		if (pt === 'object' && ts.nodeType(target) === 'pair') break;
 		target = p;
 		p = ts.parent(target);
 	}

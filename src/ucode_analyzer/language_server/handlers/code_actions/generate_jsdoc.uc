@@ -7,8 +7,9 @@ import { paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
 
 // On a function's first line, when it has no doc comment: insert a /** */
 // with an @param per parameter and an @returns, typed by inference ({any}
-// where it knows nothing). Functions: declarations, and a function or arrow
-// that is the whole initializer of a single-declarator let/const.
+// where it knows nothing). Functions: declarations, a function or arrow that
+// is the whole initializer of a single-declarator let/const, and one that is
+// the value of an object's member (the doc goes before its key).
 
 // A type in ucdocs syntax. Records are `object`: the hover form `{ a, b }`
 // lists names only and is not a type.
@@ -32,6 +33,8 @@ function documentable(node) {
 	if (t === 'function_declaration') return true;
 	if (t !== 'function_expression' && t !== 'arrow_function') return false;
 	let vd = ts.parent(node);
+	if (vd && ts.nodeType(vd) === 'pair')
+		return ts.startByte(ts.childByField(vd, 'value')) === ts.startByte(node);
 	if (!vd || ts.nodeType(vd) !== 'variable_declarator') return false;
 	let value = ts.childByField(vd, 'value');
 	if (!value || ts.startByte(value) !== ts.startByte(node)) return false;
@@ -42,10 +45,12 @@ export function actionsFor(uri, doc, range) {
 	if (!range) return [];
 	let root = ts.rootNode(doc.tree);
 	let offset = positionToOffset(doc.text, doc.lineTable, range.start);
-	// The function the cursor is in, or whose `const f = …` it is on.
+	// The function the cursor is in, or whose `const f = …` or `key: …` it
+	// is on.
 	let fn = null;
 	for (let n = ts.descendantAt(root, offset); n && !fn; n = ts.parent(n)) {
-		let v = (ts.nodeType(n) === 'variable_declarator') ? ts.childByField(n, 'value') : null;
+		let nt = ts.nodeType(n);
+		let v = (nt === 'variable_declarator' || nt === 'pair') ? ts.childByField(n, 'value') : null;
 		if (documentable(n)) fn = n;
 		else if (v && documentable(v)) fn = v;
 	}
