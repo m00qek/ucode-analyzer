@@ -46,13 +46,23 @@ export function sameBindings(a, b) {
 	return true;
 };
 
-// name → type at a scope, past the root (the imports and builtins).
+// name → type at a scope, past the root (the imports and builtins), and
+// ' path' → narrowing for its member paths' narrowings (scope.paths), '-path'
+// for the paths writes end them for (scope.kills).
 function flatten(scope, memo) {
 	if (!scope || !scope.parent) return {};
 	if (memo[scope.id]) return memo[scope.id];
 	let f = { ...flatten(scope.parent, memo) };
 	for (let k, v in scope.bindings) f[k] = v;
+	for (let k, v in scope.paths) f[' ' + k] = v;
+	for (let k in scope.kills) f['-' + k] = true;
 	return memo[scope.id] = f;
+}
+
+// True when scopes a and b, one level each, bind and narrow the same.
+function sameLevel(a, b) {
+	return !a.narrow === !b.narrow && !a.fn === !b.fn && sameBindings(a.bindings, b.bindings) &&
+		sameBindings(a.paths ?? {}, b.paths ?? {}) && sameType(a.kills, b.kills);
 }
 
 // True when scopes a and b bind the same, level by level up to the root: a
@@ -69,7 +79,7 @@ function sameChain(a, b, memo) {
 		b = b.parent;
 	}
 	for (let i = length(path) - 1; i >= 0; i--) {
-		ok = ok && sameBindings(path[i][1].bindings, path[i][2].bindings);
+		ok = ok && sameLevel(path[i][1], path[i][2]);
 		memo[path[i][0]] = ok;
 	}
 	return ok;

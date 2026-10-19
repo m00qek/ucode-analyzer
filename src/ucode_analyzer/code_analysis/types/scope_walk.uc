@@ -2,11 +2,11 @@ import * as ts from 'tree_sitter';
 import { firstNamed, namedNonComments, declarators } from 'ucode_analyzer.code_analysis.ast_text';
 import { inferNode, inferParams, declaredType, setReturnScopes } from 'ucode_analyzer.code_analysis.types.inferrer';
 import { importScope } from 'ucode_analyzer.code_analysis.types.dag_bridge';
-import { makeScope, scopeSet, scopeGet, scopeHas, scopeFork, recordLookups, resolve } from 'ucode_analyzer.code_analysis.types.scope';
+import { makeScope, fnScope, scopeSet, scopeGet, scopeHas, scopeFork, killPaths, recordLookups, resolve } from 'ucode_analyzer.code_analysis.types.scope';
 import { sameType, sameBindings } from 'ucode_analyzer.code_analysis.types.type_eq';
 import { epochOf, recordMove, forgetMoves } from 'ucode_analyzer.code_analysis.memo';
 import { UNKNOWN, STR, unionOf } from 'ucode_analyzer.code_analysis.types.type_utils';
-import { parseGuard, applyGuard as narrowBy, narrowToNonNull, optionalChainRoot } from 'ucode_analyzer.code_analysis.types.narrowing';
+import { parseGuard, applyGuard as narrowBy, narrowToNonNull, optionalChainRoot, pathOf } from 'ucode_analyzer.code_analysis.types.narrowing';
 
 // Where the last lookup landed. Passes read a file front to back, so the next
 // lookup is usually at that checkpoint or a few past it.
@@ -94,6 +94,7 @@ function rootsNonNull(scope, guard, positive) {
             for (let g in guard.guards) rootsNonNull(scope, g, positive);
         return;
     }
+    if (guard.root) return;
     let root = _chainRoots[guard.name];
     if (_unit && !exists(_unit.chainWrites, guard.name) && !exists(_unit.chainReads, guard.name))
         _unit.chainReads[guard.name] = { v: root };
@@ -280,7 +281,8 @@ function applyGuardClause(stmt, source, scope) {
 // path reached the end: `let x = null; if (c) x = {};` leaves x `null | {}`.
 
 // The nodes that assign (`??=` and `||=` widen like `=`) or declare a name.
-const BINDING_TYPES = [ 'assignment_expression', 'augmented_assignment_expression', 'variable_declarator', 'for_in_statement' ];
+const BINDING_TYPES = [ 'assignment_expression', 'augmented_assignment_expression', 'variable_declarator', 'for_in_statement',
+                        'delete_expression' ];
 
 const FUNCTION_TYPES = { function_declaration: true, function_expression: true, arrow_function: true };
 
@@ -310,13 +312,33 @@ function firstAfter(offsets, x) {
 // level), and closure whether that function does not declare name.
 // _captured holds the right-hand sides, by name, of the variables another
 // function may see change (see widenCaptured); _capturedType caches its joins.
-// _closureAssigns are the entries whose closure is true.
-let _assigns = [], _decls = [], _closureAssigns = [], _captured = {}, _capturedType = {};
+// _closureAssigns are the entries whose closure is true. _memberWrites: the
+// writes to members (`a.b = …`, `a[i] ??= …`, `delete a.b`) as { start, kill },
+// kill the member path written, or for a subscript the variable it starts from.
+let _assigns = [], _decls = [], _closureAssigns = [], _captured = {}, _capturedType = {}, _memberWrites = [];
+
+// The variable a member target starts from (a in `a.b[i]`), or null.
+function targetRoot(node, source) {
+    while (node) {
+        let t = ts.nodeType(node);
+        if (t === 'identifier') return ts.text(node, source);
+        if (t !== 'member_expression' && t !== 'subscript_expression' && t !== 'parenthesized_expression') return null;
+        node = (t === 'parenthesized_expression') ? firstNamed(node) : ts.childByField(node, 'object');
+    }
+    return null;
+}
+
+// What a write to member target node may change: its path (`a.b`), else the
+// variable it starts from (a in `a.b[i]`, any member of a); null for neither.
+function writtenPath(node, source) {
+    return pathOf(node, source)?.path ?? targetRoot(node, source);
+}
 
 function collectBindings(root, source) {
     _assigns = [];
     _decls = [];
     _closureAssigns = [];
+    _memberWrites = [];
     _captured = {};
     _capturedType = {};
     let fns = ts.descendantOffsets(root, keys(FUNCTION_TYPES));
@@ -328,8 +350,18 @@ function collectBindings(root, source) {
                 push(_decls, { start: ts.startByte(name), name: ts.text(name, source) });
             continue;
         }
+        if (t === 'delete_expression') {
+            let kill = writtenPath(ts.childByField(n, 'argument'), source);
+            if (kill) push(_memberWrites, { start: ts.startByte(n), kill });
+            continue;
+        }
         let lhs = ts.childByField(n, 'left'), rhs = ts.childByField(n, 'right');
-        if (!lhs || !rhs || ts.nodeType(lhs) !== 'identifier') continue;
+        if (lhs && ts.nodeType(lhs) !== 'identifier') {
+            let kill = writtenPath(lhs, source);
+            if (kill) push(_memberWrites, { start: ts.startByte(lhs), kill });
+            continue;
+        }
+        if (!lhs || !rhs) continue;
         if (t === 'augmented_assignment_expression' && !FILLS[ts.nodeType(ts.childByField(n, 'operator'))]) continue;
         let entry = { start: ts.startByte(lhs), name: ts.text(lhs, source), rhs, fnStart: -1, fnEnd: -1 };
         for (let p = ts.parent(n); p; p = ts.parent(p))
@@ -339,6 +371,7 @@ function collectBindings(root, source) {
     let byStart = (a, b) => a.start - b.start;
     sort(_assigns, byStart);
     sort(_decls, byStart);
+    sort(_memberWrites, byStart);
     // Captured: assigned in a function that does not declare it (the variable is
     // an enclosing one), or after a function nested where it is assigned begins,
     // which can run later. A variable assigned only before any such function
@@ -392,6 +425,15 @@ function closureAssignmentsIn(stmt) {
         for (let i = lowerBound(_decls, s); i < length(_decls) && _decls[i].start < e; i++)
             delete out[_decls[i].name];
     return out;
+}
+
+// The scope after stmt, past its writes to members, in functions nested in it
+// too (they may have run): the narrowings of those variables' paths end.
+function killWritten(stmt, scope) {
+    let s = ts.startByte(stmt), e = ts.endByte(stmt), kills = {};
+    for (let i = lowerBound(_memberWrites, s); i < length(_memberWrites) && _memberWrites[i].start < e; i++)
+        kills[_memberWrites[i].kill] = true;
+    return length(kills) ? killPaths(scope, sort(keys(kills))) : scope;
 }
 
 function rhsType(rhs, source, uri, smap) {
@@ -510,7 +552,7 @@ function stepStatement(stmt, source, uri, scope, map) {
     let inner = length(map);
     walkNode(stmt, source, uri, scope, map);
     inner = length(map) > inner;
-    let next = applyGuardClause(stmt, source, advanceScope(stmt, source, uri, scope));
+    let next = applyGuardClause(stmt, source, killWritten(stmt, advanceScope(stmt, source, uri, scope)));
     next = widenAssigned(stmt, scope, next, source, uri, map);
     next = widenByClosures(stmt, next, source, uri, map);
     // Past the statement's end (a blank line before the next one) its
@@ -795,52 +837,52 @@ function walkSwitch(node, source, uri, scope, map) {
 // outer variable the file assigns may hold any of the assigned types: `let x =
 // null; function init() { x = {}; }` makes x `null | object` in every function
 // that mentions it. Matched by name, so a shadowing variable only widens, never
-// narrows. The widened types go in the function's own frame (fnScope), not in a
+// narrows. The widened types go in the function's own frame, not in a
 // chain of forks every later lookup would walk.
 // Returns the captured names body's text holds, which are `mentions` when
 // that is given (see reuseUnit).
-function widenCaptured(fnScope, body, source, uri, smap, mentions) {
+function widenCaptured(frame, body, source, uri, smap, mentions) {
     let text = mentions ? null : ts.text(body, source);
     let found = [];
     for (let name in (mentions ?? keys(_captured))) {
         if (text !== null && index(text, name) < 0) continue;
         push(found, name);
         let rhss = _captured[name];
-        let t0 = scopeGet(fnScope, name);
+        let t0 = scopeGet(frame, name);
         if (!t0 || t0.kind === 'unknown') continue;
         let had = exists(_capturedType, name);
         _capturedType[name] ??= joinTypes(map(rhss, (r) => rhsType(r, source, uri, smap)));
         // The unit's own root scope is made again when it is reused.
-        if (_unit && fnScope !== _unit.root) {
+        if (_unit && frame !== _unit.root) {
             if (!had) _unit.capturedWrites[name] = _capturedType[name];
             else if (!exists(_unit.capturedWrites, name)) _unit.captured[name] ??= _capturedType[name];
         }
-        scopeSet(fnScope, name, joinTypes([t0, _capturedType[name]]));
+        scopeSet(frame, name, joinTypes([t0, _capturedType[name]]));
     }
     return found;
 }
 
 function walkFnBody(node, source, uri, scope, map) {
-    let fnScope = makeScope(scope);
+    let frame = fnScope(scope);
     if (_unit && !_unit.root) {
-        _unit.root = fnScope;
-        recordLookups({ root: fnScope, reads: _unit.reads });
+        _unit.root = frame;
+        recordLookups({ root: frame, reads: _unit.reads });
     }
     let body = ts.childByField(node, 'body');
-    let mentions = body ? widenCaptured(fnScope, body, source, uri, map) : [];
-    if (_unit && _unit.root === fnScope) _unit.mentions = mentions;
-    addParams(node, source, uri, fnScope);
+    let mentions = body ? widenCaptured(frame, body, source, uri, map) : [];
+    if (_unit && _unit.root === frame) _unit.mentions = mentions;
+    addParams(node, source, uri, frame);
     if (!body) return;
     if (ts.nodeType(body) === 'statement_block') {
-        walkBlock(body, source, uri, fnScope, map);
+        walkBlock(body, source, uri, frame, map);
     } else if (ts.nodeType(body) === 'statement_list') {
         // Colon form `function f(a): … endfunction` — in a template,
         // {% function f(a): %}…{% endfunction %}.
-        walkStatementList(body, source, uri, fnScope, map);
+        walkStatementList(body, source, uri, frame, map);
     } else {
         // Arrow function with expression body: emit one checkpoint then recurse.
-        emit(map, ts.startByte(body), fnScope);
-        walkNode(body, source, uri, fnScope, map);
+        emit(map, ts.startByte(body), frame);
+        walkNode(body, source, uri, frame, map);
     }
 }
 
@@ -871,7 +913,7 @@ function reuseUnit(node, source, uri, scope, smap) {
         if (_chainRoots[name] !== r.v) return false;
     // Its root scope, as walkFn would make it now: the captured names its text
     // holds are those it held, unless the file's are others now.
-    let frame = makeScope(scope);
+    let frame = fnScope(scope);
     let body = ts.childByField(node, 'body');
     let mentions = body
         ? widenCaptured(frame, body, source, uri, smap, (_prev.capturedNames === _capturedNames) ? old.mentions : null)
@@ -1105,7 +1147,7 @@ function buildMap(uri, source, tree, from, withUnits) {
     let map = [];
     let outer = [_marks, _pos, _assigns, _decls, _captured, _capturedType, _chainRoots,
         setReturnScopes(null), _closureAssigns, _units, _unit, _prev, recordLookups(null),
-        _capturedNames, _compared];
+        _capturedNames, _compared, _memberWrites];
     function restore() {
         _marks = outer[0];
         _pos = outer[1];
@@ -1122,6 +1164,7 @@ function buildMap(uri, source, tree, from, withUnits) {
         recordLookups(outer[12]);
         _capturedNames = outer[13];
         _compared = outer[14];
+        _memberWrites = outer[15];
     }
     _units = withUnits ? [] : null;
     _unit = null;

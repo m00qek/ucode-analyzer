@@ -71,3 +71,45 @@ export function scopeHas(scope, name) {
 	}
 	return false;
 };
+
+// A function's own scope. A member path narrowed outside it (pathNarrowing)
+// may have changed by the time it runs.
+export function fnScope(parent) {
+	let s = makeScope(parent);
+	s.fn = true;
+	return s;
+};
+
+// True when a write to one of kills (paths, or a variable's every member)
+// may have changed path.
+function killed(kills, path, root) {
+	for (let k in kills)
+		if (k === root || k === path || substr(path, 0, length(k) + 1) === k + '.') return true;
+	return false;
+}
+
+// How a guard narrowed member path `path` (`a.b`, root a) where scope is
+// (narrowing.uc applyGuard), or null. Until then, nothing may have changed
+// it: a write to it or a path it is under (killPaths), a binding of a other
+// than a narrowing (`let a`, `a = …`), or a function boundary.
+export function pathNarrowing(scope, path, root) {
+	for (let s = scope; s; s = s.parent) {
+		if (s.paths) {
+			if (exists(s.paths, path)) return s.paths[path];
+			if (s.kills && killed(s.kills, path, root)) return null;
+		}
+		if (!s.narrow && exists(s.bindings, root)) return null;
+		if (s.fn) return null;
+	}
+	return null;
+};
+
+// A scope past writes to members: kills holds the member paths written
+// (`a.b`), and the variables written through a subscript or a delete of one
+// (`a`). Narrowings of those paths, and of the paths under them, end there.
+export function killPaths(scope, kills) {
+	let s = makeScope(scope);
+	s.paths = {};
+	s.kills = kills;
+	return s;
+};

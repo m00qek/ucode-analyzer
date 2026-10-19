@@ -110,6 +110,10 @@ export function narrowUnionByDiscriminant(type, field, value, keep) {
 //       Discriminant test r.field === <literal> (positive=true) or !==. Refines
 //       a tagged union bound to `name` to the matching variant(s) per branch.
 //
+//   A guard's name may be a member path, `a.b.c`, with `root` its variable
+//   (a): applyGuard then narrows the path (scope.paths), whose type the
+//   inferrer narrows in turn (applyPathNarrowing).
+//
 //   { kind: 'and', guards }
 //       Compound &&: all sub-guards hold in the consequent; alternate is
 //       ambiguous (we can't tell which sub-condition failed), so applyGuard
@@ -134,34 +138,78 @@ export function optionalChainRoot(node, source) {
 	return (opt && node && ts.nodeType(node) === 'identifier') ? ts.text(node, source) : null;
 };
 
-// `name` is non-null in the branch where the condition is `holds`.
-function nonNullWhen(name, holds) {
-	return holds
-		? { kind: 'and', guards: [ { kind: 'truthy', name, positive: true } ] }
-		: { kind: 'or',  guards: [ { kind: 'truthy', name, positive: false } ] };
+// `a.b.c` as { path: 'a.b.c', root: 'a' }, `?.` links too (where the chain is
+// not null they read the same); null for anything else.
+export function pathOf(node, source) {
+	let props = [];
+	while (node && ts.nodeType(node) === 'member_expression') {
+		let prop = ts.childByField(node, 'property');
+		if (!prop || ts.nodeType(prop) !== 'property_identifier') return null;
+		unshift(props, ts.text(prop, source));
+		node = ts.childByField(node, 'object');
+	}
+	if (!node || ts.nodeType(node) !== 'identifier') return null;
+	let root = ts.text(node, source);
+	return { path: join('.', [ root, ...props ]), root };
+};
+
+// What a guard on node narrows: a variable { name } or a member path
+// { name, root }; null for anything else.
+function guardTarget(node, source) {
+	if (!node) return null;
+	if (ts.nodeType(node) === 'identifier') return { name: ts.text(node, source) };
+	let p = pathOf(node, source);
+	return p ? { name: p.path, root: p.root } : null;
+}
+
+// The objects along a chain holding a `?.` link that are variables or member
+// paths: each was read without short-circuiting or throwing where the chain is
+// not null. [] for any other node.
+function chainObjects(node, source) {
+	let objs = [], opt = false;
+	while (node) {
+		let t = ts.nodeType(node);
+		if (t !== 'member_expression' && t !== 'subscript_expression') break;
+		if (ts.childByField(node, 'optional_chain')) opt = true;
+		node = ts.childByField(node, 'object');
+		let g = guardTarget(node, source);
+		if (g) push(objs, g);
+	}
+	return opt ? objs : [];
+}
+
+// The targets are non-null in the branch where the condition is `holds`.
+function nonNullWhen(targets, holds) {
+	let guards = map(targets, (t) => ({ kind: 'truthy', ...t, positive: holds }));
+	return holds ? { kind: 'and', guards } : { kind: 'or', guards };
+}
+
+// A truthy test of node (`if (x)`, `!x` when not `holds`): x, or for a chain
+// with a `?.` link, it and the objects along it.
+function truthyGuard(node, holds, source) {
+	let target = guardTarget(node, source);
+	let objs = chainObjects(node, source);
+	if (!length(objs))
+		return target ? { kind: 'truthy', ...target, positive: holds } : null;
+	if (target) push(objs, target);
+	return nonNullWhen(objs, holds);
 }
 
 export function parseGuard(node, source) {
 	if (!node) return null;
 	let nt = ts.nodeType(node);
 
-	// `if (x?.p)`: a truthy chain proves its root non-null.
-	let chainRoot = optionalChainRoot(node, source);
-	if (chainRoot) return nonNullWhen(chainRoot, true);
-
 	if (nt === 'parenthesized_expression')
 		return parseGuard(firstNamed(node), source);
 
-	if (nt === 'identifier')
-		return { kind: 'truthy', name: ts.text(node, source), positive: true };
+	// `if (x)`, `if (a.b)`, `if (x?.p)`
+	let truthy = truthyGuard(node, true, source);
+	if (truthy) return truthy;
 
 	if (nt === 'unary_expression') {
 		if (ts.nodeType(ts.childByField(node, 'operator')) === '!') {
 			let operand = ts.childByField(node, 'argument');
-			if (operand && ts.nodeType(operand) === 'identifier')
-				return { kind: 'truthy', name: ts.text(operand, source), positive: false };
-			let root = operand ? optionalChainRoot(operand, source) : null;
-			if (root) return nonNullWhen(root, false);
+			return operand ? truthyGuard(operand, false, source) : null;
 		}
 		return null;
 	}
@@ -208,32 +256,37 @@ export function parseGuard(node, source) {
 			if (callee && ts.nodeType(callee) === 'identifier' && ts.text(callee, source) === 'type'
 			    && args && length(namedNonComments(args)) === 1) {
 				let operand = firstNamed(args);
-				// type(x?.p) == 'T' for a non-null T: x is non-null where it holds.
-				let root = operand ? optionalChainRoot(operand, source) : null;
+				// type(x?.p) == 'T' for a non-null T: x and x.p are non-null
+				// where it holds.
+				let objs = operand ? chainObjects(operand, source) : [];
+				let target = guardTarget(operand, source);
 				let typeName = replace(ts.text(stringSide, source), /^['"]|['"]$/g, '');
-				if (root && typeName !== 'null') return nonNullWhen(root, isEq);
-				if (operand && ts.nodeType(operand) === 'identifier') {
-					let name    = ts.text(operand, source);
-					let raw     = ts.text(stringSide, source);
-					let typeStr = replace(raw, /^['"]|['"]$/g, '');
-					let toType  = TYPE_FUNC_MAP[typeStr];
+				if (length(objs) && typeName !== 'null') {
+					if (target) push(objs, target);
+					return nonNullWhen(objs, isEq);
+				}
+				if (target) {
+					let toType = TYPE_FUNC_MAP[typeName];
 					if (toType)
-						return { kind: 'type', name, positive: isEq, toType };
+						return { kind: 'type', ...target, positive: isEq, toType };
 					// object/array/function have no singleton type, but
 					// `type(x) === '<non-null kind>'` still proves x is non-null
 					// where it holds (type(null) is 'null'), and `!==` where it
 					// fails: only that branch narrows, x could be null in the other.
-					return nonNullWhen(name, isEq);
+					return nonNullWhen([ target ], isEq);
 				}
 			}
 		}
 
-		// x?.p == <literal> (or != null): x is non-null where the chain is.
+		// x?.p == <literal> (or != null): x and x.p are non-null where the
+		// chain is.
 		for (let pair in [[left, right], [right, left]]) {
-			let root = optionalChainRoot(pair[0], source);
-			if (!root) continue;
-			if (ts.nodeType(pair[1]) === 'null') return nonNullWhen(root, isNotEq);
-			if (literalNodeValue(pair[1], source) !== null) return nonNullWhen(root, isEq);
+			let objs = chainObjects(pair[0], source);
+			if (!length(objs)) continue;
+			let target = guardTarget(pair[0], source);
+			if (target) push(objs, target);
+			if (ts.nodeType(pair[1]) === 'null') return nonNullWhen(objs, isNotEq);
+			if (literalNodeValue(pair[1], source) !== null) return nonNullWhen(objs, isEq);
 		}
 
 		// r.kind === 'fail'  /  r.kind !== 'fail'  — discriminant test on a
@@ -258,22 +311,25 @@ export function parseGuard(node, source) {
 			}
 		}
 
-		// x !== null  /  x === null
-		let varNode = null;
-		if (ts.nodeType(right) === 'null' && ts.nodeType(left) === 'identifier')
-			varNode = left;
-		else if (ts.nodeType(left) === 'null' && ts.nodeType(right) === 'identifier')
-			varNode = right;
-		if (!varNode) return null;
+		// x !== null  /  x === null  (or a.b)
+		let target = null;
+		if (ts.nodeType(right) === 'null')
+			target = guardTarget(left, source);
+		else if (ts.nodeType(left) === 'null')
+			target = guardTarget(right, source);
+		if (!target) return null;
 
-		return { kind: 'truthy', name: ts.text(varNode, source), positive: isNotEq };
+		return { kind: 'truthy', ...target, positive: isNotEq };
 	}
 
 	return null;
 };
 
+// Narrow scope, a fresh one for the branch, by guard: its variables' bindings,
+// and its member paths in scope.paths (see scope.uc pathNarrowing).
 export function applyGuard(scope, guard, positive) {
 	if (!guard) return;
+	scope.narrow = true;
 	if (guard.kind === 'and' || guard.kind === 'or') {
 		// `and` holds every sub-guard when true, `or` fails every one when
 		// false; the other branch is ambiguous.
@@ -282,8 +338,16 @@ export function applyGuard(scope, guard, positive) {
 				applyGuard(scope, guard.guards[i], positive);
 		return;
 	}
-	let current = scopeGet(scope, guard.name);
 	let inTrueBranch = guard.positive ? positive : !positive;
+	if (guard.root) {
+		if (guard.kind !== 'truthy' && guard.kind !== 'type') return;
+		let n = { kind: guard.kind, holds: inTrueBranch };
+		if (guard.kind === 'type') n.toType = guard.toType;
+		scope.paths ??= {};
+		scope.paths[guard.name] = n;
+		return;
+	}
+	let current = scopeGet(scope, guard.name);
 	if (guard.kind === 'variant') {
 		scopeSet(scope, guard.name,
 			narrowUnionByDiscriminant(current ?? UNKNOWN, guard.field, guard.value, inTrueBranch));
@@ -295,4 +359,10 @@ export function applyGuard(scope, guard, positive) {
 		// kind === 'truthy'
 		scopeSet(scope, guard.name, inTrueBranch ? narrowToNonNull(current ?? UNKNOWN) : NULL_T);
 	}
+};
+
+// The type of a member whose path a guard narrowed (applyGuard's n).
+export function applyPathNarrowing(type, n) {
+	if (n.kind === 'type') return n.holds ? n.toType : narrowExcluding(type ?? UNKNOWN, n.toType);
+	return n.holds ? narrowToNonNull(type) : NULL_T;
 };

@@ -473,3 +473,45 @@ describe('diagnostics — type errors: values set elsewhere', () => {
 		assert.match([['null-access', 0]], codes("let e = null;\ne += 1;\nprint($0e.x);\n"));
 	});
 });
+
+describe('diagnostics — type errors: guards on member paths', () => {
+	// The may-be-null messages of f, whose w.timer and v.timer may be null,
+	// with body after their declarations.
+	function warns(body) {
+		let text = "function f(c) {\n\tlet w = { timer: null };\n\tif (c) w = { timer: {} };\n\tlet v = w;\n" + body + "\n}\n";
+		return map(filter(typeErrors(URI, open(text)), (d) => d.code === 'may-be-null'), (d) => d.message);
+	}
+
+	it('narrows a member path its guard tests', () => {
+		assert.match([ "'w.timer' may be null" ], warns("\tw.timer.cancel();"));
+		assert.match([], warns("\tif (w.timer) w.timer.cancel();"));
+		assert.match([], warns("\tif (!w.timer) return;\n\tw.timer.cancel();"));
+		assert.match([], warns("\tif (w.timer != null) { w.timer.cancel(); }"));
+		assert.match([], warns("\tif (type(w.timer) == 'object') w.timer.cancel();"));
+		assert.match([], warns("\tw.timer && w.timer.cancel();"));
+	});
+
+	it('narrows the objects along an optional chain its guard tests', () => {
+		assert.match([], warns("\tif (type(w.timer?.list) != 'array') return;\n\treturn w.timer.list;"));
+		assert.match([], warns("\tif (w.timer?.id) return w.timer.id;"));
+	});
+
+	it('stops narrowing a path once it, or what it is under, is written', () => {
+		// (A field assigned anywhere is not null-checked at all: deletes show it.)
+		assert.match([ "'w.timer' may be null" ], warns("\tif (!w.timer) return;\n\tdelete w.timer;\n\tw.timer.cancel();"));
+		assert.match([ "'w.timer' may be null" ], warns("\tif (!w.timer) return;\n\tif (c) delete w.timer;\n\tw.timer.cancel();"));
+		assert.match([ "'w.timer' may be null" ], warns("\tif (!w.timer) return;\n\tw[c] = null;\n\tw.timer.cancel();"));
+		assert.match([], warns("\tif (!w.timer) return;\n\tw.other = 1;\n\tw.timer.id = 2;\n\tdelete v.other;\n\tw.timer.cancel();"));
+	});
+
+	it('stops narrowing a path once its variable is bound again', () => {
+		assert.match([ "'w.timer' may be null" ], warns("\tif (!w.timer) return;\n\tw = v;\n\tw.timer.cancel();"));
+		assert.match([ "'w.timer' may be null" ], warns("\tif (w.timer) { let w = v; w.timer.cancel(); }"));
+		assert.match([], warns("\tif (!w.timer) return;\n\tif (w) w.timer.cancel();"));
+	});
+
+	it('does not narrow a path in a function that may run later', () => {
+		assert.match([ "'w.timer' may be null" ], warns("\tif (!w.timer) return;\n\tlet stop = () => w.timer.cancel();\n\treturn stop;"));
+		assert.match([], warns("\tlet stop = () => { if (w.timer) w.timer.cancel(); };\n\treturn stop;"));
+	});
+});

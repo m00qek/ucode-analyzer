@@ -3,8 +3,8 @@ import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
 import { parseDoc } from 'ucode_analyzer.code_analysis.types.doc_parser';
 import { unify, substitute, returnOf } from 'ucode_analyzer.code_analysis.types.unifier';
 import { memoGet, memoSet, docMapGet, docMapSet, epochOf, enterEpoch, anchor } from 'ucode_analyzer.code_analysis.memo';
-import { makeScope, scopeGet, scopeSet, scopeHas, isRootBinding } from 'ucode_analyzer.code_analysis.types.scope';
-import { parseGuard, applyGuard, narrowToNonNull } from 'ucode_analyzer.code_analysis.types.narrowing';
+import { makeScope, fnScope, scopeGet, scopeSet, scopeHas, isRootBinding, pathNarrowing } from 'ucode_analyzer.code_analysis.types.scope';
+import { parseGuard, applyGuard, narrowToNonNull, pathOf, applyPathNarrowing } from 'ucode_analyzer.code_analysis.types.narrowing';
 import { UNKNOWN, BOOL, STR, INT, FLOAT, NULL_T, unionOf, memberOfType, literal, resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
 import { docBeforeMap, docBearingStatement } from 'ucode_analyzer.code_analysis.positions';
 import { stringLiteralText, firstNamed, declarators, paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
@@ -176,7 +176,7 @@ function inferArrow(node, source, uri, scope, depth, expectedType) {
 	let bodyNode = ts.childByField(node, 'body');
 	if (!bodyNode) return { kind: 'function', params, return: UNKNOWN };
 	return lazyFunction(uri, params, () => {
-		let childScope = makeScope(scope);
+		let childScope = fnScope(scope);
 		for (let i = 0; i < length(params); i++)
 			scopeSet(childScope, params[i].name, params[i].type);
 		let bt = ts.nodeType(bodyNode);
@@ -333,8 +333,11 @@ function inferMember(node, source, uri, scope, depth) {
 		if (dagResult) result = dagResult;
 	}
 	if (ts.childByField(node, 'optional_chain'))
-		return { kind: 'nullable', inner: result };
-	return result;
+		result = { kind: 'nullable', inner: result };
+	// `if (w.timer) w.timer.cancel()`: a guard narrowed this path.
+	let p = pathOf(node, source);
+	let n = p ? pathNarrowing(scope, p.path, p.root) : null;
+	return n ? applyPathNarrowing(result, n) : result;
 }
 
 // Infer arr[i] (list element) or obj["key"] (record field).
@@ -672,7 +675,7 @@ function inferFunctionDecl(node, source, uri, scope, depth) {
 	let body = ts.childByField(node, 'body');
 	if (!body) return { kind: 'function', params, return: UNKNOWN };
 	return lazyFunction(uri, params, () => {
-		let bodyScope = makeScope(scope);
+		let bodyScope = fnScope(scope);
 		for (let i = 0; i < length(params); i++)
 			scopeSet(bodyScope, params[i].name, params[i].type ?? UNKNOWN);
 		let rets = [];
