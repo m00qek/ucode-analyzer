@@ -14,6 +14,7 @@ import { assignmentToConst }    from 'ucode_analyzer.code_analysis.diagnostics.c
 import { missingReturn }        from 'ucode_analyzer.code_analysis.diagnostics.missing_return';
 import { formatString }         from 'ucode_analyzer.code_analysis.diagnostics.format_string';
 import { jsdocConsistency }     from 'ucode_analyzer.code_analysis.diagnostics.jsdoc_param_mismatch';
+import { unknownTypes }         from 'ucode_analyzer.code_analysis.diagnostics.unknown_type';
 
 // Run one diagnostic pass, appending its results to `out`. Each pass is isolated:
 // a die() or runtime error in one pass (a parser edge case, a pathological tree)
@@ -47,5 +48,6 @@ export function diagnosticsFor(uri, doc) {
 	runPass('missing-return',         uri, () => missingReturn(doc),             diags);
 	runPass('format-string',          uri, () => formatString(uri, doc),         diags);
 	runPass('jsdoc-param-mismatch',   uri, () => jsdocConsistency(doc),          diags);
+	runPass('unknown-type',           uri, () => unknownTypes(doc),              diags);
 	return diags;
 };

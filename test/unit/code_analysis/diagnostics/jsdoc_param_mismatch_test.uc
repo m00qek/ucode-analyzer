@@ -102,6 +102,14 @@ describe('diagnostics — jsdoc consistency: no false positives', () => {
 		assert.match(r.want, r.got);
 	});
 
+	it('flags a mismatch on an object method, documented before its key', () => {
+		let r = check("return {\n\t/** @param {int} $0wrong$1 */\n\tm: function(a) {},\n};\n");
+		assert.match(r.want, r.got);
+		assert.match(0, length(diags("return {\n\t/** @param {int} a */\n\tm: (a) => a,\n};\n")));
+		// The doc before the statement holding the object is not the method's.
+		assert.match(0, length(diags("/** @param {int} x */\nreturn {\n\tm: function(a) {},\n};\n")));
+	});
+
 	it('skips a declaration with several declarators (the doc is ambiguous)', () => {
 		assert.match([], diags("/** @param {int} x */\nconst f = function(x) {}, g = function(y) {};\n"));
 	});

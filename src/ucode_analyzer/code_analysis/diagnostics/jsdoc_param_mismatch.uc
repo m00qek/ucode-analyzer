@@ -13,10 +13,10 @@
 // yield a root that must be a real parameter. Only the documented-but-absent case
 // is reported; a missing @param (incomplete docs) is not flagged.
 //
-// Scope: function declarations, and a function expression or arrow that is the
-// whole initializer of a single-declarator let/const (`const f = function(…)`);
-// with several declarators the doc is ambiguous. Object methods are a possible
-// follow-up.
+// Scope: function declarations, a function expression or arrow that is the
+// whole initializer of a single-declarator let/const (`const f = function(…)`)
+// (with several declarators the doc is ambiguous), and one that is the value of
+// an object's member, documented before its key.
 
 import * as ts from 'tree_sitter';
 import { paramNodes } from 'ucode_analyzer.code_analysis.ast_text';
@@ -54,11 +54,13 @@ function checkFn(fn, source, lineTable, out) {
 }
 
 // A function expression or arrow that a /** */ documents on its own: the value
-// of the only declarator of a let/const.
+// of the only declarator of a let/const, or of an object's member.
 function isAssignedFn(node) {
 	let t = ts.nodeType(node);
 	if (t !== 'function_expression' && t !== 'arrow_function') return false;
 	let vd = ts.parent(node);
+	if (vd && ts.nodeType(vd) === 'pair')
+		return ts.startByte(ts.childByField(vd, 'value')) === ts.startByte(node);
 	if (!vd || ts.nodeType(vd) !== 'variable_declarator') return false;
 	let value = ts.childByField(vd, 'value');
 	if (!value || ts.startByte(value) !== ts.startByte(node)) return false;

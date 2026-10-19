@@ -316,6 +316,25 @@ export function parseDoc(commentText) {
 	return result;
 };
 
+// The names a doc comment uses as types that must name a @typedef: every
+// named type but its @template parameters and Array/Object, as
+// [{ name, start, end }] with offsets into commentText.
+export function typeNames(commentText) {
+	let root = ts.rootNode(ts.parse(_parser, commentText));
+	let tparams = {};
+	for (let tag in ts.descendants(root, [ 'template_tag' ]))
+		for (let p in ts.namedChildren(tag))
+			tparams[ts.text(p, commentText)] = true;
+	let out = [];
+	for (let n in ts.descendants(root, [ 'named_type' ])) {
+		let id = ts.childByField(n, 'name');
+		let name = id ? ts.text(id, commentText) : null;
+		if (name && !tparams[name] && name !== 'Array' && name !== 'Object')
+			push(out, { name, start: ts.startByte(id), end: ts.endByte(id) });
+	}
+	return out;
+};
+
 // Render a type object to its source-level string form.
 export function typeToString(type) {
 	if (!type) return '?';
