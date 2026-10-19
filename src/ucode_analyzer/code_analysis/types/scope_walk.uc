@@ -100,7 +100,8 @@ function rootsNonNull(scope, guard, positive) {
     let root = _chainRoots[guard.name];
     if (_unit && !exists(_unit.chainWrites, guard.name) && !exists(_unit.chainReads, guard.name))
         _unit.chainReads[guard.name] = { v: root };
-    if (guard.kind !== 'truthy' || !root || !scopeHas(scope, root)) return;
+    // Either holds only where the variable is not null.
+    if ((guard.kind !== 'truthy' && guard.kind !== 'kind') || !root || !scopeHas(scope, root)) return;
     if (guard.positive ? positive : !positive)
         scopeSet(scope, root, narrowToNonNull(scopeGet(scope, root) ?? UNKNOWN));
 }

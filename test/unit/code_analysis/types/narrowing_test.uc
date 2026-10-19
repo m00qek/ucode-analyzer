@@ -183,21 +183,19 @@ describe('parseGuard', () => {
 		assert.match(FLOAT, g.toType);
 	});
 
-	it('type(x) === "array" → non-null guard for the true branch (no array singleton)', () => {
-		// No singleton type for array, but type(x)==='array' still proves x is
-		// non-null; an 'and'-wrapped truthy guard narrows only the true branch.
+	it('type(x) === "array" → a kind guard, x of that shape where it holds', () => {
 		let doc = parseSource('if (type(x) === "array") {}');
-		let g = parseGuard(conditionNode(doc), doc.source);
-		assert.match('and', g.kind);
-		assert.match('truthy', g.guards[0].kind);
-		assert.match('x', g.guards[0].name);
-		assert.match(true, g.guards[0].positive);
+		assert.match({ kind: 'kind', name: 'x', positive: true, typeName: 'array' }, parseGuard(conditionNode(doc), doc.source));
 	});
 
-	it('type(x) !== "array" → x non-null where it fails, nothing where it holds', () => {
-		let doc = parseSource('if (type(x) !== "array") {}');
-		let g = parseGuard(conditionNode(doc), doc.source);
-		assert.match({ kind: 'or', guards: [ { kind: 'truthy', name: 'x', positive: false } ] }, g);
+	it('type(x) !== "object" → a kind guard, x of that shape where it fails', () => {
+		let doc = parseSource('if (type(x) !== "object") {}');
+		assert.match({ kind: 'kind', name: 'x', positive: false, typeName: 'object' }, parseGuard(conditionNode(doc), doc.source));
+	});
+
+	it('type(x) === "regexp" → x non-null where it holds, nothing more', () => {
+		let doc = parseSource('if (type(x) === "regexp") {}');
+		assert.match({ kind: 'and', guards: [ { kind: 'truthy', name: 'x', positive: true } ] }, parseGuard(conditionNode(doc), doc.source));
 	});
 
 	it('type(x, extra) === "string" → null (only single-arg calls qualify)', () => {

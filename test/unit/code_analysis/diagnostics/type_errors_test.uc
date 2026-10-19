@@ -2,10 +2,16 @@ import { describe, it, assert, afterEach } from 'utest';
 import * as documents from 'ucode_analyzer.code_analysis.documents';
 import { typeErrors } from 'ucode_analyzer.code_analysis.diagnostics.type_errors';
 import * as dag from 'ucode_analyzer.code_analysis.dag.dag';
+import { initBuiltinsFromDag } from 'ucode_analyzer.code_analysis.types.dag_bridge';
 import { cursors } from 'cursor';
 import * as fixture from 'fixture';
 
 let URI = 'file:///test.uc';
+
+dag.init(fixture.config());
+let _g = dag.resolveSpecifier('global');
+dag.addFromDisk(_g);
+initBuiltinsFromDag(_g);
 
 afterEach(() => documents.close(URI));
 
@@ -471,6 +477,13 @@ describe('diagnostics — type errors: values set elsewhere', () => {
 
 	it('other compound assignments do not fill a null variable', () => {
 		assert.match([['null-access', 0]], codes("let e = null;\ne += 1;\nprint($0e.x);\n"));
+	});
+});
+
+describe('diagnostics — type errors: guards on type() shapes', () => {
+	it('knows a value is an object past a type() guard', () => {
+		let doc = open("function is_effect(e) {\n\tif (type(e) != 'object' || length(keys(e)) != 1)\n\t\treturn false;\n\tlet kind = keys(e)[0];\n\treturn kind;\n}\n");
+		assert.match([], filter(typeErrors(URI, doc), (d) => d.code === 'may-be-null'));
 	});
 });
 

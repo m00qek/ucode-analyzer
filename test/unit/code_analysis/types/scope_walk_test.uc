@@ -357,6 +357,31 @@ describe('buildScopeMap if-statement narrowing', () => {
 
 // ── colon / endif (alt-form) if narrowing in a plain script ─────────────────────
 
+describe('buildScopeMap type() shape narrowing', () => {
+	// x's type at `use` in `let x = <init>;` followed by `body`.
+	function xAt(init, body) {
+		let src = '/** @param {?string} s @param {?array} a */\nfunction f(c, s, a) {\n\tlet x = ' + init + ';\n' + body + '\n}\n';
+		return scopeGet(scopeAt(src, 'use'), 'x');
+	}
+
+	it('keeps the alternatives of the shape where type() is it', () => {
+		assert.match({ kind: 'generic', base: 'list', params: [ { kind: 'primitive', name: 'string' } ] },
+			xAt("c ? split(s, ',') : s", "\tif (type(x) == 'array') use(x);"));
+		assert.match({ kind: 'union', members: [ { kind: 'primitive', name: 'string' }, { kind: 'primitive', name: 'null' } ] },
+			xAt("c ? split(s, ',') : s", "\tif (type(x) != 'array') use(x);"));
+	});
+
+	it('leaves null where type() is not the shape', () => {
+		assert.match({ kind: 'primitive', name: 'null' }, xAt('a', "\tif (type(x) == 'array') return;\n\tuse(x);"));
+	});
+
+	it('gives an unknown value the shape where type() is it', () => {
+		assert.match({ kind: 'generic', base: 'dict', params: [ { kind: 'unknown' } ] },
+			xAt('c', "\tif (type(x) != 'object') return;\n\tuse(x);"));
+		assert.match({ kind: 'unknown' }, xAt('c', "\tif (type(x) == 'object') return;\n\tuse(x);"));
+	});
+});
+
 describe('buildScopeMap colon-form if/elif narrowing', () => {
 	// `if (…): … elif (…): … endif` in a script parses to if_alt_statement with
 	// inline elif_clause bodies (no {% %} tags). Each branch must see its OWN

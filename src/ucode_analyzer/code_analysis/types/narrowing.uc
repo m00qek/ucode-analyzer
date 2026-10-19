@@ -1,6 +1,6 @@
 import * as ts from 'tree_sitter';
 import { scopeGet, scopeSet } from 'ucode_analyzer.code_analysis.types.scope';
-import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL, resolveRef } from 'ucode_analyzer.code_analysis.types.type_utils';
+import { UNKNOWN, NULL_T, STR, INT, FLOAT, BOOL, resolveRef, unionOf } from 'ucode_analyzer.code_analysis.types.type_utils';
 import { stringLiteralText, firstNamed, namedNonComments } from 'ucode_analyzer.code_analysis.ast_text';
 
 // Maps the strings returned by ucode's type() built-in to our type objects.
@@ -13,6 +13,55 @@ let TYPE_FUNC_MAP = {
     'string': STR,
     'double': FLOAT,
 };
+
+// type() names whose values have shapes of their own (KINDS[name] when
+// nothing more is known): where `type(x) == name` holds, x keeps only those of
+// its types, and where it fails, it loses them. regexp and resource values
+// have none here, and a handle's typedef is kept in both branches: the
+// declarations type handles as records, though type() says 'resource'.
+const KINDS = {
+	object:   { kind: 'generic', base: 'dict', params: [ UNKNOWN ] },
+	array:    { kind: 'generic', base: 'list', params: [ UNKNOWN ] },
+	function: { kind: 'function', params: [], return: UNKNOWN },
+};
+
+// Whether t's values have type() name `name`: true, false, or null when it
+// cannot tell.
+// JSDoc's builtin names, which stay opaque refs (doc_parser), by type() name.
+const OPAQUE_KINDS = { object: 'object', array: 'array', regexp: 'regexp', resource: 'resource',
+	integer: 'int', double: 'double', number: 'int' };
+
+function ofKind(t, name) {
+	let k = t.kind;
+	if (k === 'ref') return OPAQUE_KINDS[t.name] ? OPAQUE_KINDS[t.name] === name : null;
+	if (k === 'record') return name === 'object';
+	if (k === 'generic') return name === ((t.base === 'list') ? 'array' : 'object');
+	if (k === 'function') return name === 'function';
+	if (k === 'primitive') return false;
+	return null;
+}
+
+// t's alternatives, a nullable's null among them.
+function alternatives(t) {
+	if (t.kind === 'nullable') return [ ...alternatives(t.inner), NULL_T ];
+	if (t.kind === 'union') {
+		let out = [];
+		for (let m in t.members) push(out, ...alternatives(m));
+		return out;
+	}
+	return [ t ];
+}
+
+// x's type t where `type(x) == name` holds, or fails.
+function narrowKind(t, name, holds) {
+	if (!t || t.kind === 'unknown' || t.kind === 'any') return holds ? KINDS[name] : (t ?? UNKNOWN);
+	let kept = filter(alternatives(t), (m) => {
+		let o = ofKind(m, name);
+		return o === null || o === holds;
+	});
+	if (!length(kept)) return holds ? KINDS[name] : t;
+	return unionOf(kept);
+}
 
 export function narrowToNonNull(type) {
 	if (!type || type.kind === 'unknown') return UNKNOWN;
@@ -105,6 +154,10 @@ export function narrowUnionByDiscriminant(type, field, value, keep) {
 //
 //   { kind: 'type', name, positive, toType }
 //       type(x) === 'string' (positive=true) or !== (positive=false).
+//
+//   { kind: 'kind', name, positive, typeName }
+//       type(x) === 'object' / 'array' / 'function' (or !==): x keeps, or
+//       loses, the types of that shape (narrowKind).
 //
 //   { kind: 'variant', name, field, value, positive }
 //       Discriminant test r.field === <literal> (positive=true) or !==. Refines
@@ -269,6 +322,8 @@ export function parseGuard(node, source) {
 					let toType = TYPE_FUNC_MAP[typeName];
 					if (toType)
 						return { kind: 'type', ...target, positive: isEq, toType };
+					if (KINDS[typeName])
+						return { kind: 'kind', ...target, positive: isEq, typeName };
 					// object/array/function have no singleton type, but
 					// `type(x) === '<non-null kind>'` still proves x is non-null
 					// where it holds (type(null) is 'null'), and `!==` where it
@@ -340,9 +395,10 @@ export function applyGuard(scope, guard, positive) {
 	}
 	let inTrueBranch = guard.positive ? positive : !positive;
 	if (guard.root) {
-		if (guard.kind !== 'truthy' && guard.kind !== 'type') return;
+		if (guard.kind !== 'truthy' && guard.kind !== 'type' && guard.kind !== 'kind') return;
 		let n = { kind: guard.kind, holds: inTrueBranch };
 		if (guard.kind === 'type') n.toType = guard.toType;
+		if (guard.kind === 'kind') n.typeName = guard.typeName;
 		scope.paths ??= {};
 		scope.paths[guard.name] = n;
 		return;
@@ -355,6 +411,8 @@ export function applyGuard(scope, guard, positive) {
 		scopeSet(scope, guard.name, inTrueBranch
 			? guard.toType
 			: narrowExcluding(current ?? UNKNOWN, guard.toType));
+	} else if (guard.kind === 'kind') {
+		scopeSet(scope, guard.name, narrowKind(current ?? UNKNOWN, guard.typeName, inTrueBranch));
 	} else {
 		// kind === 'truthy'
 		scopeSet(scope, guard.name, inTrueBranch ? narrowToNonNull(current ?? UNKNOWN) : NULL_T);
@@ -364,5 +422,6 @@ export function applyGuard(scope, guard, positive) {
 // The type of a member whose path a guard narrowed (applyGuard's n).
 export function applyPathNarrowing(type, n) {
 	if (n.kind === 'type') return n.holds ? n.toType : narrowExcluding(type ?? UNKNOWN, n.toType);
+	if (n.kind === 'kind') return narrowKind(type, n.typeName, n.holds);
 	return n.holds ? narrowToNonNull(type) : NULL_T;
 };
