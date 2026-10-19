@@ -29,7 +29,14 @@ TEST_IMAGE = docker run --rm $(TEST_OPTS) \
 	-w /app \
 	$(IMAGE)
 
-.PHONY: compile test test-unit test-e2e test-integration lint shell package
+# The image bin/ucode-analyzer runs (see image/Dockerfile), for SDK_ARCH:
+# x86-64 (amd64) or armsr-armv8 (arm64, as Apple Silicon runs).
+IMAGE_NAME ?= ucode-analyzer
+IMAGE_PACKAGES := ucode-analyzer ucode-analyzer-core ucode-mod-tree-sitter
+IMAGE_TARGET   := $(if $(filter armsr-armv8,$(SDK_ARCH)),armsr/armv8,x86/64)
+IMAGE_ARCH     := $(if $(filter armsr-armv8,$(SDK_ARCH)),arm64,amd64)
+
+.PHONY: compile test test-unit test-e2e test-integration lint shell package image
 
 .docker-image: Dockerfile
 	@docker build \
@@ -118,3 +125,13 @@ package:
 			make defconfig && \
 			make package/$(PKG_NAME)/compile V=s \
 		"; EC=$$?; rm -f $(BUILD_DIR)/$(PKG_NAME)-Makefile; exit $$EC
+
+image: package
+	@rm -rf $(BUILD_DIR)/image && mkdir -p $(BUILD_DIR)/image
+	@for p in $(IMAGE_PACKAGES); do \
+		cp $(BUILD_DIR)/packages/*/base/$$p-$(PKG_VERSION)-r*.apk $(BUILD_DIR)/image/ || exit 1; \
+	done
+	@docker buildx build --platform linux/$(IMAGE_ARCH) --load -f image/Dockerfile \
+		--build-arg OPENWRT_VERSION=$(SDK_VERSION) \
+		--build-arg TARGET=$(IMAGE_TARGET) \
+		-t $(IMAGE_NAME):$(PKG_VERSION_BASE)-$(IMAGE_ARCH) $(BUILD_DIR)/image

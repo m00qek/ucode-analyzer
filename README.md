@@ -16,7 +16,26 @@ and ship typed declarations for ucode's builtins and modules (`fs`, `uci`,
 `ubus`, `uloop`, …).
 
 Status: pre-1.0 (0.1.0), checked against real OpenWrt code (firewall4, LuCI).
-Packages are not published yet: build them from source (below).
+Until 1.0, configuration keys and diagnostic codes may still change.
+
+## Install
+
+ucode-analyzer runs in a container image, an OpenWrt rootfs with its packages
+installed, through a small script that makes it look like a local command.
+You need Docker or Podman:
+
+```sh
+curl -fsSLo ~/.local/bin/ucode-analyzer \
+  https://raw.githubusercontent.com/m00qek/ucode-analyzer/v0.1.0/bin/ucode-analyzer
+chmod +x ~/.local/bin/ucode-analyzer
+ucode-analyzer --version     # pulls ghcr.io/m00qek/ucode-analyzer:0.1.0 once
+```
+
+The script mounts the workspace and the current directory at their own paths,
+so the locations the server reports are valid on your machine; files outside
+them are not visible to it. It runs as you, without network access.
+`UCODE_ANALYZER_IMAGE` picks another image, and `UCODE_ANALYZER_RUNTIME`
+docker or podman.
 
 ## Features
 
@@ -43,13 +62,15 @@ Packages are not published yet: build them from source (below).
 
 ## Building
 
-Everything builds and runs in Docker, against the OpenWrt SDK and rootfs, so
+To build the packages or the image yourself: everything builds and runs in Docker, against the OpenWrt SDK and rootfs, so
 the host only needs Docker and `make`:
 
 ```sh
 git clone --recursive https://github.com/m00qek/ucode-analyzer
 cd ucode-analyzer
 make package   # OpenWrt packages, in build/x86-64/25.12/packages/
+make image     # the image the script runs, as ucode-analyzer:0.1.0-amd64
+make image SDK_ARCH=armsr-armv8   # the arm64 one (Apple Silicon), built without emulation
 ```
 
 The packages are:
@@ -78,27 +99,14 @@ ucode-analyzer lint --init                                # write .lsp/config.js
 `ucode-analyzer lint --help` lists the options: `--format json`,
 `--fail-on <severity>`, `--jobs <n>`.
 
+In CI, `ucode-analyzer lint --workspace . --fail-on warning` fails the job
+on any warning.
+
 ### Neovim
 
-Run the server from a checkout, in the test image that `make test` builds.
-Mount your projects at the same path inside the container, so the file URIs
-the server returns are valid on the host:
-
 ```lua
-local root = "/path/to/ucode-analyzer"
-local projects = "/path/to/projects"
-
 vim.lsp.config("ucode_analyzer", {
-  cmd = function(dispatchers, config)
-    return vim.lsp.rpc.start({
-      "docker", "run", "--rm", "-i",
-      "-v", projects .. ":" .. projects,
-      "-v", root .. "/build/x86-64/25.12/tree_sitter_native.so:/usr/lib/ucode/tree_sitter/native.so:ro",
-      "ucode-analyzer-test:latest",
-      "ucode", "-L", root .. "/src", root .. "/src/ucode-analyzer.uc", "server",
-      "--config", "/tmp", "--workspace", config.root_dir or vim.fn.getcwd(),
-    }, dispatchers)
-  end,
+  cmd = { "ucode-analyzer", "server" },
   filetypes = { "ucode", "ucode_markup" },
   -- The nearest project config, else the repository: a folder of .uc files
   -- is not a workspace root.
@@ -111,6 +119,26 @@ The `ucode` and `ucode_markup` file types, and highlighting, come from the
 tree-sitter-ucode 0.9 grammars, for example through
 [tree-sitter-manager.nvim](https://github.com/romus204/tree-sitter-manager.nvim)
 ([#215](https://github.com/romus204/tree-sitter-manager.nvim/pull/215) adds 0.9).
+
+### Helix
+
+With the `ucode` language set up as
+[tree-sitter-ucode's guide](https://m00qek.github.io/tree-sitter-ucode/how-to/register-helix/)
+describes, add to `languages.toml`:
+
+```toml
+[language-server.ucode-analyzer]
+command = "ucode-analyzer"
+args = ["server"]
+
+[[language]]
+name = "ucode"
+language-servers = ["ucode-analyzer"]
+
+[[language]]
+name = "ucode-markup"
+language-servers = ["ucode-analyzer"]
+```
 
 ## Configuration
 
