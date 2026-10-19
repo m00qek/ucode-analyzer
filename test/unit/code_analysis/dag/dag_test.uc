@@ -558,7 +558,8 @@ describe('dag — files appearing and disappearing on disk', () => {
 		let before = dag.importsOf(a)[0].resolvedUri;
 		fs.writefile(dir + '/src/lib.uc', 'export function g() {};\n');
 		dag.addFromDisk(lib);
-		let changed = dag.resolveUnresolved();
+		// Files other tests left in the DAG may resolve anew under this config.
+		let changed = filter(dag.resolveUnresolved(), (u) => index(u, 'file://' + dir + '/') === 0);
 		let after = dag.importsOf(a)[0].resolvedUri;
 		let deps = dag.reverseDeps(lib);
 		dag.remove(a);
