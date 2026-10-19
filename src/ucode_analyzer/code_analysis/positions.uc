@@ -83,10 +83,33 @@ export function docNodeBefore(stmt, parent, text) {
 	return found;
 };
 
+// docNodeBefore for every named child of a parent, by start, kept per parent
+// for the last text asked about: asking per sibling rescans the list each time,
+// O(siblings²) over a module's object of methods.
+let _docNodes = { text: null, byParent: {} };
+
+function docNodesOf(parent, text) {
+	if (_docNodes.text !== text) _docNodes = { text, byParent: {} };
+	let key = ts.startByte(parent) + '|' + ts.endByte(parent);
+	let m = _docNodes.byParent[key];
+	if (m) return m;
+	m = {};
+	let pending = null;
+	for (let c in ts.children(parent)) {
+		if (ts.nodeType(c) === 'doc_comment') {
+			pending = c;
+		} else if (ts.isNamed(c)) {
+			m[ts.startByte(c)] = pending;
+			pending = null;
+		}
+	}
+	return _docNodes.byParent[key] = m;
+}
+
 // The /** */ comment node immediately preceding `node`'s statement, or null.
 export function precedingDocNode(node, text) {
 	let s = docBearingStatement(node);
-	return s.parent ? docNodeBefore(s.target, s.parent, text) : null;
+	return s.parent ? (docNodesOf(s.parent, text)[ts.startByte(s.target)] ?? null) : null;
 };
 
 // The text of docNodeBefore, or null.
