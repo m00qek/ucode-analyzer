@@ -20,14 +20,20 @@ function diagnosticsOf(uri, text, code) {
 	return filter(lsp.documentDiagnostics(proc, uri).items, (d) => d.code === code);
 }
 
-// Ask for the code actions fixing diags (at the first one's range).
-function actionsFor(uri, id, diags) {
+// Ask for the code actions fixing diags (at the first one's range). Every
+// diagnostic also offers to be disabled: those are left out unless `all`.
+function actionsFor(uri, id, diags, all) {
 	lsp.send(proc, { jsonrpc: '2.0', id, method: 'textDocument/codeAction', params: {
 		textDocument: { uri },
 		range: diags[0].range,
 		context: { diagnostics: diags },
 	}});
-	return lsp.receive(proc);
+	let resp = lsp.receive(proc);
+	if (!all && type(resp.result) === 'array') {
+		resp.result = filter(resp.result, (a) => substr(a.title, 0, 8) !== 'Disable ');
+		if (!length(resp.result)) resp.result = null;
+	}
+	return resp;
 }
 
 // A quickfix for diag replacing range in uri with newText.
@@ -39,6 +45,15 @@ function quickfix(title, diag, isPreferred, uri, range, newText) {
 }
 
 describe('textDocument/codeAction', () => {
+
+	it('offers to disable a diagnostic on its line', () => {
+		let diags = diagnosticsOf('file:///t.uc', "let x = 1;\nlet y = x == 1;\ny;\n", 'prefer-strict-equality');
+		let at = { line: 1, character: 0 };
+		assert.match([ { title: 'Disable prefer-strict-equality for this line', kind: 'quickfix', diagnostics: [ diags[0] ],
+			edit: { changes: { 'file:///t.uc': [ { range: { start: at, end: at },
+				newText: '// ucode-analyzer disable-next-line prefer-strict-equality\n' } ] } } } ],
+			filter(actionsFor('file:///t.uc', 1, diags, true).result, (a) => substr(a.title, 0, 8) === 'Disable '));
+	});
 
 	it('returns a quickfix for == that replaces it with ===', () => {
 		// Open a file with == so the server reports a hint diagnostic.

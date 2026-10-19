@@ -23,10 +23,12 @@ Packages are not published yet: build them from source (below).
 - **Diagnostics:** syntax errors, undefined, unused and redeclared names,
   unknown imports and exports, calls to non-functions, possibly-null access, unknown
   properties, `const` reassignment, unreachable code, missing returns,
-  duplicate keys, `printf` format mismatches, JSDoc inconsistencies,
-  deprecated APIs, `==` where `===` is meant.
+  duplicate keys, `printf` format mismatches, JSDoc inconsistencies and
+  unknown type names, `type()` names it never returns (`'integer'`,
+  `'null'`), arithmetic that is always NaN, deprecated APIs, `==` where `===`
+  is meant. Any of them can be silenced on a line (see below).
 - **Types:** flow-sensitive inference with narrowing (`if (!x) return;`,
-  `x && x.y`, `type(x) == 'array'`), unions, nullable values and JSDoc
+  `x && x.y`, `type(x) == 'array'`, `if (w.timer) w.timer.cancel()`), unions, nullable values and JSDoc
   annotations (`@param`, `@returns`, `@typedef`, `@property`, `@template`).
 - **Navigation:** hover with docs, go to definition, references, rename,
   document and workspace symbols, call hierarchy, document links for imports.
@@ -34,7 +36,7 @@ Packages are not published yet: build them from source (below).
   ranges, linked editing of `{% if %}…{% endif %}` pairs, document highlight.
 - **Code actions:** add a missing import, remove an unused import or a
   duplicate key, change `const` to `let`, use `===`, use optional chaining,
-  generate a JSDoc block.
+  generate a JSDoc block, disable a diagnostic for a line.
 - **Workspace:** a cross-file dependency graph, pull diagnostics for the whole
   workspace on parallel worker processes, cancellation, and change tracking for
   open and on-disk files.
@@ -145,6 +147,16 @@ Settings come from `<workspace>/.lsp/config.json` (the project) merged over
 
 Every `.uc` file in the workspace is indexed, minus the excludes. A
 subfolder with its own `.lsp/config.json` is treated as a separate workspace.
+
+A comment silences diagnostics on one line: `// ucode-analyzer
+disable-next-line` before it, or `// ucode-analyzer disable` at its end
+(`/* */`, and `{# #}` in templates, work too). Codes after the keyword limit
+it to those, and text after ` -- ` is a reason:
+
+```ucode
+// ucode-analyzer disable-next-line may-be-null -- the config always has it
+let port = cfg.get('main', 'port').value;
+```
 
 Hover text comes from ucode templates; put your own in
 `<config>/templates/hover/` to override the bundled ones

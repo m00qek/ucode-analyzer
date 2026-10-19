@@ -5,6 +5,7 @@ import { actionsFor as changeConstToLet }     from 'ucode_analyzer.language_serv
 import { actionsFor as useOptionalChain }     from 'ucode_analyzer.language_server.handlers.code_actions.use_optional_chain';
 import { actionsFor as addMissingImport }     from 'ucode_analyzer.language_server.handlers.code_actions.add_missing_import';
 import { actionsFor as generateJsdoc }        from 'ucode_analyzer.language_server.handlers.code_actions.generate_jsdoc';
+import { actionsFor as suppressDiagnostic }   from 'ucode_analyzer.language_server.handlers.code_actions.suppress_diagnostic';
 
 // `range` (optional): the request's selection, for refactorings at the cursor.
 export function codeAction(uri, doc, diagnostics, range) {
@@ -16,5 +17,6 @@ export function codeAction(uri, doc, diagnostics, range) {
 	for (let a in useOptionalChain(uri, doc, diagnostics))     push(actions, a);
 	for (let a in addMissingImport(uri, doc, diagnostics))     push(actions, a);
 	for (let a in generateJsdoc(uri, doc, range))              push(actions, a);
+	for (let a in suppressDiagnostic(uri, doc, diagnostics))   push(actions, a);
 	return length(actions) > 0 ? actions : null;
 };

@@ -15,6 +15,11 @@ function open(text) {
 	return documents.get(URI);
 }
 
+// The actions for doc's strict-equality diagnostics, but those that disable one.
+function strictFixes(doc) {
+	return filter(codeAction(URI, doc, preferStrictEquality(doc)), (a) => substr(a.title, 0, 8) !== 'Disable ');
+}
+
 // The quickfix replacing the operator at marker pair a–b of `src` with `to`.
 function strictFix(src, a, b, from, to) {
 	let range = { start: src.at[a], end: src.at[b] };
@@ -47,7 +52,7 @@ describe('codeAction', () => {
 		let src = cursors("let x = 1 $0==$1 2;\n");
 		let doc = open(src.text);
 
-		assert.match([ strictFix(src, 0, 1, '==', '===') ], codeAction(URI, doc, preferStrictEquality(doc)));
+		assert.match([ strictFix(src, 0, 1, '==', '===') ], strictFixes(doc));
 	});
 
 	it('action kind is quickfix', () => {
@@ -93,7 +98,7 @@ describe('codeAction', () => {
 		assert.match(any_order([
 			strictFix(src, 0, 1, '==', '==='),
 			strictFix(src, 2, 3, '!=', '!=='),
-		]), codeAction(URI, doc, preferStrictEquality(doc)));
+		]), strictFixes(doc));
 	});
 
 	it('action title mentions both the old and new operator', () => {
