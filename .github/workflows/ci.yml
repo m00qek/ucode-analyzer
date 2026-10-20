@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -38,6 +39,111 @@ jobs:
 
       - name: Lint
         run: make lint
+
+  # The image bin/ucode-analyzer runs, for amd64 and arm64 under one tag: the
+  # short commit for a push to main, the version for a v<version> tag.
+  image-tag:
+    name: Image tag
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      commit: ${{ steps.tag.outputs.commit }}
+      version: ${{ steps.tag.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tag
+        id: tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(grep -oP 'PKG_VERSION:=\K.*' openwrt/ucode-analyzer/Makefile)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [ "$REF_TYPE" = tag ]; then
+            if [ "$REF_NAME" != "v${version}" ]; then
+              echo "::error::tag ${REF_NAME} does not match the package version ${version}"
+              exit 1
+            fi
+            echo "tag=${version}" >> "$GITHUB_OUTPUT"
+            echo "commit=" >> "$GITHUB_OUTPUT"
+          else
+            commit=$(git rev-parse --short HEAD)
+            echo "tag=${commit}" >> "$GITHUB_OUTPUT"
+            echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+          fi
+
+  image:
+    name: Image (${{ matrix.arch }})
+    needs: image-tag
+    runs-on: ubuntu-latest
+    # Each builds the packages in the OpenWrt SDK of its target.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write # push the image to ghcr.io
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            sdk: x86-64
+          - arch: arm64
+            sdk: armsr-armv8
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Build
+        env:
+          SDK_ARCH: ${{ matrix.sdk }}
+          GIT_COMMIT: ${{ needs.image-tag.outputs.commit }}
+        run: make image SDK_ARCH="$SDK_ARCH" GIT_COMMIT="$GIT_COMMIT"
+
+      - name: Push
+        env:
+          ARCH: ${{ matrix.arch }}
+          TAG: ${{ needs.image-tag.outputs.tag }}
+          VERSION: ${{ needs.image-tag.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ github.token }}
+        run: |
+          image="ghcr.io/${REPOSITORY,,}"
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker tag "ucode-analyzer:${VERSION}-${ARCH}" "${image}:${TAG}-${ARCH}"
+          docker push "${image}:${TAG}-${ARCH}"
+
+  image-manifest:
+    name: Image
+    needs: [image-tag, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write # publish the image's tag on ghcr.io
+
+    steps:
+      - name: Publish both architectures under one tag
+        env:
+          TAG: ${{ needs.image-tag.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ github.token }}
+        run: |
+          image="ghcr.io/${REPOSITORY,,}"
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker buildx imagetools create -t "${image}:${TAG}" "${image}:${TAG}-amd64" "${image}:${TAG}-arm64"
 
   workflows:
     name: Lint workflows

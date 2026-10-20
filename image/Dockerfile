@@ -43,5 +43,8 @@ RUN apk --root /target add --no-scripts --allow-untrusted /packages/*.apk && \
     rm -rf /target/var/cache/apk/* /target/tmp/*
 
 FROM scratch
+LABEL org.opencontainers.image.source="https://github.com/m00qek/ucode-analyzer" \
+      org.opencontainers.image.description="Language server and linter for ucode" \
+      org.opencontainers.image.licenses="MIT"
 COPY --from=rootfs /target /
 ENTRYPOINT ["/usr/bin/ucode-analyzer"]
